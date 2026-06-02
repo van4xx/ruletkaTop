@@ -8,6 +8,7 @@
  */
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { MessageCircle, MessagesSquare } from 'lucide-react';
 import type { Conversation } from '@ruletka/shared-types';
 import { Avatar, Skeleton } from '@ruletka/ui';
@@ -25,6 +26,7 @@ import { ErrorState } from '@/components/economy/states';
 import { DashboardCard, WidgetHeader } from './dashboard-card';
 
 export function RecentChatsWidget() {
+  const t = useTranslations('misc');
   const { user } = useAuth();
   const { conversations, unreadTotal, isLoading, isError, refetch } = useRecentChats(4);
 
@@ -35,19 +37,19 @@ export function RecentChatsWidget() {
   const { byId } = usePeerProfiles(peerIds);
 
   return (
-    <DashboardCard label="Сообщения">
+    <DashboardCard label={t('dashboard.chatsLabel')}>
       <WidgetHeader
         icon={<MessagesSquare className="h-4 w-4" aria-hidden="true" />}
         accent="var(--color-neon-violet)"
-        title="Сообщения"
+        title={t('dashboard.chatsTitle')}
         count={unreadTotal > 0 ? unreadTotal : null}
         href={ROUTES.chats}
       />
 
       {isError ? (
         <ErrorState
-          title="Не удалось загрузить чаты"
-          description="Список диалогов временно недоступен."
+          title={t('dashboard.chatsErrorTitle')}
+          description={t('dashboard.chatsErrorDesc')}
           onRetry={refetch}
         />
       ) : isLoading ? (
@@ -90,9 +92,10 @@ function ChatRow({
   peerPremium?: boolean;
   index: number;
 }) {
+  const t = useTranslations('misc');
   const hasUnread = conversation.unreadCount > 0;
-  const name = peerName ?? 'Собеседник';
-  const preview = conversation.lastMessagePreview ?? 'Нет сообщений';
+  const name = peerName ?? t('dashboard.chatPeerFallback');
+  const preview = conversation.lastMessagePreview ?? t('dashboard.chatNoMessages');
 
   return (
     <motion.li
@@ -138,17 +141,18 @@ function ChatRow({
 }
 
 function EmptyChats() {
+  const t = useTranslations('misc');
   return (
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 py-7 text-center">
       <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-card/60 text-muted-foreground ring-1 ring-border/60">
         <MessageCircle className="h-5 w-5" aria-hidden="true" />
       </span>
-      <p className="text-sm text-muted-foreground">Пока нет диалогов</p>
+      <p className="text-sm text-muted-foreground">{t('dashboard.chatsEmpty')}</p>
       <Link
         href={ROUTES.friends}
         className="text-xs font-semibold text-[var(--color-neon-violet)] transition-colors hover:text-foreground"
       >
-        Начать общение
+        {t('dashboard.chatsStart')}
       </Link>
     </div>
   );

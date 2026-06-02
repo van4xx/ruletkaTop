@@ -7,6 +7,7 @@
  */
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, LogIn, RefreshCw } from 'lucide-react';
 import { Button } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -55,23 +56,24 @@ export function StatePanel({
 
 /** Standard "something went wrong" panel with a retry button. */
 export function ErrorState({
-  title = 'Что-то пошло не так',
-  description = 'Не удалось загрузить данные. Попробуйте ещё раз.',
+  title,
+  description,
   onRetry,
 }: {
   title?: string;
   description?: string;
   onRetry?: () => void;
 }) {
+  const t = useTranslations('social');
   return (
     <StatePanel
       icon={<AlertTriangle className="h-7 w-7 text-[var(--color-neon-magenta)]" />}
-      title={title}
-      description={description}
+      title={title ?? t('somethingWentWrong')}
+      description={description ?? t('loadDataError')}
       action={
         onRetry && (
           <Button variant="outline" size="sm" leadingIcon={<RefreshCw className="h-4 w-4" />} onClick={onRetry}>
-            Повторить
+            {t('retry')}
           </Button>
         )
       }
@@ -81,18 +83,19 @@ export function ErrorState({
 
 /** Shown when an authenticated session is required but absent. */
 export function SignInRequired({
-  description = 'Войдите в аккаунт, чтобы продолжить.',
+  description,
 }: {
   description?: string;
 }) {
+  const t = useTranslations('social');
   return (
     <StatePanel
       icon={<LogIn className="h-7 w-7" />}
-      title="Нужен вход"
-      description={description}
+      title={t('signInRequiredTitle')}
+      description={description ?? t('signInRequiredDescription')}
       action={
         <Button asChild variant="primary" size="sm">
-          <a href="/">На главную</a>
+          <a href="/">{t('goHome')}</a>
         </Button>
       }
     />

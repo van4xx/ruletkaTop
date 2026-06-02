@@ -10,6 +10,7 @@
  *
  * Icon-only controls are wrapped in tooltips and carry `aria-label`s.
  */
+import { useTranslations } from 'next-intl';
 import {
   Flag,
   Gift,
@@ -98,6 +99,7 @@ function ControlButton({
 }
 
 export function CallControls(props: CallControlsProps) {
+  const t = useTranslations('roulette');
   const {
     status,
     isVideo,
@@ -132,7 +134,7 @@ export function CallControls(props: CallControlsProps) {
         {active && (
           <>
             <ControlButton
-              label={micMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+              label={micMuted ? t('controls.micOn') : t('controls.micOff')}
               active={micMuted}
               danger={micMuted}
               onClick={onToggleMic}
@@ -142,7 +144,7 @@ export function CallControls(props: CallControlsProps) {
 
             {isVideo && (
               <ControlButton
-                label={cameraOff ? 'Включить камеру' : 'Выключить камеру'}
+                label={cameraOff ? t('controls.cameraOn') : t('controls.cameraOff')}
                 active={cameraOff}
                 danger={cameraOff}
                 onClick={onToggleCamera}
@@ -163,7 +165,7 @@ export function CallControls(props: CallControlsProps) {
             className="gap-2 rounded-full px-8"
           >
             <Play className="h-5 w-5" />
-            Начать
+            {t('controls.start')}
           </Button>
         ) : (
           <Button
@@ -173,23 +175,23 @@ export function CallControls(props: CallControlsProps) {
             className="gap-2 rounded-full px-7"
           >
             <SkipForward className="h-5 w-5" />
-            Дальше
+            {t('controls.next')}
           </Button>
         )}
 
         {/* Social actions (enabled when connected to a peer) */}
         {active && (
           <>
-            <ControlButton label="Подарок" onClick={onGift} disabled={!hasPeer}>
+            <ControlButton label={t('controls.gift')} onClick={onGift} disabled={!hasPeer}>
               <Gift />
             </ControlButton>
 
-            <ControlButton label="В друзья" onClick={onAddFriend} disabled={!hasPeer}>
+            <ControlButton label={t('controls.addFriend')} onClick={onAddFriend} disabled={!hasPeer}>
               <UserPlus />
             </ControlButton>
 
             <ControlButton
-              label="Чат"
+              label={t('controls.chat')}
               active={chatOpen}
               onClick={onToggleChat}
               disabled={!hasPeer}
@@ -202,7 +204,7 @@ export function CallControls(props: CallControlsProps) {
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
                     <IconButton
-                      aria-label="Ещё"
+                      aria-label={t('controls.more')}
                       variant="glass"
                       size="lg"
                       shape="circle"
@@ -212,17 +214,17 @@ export function CallControls(props: CallControlsProps) {
                     </IconButton>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent>Ещё</TooltipContent>
+                <TooltipContent>{t('controls.more')}</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={onReport}>
                   <Flag className="h-4 w-4" />
-                  Пожаловаться
+                  {t('controls.report')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem destructive onSelect={onBlock}>
                   <UserX className="h-4 w-4" />
-                  Заблокировать
+                  {t('controls.block')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -231,7 +233,7 @@ export function CallControls(props: CallControlsProps) {
 
         {/* Stop (only while active) */}
         {active && (
-          <ControlButton label="Завершить" danger onClick={onStop}>
+          <ControlButton label={t('controls.stop')} danger onClick={onStop}>
             <PhoneOff />
           </ControlButton>
         )}

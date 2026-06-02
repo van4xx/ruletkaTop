@@ -10,6 +10,7 @@
  */
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, Home, RotateCcw } from 'lucide-react';
 import * as Sentry from '@sentry/nextjs';
 import { Button } from '@ruletka/ui';
@@ -23,6 +24,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useTranslations('misc');
   // Surface the error to the console (dev) and forward it to Sentry. When no
   // DSN is configured the SDK is uninitialized and `captureException` is a
   // harmless no-op, so this is safe in dev / CI.
@@ -36,22 +38,22 @@ export default function GlobalError({
     <SystemScreen
       tone="danger"
       icon={<AlertTriangle className="h-8 w-8" aria-hidden="true" />}
-      title="Что-то пошло не так"
-      description="Произошла непредвиденная ошибка. Попробуйте обновить — обычно это решает проблему. Если ошибка повторяется, вернитесь на главную."
+      title={t('system.errorTitle')}
+      description={t('system.errorDesc')}
       actions={
         <>
           <Button size="lg" leadingIcon={<RotateCcw className="h-5 w-5" />} onClick={() => reset()}>
-            Попробовать снова
+            {t('system.tryAgain')}
           </Button>
           <Button asChild variant="outline" size="lg" leadingIcon={<Home className="h-5 w-5" />}>
-            <Link href={ROUTES.home}>На главную</Link>
+            <Link href={ROUTES.home}>{t('system.goHome')}</Link>
           </Button>
         </>
       }
     >
       {error.digest && (
         <p className="mt-6 text-xs text-muted-foreground/60">
-          Код ошибки: <span className="font-mono">{error.digest}</span>
+          {t('system.errorCode')} <span className="font-mono">{error.digest}</span>
         </p>
       )}
     </SystemScreen>

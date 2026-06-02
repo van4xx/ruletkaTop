@@ -9,6 +9,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations } from 'next-intl';
 import { Flag } from 'lucide-react';
 import {
   createReportSchema,
@@ -31,20 +32,30 @@ import { cn } from '@/lib/cn';
 import { useModal, useModalProps } from '@/lib/stores/modal-store';
 import { FieldError } from './shared';
 
-/** Russian labels + short hints for each moderation reason. */
-const REASONS: Array<{ value: ReportReason; label: string; hint: string }> = [
-  { value: 'nudity', label: 'Нагота / 18+', hint: 'Откровенный контент' },
-  { value: 'harassment', label: 'Оскорбления', hint: 'Травля, угрозы' },
-  { value: 'minor', label: 'Несовершеннолетний', hint: 'Похоже, это ребёнок' },
-  { value: 'violence', label: 'Насилие', hint: 'Жестокий контент' },
-  { value: 'spam', label: 'Спам', hint: 'Реклама, флуд' },
-  { value: 'scam', label: 'Мошенничество', hint: 'Обман, попрошайничество' },
-  { value: 'other', label: 'Другое', hint: 'Опишите ниже' },
+/** The moderation reason enum values, in display order. */
+const REASON_VALUES: readonly ReportReason[] = [
+  'nudity',
+  'harassment',
+  'minor',
+  'violence',
+  'spam',
+  'scam',
+  'other',
 ];
 
 export function ReportUserModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { userId, nickname, matchId } = useModalProps<'report-user'>();
+
+  // Localized label + short hint per moderation reason.
+  const REASONS: Array<{ value: ReportReason; label: string; hint: string }> = REASON_VALUES.map(
+    (value) => ({
+      value,
+      label: t(`modals.reportUser.reason${value.charAt(0).toUpperCase()}${value.slice(1)}`),
+      hint: t(`modals.reportUser.reason${value.charAt(0).toUpperCase()}${value.slice(1)}Hint`),
+    }),
+  );
 
   const {
     control,
@@ -75,18 +86,18 @@ export function ReportUserModal() {
     };
     report.mutate(payload, {
       onSuccess: () => {
-        toast.success('Жалоба отправлена', {
-          description: 'Спасибо — модераторы рассмотрят её в ближайшее время.',
+        toast.success(t('modals.reportUser.sentTitle'), {
+          description: t('modals.reportUser.sentDescription'),
         });
         close();
       },
       onError: (err) => {
         if (err instanceof ApiClientError && err.status === 409) {
-          toast.info('Вы уже пожаловались на этого пользователя');
+          toast.info(t('modals.reportUser.alreadyReported'));
           close();
           return;
         }
-        toast.error('Не удалось отправить жалобу');
+        toast.error(t('modals.reportUser.errGeneric'));
       },
     });
   };
@@ -97,21 +108,23 @@ export function ReportUserModal() {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Пожаловаться{name ? ` на ${name}` : ''}</DialogTitle>
+        <DialogTitle>
+          {name ? t('modals.reportUser.titleOnUser', { name }) : t('modals.reportUser.titlePlain')}
+        </DialogTitle>
         <DialogDescription>
-          Расскажите, что не так. Жалобы анонимны и помогают делать рулетку безопаснее.
+          {t('modals.reportUser.description')}
         </DialogDescription>
       </DialogHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Reason picker */}
         <fieldset className="space-y-2">
-          <legend className="mb-1.5 text-sm font-medium text-foreground">Причина</legend>
+          <legend className="mb-1.5 text-sm font-medium text-foreground">{t('modals.reportUser.reasonLegend')}</legend>
           <Controller
             control={control}
             name="reason"
             render={({ field }) => (
-              <div role="radiogroup" aria-label="Причина жалобы" className="grid grid-cols-2 gap-2">
+              <div role="radiogroup" aria-label={t('modals.reportUser.reasonGroupAria')} className="grid grid-cols-2 gap-2">
                 {REASONS.map((r) => {
                   const selected = field.value === r.value;
                   return (
@@ -137,17 +150,17 @@ export function ReportUserModal() {
               </div>
             )}
           />
-          <FieldError>{errors.reason && 'Выберите причину жалобы.'}</FieldError>
+          <FieldError>{errors.reason && t('modals.reportUser.reasonRequired')}</FieldError>
         </fieldset>
 
         {/* Details */}
         <div className="space-y-1.5">
-          <Label htmlFor="report-details">Подробности (необязательно)</Label>
+          <Label htmlFor="report-details">{t('modals.reportUser.detailsLabel')}</Label>
           <Textarea
             id="report-details"
             rows={3}
             maxLength={1000}
-            placeholder="Что произошло? Чем больше деталей, тем лучше."
+            placeholder={t('modals.reportUser.detailsPlaceholder')}
             invalid={!!errors.details}
             {...register('details')}
           />
@@ -161,7 +174,7 @@ export function ReportUserModal() {
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={close}>
-            Отмена
+            {t('modals.reportUser.cancel')}
           </Button>
           <Button
             type="submit"
@@ -169,7 +182,7 @@ export function ReportUserModal() {
             loading={report.isPending}
             leadingIcon={<Flag className="h-4 w-4" />}
           >
-            Отправить жалобу
+            {t('modals.reportUser.submit')}
           </Button>
         </DialogFooter>
       </form>

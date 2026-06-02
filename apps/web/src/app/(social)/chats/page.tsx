@@ -1,13 +1,18 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
+import { useTranslations } from 'next-intl';
 import { MessagesSquare } from 'lucide-react';
 import { ChatsClient } from '@/features/chat/chats-client';
 import { ConversationsSkeleton } from '@/components/chat/chat-skeleton';
 
-export const metadata: Metadata = {
-  title: 'Чаты',
-  description: 'Личные сообщения и переписки.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('social');
+  return {
+    title: t('chatsMetaTitle'),
+    description: t('chatsMetaDescription'),
+  };
+}
 
 /**
  * /chats — the conversation inbox. The interactive list reads `?to=` from the
@@ -15,6 +20,7 @@ export const metadata: Metadata = {
  * by Next.js for `useSearchParams`.
  */
 export default function ChatsPage() {
+  const t = useTranslations('social');
   return (
     <div className="relative overflow-hidden">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
@@ -28,8 +34,10 @@ export default function ChatsPage() {
             <MessagesSquare className="h-6 w-6" aria-hidden="true" />
           </span>
           <div>
-            <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">Чаты</h1>
-            <p className="text-sm text-muted-foreground">Все ваши личные переписки.</p>
+            <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+              {t('chatsHeading')}
+            </h1>
+            <p className="text-sm text-muted-foreground">{t('chatsSubtitle')}</p>
           </div>
         </header>
 

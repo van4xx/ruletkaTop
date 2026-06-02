@@ -10,6 +10,7 @@
  */
 import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { ShieldCheck } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, toast } from '@ruletka/ui';
 import type { ReportStatus } from '@ruletka/shared-types';
@@ -17,14 +18,15 @@ import { useReviewQueue, useResolveReview } from '@/features/moderation';
 import { CardGridSkeleton, EmptyState, ErrorState } from '@/components/economy/states';
 import { ReviewCard } from './review-card';
 
-/** Selectable queue statuses (Russian labels). */
-const STATUS_TABS: { value: ReportStatus; label: string }[] = [
-  { value: 'open', label: 'Новые' },
-  { value: 'resolved', label: 'Подтверждённые' },
-  { value: 'dismissed', label: 'Отклонённые' },
+/** Selectable queue statuses with their `misc.moderation.*` label keys. */
+const STATUS_TABS: { value: ReportStatus; labelKey: string }[] = [
+  { value: 'open', labelKey: 'moderation.statusOpen' },
+  { value: 'resolved', labelKey: 'moderation.statusResolved' },
+  { value: 'dismissed', labelKey: 'moderation.statusDismissed' },
 ];
 
 export function ModerationQueue() {
+  const t = useTranslations('misc');
   const [status, setStatus] = useState<ReportStatus>('open');
   const queue = useReviewQueue(status);
   const resolve = useResolveReview();
@@ -38,10 +40,10 @@ export function ModerationQueue() {
       {
         onSuccess: () =>
           toast.success(
-            resolution === 'uphold' ? 'Нарушение подтверждено' : 'Жалоба отклонена',
+            resolution === 'uphold' ? t('moderation.upheld') : t('moderation.dismissed'),
           ),
         onError: (err: unknown) =>
-          toast.error(err instanceof Error ? err.message : 'Не удалось сохранить решение'),
+          toast.error(err instanceof Error ? err.message : t('moderation.resolveError')),
       },
     );
   }
@@ -52,9 +54,9 @@ export function ModerationQueue() {
     <div className="space-y-8">
       <Tabs value={status} onValueChange={(v) => setStatus(v as ReportStatus)}>
         <TabsList variant="pill">
-          {STATUS_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value}>
-              {t.label}
+          {STATUS_TABS.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {t(tab.labelKey)}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -64,18 +66,18 @@ export function ModerationQueue() {
         <CardGridSkeleton count={6} />
       ) : queue.isError ? (
         <ErrorState
-          title="Не удалось загрузить очередь"
-          description="Проверьте доступ и попробуйте ещё раз."
+          title={t('moderation.queueErrorTitle')}
+          description={t('moderation.queueErrorDesc')}
           onRetry={() => queue.refetch()}
         />
       ) : items.length === 0 ? (
         <EmptyState
           icon={<ShieldCheck className="h-6 w-6" />}
-          title={status === 'open' ? 'Очередь пуста' : 'Здесь пока ничего нет'}
+          title={status === 'open' ? t('moderation.emptyOpenTitle') : t('moderation.emptyOtherTitle')}
           description={
             status === 'open'
-              ? 'Нет событий, ожидающих проверки. Отличная работа!'
-              : 'Решённые элементы появятся здесь.'
+              ? t('moderation.emptyOpenDesc')
+              : t('moderation.emptyOtherDesc')
           }
         />
       ) : (

@@ -2,9 +2,11 @@
 
 /** Animated three-dot "typing…" bubble shown when the peer is composing. */
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/cn';
 
 export function TypingIndicator({ name, className }: { name?: string; className?: string }) {
+  const t = useTranslations('social');
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -15,7 +17,7 @@ export function TypingIndicator({ name, className }: { name?: string; className?
       aria-live="polite"
     >
       <div className="glass-panel inline-flex items-center gap-1.5 rounded-2xl rounded-bl-md px-3.5 py-3">
-        <span className="sr-only">{name ? `${name} печатает` : 'Печатает'}…</span>
+        <span className="sr-only">{name ? t('isTyping', { name }) : t('typing')}…</span>
         {[0, 1, 2].map((i) => (
           <motion.span
             key={i}

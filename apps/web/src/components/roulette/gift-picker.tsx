@@ -8,6 +8,7 @@
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Crown, Gift as GiftIcon, Sparkles } from 'lucide-react';
 import {
   Badge,
@@ -46,11 +47,11 @@ const rarityBadge: Record<Rarity, 'common' | 'rare' | 'epic' | 'legendary'> = {
   legendary: 'legendary',
 };
 
-const rarityLabel: Record<Rarity, string> = {
-  common: 'Обычный',
-  rare: 'Редкий',
-  epic: 'Эпический',
-  legendary: 'Легендарный',
+const rarityLabelKey: Record<Rarity, string> = {
+  common: 'gift.rarityCommon',
+  rare: 'gift.rarityRare',
+  epic: 'gift.rarityEpic',
+  legendary: 'gift.rarityLegendary',
 };
 
 export function GiftPicker({
@@ -60,6 +61,7 @@ export function GiftPicker({
   peerName,
   isPremium,
 }: GiftPickerProps) {
+  const t = useTranslations('roulette');
   const giftsQuery = useGifts(open);
   const sendGift = useSendGift();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -79,7 +81,7 @@ export function GiftPicker({
       },
       {
         onSuccess: () => {
-          toast.success(`Подарок отправлен ${peerName}!`, {
+          toast.success(t('gift.sentTitle', { name: peerName }), {
             description: selected.title,
           });
           setSelectedId(null);
@@ -87,7 +89,7 @@ export function GiftPicker({
           onOpenChange(false);
         },
         onError: (err: unknown) => {
-          const msg = err instanceof Error ? err.message : 'Не удалось отправить подарок';
+          const msg = err instanceof Error ? err.message : t('gift.sendError');
           toast.error(msg);
         },
       },
@@ -102,9 +104,9 @@ export function GiftPicker({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-[var(--color-neon-magenta)]" />
-            Подарить {peerName}
+            {t('gift.title', { name: peerName })}
           </DialogTitle>
-          <DialogDescription>Выберите подарок — он появится прямо в звонке.</DialogDescription>
+          <DialogDescription>{t('gift.description')}</DialogDescription>
         </DialogHeader>
 
         {/* States */}
@@ -116,20 +118,20 @@ export function GiftPicker({
           </div>
         ) : giftsQuery.isError ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <p className="text-sm text-muted-foreground">Не удалось загрузить подарки.</p>
+            <p className="text-sm text-muted-foreground">{t('gift.loadError')}</p>
             <Button variant="outline" size="sm" onClick={() => giftsQuery.refetch()}>
-              Повторить
+              {t('gift.retry')}
             </Button>
           </div>
         ) : gifts.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <GiftIcon className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Подарки пока недоступны.</p>
+            <p className="text-sm text-muted-foreground">{t('gift.empty')}</p>
           </div>
         ) : (
           <div
             role="listbox"
-            aria-label="Выбор подарка"
+            aria-label={t('gift.listAriaLabel')}
             className="grid max-h-[46vh] grid-cols-3 gap-3 overflow-y-auto p-0.5 sm:grid-cols-4"
           >
             {gifts.map((gift) => {
@@ -179,7 +181,7 @@ export function GiftPicker({
                       size="sm"
                       className="absolute left-1 top-1"
                     >
-                      {rarityLabel[gift.rarity]}
+                      {t(rarityLabelKey[gift.rarity])}
                     </Badge>
                   )}
                   {isLocked && (
@@ -201,8 +203,8 @@ export function GiftPicker({
               value={message}
               maxLength={200}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Добавить сообщение (необязательно)"
-              aria-label="Сообщение к подарку"
+              placeholder={t('gift.messagePlaceholder')}
+              aria-label={t('gift.messageAriaLabel')}
             />
           </div>
         )}
@@ -211,11 +213,11 @@ export function GiftPicker({
           <span className="text-sm text-muted-foreground">
             {selected ? (
               <span className="inline-flex items-center gap-1.5">
-                Стоимость:
+                {t('gift.cost')}
                 <CoinBalance amount={selected.priceCoins} size="sm" />
               </span>
             ) : (
-              'Выберите подарок'
+              t('gift.selectPrompt')
             )}
           </span>
           <Button
@@ -225,7 +227,7 @@ export function GiftPicker({
             className="gap-2"
           >
             {sendGift.isPending ? <Spinner size="sm" tone="current" /> : <GiftIcon className="h-4 w-4" />}
-            Подарить
+            {t('gift.send')}
           </Button>
         </DialogFooter>
       </DialogContent>

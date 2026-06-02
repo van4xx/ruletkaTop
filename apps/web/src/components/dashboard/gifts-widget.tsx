@@ -8,6 +8,7 @@
  */
 import Link from 'next/link';
 import { Gift as GiftIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/features/auth';
 import { useProfileGifts } from '@/features/profile/use-profile';
 import { GiftsShowcase } from '@/components/profile/gifts-showcase';
@@ -19,26 +20,27 @@ const GIFTS_ROUTE = '/gifts';
 const PREVIEW_LIMIT = 8;
 
 export function GiftsWidget() {
+  const t = useTranslations('misc');
   const { user } = useAuth();
   const { gifts, isLoading, isError, refetch } = useProfileGifts(user?.id);
 
   const preview = gifts.slice(0, PREVIEW_LIMIT);
 
   return (
-    <DashboardCard label="Подарки">
+    <DashboardCard label={t('dashboard.giftsLabel')}>
       <WidgetHeader
         icon={<GiftIcon className="h-4 w-4" aria-hidden="true" />}
         accent="var(--color-neon-magenta)"
-        title="Мои подарки"
+        title={t('dashboard.giftsTitle')}
         count={gifts.length > 0 ? gifts.length : null}
         href="/profile/me"
-        linkLabel="Все"
+        linkLabel={t('dashboard.widgetAll')}
       />
 
       {isError ? (
         <ErrorState
-          title="Не удалось загрузить подарки"
-          description="Витрина временно недоступна."
+          title={t('dashboard.giftsErrorTitle')}
+          description={t('dashboard.giftsErrorDesc')}
           onRetry={refetch}
         />
       ) : (
@@ -50,7 +52,7 @@ export function GiftsWidget() {
                 href={GIFTS_ROUTE}
                 className="text-xs font-semibold text-[var(--color-neon-magenta)] transition-colors hover:text-foreground"
               >
-                Посмотреть каталог подарков
+                {t('dashboard.giftsCatalog')}
               </Link>
             </div>
           )}

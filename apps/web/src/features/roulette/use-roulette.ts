@@ -23,6 +23,7 @@
  * Everything is torn down deterministically on stop()/next()/unmount.
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type {
   MatchFilters,
   MmMatchedPayload,
@@ -181,6 +182,7 @@ const ICE_RESTART_TIMEOUT_MS = 10_000;
 const QUALITY_POLL_MS = 2_000;
 
 export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteResult {
+  const t = useTranslations('roulette');
   const isVideo = type === 'video';
   const [state, dispatch] = useReducer(reducer, initialState);
   const [filters, setFilters] = useState<MatchFilters>(DEFAULT_FILTERS);
@@ -691,7 +693,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     if (!token) {
       dispatch({
         type: 'ERROR',
-        error: { kind: 'socket', message: 'Войдите в аккаунт, чтобы начать общение.' },
+        error: { kind: 'socket', message: t('errors.signInToStart') },
       });
       return;
     }
@@ -731,13 +733,13 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       } else {
         dispatch({
           type: 'ERROR',
-          error: { kind: 'unknown', message: 'Не удалось запустить. Попробуйте ещё раз.' },
+          error: { kind: 'unknown', message: t('errors.startFailed') },
         });
       }
     } finally {
       setIsStarting(false);
     }
-  }, [token, isStarting, acquireLocalStream, ensureIceServers, clearMatchTimeout, type]);
+  }, [token, isStarting, acquireLocalStream, ensureIceServers, clearMatchTimeout, type, t]);
 
   const next = useCallback(() => {
     if (!startedRef.current) return;

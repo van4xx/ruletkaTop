@@ -10,6 +10,7 @@
  * under `prefers-reduced-motion` (globals.css). Loading / empty states included.
  */
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { Gift as GiftIcon, Sparkles } from 'lucide-react';
 import type { Rarity } from '@ruletka/shared-types';
@@ -38,7 +39,7 @@ export function GiftsShowcase({
   /** Total coin value across ALL received gifts (incl. duplicates). */
   totalValueCoins,
   /** Empty-state copy — tuned per surface ("Пока нет подарков" vs "Подарите первым"). */
-  emptyTitle = 'Пока нет подарков',
+  emptyTitle,
   emptyHint,
 }: {
   gifts: ReceivedGift[];
@@ -47,7 +48,9 @@ export function GiftsShowcase({
   emptyTitle?: string;
   emptyHint?: string;
 }) {
+  const t = useTranslations('profile');
   const reduce = useReducedMotion();
+  const giftFallbackTitle = t('giftFallbackTitle');
 
   const aggregated = useMemo<Aggregated[]>(() => {
     const map = new Map<string, Aggregated>();
@@ -61,7 +64,7 @@ export function GiftsShowcase({
       } else {
         map.set(key, {
           key,
-          title: g.gift?.title ?? 'Подарок',
+          title: g.gift?.title ?? giftFallbackTitle,
           animationUrl: g.gift?.animationUrl,
           rarity: g.gift?.rarity ?? 'common',
           count: 1,
@@ -73,7 +76,7 @@ export function GiftsShowcase({
     return Array.from(map.values()).sort(
       (a, b) => RARITY_ORDER[b.rarity] - RARITY_ORDER[a.rarity] || b.valueCoins - a.valueCoins,
     );
-  }, [gifts]);
+  }, [gifts, giftFallbackTitle]);
 
   if (isLoading) {
     return (
@@ -92,7 +95,7 @@ export function GiftsShowcase({
           <GiftIcon className="h-7 w-7" aria-hidden="true" />
         </span>
         <div className="space-y-1">
-          <p className="font-display text-base font-bold">{emptyTitle}</p>
+          <p className="font-display text-base font-bold">{emptyTitle ?? t('giftsShowcase.emptyTitle')}</p>
           {emptyHint && <p className="max-w-xs text-pretty text-sm text-muted-foreground">{emptyHint}</p>}
         </div>
       </div>
@@ -115,7 +118,7 @@ export function GiftsShowcase({
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
           <Sparkles className="h-4 w-4 text-[var(--color-neon-magenta)]" aria-hidden="true" />
-          {aggregated.length} {pluralGifts(aggregated.length)}
+          {t('giftsShowcase.countLine', { count: aggregated.length })}
         </span>
         {totalValueCoins != null && totalValueCoins > 0 && (
           <span className="inline-flex items-center gap-1.5 font-semibold tabular-nums">
@@ -181,13 +184,4 @@ export function GiftsShowcase({
       </ul>
     </div>
   );
-}
-
-/** Russian plural for "подарок". */
-function pluralGifts(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'подарок';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'подарка';
-  return 'подарков';
 }

@@ -10,6 +10,7 @@
  * appears seamless. Respects `prefers-reduced-motion` (animations are
  * neutralised globally).
  */
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/cn';
 
 interface TopCardData {
@@ -36,6 +37,7 @@ const RIGHT_LANE: TopCardData[] = [
 ];
 
 function TopCard({ data, rank }: { data: TopCardData; rank: number }) {
+  const t = useTranslations('economy');
   const initials = data.nick.slice(0, 2).toUpperCase();
   return (
     <div className="glass-panel flex items-center gap-3 rounded-2xl p-3">
@@ -53,7 +55,7 @@ function TopCard({ data, rank }: { data: TopCardData; rank: number }) {
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-sm font-semibold">{data.nick}</span>
-        <span className="text-xs text-muted-foreground">в эфире {data.country}</span>
+        <span className="text-xs text-muted-foreground">{t('topMarquee.onAir', { country: data.country })}</span>
       </span>
     </div>
   );

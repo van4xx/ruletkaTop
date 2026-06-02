@@ -14,6 +14,7 @@
  * opened (e.g. a premium-gated filter or gift).
  */
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Check, CheckCircle2, Crown, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
 import type { PremiumPlan } from '@ruletka/shared-types';
 import {
@@ -30,21 +31,28 @@ import { useModal, useModalProps } from '@/lib/stores/modal-store';
 import { formatRub } from '@/features/economy/format';
 import { usePremiumPlans, useSubscribe } from '@/features/premium/use-premium';
 
-/** "per month/week/day" suffix from a plan's interval. */
-function intervalSuffix(days: number): string {
+type ChromeTranslator = ReturnType<typeof useTranslations>;
+
+/** "per month/week/day" suffix from a plan's interval (localized). */
+function intervalSuffix(days: number, t: ChromeTranslator): string {
   if (days % 30 === 0) {
     const months = Math.round(days / 30);
-    return months === 1 ? '/мес' : `/${months} мес`;
+    return months === 1
+      ? t('modals.premium.perMonth')
+      : t('modals.premium.perMonths', { count: months });
   }
   if (days % 7 === 0) {
     const weeks = Math.round(days / 7);
-    return weeks === 1 ? '/нед' : `/${weeks} нед`;
+    return weeks === 1
+      ? t('modals.premium.perWeek')
+      : t('modals.premium.perWeeks', { count: weeks });
   }
-  return days === 1 ? '/день' : `/${days} дн`;
+  return days === 1 ? t('modals.premium.perDay') : t('modals.premium.perDays', { count: days });
 }
 
 export function PremiumModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { reason } = useModalProps<'premium'>();
   const plans = usePremiumPlans();
   const subscribe = useSubscribe();
@@ -72,11 +80,11 @@ export function PremiumModal() {
     return (
       <StatusPanel
         icon={<Loader2 className="h-7 w-7 animate-spin text-accent" />}
-        title="Активируем премиум…"
-        description="Платёж принят. Премиум появится в профиле через несколько секунд."
+        title={t('modals.premium.pendingTitle')}
+        description={t('modals.premium.pendingDescription')}
       >
         <Button type="button" variant="primary" onClick={() => { subscribe.reset(); close(); }}>
-          Понятно
+          {t('modals.premium.gotIt')}
         </Button>
       </StatusPanel>
     );
@@ -85,11 +93,11 @@ export function PremiumModal() {
     return (
       <StatusPanel
         icon={<CheckCircle2 className="h-7 w-7 text-success" />}
-        title="Добро пожаловать в премиум!"
-        description="Все возможности уже доступны. Спасибо за поддержку!"
+        title={t('modals.premium.activeTitle')}
+        description={t('modals.premium.activeDescription')}
       >
         <Button type="button" variant="primary" onClick={() => { subscribe.reset(); close(); }}>
-          Отлично
+          {t('modals.premium.thanks')}
         </Button>
       </StatusPanel>
     );
@@ -98,15 +106,15 @@ export function PremiumModal() {
     return (
       <StatusPanel
         icon={<TriangleAlert className="h-7 w-7 text-danger" />}
-        title="Не удалось оформить"
-        description={subscribe.error ?? 'Платёж не прошёл. Попробуйте ещё раз.'}
+        title={t('modals.premium.errorTitle')}
+        description={subscribe.error ?? t('modals.premium.errorDescription')}
       >
         <Button type="button" variant="ghost" onClick={subscribe.reset}>
-          Назад
+          {t('modals.premium.back')}
         </Button>
         {subscribe.activePlan && (
           <Button type="button" variant="primary" onClick={() => subscribe.subscribe(subscribe.activePlan!)}>
-            Повторить
+            {t('modals.premium.retry')}
           </Button>
         )}
       </StatusPanel>
@@ -118,13 +126,14 @@ export function PremiumModal() {
       <DialogHeader>
         <span className="mb-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-warning">
           <Crown className="h-3.5 w-3.5" aria-hidden="true" />
-          Премиум
+          {t('modals.premium.eyebrow')}
         </span>
         <DialogTitle>
-          Больше <span className="text-gradient-neon">возможностей</span>
+          {t('modals.premium.titlePrefix')}{' '}
+          <span className="text-gradient-neon">{t('modals.premium.titleHighlight')}</span>
         </DialogTitle>
         <DialogDescription>
-          {reason ?? 'Фильтры по полу и стране, приоритет в поиске, без рекламы и эксклюзивные подарки.'}
+          {reason ?? t('modals.premium.descDefault')}
         </DialogDescription>
       </DialogHeader>
 
@@ -156,13 +165,13 @@ export function PremiumModal() {
 
           {plans.isError && (
             <div className="rounded-xl border border-border/60 bg-card/40 p-6 text-center text-sm text-muted-foreground">
-              Не удалось загрузить тарифы.{' '}
+              {t('modals.premium.loadError')}{' '}
               <button
                 type="button"
                 onClick={() => plans.refetch()}
                 className="font-medium text-accent hover:underline"
               >
-                Повторить
+                {t('modals.premium.retry')}
               </button>
             </div>
           )}
@@ -180,7 +189,7 @@ export function PremiumModal() {
 
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={close}>
-          Не сейчас
+          {t('modals.premium.notNow')}
         </Button>
         <Button
           type="button"
@@ -190,7 +199,9 @@ export function PremiumModal() {
           leadingIcon={<Sparkles className="h-4 w-4" />}
           onClick={() => selected && subscribe.subscribe(selected)}
         >
-          {selected ? `Оформить за ${formatRub(selected.priceRub)}` : 'Выберите тариф'}
+          {selected
+            ? t('modals.premium.subscribeFor', { price: formatRub(selected.priceRub) })
+            : t('modals.premium.selectPlan')}
         </Button>
       </DialogFooter>
     </>
@@ -206,6 +217,7 @@ function PlanRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const t = useTranslations('chrome');
   return (
     <button
       type="button"
@@ -233,7 +245,7 @@ function PlanRow({
         <span className="font-medium text-foreground">{plan.title}</span>
         {plan.intervalDays >= 30 && (
           <Badge variant="success" size="sm" className="ml-2">
-            выгодно
+            {t('modals.premium.planBadge')}
           </Badge>
         )}
       </span>
@@ -241,7 +253,7 @@ function PlanRow({
         <span className="font-display text-base font-bold tabular-nums text-foreground">
           {formatRub(plan.priceRub)}
         </span>
-        <span className="text-xs text-muted-foreground">{intervalSuffix(plan.intervalDays)}</span>
+        <span className="text-xs text-muted-foreground">{intervalSuffix(plan.intervalDays, t)}</span>
       </span>
     </button>
   );

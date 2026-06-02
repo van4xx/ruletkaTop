@@ -8,29 +8,32 @@
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Check, Eye, EyeOff, ShieldAlert, VideoOff, X } from 'lucide-react';
 import { Badge, Button } from '@ruletka/ui';
 import type { ModerationAction, ModerationLabel, ReviewItem } from '@ruletka/shared-types';
 import { formatRelativeTime } from '@/features/chat/lib/format';
 import { cn } from '@/lib/cn';
 
-/** Russian copy + Badge treatment per moderation label. */
-const LABEL_META: Record<ModerationLabel, { label: string; variant: 'danger' | 'warning' | 'neutral' }> = {
-  minor: { label: 'Несовершеннолетний', variant: 'danger' },
-  sexual: { label: 'Секс. контент', variant: 'danger' },
-  nudity: { label: 'Обнажение', variant: 'warning' },
-  violence: { label: 'Насилие', variant: 'warning' },
-  other: { label: 'Другое', variant: 'neutral' },
-  safe: { label: 'Безопасно', variant: 'neutral' },
+type BadgeVariant = 'danger' | 'warning' | 'neutral';
+
+/** `misc.moderation.*` label key + Badge treatment per moderation label. */
+const LABEL_META: Record<ModerationLabel, { labelKey: string; variant: BadgeVariant }> = {
+  minor: { labelKey: 'moderation.labelMinor', variant: 'danger' },
+  sexual: { labelKey: 'moderation.labelSexual', variant: 'danger' },
+  nudity: { labelKey: 'moderation.labelNudity', variant: 'warning' },
+  violence: { labelKey: 'moderation.labelViolence', variant: 'warning' },
+  other: { labelKey: 'moderation.labelOther', variant: 'neutral' },
+  safe: { labelKey: 'moderation.labelSafe', variant: 'neutral' },
 };
 
-/** Russian copy per auto-action. */
-const ACTION_META: Record<ModerationAction, { label: string; variant: 'danger' | 'warning' | 'neutral' }> = {
-  ban: { label: 'Авто-бан', variant: 'danger' },
-  kick: { label: 'Авто-кик', variant: 'warning' },
-  warn: { label: 'Предупреждение', variant: 'warning' },
-  blur: { label: 'Размытие', variant: 'neutral' },
-  none: { label: 'Без действия', variant: 'neutral' },
+/** `misc.moderation.*` label key per auto-action. */
+const ACTION_META: Record<ModerationAction, { labelKey: string; variant: BadgeVariant }> = {
+  ban: { labelKey: 'moderation.actionBan', variant: 'danger' },
+  kick: { labelKey: 'moderation.actionKick', variant: 'warning' },
+  warn: { labelKey: 'moderation.actionWarn', variant: 'warning' },
+  blur: { labelKey: 'moderation.actionBlur', variant: 'neutral' },
+  none: { labelKey: 'moderation.actionNone', variant: 'neutral' },
 };
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -43,6 +46,7 @@ export interface ReviewCardProps {
 }
 
 export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps) {
+  const t = useTranslations('misc');
   // Evidence is NSFW — keep it blurred until the moderator opts to view it.
   const [revealed, setRevealed] = useState(false);
 
@@ -66,7 +70,7 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={item.evidenceUrl}
-              alt="Кадр-улика"
+              alt={t('moderation.evidenceAlt')}
               className={cn(
                 'h-full w-full object-cover transition-[filter] duration-200',
                 !revealed && 'blur-2xl brightness-50',
@@ -79,18 +83,18 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
                 'absolute inset-0 grid place-items-center text-white/90',
                 'transition-colors hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               )}
-              aria-label={revealed ? 'Скрыть улику' : 'Показать улику'}
+              aria-label={revealed ? t('moderation.hideEvidenceAria') : t('moderation.showEvidenceAria')}
             >
               {!revealed && (
                 <span className="inline-flex flex-col items-center gap-1.5 rounded-xl bg-black/50 px-4 py-3 text-xs font-medium backdrop-blur-sm">
                   <Eye className="h-5 w-5" aria-hidden="true" />
-                  Показать кадр
+                  {t('moderation.showFrame')}
                 </span>
               )}
               {revealed && (
                 <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg bg-black/55 px-2 py-1 text-[0.625rem] font-medium backdrop-blur-sm">
                   <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
-                  Скрыть
+                  {t('moderation.hide')}
                 </span>
               )}
             </button>
@@ -99,7 +103,7 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
           <div className="grid h-full place-items-center text-muted-foreground">
             <span className="inline-flex flex-col items-center gap-1.5 text-xs">
               <VideoOff className="h-6 w-6" aria-hidden="true" />
-              Улика недоступна
+              {t('moderation.evidenceUnavailable')}
             </span>
           </div>
         )}
@@ -113,9 +117,9 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
       {/* Meta + actions */}
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={labelMeta.variant}>{labelMeta.label}</Badge>
+          <Badge variant={labelMeta.variant}>{t(labelMeta.labelKey)}</Badge>
           <Badge variant={actionMeta.variant} size="sm">
-            {actionMeta.label}
+            {t(actionMeta.labelKey)}
           </Badge>
           <span className="ml-auto text-xs text-muted-foreground">
             {formatRelativeTime(item.createdAt)}
@@ -124,12 +128,12 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
 
         <dl className="space-y-0.5 text-xs text-muted-foreground">
           <div className="flex gap-1.5">
-            <dt className="shrink-0 font-medium text-foreground/80">Пользователь:</dt>
+            <dt className="shrink-0 font-medium text-foreground/80">{t('moderation.user')}</dt>
             <dd className="truncate font-mono">{item.userId}</dd>
           </div>
           {item.matchId && (
             <div className="flex gap-1.5">
-              <dt className="shrink-0 font-medium text-foreground/80">Матч:</dt>
+              <dt className="shrink-0 font-medium text-foreground/80">{t('moderation.match')}</dt>
               <dd className="truncate font-mono">{item.matchId}</dd>
             </div>
           )}
@@ -144,7 +148,7 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
             onClick={() => onResolve(item.id, 'uphold')}
           >
             <Check className="h-4 w-4" aria-hidden="true" />
-            Подтвердить
+            {t('moderation.confirm')}
           </Button>
           <Button
             variant="outline"
@@ -154,7 +158,7 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
             onClick={() => onResolve(item.id, 'dismiss')}
           >
             <X className="h-4 w-4" aria-hidden="true" />
-            Отклонить
+            {t('moderation.dismiss')}
           </Button>
         </div>
       </div>

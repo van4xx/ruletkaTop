@@ -14,6 +14,7 @@
  * Auth-gated actions prompt a sign-in toast when the viewer is anonymous.
  */
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Flag, Gift as GiftIcon, MessageCircle, MoreHorizontal, UserPlus, UserX, Video } from 'lucide-react';
 import {
   Button,
@@ -42,6 +43,7 @@ export function ProfileActions({
   isAuthenticated: boolean;
   onBlocked?: () => void;
 }) {
+  const t = useTranslations('profile');
   const { open } = useModal();
   const canCall = status === 'online' || status === 'away';
 
@@ -56,11 +58,11 @@ export function ProfileActions({
   return (
     <>
       <Button asChild variant="secondary" size="sm" leadingIcon={<MessageCircle className="h-4 w-4" />}>
-        <Link href={`${ROUTES.chats}?to=${profileId}`}>Написать</Link>
+        <Link href={`${ROUTES.chats}?to=${profileId}`}>{t('actions.message')}</Link>
       </Button>
 
       {canCall && (
-        <IconButton asChild variant="glass" size="sm" aria-label="Видеозвонок">
+        <IconButton asChild variant="glass" size="sm" aria-label={t('actions.videoCall')}>
           <Link href={`${ROUTES.video}?to=${profileId}`}>
             <Video aria-hidden="true" />
           </Link>
@@ -74,16 +76,16 @@ export function ProfileActions({
         onClick={() =>
           requireAuth(
             () => open('gift-picker', { toUserId: profileId, toNickname: nickname, context: 'profile' }),
-            'Войдите, чтобы дарить подарки',
+            t('actions.authGift'),
           )
         }
       >
-        Подарить
+        {t('actions.sendGift')}
       </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <IconButton variant="ghost" size="sm" aria-label="Ещё действия">
+          <IconButton variant="ghost" size="sm" aria-label={t('actions.more')}>
             <MoreHorizontal aria-hidden="true" />
           </IconButton>
         </DropdownMenuTrigger>
@@ -92,33 +94,33 @@ export function ProfileActions({
             onSelect={() =>
               requireAuth(
                 () => open('add-friend', { presetUserId: profileId, nickname }),
-                'Войдите, чтобы добавлять друзей',
+                t('actions.authFriend'),
               )
             }
           >
             <UserPlus aria-hidden="true" />
-            Добавить в друзья
+            {t('actions.addFriend')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() =>
-              requireAuth(() => open('report-user', { userId: profileId, nickname }), 'Войдите, чтобы пожаловаться')
+              requireAuth(() => open('report-user', { userId: profileId, nickname }), t('actions.authReport'))
             }
           >
             <Flag aria-hidden="true" />
-            Пожаловаться
+            {t('actions.report')}
           </DropdownMenuItem>
           <DropdownMenuItem
             destructive
             onSelect={() =>
               requireAuth(
                 () => open('block-user', { userId: profileId, nickname, onBlocked }),
-                'Войдите, чтобы заблокировать',
+                t('actions.authBlock'),
               )
             }
           >
             <UserX aria-hidden="true" />
-            Заблокировать
+            {t('actions.block')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

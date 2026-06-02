@@ -8,6 +8,7 @@
  * read-all endpoint and clears the unread counter.
  */
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Bell, BellRing, Gift, MessageCircle, Phone, Sparkles, UserPlus } from 'lucide-react';
 import type { AppNotification } from '@ruletka/shared-types';
 import type { LucideIcon } from 'lucide-react';
@@ -29,14 +30,15 @@ const KIND: Record<AppNotification['kind'], KindStyle> = {
 };
 
 export function NotificationsWidget() {
+  const t = useTranslations('misc');
   const { items, unread, markAllRead } = useNotificationsPreview();
 
   return (
-    <DashboardCard label="Уведомления">
+    <DashboardCard label={t('dashboard.notificationsLabel')}>
       <WidgetHeader
         icon={unread > 0 ? <BellRing className="h-4 w-4" aria-hidden="true" /> : <Bell className="h-4 w-4" aria-hidden="true" />}
         accent="var(--warning)"
-        title="Уведомления"
+        title={t('dashboard.notificationsTitle')}
         count={unread > 0 ? unread : null}
       />
 
@@ -46,7 +48,7 @@ export function NotificationsWidget() {
             <Bell className="h-5 w-5" aria-hidden="true" />
           </span>
           <p className="max-w-[14rem] text-sm text-muted-foreground">
-            Здесь появятся новые события — заявки, подарки и звонки.
+            {t('dashboard.notificationsEmpty')}
           </p>
         </div>
       ) : (
@@ -97,7 +99,7 @@ export function NotificationsWidget() {
                 onClick={markAllRead}
                 className="rounded-lg text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                Отметить прочитанным
+                {t('dashboard.markRead')}
               </button>
             </div>
           )}

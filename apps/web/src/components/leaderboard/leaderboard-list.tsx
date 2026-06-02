@@ -7,6 +7,7 @@
  */
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Calendar, Crown, Gift, Sparkles } from 'lucide-react';
 import { Avatar, Badge, CoinBalance, Skeleton } from '@ruletka/ui';
 import type { LeaderboardEntry, LeaderboardMetric } from '@ruletka/shared-types';
@@ -30,15 +31,6 @@ function RankBadge({ rank, highlight }: { rank: number; highlight?: boolean }) {
   );
 }
 
-/** Russian plural for "день/дня/дней". */
-function pluralDays(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'день';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня';
-  return 'дней';
-}
-
 /** The small score chip + caption, by metric. */
 export function ScoreDisplay({
   metric,
@@ -49,6 +41,7 @@ export function ScoreDisplay({
   score: number;
   size?: 'sm' | 'md';
 }) {
+  const t = useTranslations('misc');
   if (metric === 'top') {
     return (
       <span
@@ -58,7 +51,7 @@ export function ScoreDisplay({
         )}
       >
         <Calendar className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-        {score} {pluralDays(score)}
+        {t('leaderboard.days', { count: score })}
       </span>
     );
   }
@@ -67,12 +60,13 @@ export function ScoreDisplay({
 }
 
 /** Per-metric one-line caption under the name. */
-function MetricCaption({ metric, score }: { metric: LeaderboardMetric; score: number }) {
+function MetricCaption({ metric, score: _score }: { metric: LeaderboardMetric; score: number }) {
+  const t = useTranslations('misc');
   if (metric === 'gifts') {
     return (
       <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
         <Gift className="h-3 w-3 text-[var(--color-neon-magenta)]" aria-hidden="true" />
-        Получено подарков
+        {t('leaderboard.giftsReceived')}
       </p>
     );
   }
@@ -80,14 +74,14 @@ function MetricCaption({ metric, score }: { metric: LeaderboardMetric; score: nu
     return (
       <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
         <Crown className="h-3 w-3 text-[var(--coin)]" aria-hidden="true" />
-        Дней в Топе
+        {t('leaderboard.daysInTop')}
       </p>
     );
   }
   return (
     <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
       <Sparkles className="h-3 w-3 text-[var(--coin)]" aria-hidden="true" />
-      Баланс монет
+      {t('leaderboard.coinBalance')}
     </p>
   );
 }
@@ -101,7 +95,8 @@ export function LeaderboardRow({
   metric: LeaderboardMetric;
   isMe?: boolean;
 }) {
-  const name = entry.nickname || 'Участник';
+  const t = useTranslations('misc');
+  const name = entry.nickname || t('leaderboard.memberFallback');
 
   return (
     <motion.li
@@ -132,7 +127,7 @@ export function LeaderboardRow({
             <p className="truncate font-medium text-foreground">{name}</p>
             {isMe && (
               <Badge variant="outline" size="sm" className="shrink-0">
-                Вы
+                {t('leaderboard.you')}
               </Badge>
             )}
             {entry.isPremium && (

@@ -12,6 +12,7 @@
  * shows a pending state and polls the balance (credited by the webhook).
  */
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import Script from 'next/script';
 import { History, ShoppingBag } from 'lucide-react';
 import { EconomyShell } from '@/components/economy/economy-shell';
@@ -26,6 +27,7 @@ import { useCoinPackages, useBuyCoins } from '@/features/coins/use-coins';
 import { useWallet, useTransactions, flattenTransactions } from '@/hooks/wallet/use-wallet';
 
 export default function CoinsPage() {
+  const t = useTranslations('economy');
   const wallet = useWallet();
   const packages = useCoinPackages();
   const buy = useBuyCoins();
@@ -58,15 +60,16 @@ export default function CoinsPage() {
         eyebrow={
           <>
             <ShoppingBag className="h-3.5 w-3.5 text-[var(--coin)]" aria-hidden="true" />
-            Магазин монет
+            {t('coins.eyebrow')}
           </>
         }
         title={
           <>
-            Монеты для <span className="text-gradient-neon">подарков и Топа</span>
+            {t('coins.titlePrefix')}{' '}
+            <span className="text-gradient-neon">{t('coins.titleHighlight')}</span>
           </>
         }
-        lede="Пополняйте баланс, чтобы дарить анимированные подарки, покупать места в Топе и открывать больше возможностей."
+        lede={t('coins.lede')}
       >
         <div className="space-y-12">
           {/* Balance */}
@@ -79,14 +82,14 @@ export default function CoinsPage() {
           {/* Packages */}
           <section aria-labelledby="packages-heading">
             <h2 id="packages-heading" className="mb-5 font-display text-xl font-bold tracking-tight">
-              Выберите пакет
+              {t('coins.packagesHeading')}
             </h2>
             {packages.isLoading ? (
               <CardGridSkeleton count={6} />
             ) : packages.isError ? (
               <ErrorState
-                title="Не удалось загрузить пакеты"
-                description="Каталог монет временно недоступен."
+                title={t('coins.packagesErrorTitle')}
+                description={t('coins.packagesErrorDescription')}
                 onRetry={() => packages.refetch()}
               />
             ) : (
@@ -113,7 +116,7 @@ export default function CoinsPage() {
               className="mb-5 inline-flex items-center gap-2 font-display text-xl font-bold tracking-tight"
             >
               <History className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              История операций
+              {t('coins.ledgerHeading')}
             </h2>
             <TransactionList
               transactions={transactions}

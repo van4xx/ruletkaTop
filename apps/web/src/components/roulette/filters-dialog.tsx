@@ -9,6 +9,7 @@
  * never emit an invalid `mm:join` payload.
  */
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Crown, SlidersHorizontal, Sparkles } from 'lucide-react';
 import {
   Badge,
@@ -37,11 +38,7 @@ import { cn } from '@/lib/cn';
 const AGE_MIN = 18;
 const AGE_MAX = 100;
 
-const GENDERS: { value: MatchFilters['gender']; label: string }[] = [
-  { value: 'any', label: 'Любой' },
-  { value: 'male', label: 'Парни' },
-  { value: 'female', label: 'Девушки' },
-];
+const GENDER_VALUES: MatchFilters['gender'][] = ['any', 'male', 'female'];
 
 export interface FiltersDialogProps {
   value: MatchFilters;
@@ -62,6 +59,12 @@ function PremiumTag() {
   );
 }
 
+const GENDER_LABEL_KEY: Record<MatchFilters['gender'], string> = {
+  any: 'filters.genderAny',
+  male: 'filters.genderMale',
+  female: 'filters.genderFemale',
+};
+
 export function FiltersDialog({
   value,
   onApply,
@@ -69,6 +72,7 @@ export function FiltersDialog({
   disabled = false,
   trigger,
 }: FiltersDialogProps) {
+  const t = useTranslations('roulette');
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<MatchFilters>(value);
 
@@ -122,7 +126,7 @@ export function FiltersDialog({
         {trigger ?? (
           <Button variant="glass" size="md" disabled={disabled} className="gap-2">
             <SlidersHorizontal className="h-4 w-4" />
-            Фильтры
+            {t('filters.trigger')}
             {activeCount > 0 && (
               <Badge variant="accent" size="sm" className="ml-0.5 tabular-nums">
                 {activeCount}
@@ -134,10 +138,8 @@ export function FiltersDialog({
 
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Фильтры поиска</DialogTitle>
-          <DialogDescription>
-            Настройте, с кем хотите общаться. Пол и страна доступны в Premium.
-          </DialogDescription>
+          <DialogTitle>{t('filters.title')}</DialogTitle>
+          <DialogDescription>{t('filters.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -147,24 +149,24 @@ export function FiltersDialog({
             disabled={!isPremium}
           >
             <div className="flex items-center justify-between">
-              <Label>Пол собеседника</Label>
+              <Label>{t('filters.genderLabel')}</Label>
               {!isPremium && <PremiumTag />}
             </div>
             <div
               role="radiogroup"
-              aria-label="Пол собеседника"
+              aria-label={t('filters.genderLabel')}
               className="grid grid-cols-3 gap-2"
             >
-              {GENDERS.map((g) => {
-                const selected = draft.gender === g.value;
+              {GENDER_VALUES.map((value) => {
+                const selected = draft.gender === value;
                 return (
                   <button
-                    key={g.value}
+                    key={value}
                     type="button"
                     role="radio"
                     aria-checked={selected}
                     disabled={!isPremium}
-                    onClick={() => setDraft((d) => ({ ...d, gender: g.value }))}
+                    onClick={() => setDraft((d) => ({ ...d, gender: value }))}
                     className={cn(
                       'rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -174,7 +176,7 @@ export function FiltersDialog({
                       !isPremium && 'cursor-not-allowed',
                     )}
                   >
-                    {g.label}
+                    {t(GENDER_LABEL_KEY[value])}
                   </button>
                 );
               })}
@@ -184,7 +186,7 @@ export function FiltersDialog({
           {/* Age range (free) */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <Label>Возраст</Label>
+              <Label>{t('filters.ageLabel')}</Label>
               <span className="text-sm font-semibold tabular-nums text-foreground">
                 {draft.ageMin}–{draft.ageMax}
               </span>
@@ -204,7 +206,7 @@ export function FiltersDialog({
               }}
               showValues
               formatValue={(v) => `${v}`}
-              aria-label="Диапазон возраста"
+              aria-label={t('filters.ageRangeAriaLabel')}
               className="pt-1"
             />
           </div>
@@ -212,7 +214,7 @@ export function FiltersDialog({
           {/* Countries (premium) */}
           <div className={cn('space-y-2.5', !isPremium && 'opacity-60')}>
             <div className="flex items-center justify-between">
-              <Label htmlFor="filter-countries">Страны</Label>
+              <Label htmlFor="filter-countries">{t('filters.countriesLabel')}</Label>
               {!isPremium && <PremiumTag />}
             </div>
             {isPremium ? (
@@ -222,9 +224,9 @@ export function FiltersDialog({
                 onChange={(codes: CountryCode[]) =>
                   setDraft((d) => ({ ...d, countries: codes }))
                 }
-                placeholder="Любая страна"
+                placeholder={t('filters.anyCountry')}
                 maxSelections={50}
-                aria-label="Выбор стран"
+                aria-label={t('filters.countriesAriaLabel')}
               />
             ) : (
               <TooltipProvider>
@@ -234,10 +236,10 @@ export function FiltersDialog({
                       aria-disabled
                       className="flex min-h-11 w-full cursor-not-allowed items-center rounded-xl border border-border bg-input/30 px-3 text-sm text-muted-foreground"
                     >
-                      Любая страна
+                      {t('filters.anyCountry')}
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent>Доступно в Premium</TooltipContent>
+                  <TooltipContent>{t('filters.availableInPremium')}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
@@ -257,13 +259,11 @@ export function FiltersDialog({
                     className="h-4 w-4 text-[var(--color-neon-violet)]"
                     aria-hidden="true"
                   />
-                  Только с общими интересами
+                  {t('filters.sharedInterestsLabel')}
                 </Label>
                 {!isPremium && <PremiumTag />}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Подбирать собеседников, у которых есть хотя бы один общий с вами интерес.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('filters.sharedInterestsHint')}</p>
             </div>
             <Switch
               id="filter-shared-interests"
@@ -272,7 +272,7 @@ export function FiltersDialog({
               onCheckedChange={(checked) =>
                 setDraft((d) => ({ ...d, sharedInterestsOnly: checked }))
               }
-              aria-label="Только с общими интересами"
+              aria-label={t('filters.sharedInterestsLabel')}
               className="mt-0.5 shrink-0"
             />
           </div>
@@ -283,17 +283,17 @@ export function FiltersDialog({
               className="flex items-center justify-center gap-2 rounded-xl border border-[var(--color-neon-violet)]/40 bg-[var(--color-neon-violet)]/10 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-[var(--color-neon-violet)]/20"
             >
               <Crown className="h-4 w-4 text-[var(--color-neon-magenta)]" />
-              Открыть фильтры с Premium
+              {t('filters.unlockWithPremium')}
             </Link>
           )}
         </div>
 
         <DialogFooter className="sm:justify-between">
           <Button variant="ghost" onClick={reset}>
-            Сбросить
+            {t('filters.reset')}
           </Button>
           <Button variant="primary" onClick={apply}>
-            Применить
+            {t('filters.apply')}
           </Button>
         </DialogFooter>
       </DialogContent>

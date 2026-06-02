@@ -10,6 +10,7 @@
  * still communicates that requests need attention.
  */
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Check, UserPlus, X } from 'lucide-react';
 import { Button, Card, IconButton } from '@ruletka/ui';
 import type { FriendRequestNotice } from '@/features/friends/use-friend-requests';
@@ -23,6 +24,7 @@ export function FriendRequestsPanel({
   onDismiss: (id: string) => void;
   onReview: () => void;
 }) {
+  const t = useTranslations('social');
   if (requests.length === 0) return null;
 
   return (
@@ -32,7 +34,7 @@ export function FriendRequestsPanel({
           <UserPlus className="h-4 w-4" aria-hidden="true" />
         </span>
         <h2 className="font-display text-sm font-bold tracking-tight">
-          Новые заявки в друзья
+          {t('newFriendRequests')}
           <span className="ml-2 rounded-full bg-[var(--color-neon-magenta)]/20 px-2 py-0.5 text-xs text-[var(--color-neon-magenta)]">
             {requests.length}
           </span>
@@ -56,12 +58,12 @@ export function FriendRequestsPanel({
                 <p className="truncate text-xs text-muted-foreground">{r.body}</p>
               </div>
               <Button variant="secondary" size="sm" leadingIcon={<Check className="h-4 w-4" />} onClick={onReview}>
-                Посмотреть
+                {t('view')}
               </Button>
               <IconButton
                 variant="ghost"
                 size="sm"
-                aria-label="Скрыть заявку"
+                aria-label={t('dismissRequest')}
                 onClick={() => onDismiss(r.id)}
               >
                 <X aria-hidden="true" />

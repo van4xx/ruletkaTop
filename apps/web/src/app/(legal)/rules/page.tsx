@@ -1,158 +1,134 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 import { ShieldCheck, Flag, Ban } from 'lucide-react';
 import { LegalLayout, type TocEntry } from '@/components/legal/legal-layout';
 import { Section, P, H3, List, Callout } from '@/components/legal/legal-content';
 
-export const metadata: Metadata = {
-  title: 'Правила сообщества',
-  description:
-    'Правила сообщества ruletka.top: возрастное ограничение 18+, нормы поведения, запрещённый контент и порядок модерации.',
-};
-
-const TOC: TocEntry[] = [
-  { id: 'age', label: 'Возраст 18+' },
-  { id: 'principles', label: 'Основные принципы' },
-  { id: 'prohibited', label: 'Что запрещено' },
-  { id: 'ugc', label: 'Контент и модерация' },
-  { id: 'reports', label: 'Жалобы и блокировки' },
-  { id: 'consequences', label: 'Последствия нарушений' },
-];
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('legal');
+  return {
+    title: t('rules.metaTitle'),
+    description: t('rules.metaDescription'),
+  };
+}
 
 export default function RulesPage() {
+  const t = useTranslations('legal');
+
+  const TOC: TocEntry[] = [
+    { id: 'age', label: t('rules.toc.age') },
+    { id: 'principles', label: t('rules.toc.principles') },
+    { id: 'prohibited', label: t('rules.toc.prohibited') },
+    { id: 'ugc', label: t('rules.toc.ugc') },
+    { id: 'reports', label: t('rules.toc.reports') },
+    { id: 'consequences', label: t('rules.toc.consequences') },
+  ];
+
   return (
     <LegalLayout
       eyebrow={
         <>
           <ShieldCheck className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-          Сообщество
+          {t('rules.eyebrow')}
         </>
       }
       title={
         <>
-          Правила <span className="text-gradient-neon">сообщества</span>
+          {t('rules.title1')} <span className="text-gradient-neon">{t('rules.title2')}</span>
         </>
       }
-      lede="ruletka.top — пространство для живого, уважительного общения. Эти правила обязательны для всех участников и помогают сохранять платформу безопасной."
-      updatedAt="1 июня 2026"
+      lede={t('rules.lede')}
+      updatedAt={t('rules.updatedAt')}
       toc={TOC}
     >
-      <Section id="age" index={1} title="Возрастное ограничение 18+">
+      <Section id="age" index={1} title={t('rules.age.title')}>
         <Callout tone="warning" icon={<Ban className="h-5 w-5" />}>
-          <p className="font-semibold text-foreground">Сервис предназначен только для лиц старше 18 лет.</p>
-          <p>
-            Регистрируясь и пользуясь ruletka.top, вы подтверждаете, что вам исполнилось 18 лет.
-            Аккаунты пользователей, не достигших совершеннолетия, удаляются без предупреждения.
-          </p>
+          <p className="font-semibold text-foreground">{t('rules.age.calloutTitle')}</p>
+          <p>{t('rules.age.calloutBody')}</p>
         </Callout>
-        <P>
-          Мы можем запросить подтверждение возраста в любой момент. Передача доступа к аккаунту
-          несовершеннолетним, а также участие в звонках от их имени строго запрещены.
-        </P>
+        <P>{t('rules.age.p1')}</P>
       </Section>
 
-      <Section id="principles" index={2} title="Основные принципы">
-        <P>
-          В основе сообщества — взаимное уважение. Относитесь к собеседникам так, как хотели бы, чтобы
-          относились к вам.
-        </P>
+      <Section id="principles" index={2} title={t('rules.principles.title')}>
+        <P>{t('rules.principles.intro')}</P>
         <List
           variant="check"
           items={[
-            'Будьте вежливы и доброжелательны, даже если интересы не совпали — просто переключитесь на следующего собеседника.',
-            'Уважайте личные границы: не настаивайте на продолжении общения, если человек этого не хочет.',
-            'Соблюдайте конфиденциальность: не публикуйте чужие данные, скриншоты или записи без согласия.',
-            'Общайтесь честно — не выдавайте себя за другого человека и не вводите в заблуждение.',
+            t('rules.principles.item1'),
+            t('rules.principles.item2'),
+            t('rules.principles.item3'),
+            t('rules.principles.item4'),
           ]}
         />
       </Section>
 
-      <Section id="prohibited" index={3} title="Что запрещено">
-        <P>На платформе категорически не допускаются:</P>
+      <Section id="prohibited" index={3} title={t('rules.prohibited.title')}>
+        <P>{t('rules.prohibited.intro')}</P>
         <List
           variant="cross"
           items={[
-            'Нагота, сексуализированный контент и любые действия сексуального характера в кадре.',
-            'Оскорбления, травля, угрозы, разжигание ненависти по любому признаку.',
-            'Демонстрация насилия, оружия, употребления наркотиков и другого опасного поведения.',
-            'Мошенничество, спам, реклама, попрошайничество и ссылки на сторонние ресурсы с целью обмана.',
-            'Распространение контента, защищённого авторским правом, без разрешения правообладателя.',
-            'Любой контент с участием несовершеннолетних.',
+            t('rules.prohibited.item1'),
+            t('rules.prohibited.item2'),
+            t('rules.prohibited.item3'),
+            t('rules.prohibited.item4'),
+            t('rules.prohibited.item5'),
+            t('rules.prohibited.item6'),
           ]}
         />
         <Callout>
-          <p>
-            Часть запрещённых действий является уголовно наказуемой. В таких случаях мы передаём
-            материалы в правоохранительные органы.
-          </p>
+          <p>{t('rules.prohibited.callout')}</p>
         </Callout>
       </Section>
 
-      <Section id="ugc" index={4} title="Пользовательский контент и модерация">
-        <P>
-          Никнейм, статус, аватар, сообщения в чатах и видеопоток — это пользовательский контент
-          (UGC). Размещая его, вы отвечаете за то, чтобы он соответствовал этим правилам и
-          законодательству.
-        </P>
-        <H3>Как работает модерация</H3>
+      <Section id="ugc" index={4} title={t('rules.ugc.title')}>
+        <P>{t('rules.ugc.p1')}</P>
+        <H3>{t('rules.ugc.subheading')}</H3>
         <List
           variant="dot"
           items={[
-            'Автоматические фильтры выявляют потенциальные нарушения в текстах и изображениях профиля.',
-            'Жалобы пользователей попадают модераторам и рассматриваются в приоритетном порядке.',
-            'Модераторы вправе скрыть, удалить контент или ограничить доступ к функциям без предварительного уведомления.',
-            'Видеозвонки не записываются нами по умолчанию; модерация эфира происходит по жалобам и стоп-кадрам, прикреплённым к ним.',
+            t('rules.ugc.item1'),
+            t('rules.ugc.item2'),
+            t('rules.ugc.item3'),
+            t('rules.ugc.item4'),
           ]}
         />
       </Section>
 
-      <Section id="reports" index={5} title="Жалобы и блокировки">
-        <P>
-          Если собеседник нарушает правила — воспользуйтесь кнопкой «Пожаловаться» прямо во время
-          звонка или в чате. Опишите ситуацию: это ускорит разбор.
-        </P>
+      <Section id="reports" index={5} title={t('rules.reports.title')}>
+        <P>{t('rules.reports.intro')}</P>
         <List
           variant="dot"
           items={[
+            <>{t('rules.reports.item1')}</>,
+            t('rules.reports.item2'),
             <>
-              Вы всегда можете завершить звонок и заблокировать пользователя — он больше не попадётся
-              вам в рулетке.
-            </>,
-            'Ложные и массовые жалобы с целью навредить другим участникам сами являются нарушением.',
-            <>
-              По вопросам модерации и спорным решениям пишите в{' '}
+              {t('rules.reports.item3Pre')}{' '}
               <Link href="/help" className="text-[var(--color-neon-cyan)] hover:underline">
-                раздел помощи
+                {t('rules.reports.item3Link')}
               </Link>
               .
             </>,
           ]}
         />
         <Callout icon={<Flag className="h-5 w-5" />}>
-          <p>
-            Экстренные ситуации, угрожающие жизни и здоровью, незамедлительно сообщайте в
-            экстренные службы вашего региона.
-          </p>
+          <p>{t('rules.reports.callout')}</p>
         </Callout>
       </Section>
 
-      <Section id="consequences" index={6} title="Последствия нарушений">
-        <P>
-          В зависимости от тяжести и повторяемости нарушения мы применяем соразмерные меры:
-        </P>
+      <Section id="consequences" index={6} title={t('rules.consequences.title')}>
+        <P>{t('rules.consequences.intro')}</P>
         <List
           variant="dot"
           items={[
-            'Предупреждение и временное ограничение отдельных функций (например, поиска собеседников).',
-            'Временная блокировка аккаунта на срок от 24 часов.',
-            'Постоянная блокировка с потерей доступа к балансу монет и приобретённым возможностям.',
-            'Передача данных в правоохранительные органы при наличии признаков преступления.',
+            t('rules.consequences.item1'),
+            t('rules.consequences.item2'),
+            t('rules.consequences.item3'),
+            t('rules.consequences.item4'),
           ]}
         />
-        <P>
-          Решения о блокировке можно обжаловать через раздел помощи. Мы рассмотрим обращение и
-          ответим в разумный срок.
-        </P>
+        <P>{t('rules.consequences.outro')}</P>
       </Section>
     </LegalLayout>
   );

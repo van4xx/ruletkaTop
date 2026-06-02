@@ -8,10 +8,12 @@
  * pip carries a soft cyan glow. Decorative layers are `aria-hidden`.
  */
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { ROUTES } from '@/config/nav';
 import { useAuth } from '@/features/auth';
 
 export function BrandMark() {
+  const t = useTranslations('chrome');
   const { isAuthenticated } = useAuth();
   const href = isAuthenticated ? ROUTES.dashboard : ROUTES.home;
 
@@ -19,7 +21,7 @@ export function BrandMark() {
     <Link
       href={href}
       className="group flex shrink-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      aria-label="ruletka.top — на главную"
+      aria-label={t('brand.homeAria')}
     >
       <span className="relative inline-flex h-9 w-9 items-center justify-center">
         {/* Concentric "roulette" emblem with a neon sweep. */}

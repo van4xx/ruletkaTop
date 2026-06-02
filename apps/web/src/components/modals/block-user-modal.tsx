@@ -6,6 +6,7 @@
  * `friendshipId` is supplied we drop it from the cached friends list too, and
  * fire the optional `onBlocked` callback (e.g. to leave an active call).
  */
+import { useTranslations } from 'next-intl';
 import { ShieldBan } from 'lucide-react';
 import {
   Button,
@@ -20,38 +21,39 @@ import { useBlockUser, useRemoveFriendship } from '@/features/friends/use-friend
 
 export function BlockUserModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { userId, nickname, friendshipId, onBlocked } = useModalProps<'block-user'>();
   const block = useBlockUser();
   const removeFriendship = useRemoveFriendship();
 
-  const name = nickname?.trim() || 'Этот пользователь';
+  const name = nickname?.trim() || t('modals.blockUser.fallbackName');
 
   function handleBlock() {
     block.mutate(userId, {
       onSuccess: () => {
         if (friendshipId) removeFriendship.mutate(friendshipId);
-        toast.success(`${name} заблокирован`, {
-          description: 'Он больше не сможет писать вам и звонить.',
+        toast.success(t('modals.blockUser.blockedTitle', { name }), {
+          description: t('modals.blockUser.blockedDescription'),
         });
         onBlocked?.();
         close();
       },
-      onError: () => toast.error('Не удалось заблокировать пользователя'),
+      onError: () => toast.error(t('modals.blockUser.errGeneric')),
     });
   }
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Заблокировать пользователя?</DialogTitle>
+        <DialogTitle>{t('modals.blockUser.title')}</DialogTitle>
         <DialogDescription>
-          <span className="font-medium text-foreground">{name}</span> больше не сможет писать вам,
-          звонить или находить вас в рулетке. Если вы друзья — дружба будет разорвана.
+          <span className="font-medium text-foreground">{name}</span>{' '}
+          {t('modals.blockUser.descriptionPrefix')}
         </DialogDescription>
       </DialogHeader>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={close} disabled={block.isPending}>
-          Отмена
+          {t('modals.blockUser.cancel')}
         </Button>
         <Button
           type="button"
@@ -60,7 +62,7 @@ export function BlockUserModal() {
           leadingIcon={<ShieldBan className="h-4 w-4" />}
           onClick={handleBlock}
         >
-          Заблокировать
+          {t('modals.blockUser.block')}
         </Button>
       </DialogFooter>
     </>

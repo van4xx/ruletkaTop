@@ -9,6 +9,7 @@
  * heuristic (length + character-class variety) and is purely advisory.
  */
 import { forwardRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Eye, EyeOff, Lock } from 'lucide-react';
 import { Input, type InputProps } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -31,18 +32,20 @@ export function scorePassword(pw: string): number {
   return Math.min(score, 4);
 }
 
+/** Strength tier tones + i18n keys (copy lives in `auth.passwordField.strength.*`). */
 const STRENGTH = [
-  { label: 'Слишком короткий', tone: 'bg-destructive' },
-  { label: 'Слабый', tone: 'bg-destructive' },
-  { label: 'Средний', tone: 'bg-warning' },
-  { label: 'Хороший', tone: 'bg-[var(--color-neon-cyan)]' },
-  { label: 'Надёжный', tone: 'bg-success' },
+  { key: 'tooShort', tone: 'bg-destructive' },
+  { key: 'weak', tone: 'bg-destructive' },
+  { key: 'medium', tone: 'bg-warning' },
+  { key: 'good', tone: 'bg-[var(--color-neon-cyan)]' },
+  { key: 'strong', tone: 'bg-success' },
 ] as const;
 
 export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(function PasswordField(
   { showStrength = false, value = '', className, ...props },
   ref,
 ) {
+  const t = useTranslations('auth');
   const [visible, setVisible] = useState(false);
   const score = scorePassword(value);
   const meta = STRENGTH[score] ?? STRENGTH[0];
@@ -61,7 +64,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(fu
           <button
             type="button"
             onClick={() => setVisible((v) => !v)}
-            aria-label={visible ? 'Скрыть пароль' : 'Показать пароль'}
+            aria-label={visible ? t('passwordField.hide') : t('passwordField.show')}
             aria-pressed={visible}
             className="pointer-events-auto inline-flex items-center justify-center rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             tabIndex={-1}
@@ -84,7 +87,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(fu
               />
             ))}
           </div>
-          <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">{meta.label}</span>
+          <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">{t(`passwordField.strength.${meta.key}`)}</span>
         </div>
       )}
     </div>

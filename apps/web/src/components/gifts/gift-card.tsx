@@ -4,6 +4,7 @@
  * A single gift in the catalogue — rarity-tinted glass card with the animation,
  * price in coins, a premium-only lock, and a hover-revealed "Send" action.
  */
+import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Crown, Send } from 'lucide-react';
 import type { Gift } from '@ruletka/shared-types';
@@ -24,6 +25,7 @@ export interface GiftCardProps {
 }
 
 export function GiftCard({ gift, isPremium, onSend, index = 0 }: GiftCardProps) {
+  const t = useTranslations('economy');
   const style = RARITY_STYLES[gift.rarity];
   const locked = gift.isPremiumOnly && !isPremium;
 
@@ -59,10 +61,10 @@ export function GiftCard({ gift, isPremium, onSend, index = 0 }: GiftCardProps) 
                     )}
                   >
                     <Crown className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span className="sr-only">Только для премиум</span>
+                    <span className="sr-only">{t('giftCard.premiumOnly')}</span>
                   </span>
                 </TooltipTrigger>
-                <TooltipContent>Только для премиум</TooltipContent>
+                <TooltipContent>{t('giftCard.premiumOnly')}</TooltipContent>
               </Tooltip>
             </span>
           )}
@@ -87,7 +89,7 @@ export function GiftCard({ gift, isPremium, onSend, index = 0 }: GiftCardProps) 
           leadingIcon={locked ? <Crown className="h-4 w-4" /> : <Send className="h-4 w-4" />}
           onClick={() => onSend(gift)}
         >
-          {locked ? 'Премиум' : 'Подарить'}
+          {locked ? t('giftCard.premiumLabel') : t('giftCard.send')}
         </Button>
       </div>
     </motion.div>

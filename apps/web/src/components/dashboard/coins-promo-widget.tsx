@@ -16,6 +16,7 @@
  */
 import Link from 'next/link';
 import { motion, type Variants } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Coins, Gift, Plus, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { MODAL, useAppModals } from '@/hooks/dashboard/use-app-modals';
@@ -39,11 +40,12 @@ const rung: Variants = {
 };
 
 export function CoinsPromoWidget() {
+  const t = useTranslations('misc');
   const modals = useAppModals();
 
   return (
     <motion.section
-      aria-label="Монеты и бонусы"
+      aria-label={t('dashboard.coinsPromoLabel')}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, ease: EASE_OUT }}
@@ -73,8 +75,8 @@ export function CoinsPromoWidget() {
               </span>
             </span>
             <div>
-              <h2 className="font-display text-base font-bold tracking-tight">Ежедневный бонус</h2>
-              <p className="text-xs text-muted-foreground">Заходи каждый день — копи монеты</p>
+              <h2 className="font-display text-base font-bold tracking-tight">{t('dashboard.dailyBonusTitle')}</h2>
+              <p className="text-xs text-muted-foreground">{t('dashboard.dailyBonusSubtitle')}</p>
             </div>
           </div>
         </div>
@@ -82,7 +84,7 @@ export function CoinsPromoWidget() {
         {/* 7-day streak ladder. */}
         <motion.ol
           className="mt-4 grid grid-cols-7 gap-1.5"
-          aria-label="Лестница наград за 7 дней"
+          aria-label={t('dashboard.rewardLadderAria')}
           variants={ladder}
           initial="hidden"
           animate="show"
@@ -109,7 +111,7 @@ export function CoinsPromoWidget() {
                   <Coins className="h-3 w-3 opacity-70" aria-hidden="true" />
                   {reward}
                 </span>
-                <span className="text-[0.5625rem] text-muted-foreground">Д{i + 1}</span>
+                <span className="text-[0.5625rem] text-muted-foreground">{t('dashboard.dayShort', { day: i + 1 })}</span>
               </motion.li>
             );
           })}
@@ -129,7 +131,7 @@ export function CoinsPromoWidget() {
             )}
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Пополнить баланс
+            {t('dashboard.topUpBalance')}
           </button>
           <Link
             href={PREMIUM_ROUTE}
@@ -141,7 +143,7 @@ export function CoinsPromoWidget() {
             )}
           >
             <Sparkles className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
-            Премиум
+            {t('dashboard.premium')}
           </Link>
         </div>
       </div>

@@ -8,6 +8,7 @@
  *   - 403 premium-only gift sent by a non-premium member
  */
 import { useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Crown, Send } from 'lucide-react';
@@ -55,6 +56,8 @@ export function SendGiftDialog({
   context = 'profile',
   onClose,
 }: SendGiftDialogProps) {
+  const t = useTranslations('economy');
+  const tc = useTranslations('common');
   const send = useSendGift();
 
   const {
@@ -90,32 +93,32 @@ export function SendGiftDialog({
   const onSubmit = (values: SendGiftDto) => {
     send.mutate(values, {
       onSuccess: () => {
-        toast.success('Подарок отправлен!', {
-          description: gift ? `${gift.title} уже в пути.` : undefined,
+        toast.success(t('sendGift.toastSuccess'), {
+          description: gift ? t('sendGift.toastSuccessDescription', { title: gift.title }) : undefined,
         });
         onClose();
       },
       onError: (err) => {
         if (err instanceof ApiClientError) {
           if (err.status === 402 || err.status === 422) {
-            setError('toUserId', { message: 'Недостаточно монет на балансе.' });
-            toast.error('Недостаточно монет', {
-              description: 'Пополните баланс, чтобы отправить подарок.',
+            setError('toUserId', { message: t('sendGift.errorInsufficientField') });
+            toast.error(t('sendGift.errorInsufficientToast'), {
+              description: t('sendGift.errorInsufficientToastDescription'),
             });
             return;
           }
           if (err.status === 403) {
-            toast.error('Только для премиум', {
-              description: 'Этот подарок доступен премиум-участникам.',
+            toast.error(t('sendGift.errorPremiumToast'), {
+              description: t('sendGift.errorPremiumToastDescription'),
             });
             return;
           }
           if (err.status === 404) {
-            setError('toUserId', { message: 'Получатель не найден.' });
+            setError('toUserId', { message: t('sendGift.errorRecipientNotFound') });
             return;
           }
         }
-        toast.error('Не удалось отправить подарок');
+        toast.error(t('sendGift.errorGeneric'));
       },
     });
   };
@@ -126,9 +129,9 @@ export function SendGiftDialog({
     <Dialog open={!!gift} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Отправить подарок</DialogTitle>
+          <DialogTitle>{t('sendGift.title')}</DialogTitle>
           <DialogDescription>
-            Подарок спишется с вашего баланса монет и придёт получателю мгновенно.
+            {t('sendGift.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -159,10 +162,10 @@ export function SendGiftDialog({
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center">
                 <Crown className="h-7 w-7 text-warning" aria-hidden="true" />
                 <p className="text-sm text-foreground">
-                  Этот подарок могут дарить только премиум-участники.
+                  {t('sendGift.lockedText')}
                 </p>
                 <Button asChild size="sm" variant="secondary">
-                  <Link href="/premium">Подключить премиум</Link>
+                  <Link href="/premium">{t('sendGift.lockedCta')}</Link>
                 </Button>
               </div>
             ) : (
@@ -170,11 +173,11 @@ export function SendGiftDialog({
                 {/* Recipient */}
                 <div className="space-y-1.5">
                   <Label htmlFor="toUserId" required>
-                    ID получателя
+                    {t('sendGift.recipientLabel')}
                   </Label>
                   <Input
                     id="toUserId"
-                    placeholder="Например, 663f1a2b9c0e4d5f6a7b8c9d"
+                    placeholder={t('sendGift.recipientPlaceholder')}
                     invalid={!!errors.toUserId}
                     {...register('toUserId')}
                   />
@@ -182,18 +185,18 @@ export function SendGiftDialog({
                     <p className="text-xs text-destructive">{errors.toUserId.message}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Откройте профиль собеседника и скопируйте его идентификатор.
+                    {t('sendGift.recipientHint')}
                   </p>
                 </div>
 
                 {/* Message */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="message">Сообщение (необязательно)</Label>
+                  <Label htmlFor="message">{t('sendGift.messageLabel')}</Label>
                   <Textarea
                     id="message"
                     rows={3}
                     maxLength={200}
-                    placeholder="Добавьте тёплые слова…"
+                    placeholder={t('sendGift.messagePlaceholder')}
                     invalid={!!errors.message}
                     {...register('message')}
                   />
@@ -206,7 +209,7 @@ export function SendGiftDialog({
 
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={onClose}>
-                Отмена
+                {tc('cancel')}
               </Button>
               {!locked && (
                 <Button
@@ -214,7 +217,7 @@ export function SendGiftDialog({
                   loading={send.isPending}
                   leadingIcon={<Send className="h-4 w-4" />}
                 >
-                  Подарить за {formatNumber(gift.priceCoins)}
+                  {t('sendGift.submit', { amount: formatNumber(gift.priceCoins) })}
                 </Button>
               )}
             </DialogFooter>

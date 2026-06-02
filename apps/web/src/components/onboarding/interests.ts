@@ -6,25 +6,26 @@
  */
 export interface InterestOption {
   key: string;
-  label: string;
+  /** `misc.onboarding.*` key for the interest label. */
+  labelKey: string;
   emoji: string;
 }
 
 export const INTERESTS: readonly InterestOption[] = [
-  { key: 'music', label: 'Музыка', emoji: '🎧' },
-  { key: 'travel', label: 'Путешествия', emoji: '✈️' },
-  { key: 'games', label: 'Игры', emoji: '🎮' },
-  { key: 'movies', label: 'Кино и сериалы', emoji: '🎬' },
-  { key: 'sport', label: 'Спорт', emoji: '⚽' },
-  { key: 'art', label: 'Искусство', emoji: '🎨' },
-  { key: 'tech', label: 'Технологии', emoji: '💻' },
-  { key: 'food', label: 'Еда', emoji: '🍜' },
-  { key: 'books', label: 'Книги', emoji: '📚' },
-  { key: 'languages', label: 'Языки', emoji: '🗣️' },
-  { key: 'photo', label: 'Фотография', emoji: '📷' },
-  { key: 'nature', label: 'Природа', emoji: '🌿' },
-  { key: 'fashion', label: 'Мода', emoji: '👗' },
-  { key: 'science', label: 'Наука', emoji: '🔬' },
-  { key: 'pets', label: 'Питомцы', emoji: '🐾' },
-  { key: 'dance', label: 'Танцы', emoji: '💃' },
+  { key: 'music', labelKey: 'onboarding.interestMusic', emoji: '🎧' },
+  { key: 'travel', labelKey: 'onboarding.interestTravel', emoji: '✈️' },
+  { key: 'games', labelKey: 'onboarding.interestGames', emoji: '🎮' },
+  { key: 'movies', labelKey: 'onboarding.interestMovies', emoji: '🎬' },
+  { key: 'sport', labelKey: 'onboarding.interestSport', emoji: '⚽' },
+  { key: 'art', labelKey: 'onboarding.interestArt', emoji: '🎨' },
+  { key: 'tech', labelKey: 'onboarding.interestTech', emoji: '💻' },
+  { key: 'food', labelKey: 'onboarding.interestFood', emoji: '🍜' },
+  { key: 'books', labelKey: 'onboarding.interestBooks', emoji: '📚' },
+  { key: 'languages', labelKey: 'onboarding.interestLanguages', emoji: '🗣️' },
+  { key: 'photo', labelKey: 'onboarding.interestPhoto', emoji: '📷' },
+  { key: 'nature', labelKey: 'onboarding.interestNature', emoji: '🌿' },
+  { key: 'fashion', labelKey: 'onboarding.interestFashion', emoji: '👗' },
+  { key: 'science', labelKey: 'onboarding.interestScience', emoji: '🔬' },
+  { key: 'pets', labelKey: 'onboarding.interestPets', emoji: '🐾' },
+  { key: 'dance', labelKey: 'onboarding.interestDance', emoji: '💃' },
 ] as const;

@@ -12,6 +12,7 @@
  * unavailable for the given profile. Tiles never collapse the layout.
  */
 import type { ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { motion, type Variants } from 'framer-motion';
 import { Coins, Eye, Lock, Trophy, Users } from 'lucide-react';
 import { CoinIcon, Skeleton } from '@ruletka/ui';
@@ -103,6 +104,7 @@ export function ProfileStats({
   topLoading,
   isOwnProfile,
 }: ProfileStatsProps) {
+  const t = useTranslations('profile');
   const { open } = useModal();
   const showFriends = friendsCount !== undefined && friendsCount !== null;
 
@@ -112,10 +114,10 @@ export function ProfileStats({
       initial="hidden"
       animate="show"
       className={cn('grid grid-cols-2 gap-3', showFriends ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}
-      aria-label="Статистика профиля"
+      aria-label={t('stats.ariaLabel')}
     >
       {/* Gifts value */}
-      <StatTile icon={<Coins className="h-4.5 w-4.5" aria-hidden="true" />} tone="coin" label="Получено в подарках">
+      <StatTile icon={<Coins className="h-4.5 w-4.5" aria-hidden="true" />} tone="coin" label={t('stats.giftsLabel')}>
         {giftsLoading ? (
           <Skeleton className="h-5 w-16" />
         ) : (
@@ -128,14 +130,14 @@ export function ProfileStats({
 
       {/* Profile views */}
       {canSeeViews ? (
-        <StatTile icon={<Eye className="h-4.5 w-4.5" aria-hidden="true" />} tone="cyan" label="Просмотров профиля">
+        <StatTile icon={<Eye className="h-4.5 w-4.5" aria-hidden="true" />} tone="cyan" label={t('stats.viewsLabel')}>
           {formatNumber(profileViews)}
         </StatTile>
       ) : (
         <button
           type="button"
-          onClick={() => open('premium', { reason: 'Смотрите, кто заходил в профили.' })}
-          aria-label="Просмотры профиля доступны с Премиумом"
+          onClick={() => open('premium', { reason: t('stats.viewsLockedReason') })}
+          aria-label={t('stats.viewsLockedAria')}
           className="group relative flex items-center gap-3 overflow-hidden rounded-2xl p-3.5 text-left ring-1 ring-border/60 transition-colors hover:ring-[var(--color-neon-violet)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:flex-col sm:items-start sm:gap-2.5"
         >
           <span
@@ -146,9 +148,9 @@ export function ProfileStats({
             <Lock className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="relative min-w-0">
-            <div className="font-display text-sm font-bold leading-tight">Скрыто</div>
+            <div className="font-display text-sm font-bold leading-tight">{t('stats.hidden')}</div>
             <p className="mt-1 truncate text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
-              Просмотры · Премиум
+              {t('stats.viewsLockedCaption')}
             </p>
           </div>
         </button>
@@ -156,17 +158,17 @@ export function ProfileStats({
 
       {/* Friends (own profile) */}
       {showFriends && (
-        <StatTile icon={<Users className="h-4.5 w-4.5" aria-hidden="true" />} tone="violet" label="Друзей">
+        <StatTile icon={<Users className="h-4.5 w-4.5" aria-hidden="true" />} tone="violet" label={t('stats.friendsLabel')}>
           {friendsLoading ? <Skeleton className="h-5 w-10" /> : formatNumber(friendsCount ?? 0)}
         </StatTile>
       )}
 
       {/* Top placement */}
-      <StatTile icon={<Trophy className="h-4.5 w-4.5" aria-hidden="true" />} tone="amber" label="Топ эфира">
+      <StatTile icon={<Trophy className="h-4.5 w-4.5" aria-hidden="true" />} tone="amber" label={t('stats.topLabel')}>
         {topLoading ? (
           <Skeleton className="h-5 w-14" />
         ) : isTopPlaced ? (
-          <span className="text-gradient-neon">{isOwnProfile ? 'Вы в Топе' : 'В Топе'}</span>
+          <span className="text-gradient-neon">{isOwnProfile ? t('stats.topPlacedOwn') : t('stats.topPlacedOther')}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}

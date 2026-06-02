@@ -15,6 +15,7 @@
  * shortcut into the same buy flow.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { History, Plus, ShoppingBag, Wallet as WalletIcon } from 'lucide-react';
 import { Button, CoinBalance } from '@ruletka/ui';
@@ -28,6 +29,7 @@ import { WalletLedger } from '@/components/wallet/wallet-ledger';
 import { BuyCoinsDialog } from '@/components/wallet/buy-coins-dialog';
 
 export default function WalletPage() {
+  const t = useTranslations('economy');
   const { isAuthenticated, isReady } = useAuth();
   const wallet = useWallet();
   const tx = useTransactions();
@@ -41,15 +43,16 @@ export default function WalletPage() {
         eyebrow={
           <>
             <WalletIcon className="h-3.5 w-3.5 text-[var(--coin)]" aria-hidden="true" />
-            Кошелёк
+            {t('wallet.eyebrow')}
           </>
         }
         title={
           <>
-            Ваши <span className="text-gradient-neon">монеты и история</span>
+            {t('wallet.titlePrefix')}{' '}
+            <span className="text-gradient-neon">{t('wallet.titleHighlight')}</span>
           </>
         }
-        lede="Следите за балансом и всеми операциями: пополнения, подарки и места в Топе — в одном месте."
+        lede={t('wallet.lede')}
         actions={
           <div className="flex items-center gap-2">
             <CoinBalance
@@ -59,13 +62,13 @@ export default function WalletPage() {
               className="hidden sm:inline-flex"
             />
             <Button leadingIcon={<Plus className="h-4 w-4" />} onClick={() => setBuyOpen(true)}>
-              Пополнить
+              {t('wallet.topUp')}
             </Button>
           </div>
         }
       >
         {isReady && !isAuthenticated ? (
-          <SignInRequired description="Войдите, чтобы видеть баланс и историю операций." />
+          <SignInRequired description={t('wallet.signInRequired')} />
         ) : (
           <div className="space-y-10">
             {/* Balance + derived stats */}
@@ -86,12 +89,12 @@ export default function WalletPage() {
                   className="inline-flex items-center gap-2 font-display text-xl font-bold tracking-tight"
                 >
                   <History className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                  История операций
+                  {t('wallet.ledgerHeading')}
                 </h2>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/coins">
                     <ShoppingBag className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Магазин монет</span>
+                    <span className="hidden sm:inline">{t('wallet.coinStore')}</span>
                   </Link>
                 </Button>
               </div>

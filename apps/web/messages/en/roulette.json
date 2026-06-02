@@ -1,0 +1,180 @@
+{
+  "video": {
+    "metaTitle": "Video Roulette",
+    "metaDescription": "Random video calls with people from all over the world. Turn on your camera, filter by interests, and meet someone in one click."
+  },
+  "voice": {
+    "metaTitle": "Voice Roulette",
+    "metaDescription": "Voice conversations with random partners — no camera. Crisp audio, a live equalizer, and an instant connect."
+  },
+  "modeName": {
+    "video": "Video Roulette",
+    "voice": "Voice Roulette"
+  },
+  "self": "You",
+  "peerFallback": "partner",
+  "screening": {
+    "hiddenTitle": "Camera hidden",
+    "hiddenDescription": "Inappropriate content detected. Your video is hidden from your partner."
+  },
+  "friend": {
+    "requestSent": "Request sent to {name}",
+    "requestError": "Couldn't send the request"
+  },
+  "errors": {
+    "signInToStart": "Sign in to your account to start chatting.",
+    "startFailed": "Couldn't start. Please try again."
+  },
+  "peerSubtitle": "{age} · {flag} {country}",
+  "status": {
+    "idle": {
+      "video": "Press “Start” — we'll ask for camera and microphone access and find you a partner.",
+      "voice": "Press “Start” — we'll ask for microphone access and find you a partner."
+    },
+    "searching": {
+      "title": "Looking for a partner…",
+      "longWait": "It's quiet in the stream right now. Try easing your filters — you'll match faster.",
+      "position": "You're in the queue: position {position}",
+      "default": "This will take a couple of seconds."
+    },
+    "ended": {
+      "title": "Your partner disconnected",
+      "subtitle": "Finding the next one…"
+    },
+    "reconnecting": {
+      "title": "Restoring the connection…",
+      "retry": "The connection is unstable. Attempt {attempt} — please keep this window open.",
+      "first": "The connection dropped. Trying to restore it — please keep this window open."
+    },
+    "error": {
+      "denied": "No access to your devices",
+      "notfound": "Device not found",
+      "inuse": "Device is in use",
+      "insecure": "Insecure connection",
+      "socket": "No connection",
+      "timeout": "Request timed out",
+      "unknown": "Something went wrong",
+      "retry": "Try again"
+    },
+    "signIn": {
+      "title": "Sign in to start",
+      "body": "{mode} is available to signed-in users. It only takes a minute."
+    }
+  },
+  "controls": {
+    "micOn": "Turn on microphone",
+    "micOff": "Turn off microphone",
+    "cameraOn": "Turn on camera",
+    "cameraOff": "Turn off camera",
+    "start": "Start",
+    "next": "Next",
+    "gift": "Gift",
+    "addFriend": "Add friend",
+    "chat": "Chat",
+    "more": "More",
+    "report": "Report",
+    "block": "Block",
+    "stop": "End"
+  },
+  "overlay": {
+    "genderMale": "M",
+    "genderFemale": "F",
+    "sharedInterestsMany": "shared interests: {interest} +{count}",
+    "sharedInterestOne": "shared interest: {interest}",
+    "reconnecting": "Reconnecting…",
+    "connecting": "Connecting…"
+  },
+  "chat": {
+    "ariaLabel": "Chat with {name}",
+    "title": "Chat",
+    "close": "Close chat",
+    "empty": "Messages are visible only to the two of you and disappear after the call.",
+    "placeholder": "Message…",
+    "messageAriaLabel": "Message text",
+    "send": "Send"
+  },
+  "filters": {
+    "genderAny": "Any",
+    "genderMale": "Men",
+    "genderFemale": "Women",
+    "trigger": "Filters",
+    "title": "Search filters",
+    "description": "Set who you'd like to chat with. Gender and country are available with Premium.",
+    "genderLabel": "Partner's gender",
+    "ageLabel": "Age",
+    "ageRangeAriaLabel": "Age range",
+    "countriesLabel": "Countries",
+    "anyCountry": "Any country",
+    "countriesAriaLabel": "Country selection",
+    "availableInPremium": "Available with Premium",
+    "sharedInterestsLabel": "Only with shared interests",
+    "sharedInterestsHint": "Match with partners who share at least one interest with you.",
+    "unlockWithPremium": "Unlock filters with Premium",
+    "reset": "Reset",
+    "apply": "Apply"
+  },
+  "gift": {
+    "rarityCommon": "Common",
+    "rarityRare": "Rare",
+    "rarityEpic": "Epic",
+    "rarityLegendary": "Legendary",
+    "title": "Send a gift to {name}",
+    "description": "Pick a gift — it'll appear right in the call.",
+    "loadError": "Couldn't load gifts.",
+    "retry": "Retry",
+    "empty": "No gifts available yet.",
+    "listAriaLabel": "Gift selection",
+    "messagePlaceholder": "Add a message (optional)",
+    "messageAriaLabel": "Gift message",
+    "cost": "Cost:",
+    "selectPrompt": "Pick a gift",
+    "send": "Send gift",
+    "sentTitle": "Gift sent to {name}!",
+    "sendError": "Couldn't send the gift"
+  },
+  "report": {
+    "reasonNudity": "Nudity / 18+",
+    "reasonHarassment": "Harassment",
+    "reasonMinor": "Minor",
+    "reasonViolence": "Violence",
+    "reasonSpam": "Spam",
+    "reasonScam": "Scam",
+    "reasonOther": "Other",
+    "title": "Report {name}",
+    "description": "Pick a reason. Reports are anonymous and help keep everyone safe.",
+    "reasonGroupAriaLabel": "Report reason",
+    "detailsLabel": "More details (optional)",
+    "detailsPlaceholder": "Describe what happened…",
+    "cancel": "Cancel",
+    "submit": "Submit report",
+    "successTitle": "Report submitted",
+    "successDescription": "Thank you — moderation will review it.",
+    "error": "Couldn't submit the report"
+  },
+  "block": {
+    "title": "Block {name}?",
+    "description": "You won't run into this user in the roulette again. You can undo this in settings.",
+    "cancel": "Cancel",
+    "confirm": "Block",
+    "successTitle": "{name} blocked",
+    "successDescription": "The two of you won't be matched again.",
+    "error": "Couldn't block"
+  },
+  "quality": {
+    "great": "Excellent connection",
+    "good": "Good connection",
+    "poor": "Weak connection",
+    "bad": "Poor connection",
+    "rtt": "{ms} ms",
+    "titleWithPing": "{label} · ping {rtt}"
+  },
+  "videoTile": {
+    "hiddenTitle": "Video hidden",
+    "hiddenSubtitle": "Inappropriate content detected",
+    "cameraOff": "Camera off",
+    "noVideo": "No video"
+  },
+  "voiceVisualizer": {
+    "audioActive": "{name}: audio active"
+  }
+}

@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Crown, LogOut, Search, X } from 'lucide-react';
 import type { AuthUser } from '@ruletka/shared-types';
@@ -52,6 +53,9 @@ export function MobileDrawer({
 }: MobileDrawerProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const reduceMotion = useReducedMotion();
+  const t = useTranslations('chrome');
+  const tc = useTranslations('common');
+  const tn = useTranslations('nav');
 
   // Authed users get the full taxonomy; anon users only the public few.
   const items = isAuthenticated ? MOBILE_NAV : PRIMARY_NAV;
@@ -149,7 +153,7 @@ export function MobileDrawer({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-label="Меню навигации"
+            aria-label={t('drawer.navAria')}
             initial={reduceMotion ? { opacity: 0 } : { x: '100%' }}
             animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { x: '100%' }}
@@ -167,7 +171,7 @@ export function MobileDrawer({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Закрыть меню"
+                aria-label={t('drawer.closeAria')}
                 className={cn(
                   'inline-flex h-9 w-9 items-center justify-center rounded-full',
                   'border border-border/70 bg-card/40 text-muted-foreground',
@@ -192,7 +196,7 @@ export function MobileDrawer({
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-semibold">{user.nickname}</span>
                     {user.isPremium && (
-                      <Crown className="h-3.5 w-3.5 shrink-0 text-warning" aria-label="Премиум" />
+                      <Crown className="h-3.5 w-3.5 shrink-0 text-warning" aria-label={t('drawer.premiumAria')} />
                     )}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">{user.email}</span>
@@ -213,12 +217,12 @@ export function MobileDrawer({
                 )}
               >
                 <Search className="h-4 w-4" aria-hidden="true" />
-                Поиск по разделам
+                {t('drawer.searchSections')}
               </button>
             </div>
 
             {/* Nav */}
-            <nav aria-label="Мобильная навигация" className="flex-1 overflow-y-auto px-3 py-3">
+            <nav aria-label={t('drawer.mobileNavAria')} className="flex-1 overflow-y-auto px-3 py-3">
               <ul className="flex flex-col gap-1">
                 {items.map((item) => {
                   const active = isRouteActive(pathname, item.href);
@@ -239,9 +243,9 @@ export function MobileDrawer({
                       >
                         <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
                         <span className="flex min-w-0 flex-col">
-                          <span>{item.label}</span>
+                          <span>{tn(`${item.key}.label`)}</span>
                           <span className="truncate text-xs font-normal text-muted-foreground">
-                            {item.description}
+                            {tn(`${item.key}.description`)}
                           </span>
                         </span>
                       </Link>
@@ -266,7 +270,7 @@ export function MobileDrawer({
                     )}
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
-                    Выйти
+                    {tc('logout')}
                   </button>
                 </div>
               ) : (

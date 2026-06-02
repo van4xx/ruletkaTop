@@ -9,6 +9,7 @@
  */
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Check, X } from 'lucide-react';
 import { IconButton, Skeleton } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -36,6 +37,7 @@ function NotificationRow({
   onRead: (id: string) => void;
   onRemove?: (id: string) => void;
 }) {
+  const t = useTranslations('misc');
   const meta = NOTIFICATION_META[notification.kind];
   const Icon = meta.icon;
   const { read } = notification;
@@ -72,14 +74,14 @@ function NotificationRow({
           </p>
           {!read && (
             <span
-              aria-label="Непрочитано"
+              aria-label={t('notifications.unread')}
               className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-neon-cyan)] shadow-[0_0_6px_var(--color-neon-cyan)]"
             />
           )}
         </div>
         <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{notification.body}</p>
         <p className="mt-1 text-xs text-muted-foreground/80">
-          {meta.label} · {formatRelativeTime(notification.createdAt)}
+          {t(meta.labelKey)} · {formatRelativeTime(notification.createdAt, t)}
         </p>
       </div>
     </>
@@ -123,8 +125,8 @@ function NotificationRow({
             <IconButton
               variant="ghost"
               size="sm"
-              aria-label="Отметить прочитанным"
-              title="Отметить прочитанным"
+              aria-label={t('notifications.markReadAria')}
+              title={t('notifications.markReadAria')}
               onClick={() => onRead(notification.id)}
               className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
             >
@@ -135,8 +137,8 @@ function NotificationRow({
             <IconButton
               variant="ghost"
               size="sm"
-              aria-label="Удалить уведомление"
-              title="Удалить"
+              aria-label={t('notifications.removeAria')}
+              title={t('notifications.removeTitle')}
               onClick={() => onRemove(notification.id)}
               className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
             >
@@ -166,6 +168,7 @@ export function NotificationList({
   onRead: (id: string) => void;
   onRemove?: (id: string) => void;
 }) {
+  const t = useTranslations('misc');
   const today = notifications.filter((n) => isToday(n.createdAt));
   const earlier = notifications.filter((n) => !isToday(n.createdAt));
 
@@ -173,7 +176,7 @@ export function NotificationList({
     <div className="glass-panel overflow-hidden rounded-2xl p-1.5 sm:p-2">
       <ul>
         <AnimatePresence initial={false}>
-          {today.length > 0 && <GroupHeading key="today-h">Сегодня</GroupHeading>}
+          {today.length > 0 && <GroupHeading key="today-h">{t('notifications.groupToday')}</GroupHeading>}
           {today.map((n) => (
             <NotificationRow
               key={n.id}
@@ -182,7 +185,7 @@ export function NotificationList({
               onRemove={onRemove}
             />
           ))}
-          {earlier.length > 0 && <GroupHeading key="earlier-h">Ранее</GroupHeading>}
+          {earlier.length > 0 && <GroupHeading key="earlier-h">{t('notifications.groupEarlier')}</GroupHeading>}
           {earlier.map((n) => (
             <NotificationRow
               key={n.id}

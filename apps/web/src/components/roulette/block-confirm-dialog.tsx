@@ -13,6 +13,7 @@ import {
   toast,
 } from '@ruletka/ui';
 import { UserX } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useBlockUser } from '@/hooks/roulette/use-roulette-api';
 
 export interface BlockConfirmDialogProps {
@@ -31,6 +32,7 @@ export function BlockConfirmDialog({
   peerName,
   onBlocked,
 }: BlockConfirmDialogProps) {
+  const t = useTranslations('roulette');
   const block = useBlockUser();
 
   function confirm() {
@@ -38,14 +40,14 @@ export function BlockConfirmDialog({
       { blockedUserId },
       {
         onSuccess: () => {
-          toast.success(`${peerName} заблокирован`, {
-            description: 'Вы больше не будете попадать друг на друга.',
+          toast.success(t('block.successTitle', { name: peerName }), {
+            description: t('block.successDescription'),
           });
           onOpenChange(false);
           onBlocked?.();
         },
         onError: (err: unknown) => {
-          toast.error(err instanceof Error ? err.message : 'Не удалось заблокировать');
+          toast.error(err instanceof Error ? err.message : t('block.error'));
         },
       },
     );
@@ -57,20 +59,17 @@ export function BlockConfirmDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserX className="h-5 w-5 text-destructive" />
-            Заблокировать {peerName}?
+            {t('block.title', { name: peerName })}
           </DialogTitle>
-          <DialogDescription>
-            Вы больше не встретите этого пользователя в рулетке. Действие можно отменить в
-            настройках.
-          </DialogDescription>
+          <DialogDescription>{t('block.description')}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('block.cancel')}
           </Button>
           <Button variant="danger" onClick={confirm} disabled={block.isPending} className="gap-2">
             {block.isPending ? <Spinner size="sm" tone="current" /> : <UserX className="h-4 w-4" />}
-            Заблокировать
+            {t('block.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

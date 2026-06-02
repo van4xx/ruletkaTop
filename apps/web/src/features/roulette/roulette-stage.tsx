@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import type { MatchType } from '@ruletka/shared-types';
 import { toast } from '@ruletka/ui';
 
@@ -38,6 +39,7 @@ import { COUNTRY_BY_CODE, codeToFlag } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 
 export function RouletteStage({ type }: { type: MatchType }) {
+  const t = useTranslations('roulette');
   const isVideo = type === 'video';
   const { token, ready, isPremium } = useAuthToken();
   const r = useRoulette({ type, token });
@@ -53,8 +55,8 @@ export function RouletteStage({ type }: { type: MatchType }) {
     matchId: r.roomId,
     enabled: isVideo,
     onViolation: () =>
-      toast.warning('Камера скрыта', {
-        description: 'Обнаружен недопустимый контент. Видео скрыто от собеседника.',
+      toast.warning(t('screening.hiddenTitle'), {
+        description: t('screening.hiddenDescription'),
         duration: 6000,
       }),
   });
@@ -116,9 +118,9 @@ export function RouletteStage({ type }: { type: MatchType }) {
     addFriend.mutate(
       { recipientId: peer.userId },
       {
-        onSuccess: () => toast.success(`Заявка отправлена ${peer.nickname}`),
+        onSuccess: () => toast.success(t('friend.requestSent', { name: peer.nickname })),
         onError: (err: unknown) =>
-          toast.error(err instanceof Error ? err.message : 'Не удалось отправить заявку'),
+          toast.error(err instanceof Error ? err.message : t('friend.requestError')),
       },
     );
   }
@@ -138,9 +140,11 @@ export function RouletteStage({ type }: { type: MatchType }) {
   }
 
   const peerSubtitle = peer
-    ? `${peer.age} · ${codeToFlag(peer.country)} ${
-        COUNTRY_BY_CODE.get(peer.country)?.name ?? peer.country
-      }`
+    ? t('peerSubtitle', {
+        age: peer.age,
+        flag: codeToFlag(peer.country),
+        country: COUNTRY_BY_CODE.get(peer.country)?.name ?? peer.country,
+      })
     : '';
 
   return (
@@ -248,11 +252,11 @@ export function RouletteStage({ type }: { type: MatchType }) {
             mirror
             cameraOff={r.cameraOff}
             flagged={screening.flagged}
-            placeholderName="Вы"
+            placeholderName={t('self')}
             fit="cover"
           />
           <span className="absolute bottom-1 left-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[0.625rem] font-medium text-white">
-            Вы
+            {t('self')}
           </span>
         </motion.div>
       )}
@@ -263,7 +267,7 @@ export function RouletteStage({ type }: { type: MatchType }) {
           <div className="glass-panel rounded-2xl px-3 py-2">
             <VoiceVisualizer
               stream={r.localStream}
-              name="Вы"
+              name={t('self')}
               tone="local"
               compact
               className="w-32"
@@ -279,7 +283,7 @@ export function RouletteStage({ type }: { type: MatchType }) {
           onClose={() => r.setChatOpen(false)}
           messages={r.chatMessages}
           onSend={r.sendChatMessage}
-          peerName={peer?.nickname ?? 'собеседник'}
+          peerName={peer?.nickname ?? t('peerFallback')}
         />
       </div>
 

@@ -1,9 +1,13 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { ChatThread } from '@/features/chat/chat-thread';
 
-export const metadata: Metadata = {
-  title: 'Переписка',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('social');
+  return {
+    title: t('conversationMetaTitle'),
+  };
+}
 
 /**
  * /chats/[conversationId] — the realtime thread. `params` is async in the

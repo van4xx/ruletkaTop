@@ -8,6 +8,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/cn';
 
 export interface DashboardCardProps {
@@ -49,7 +50,7 @@ export interface WidgetHeaderProps {
   count?: number | null;
   /** Optional "see all" link target. */
   href?: string;
-  /** Visible label for the link (defaults to "Все"). */
+  /** Visible label for the link (defaults to the shared "All" label). */
   linkLabel?: string;
   className?: string;
 }
@@ -60,9 +61,11 @@ export function WidgetHeader({
   accent = 'var(--color-neon-violet)',
   count,
   href,
-  linkLabel = 'Все',
+  linkLabel,
   className,
 }: WidgetHeaderProps) {
+  const t = useTranslations('misc');
+  const resolvedLinkLabel = linkLabel ?? t('dashboard.widgetAll');
   return (
     <header className={cn('mb-4 flex items-center justify-between gap-3', className)}>
       <h2 className="flex min-w-0 items-center gap-2.5">
@@ -88,7 +91,7 @@ export function WidgetHeader({
           href={href}
           className="group inline-flex shrink-0 items-center gap-0.5 rounded-lg text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          {linkLabel}
+          {resolvedLinkLabel}
           <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
         </Link>
       )}

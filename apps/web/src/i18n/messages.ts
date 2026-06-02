@@ -22,6 +22,14 @@ export async function loadMessages(locale: Locale): Promise<Messages> {
       nav: (await import('../../messages/en/nav.json')).default,
       landing: (await import('../../messages/en/landing.json')).default,
       footer: (await import('../../messages/en/footer.json')).default,
+      auth: (await import('../../messages/en/auth.json')).default,
+      economy: (await import('../../messages/en/economy.json')).default,
+      social: (await import('../../messages/en/social.json')).default,
+      profile: (await import('../../messages/en/profile.json')).default,
+      legal: (await import('../../messages/en/legal.json')).default,
+      roulette: (await import('../../messages/en/roulette.json')).default,
+      chrome: (await import('../../messages/en/chrome.json')).default,
+      misc: (await import('../../messages/en/misc.json')).default,
     };
   }
   // ru — the default locale and the fallback for any missing message.
@@ -30,5 +38,13 @@ export async function loadMessages(locale: Locale): Promise<Messages> {
     nav: (await import('../../messages/ru/nav.json')).default,
     landing: (await import('../../messages/ru/landing.json')).default,
     footer: (await import('../../messages/ru/footer.json')).default,
+    auth: (await import('../../messages/ru/auth.json')).default,
+    economy: (await import('../../messages/ru/economy.json')).default,
+    social: (await import('../../messages/ru/social.json')).default,
+    profile: (await import('../../messages/ru/profile.json')).default,
+    legal: (await import('../../messages/ru/legal.json')).default,
+    roulette: (await import('../../messages/ru/roulette.json')).default,
+    chrome: (await import('../../messages/ru/chrome.json')).default,
+    misc: (await import('../../messages/ru/misc.json')).default,
   };
 }

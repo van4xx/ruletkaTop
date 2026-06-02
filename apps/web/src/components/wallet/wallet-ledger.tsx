@@ -9,6 +9,7 @@
  * and "load more" states in the product's glass aesthetic.
  */
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import {
   ArrowDownLeft,
@@ -29,27 +30,28 @@ type Tone = 'in' | 'out';
 
 const TX_META: Record<
   CoinTxType,
-  { label: string; icon: typeof Gift; tone: Tone; badge: BadgeProps['variant'] }
+  { icon: typeof Gift; tone: Tone; badge: BadgeProps['variant'] }
 > = {
-  purchase: { label: 'Покупка монет', icon: ShoppingCart, tone: 'in', badge: 'coin' },
-  bonus: { label: 'Бонус', icon: Sparkles, tone: 'in', badge: 'success' },
-  gift_in: { label: 'Подарок получен', icon: Gift, tone: 'in', badge: 'success' },
-  refund: { label: 'Возврат', icon: RotateCcw, tone: 'in', badge: 'accent' },
-  gift_out: { label: 'Подарок отправлен', icon: Gift, tone: 'out', badge: 'neutral' },
-  top: { label: 'Место в Топе', icon: Crown, tone: 'out', badge: 'warning' },
+  purchase: { icon: ShoppingCart, tone: 'in', badge: 'coin' },
+  bonus: { icon: Sparkles, tone: 'in', badge: 'success' },
+  gift_in: { icon: Gift, tone: 'in', badge: 'success' },
+  refund: { icon: RotateCcw, tone: 'in', badge: 'accent' },
+  gift_out: { icon: Gift, tone: 'out', badge: 'neutral' },
+  top: { icon: Crown, tone: 'out', badge: 'warning' },
 };
 
 type DirectionFilter = 'all' | 'in' | 'out';
 
-const FILTERS: { value: DirectionFilter; label: string }[] = [
-  { value: 'all', label: 'Все' },
-  { value: 'in', label: 'Пополнения' },
-  { value: 'out', label: 'Списания' },
+const FILTER_KEYS: { value: DirectionFilter; labelKey: string }[] = [
+  { value: 'all', labelKey: 'walletLedger.filterAll' },
+  { value: 'in', labelKey: 'walletLedger.filterIn' },
+  { value: 'out', labelKey: 'walletLedger.filterOut' },
 ];
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 function TxRow({ tx, index }: { tx: CoinTransaction; index: number }) {
+  const t = useTranslations('economy');
   const meta = TX_META[tx.type];
   const Icon = meta.icon;
   const positive = tx.delta > 0;
@@ -72,9 +74,9 @@ function TxRow({ tx, index }: { tx: CoinTransaction; index: number }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="truncate text-sm font-semibold text-foreground">{meta.label}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{t(`txType.${tx.type}`)}</p>
           <Badge variant={meta.badge} size="sm" className="hidden sm:inline-flex">
-            {meta.tone === 'in' ? 'Пополнение' : 'Списание'}
+            {meta.tone === 'in' ? t('walletLedger.badgeIn') : t('walletLedger.badgeOut')}
           </Badge>
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(tx.createdAt)}</p>
@@ -146,6 +148,7 @@ export function WalletLedger({
   onRetry,
   onTopUp,
 }: WalletLedgerProps) {
+  const t = useTranslations('economy');
   const [filter, setFilter] = useState<DirectionFilter>('all');
 
   const visible = useMemo(() => {
@@ -158,8 +161,8 @@ export function WalletLedger({
   if (isError) {
     return (
       <ErrorState
-        title="Не удалось загрузить историю"
-        description="История операций временно недоступна."
+        title={t('walletLedger.errorTitle')}
+        description={t('walletLedger.errorDescription')}
         onRetry={onRetry}
       />
     );
@@ -169,12 +172,12 @@ export function WalletLedger({
     return (
       <EmptyState
         icon={<ShoppingCart className="h-6 w-6" />}
-        title="Пока нет операций"
-        description="Пополните баланс или отправьте первый подарок — все операции появятся здесь."
+        title={t('walletLedger.emptyTitle')}
+        description={t('walletLedger.emptyDescription')}
         action={
           onTopUp && (
             <Button variant="primary" size="sm" onClick={onTopUp}>
-              Пополнить баланс
+              {t('walletLedger.emptyAction')}
             </Button>
           )
         }
@@ -185,8 +188,8 @@ export function WalletLedger({
   return (
     <div className="space-y-4">
       {/* Direction filter chips */}
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Фильтр операций">
-        {FILTERS.map((f) => {
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('walletLedger.filterLabel')}>
+        {FILTER_KEYS.map((f) => {
           const active = filter === f.value;
           return (
             <button
@@ -202,7 +205,7 @@ export function WalletLedger({
                   : 'glass-panel text-muted-foreground hover:text-foreground',
               )}
             >
-              {f.label}
+              {t(f.labelKey)}
             </button>
           );
         })}
@@ -211,7 +214,7 @@ export function WalletLedger({
       <div className="glass-panel overflow-hidden rounded-2xl">
         {visible.length === 0 ? (
           <div className="px-5 py-12 text-center text-sm text-muted-foreground">
-            {filter === 'in' ? 'Пополнений пока нет.' : 'Списаний пока нет.'}
+            {filter === 'in' ? t('walletLedger.noIncome') : t('walletLedger.noSpending')}
           </div>
         ) : (
           <ul className="divide-y divide-border/50">
@@ -230,7 +233,7 @@ export function WalletLedger({
               onClick={onLoadMore}
               disabled={isFetchingNextPage}
             >
-              {isFetchingNextPage ? <Spinner size="sm" tone="current" /> : 'Показать ещё'}
+              {isFetchingNextPage ? <Spinner size="sm" tone="current" /> : t('walletLedger.loadMore')}
             </Button>
           </div>
         )}

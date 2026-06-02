@@ -8,6 +8,7 @@
  * all-time total.
  */
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { ArrowDownLeft, ArrowUpRight, Receipt } from 'lucide-react';
 import type { CoinTransaction } from '@ruletka/shared-types';
@@ -24,6 +25,7 @@ export interface WalletStatsProps {
 }
 
 export function WalletStats({ transactions, isLoading, className }: WalletStatsProps) {
+  const t = useTranslations('economy');
   const { received, spent } = useMemo(() => {
     let received = 0;
     let spent = 0;
@@ -37,7 +39,7 @@ export function WalletStats({ transactions, isLoading, className }: WalletStatsP
   const items = [
     {
       key: 'in',
-      label: 'Получено',
+      label: t('walletStats.received'),
       value: received,
       icon: ArrowDownLeft,
       tone: 'text-success',
@@ -45,7 +47,7 @@ export function WalletStats({ transactions, isLoading, className }: WalletStatsP
     },
     {
       key: 'out',
-      label: 'Потрачено',
+      label: t('walletStats.spent'),
       value: spent,
       icon: ArrowUpRight,
       tone: 'text-foreground',
@@ -53,7 +55,7 @@ export function WalletStats({ transactions, isLoading, className }: WalletStatsP
     },
     {
       key: 'count',
-      label: 'Операций',
+      label: t('walletStats.operations'),
       value: transactions.length,
       icon: Receipt,
       tone: 'text-foreground',

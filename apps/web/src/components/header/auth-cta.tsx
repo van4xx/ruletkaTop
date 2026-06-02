@@ -8,9 +8,11 @@
  */
 import { memo } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/cn';
 
 function AuthCtaImpl({ className }: { className?: string }) {
+  const tc = useTranslations('common');
   return (
     <div className={cn('flex items-center gap-2', className)}>
       <Link
@@ -21,7 +23,7 @@ function AuthCtaImpl({ className }: { className?: string }) {
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         )}
       >
-        Войти
+        {tc('signIn')}
       </Link>
       <Link
         href="/register"
@@ -34,7 +36,7 @@ function AuthCtaImpl({ className }: { className?: string }) {
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         )}
       >
-        Регистрация
+        {tc('signUp')}
       </Link>
     </div>
   );

@@ -11,6 +11,7 @@
  * The actual card form is the CloudPayments hosted widget (separate overlay);
  * this dialog only narrates our side of the flow.
  */
+import { useTranslations } from 'next-intl';
 import { CheckCircle2, CreditCard, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import type { CoinPackage } from '@ruletka/shared-types';
 import {
@@ -42,6 +43,8 @@ export function CheckoutStatusDialog({
   onClose,
   onRetry,
 }: CheckoutStatusDialogProps) {
+  const t = useTranslations('economy');
+  const tc = useTranslations('common');
   // The dialog is visible for every phase except idle and the active widget
   // overlay (where CloudPayments owns the screen).
   const open = phase === 'starting' || phase === 'pending' || phase === 'credited' || phase === 'error';
@@ -53,21 +56,21 @@ export function CheckoutStatusDialog({
         <DialogHeader>
           <DialogTitle>
             {phase === 'error'
-              ? 'Платёж не завершён'
+              ? t('checkout.titleError')
               : phase === 'credited'
-                ? 'Монеты зачислены'
+                ? t('checkout.titleCredited')
                 : phase === 'pending'
-                  ? 'Подтверждаем оплату'
-                  : 'Готовим оплату'}
+                  ? t('checkout.titlePending')
+                  : t('checkout.titlePreparing')}
           </DialogTitle>
           <DialogDescription>
             {phase === 'error'
-              ? error ?? 'Попробуйте ещё раз или выберите другой способ оплаты.'
+              ? error ?? t('checkout.descError')
               : phase === 'credited'
-                ? `${formatNumber(total)} монет уже на вашем балансе.`
+                ? t('checkout.descCredited', { amount: formatNumber(total) })
                 : phase === 'pending'
-                  ? 'Оплата прошла. Зачисляем монеты — это занимает несколько секунд.'
-                  : 'Открываем защищённое окно CloudPayments. Данные карты не попадают на наш сервер.'}
+                  ? t('checkout.descPending')
+                  : t('checkout.descPreparing')}
           </DialogDescription>
         </DialogHeader>
 
@@ -76,13 +79,15 @@ export function CheckoutStatusDialog({
           {pkg && phase !== 'error' && (
             <div className="inline-flex items-center gap-2 rounded-full border border-[color-mix(in_oklch,var(--coin)_30%,transparent)] bg-[color-mix(in_oklch,var(--coin)_12%,transparent)] px-3.5 py-1.5">
               <CoinIcon size="sm" className="text-[var(--coin)]" />
-              <span className="text-sm font-semibold tabular-nums">{formatNumber(total)} монет</span>
+              <span className="text-sm font-semibold tabular-nums">
+                {t('checkout.coinsBadge', { amount: formatNumber(total) })}
+              </span>
             </div>
           )}
           {phase === 'starting' && (
             <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden="true" />
-              Безопасная оплата CloudPayments
+              {t('checkout.secure')}
             </p>
           )}
         </div>
@@ -92,15 +97,15 @@ export function CheckoutStatusDialog({
             {phase === 'error' ? (
               <>
                 <Button variant="ghost" onClick={onClose}>
-                  Отмена
+                  {tc('cancel')}
                 </Button>
                 <Button onClick={onRetry} leadingIcon={<CreditCard className="h-4 w-4" />}>
-                  Повторить оплату
+                  {t('checkout.retry')}
                 </Button>
               </>
             ) : (
               <Button onClick={onClose} block>
-                Отлично
+                {t('checkout.done')}
               </Button>
             )}
           </DialogFooter>

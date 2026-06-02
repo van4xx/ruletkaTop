@@ -11,6 +11,7 @@
  *                  lands (the gifts already received double as a light feed).
  */
 import { useState } from 'react';
+import { useFormatter, useTranslations } from 'next-intl';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Activity as ActivityIcon,
@@ -26,7 +27,6 @@ import { Tabs, TabsList, TabsTrigger, codeToFlag, COUNTRY_BY_CODE } from '@rulet
 import { cn } from '@/lib/cn';
 import { ErrorState } from '@/components/social/state-views';
 import { InterestChips } from './interest-chips';
-import { GENDER_LABEL, ageLabel } from './profile-meta';
 import { GiftsShowcase } from './gifts-showcase';
 import type { ReceivedGift } from '@/features/profile/use-profile';
 
@@ -53,6 +53,7 @@ export function ProfileTabs({
   onRetryGifts: () => void;
   isOwnProfile?: boolean;
 }) {
+  const t = useTranslations('profile');
   const reduce = useReducedMotion();
   const [tab, setTab] = useState<TabKey>('gifts');
 
@@ -65,14 +66,15 @@ export function ProfileTabs({
       <TabsList block className="w-full">
         <TabsTrigger value="gifts">
           <GiftIcon aria-hidden="true" />
-          Подарки
+          {t('tabs.gifts')}
         </TabsTrigger>
         <TabsTrigger value="about">
-          <UserRound aria-hidden="true" />О себе
+          <UserRound aria-hidden="true" />
+          {t('tabs.about')}
         </TabsTrigger>
         <TabsTrigger value="activity">
           <ActivityIcon aria-hidden="true" />
-          Активность
+          {t('tabs.activity')}
         </TabsTrigger>
       </TabsList>
 
@@ -88,23 +90,19 @@ export function ProfileTabs({
             // Region is labelled by the active tab for screen readers.
             role="region"
             aria-label={
-              tab === 'gifts' ? 'Подарки' : tab === 'about' ? 'О себе' : 'Активность'
+              tab === 'gifts' ? t('tabs.gifts') : tab === 'about' ? t('tabs.about') : t('tabs.activity')
             }
           >
             {tab === 'gifts' &&
               (giftsError ? (
-                <ErrorState onRetry={onRetryGifts} description="Не удалось загрузить подарки." />
+                <ErrorState onRetry={onRetryGifts} description={t('tabs.giftsError')} />
               ) : (
                 <GiftsShowcase
                   gifts={gifts}
                   isLoading={giftsLoading}
                   totalValueCoins={giftsValueCoins}
-                  emptyTitle={isOwnProfile ? 'У вас пока нет подарков' : 'Пока нет подарков'}
-                  emptyHint={
-                    isOwnProfile
-                      ? 'Подарки от собеседников появятся здесь — выходите в эфир и общайтесь.'
-                      : 'Станьте первым, кто подарит что-нибудь.'
-                  }
+                  emptyTitle={isOwnProfile ? t('tabs.giftsEmptyTitleOwn') : t('tabs.giftsEmptyTitleOther')}
+                  emptyHint={isOwnProfile ? t('tabs.giftsEmptyHintOwn') : t('tabs.giftsEmptyHintOther')}
                 />
               ))}
 
@@ -123,18 +121,27 @@ export function ProfileTabs({
 /* ── О себе ───────────────────────────────────────────────────────────── */
 
 function AboutPanel({ profile }: { profile: PublicProfile }) {
+  const t = useTranslations('profile');
+  const format = useFormatter();
   const country = COUNTRY_BY_CODE.get(profile.country);
-  const joined = new Date(profile.createdAt).toLocaleDateString('ru-RU', {
+  const joined = format.dateTime(new Date(profile.createdAt), {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   });
 
   const rows: Array<{ icon: typeof Globe2; label: string; value: React.ReactNode }> = [
-    { icon: UserRound, label: 'Пол · возраст', value: `${GENDER_LABEL[profile.gender]} · ${ageLabel(profile.age)}` },
+    {
+      icon: UserRound,
+      label: t('tabs.aboutGenderAge'),
+      value: t('tabs.aboutGenderAgeValue', {
+        gender: t(`gender.${profile.gender}`),
+        age: t('age', { age: profile.age }),
+      }),
+    },
     {
       icon: Globe2,
-      label: 'Страна',
+      label: t('tabs.aboutCountry'),
       value: (
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden="true">{codeToFlag(profile.country)}</span>
@@ -144,14 +151,14 @@ function AboutPanel({ profile }: { profile: PublicProfile }) {
     },
     {
       icon: Languages,
-      label: 'Языки',
+      label: t('tabs.aboutLanguages'),
       value: profile.languages.length ? (
         <span className="uppercase">{profile.languages.join(', ')}</span>
       ) : (
-        <span className="text-muted-foreground">не указаны</span>
+        <span className="text-muted-foreground">{t('tabs.aboutLanguagesEmpty')}</span>
       ),
     },
-    { icon: CalendarDays, label: 'В эфире с', value: joined },
+    { icon: CalendarDays, label: t('tabs.aboutJoined'), value: joined },
   ];
 
   return (
@@ -159,14 +166,14 @@ function AboutPanel({ profile }: { profile: PublicProfile }) {
       {profile.status ? (
         <p className="text-pretty text-[0.9375rem] leading-relaxed text-foreground/90">{profile.status}</p>
       ) : (
-        <p className="text-pretty text-sm italic text-muted-foreground">Пользователь пока не добавил описание.</p>
+        <p className="text-pretty text-sm italic text-muted-foreground">{t('tabs.aboutNoBio')}</p>
       )}
 
       {profile.interests && profile.interests.length > 0 && (
         <div className="rounded-xl bg-card/40 px-3.5 py-3 ring-1 ring-border/50">
           <p className="mb-2 flex items-center gap-2 text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
             <Sparkles className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
-            Интересы
+            {t('tabs.interestsLabel')}
           </p>
           <InterestChips interests={profile.interests} />
         </div>
@@ -203,6 +210,9 @@ function ActivityPanel({
   gifts: ReceivedGift[];
   isLoading: boolean;
 }) {
+  const t = useTranslations('profile');
+  const format = useFormatter();
+
   // No dedicated activity feed yet — synthesise a light, honest timeline from
   // the signals we DO have (join date + most recent received gifts).
   const recent = [...gifts]
@@ -217,21 +227,21 @@ function ActivityPanel({
         <TimelineRow
           tone="text-success"
           dot="bg-success"
-          title="Сейчас в сети"
-          meta="Можно написать или позвонить"
+          title={t('tabs.activityOnlineTitle')}
+          meta={t('tabs.activityOnlineMeta')}
         />
       )}
 
       {isLoading ? (
-        <li className="ml-8 text-sm text-muted-foreground">Загрузка активности…</li>
+        <li className="ml-8 text-sm text-muted-foreground">{t('tabs.activityLoading')}</li>
       ) : (
         recent.map((g) => (
           <TimelineRow
             key={g.id}
             tone="text-[var(--color-neon-magenta)]"
             dot="bg-[var(--color-neon-magenta)]"
-            title={`Получен подарок · ${g.gift?.title ?? 'Подарок'}`}
-            meta={relativeDate(g.createdAt)}
+            title={t('tabs.activityGiftReceived', { title: g.gift?.title ?? t('giftFallbackTitle') })}
+            meta={relativeDate(g.createdAt, t, format)}
           />
         ))
       )}
@@ -239,8 +249,8 @@ function ActivityPanel({
       <TimelineRow
         tone="text-[var(--color-neon-cyan)]"
         dot="bg-[var(--color-neon-cyan)]"
-        title="Присоединился к ruletka.top"
-        meta={new Date(profile.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+        title={t('tabs.activityJoined')}
+        meta={format.dateTime(new Date(profile.createdAt), { day: 'numeric', month: 'long', year: 'numeric' })}
       />
     </ol>
   );
@@ -270,13 +280,17 @@ function TimelineRow({
   );
 }
 
-/** "сегодня" / "вчера" / "3 дня назад" / a date for older events. */
-function relativeDate(iso: string): string {
+/** "today" / "yesterday" / "3 days ago" / a date for older events. */
+function relativeDate(
+  iso: string,
+  t: ReturnType<typeof useTranslations>,
+  format: ReturnType<typeof useFormatter>,
+): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
   const days = Math.floor((Date.now() - then) / 86_400_000);
-  if (days <= 0) return 'сегодня';
-  if (days === 1) return 'вчера';
-  if (days < 7) return `${days} ${days < 5 ? 'дня' : 'дней'} назад`;
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  if (days <= 0) return t('relativeDate.today');
+  if (days === 1) return t('relativeDate.yesterday');
+  if (days < 7) return t('relativeDate.daysAgo', { days });
+  return format.dateTime(new Date(iso), { day: 'numeric', month: 'short' });
 }

@@ -8,6 +8,7 @@
  */
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Crown } from 'lucide-react';
 import { Avatar } from '@ruletka/ui';
 import type { LeaderboardEntry, LeaderboardMetric } from '@ruletka/shared-types';
@@ -56,8 +57,9 @@ function PodiumColumn({
   rank: 1 | 2 | 3;
   metric: LeaderboardMetric;
 }) {
+  const t = useTranslations('misc');
   const s = RANK_STYLES[rank];
-  const name = entry.nickname || 'Участник';
+  const name = entry.nickname || t('leaderboard.memberFallback');
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -126,6 +128,7 @@ export function LeaderboardPodium({
   top: LeaderboardEntry[];
   metric: LeaderboardMetric;
 }) {
+  const t = useTranslations('misc');
   // Expect up to 3 entries; render only what exists.
   const ranks: (1 | 2 | 3)[] = [2, 1, 3];
 
@@ -139,12 +142,12 @@ export function LeaderboardPodium({
         {ranks.map((rank) => {
           const entry = top[rank - 1];
           if (!entry) return null;
-          const name = entry.nickname || 'Участник';
+          const name = entry.nickname || t('leaderboard.memberFallback');
           return (
             <div key={rank} className={cn('flex w-full flex-1', RANK_STYLES[rank].order)}>
               <Link
                 href={`/profile/${entry.userId}`}
-                aria-label={`${name}, ${rank}-е место`}
+                aria-label={t('leaderboard.placeAria', { name, rank })}
                 className="flex w-full rounded-xl outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PodiumColumn entry={entry} rank={rank} metric={metric} />

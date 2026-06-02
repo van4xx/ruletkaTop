@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { ArrowLeft, AtSign, MailCheck } from 'lucide-react';
 import { Button, Input } from '@ruletka/ui';
 import {
@@ -30,6 +31,7 @@ import { FormField } from './form-field';
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 export function ForgotPasswordForm() {
+  const t = useTranslations('auth');
   const requestReset = useRequestPasswordReset();
   // Flip to the neutral confirmation once the request has been ATTEMPTED — we
   // don't branch on success vs. error, to avoid leaking account existence.
@@ -63,13 +65,12 @@ export function ForgotPasswordForm() {
         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl glass-panel">
           <MailCheck className="h-6 w-6 text-[var(--color-neon-cyan)]" aria-hidden="true" />
         </span>
-        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">Проверьте почту</h1>
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">{t('forgotPassword.sent.title')}</h1>
         <p className="mt-3 text-muted-foreground">
-          Если такой email есть в нашей системе, мы отправили на него ссылку для сброса пароля.
-          Перейдите по ней, чтобы задать новый пароль.
+          {t('forgotPassword.sent.body')}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Письмо не пришло? Проверьте папку «Спам» или попробуйте ещё раз через пару минут.
+          {t('forgotPassword.sent.spamHint')}
         </p>
 
         <div className="mt-8 flex flex-col gap-3">
@@ -80,14 +81,14 @@ export function ForgotPasswordForm() {
             block
             onClick={() => setSubmitted(false)}
           >
-            Отправить ещё раз
+            {t('forgotPassword.sent.resend')}
           </Button>
           <Link
             href="/login"
             className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Вернуться ко входу
+            {t('forgotPassword.sent.backToLogin')}
           </Link>
         </div>
       </motion.div>
@@ -97,14 +98,14 @@ export function ForgotPasswordForm() {
   return (
     <div>
       <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Забыли пароль?</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">{t('forgotPassword.title')}</h1>
         <p className="mt-2 text-muted-foreground">
-          Укажите email от аккаунта — мы пришлём ссылку, чтобы задать новый пароль.
+          {t('forgotPassword.subtitle')}
         </p>
       </header>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <FormField label="Email" required error={errors.email?.message}>
+        <FormField label={t('fields.email')} required error={errors.email?.message}>
           {(field) => (
             <Input
               {...field}
@@ -112,7 +113,7 @@ export function ForgotPasswordForm() {
               inputMode="email"
               autoComplete="email"
               autoFocus
-              placeholder="you@example.com"
+              placeholder={t('fields.emailPlaceholder')}
               leadingIcon={<AtSign />}
               {...register('email')}
             />
@@ -120,17 +121,17 @@ export function ForgotPasswordForm() {
         </FormField>
 
         <Button type="submit" variant="primary" size="lg" block loading={busy}>
-          Отправить ссылку
+          {t('forgotPassword.submit')}
         </Button>
       </form>
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
-        Вспомнили пароль?{' '}
+        {t('forgotPassword.rememberedPassword')}{' '}
         <Link
           href="/login"
           className="font-semibold text-foreground underline-offset-4 transition-colors hover:text-[var(--color-neon-cyan)] hover:underline"
         >
-          Войти
+          {t('forgotPassword.signIn')}
         </Link>
       </p>
     </div>

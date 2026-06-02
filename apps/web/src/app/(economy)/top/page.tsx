@@ -9,6 +9,7 @@
  * bid coins for a placement — more coins ⇒ higher rank.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Crown, Flame, Trophy } from 'lucide-react';
 import { Button, TooltipProvider } from '@ruletka/ui';
 import { EconomyShell } from '@/components/economy/economy-shell';
@@ -19,6 +20,7 @@ import { useTopFeed } from '@/features/top/use-top';
 import { useCoinBalance } from '@/hooks/wallet/use-wallet';
 
 export default function TopPage() {
+  const t = useTranslations('economy');
   const feed = useTopFeed();
   const balance = useCoinBalance();
   const [buyOpen, setBuyOpen] = useState(false);
@@ -31,29 +33,30 @@ export default function TopPage() {
         eyebrow={
           <>
             <Flame className="h-3.5 w-3.5 text-[var(--color-neon-magenta)]" aria-hidden="true" />
-            Топ эфира
+            {t('top.eyebrow')}
           </>
         }
         title={
           <>
-            Лучшие <span className="text-gradient-neon">в эфире</span>
+            {t('top.titlePrefix')}{' '}
+            <span className="text-gradient-neon">{t('top.titleHighlight')}</span>
           </>
         }
-        lede="Живая лента самых заметных участников. Купите место — и вас увидят все, кто заходит в рулетку."
+        lede={t('top.lede')}
         actions={
           <Button
             size="lg"
             leadingIcon={<Crown className="h-5 w-5" />}
             onClick={() => setBuyOpen(true)}
           >
-            Купить место
+            {t('top.buySpot')}
           </Button>
         }
       >
         {feed.isError ? (
           <ErrorState
-            title="Не удалось загрузить Топ"
-            description="Лента временно недоступна. Попробуйте обновить."
+            title={t('top.errorTitle')}
+            description={t('top.errorDescription')}
             onRetry={() => feed.refetch()}
           />
         ) : (
@@ -76,12 +79,10 @@ export default function TopPage() {
               <div className="glass-panel absolute inset-0 -z-10 rounded-3xl" aria-hidden="true" />
               <Trophy className="mx-auto h-8 w-8 text-[var(--coin)]" aria-hidden="true" />
               <h2 className="mt-4 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-                Хотите оказаться здесь?
+                {t('top.ctaTitle')}
               </h2>
               <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
-                {total > 0
-                  ? `Сейчас в Топе ${total} ${pluralPlaces(total)}. Сделайте ставку выше — и поднимитесь в начало ленты.`
-                  : 'Дорожки свободны — станьте первым в Топе прямо сейчас.'}
+                {total > 0 ? t('top.ctaWithCount', { count: total }) : t('top.ctaEmpty')}
               </p>
               <Button
                 className="mt-6"
@@ -89,7 +90,7 @@ export default function TopPage() {
                 leadingIcon={<Crown className="h-5 w-5" />}
                 onClick={() => setBuyOpen(true)}
               >
-                Купить место в Топе
+                {t('top.ctaButton')}
               </Button>
             </div>
           </div>
@@ -99,13 +100,4 @@ export default function TopPage() {
       <BuySpotDialog open={buyOpen} onClose={() => setBuyOpen(false)} balance={balance} />
     </TooltipProvider>
   );
-}
-
-/** Russian plural for "места/мест". */
-function pluralPlaces(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'участник';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'участника';
-  return 'участников';
 }

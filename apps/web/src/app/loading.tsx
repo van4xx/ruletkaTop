@@ -1,4 +1,5 @@
 import { Skeleton, Spinner } from '@ruletka/ui';
+import { useTranslations } from 'next-intl';
 
 /**
  * Global route-transition fallback (App Router `loading.tsx`). A tasteful,
@@ -7,6 +8,8 @@ import { Skeleton, Spinner } from '@ruletka/ui';
  * blank. Purely presentational and accessible (announced as busy).
  */
 export default function Loading() {
+  const t = useTranslations('misc');
+  const tc = useTranslations('common');
   return (
     <div
       role="status"
@@ -14,7 +17,7 @@ export default function Loading() {
       aria-busy="true"
       className="relative min-h-[calc(100dvh-4rem)] overflow-hidden"
     >
-      <span className="sr-only">Загрузка…</span>
+      <span className="sr-only">{tc('loading')}</span>
 
       {/* Atmospheric background, matching the page shells. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
@@ -26,7 +29,7 @@ export default function Loading() {
         {/* Centered live spinner for an immediate signal of activity. */}
         <div className="mb-10 flex items-center gap-3 text-muted-foreground" aria-hidden="true">
           <Spinner size="sm" role="presentation" label="" />
-          <span className="text-sm">Загружаем…</span>
+          <span className="text-sm">{t('system.loadingInline')}</span>
         </div>
 
         {/* Header skeleton */}

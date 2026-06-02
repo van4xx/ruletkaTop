@@ -10,6 +10,7 @@
  * surfaces can pass them as `getUserMedia` constraints.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Camera, Mic, RefreshCw, TriangleAlert } from 'lucide-react';
 import {
   Button,
@@ -40,6 +41,7 @@ function readStored(): StoredDevices {
 
 export function DeviceSettingsModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { kinds = ['camera', 'microphone'] } = useModalProps<'device-settings'>();
   const wantCamera = kinds.includes('camera');
   const wantMic = kinds.includes('microphone');
@@ -174,17 +176,17 @@ export function DeviceSettingsModal() {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Камера и микрофон</DialogTitle>
+        <DialogTitle>{t('modals.deviceSettings.title')}</DialogTitle>
         <DialogDescription>
-          Выберите устройства для звонков. Проверьте картинку и уровень микрофона.
+          {t('modals.deviceSettings.description')}
         </DialogDescription>
       </DialogHeader>
 
       {status === 'unsupported' ? (
-        <Notice text="Ваш браузер не поддерживает выбор устройств." />
+        <Notice text={t('modals.deviceSettings.unsupported')} />
       ) : status === 'denied' ? (
         <div className="space-y-3">
-          <Notice text="Нет доступа к камере или микрофону. Разрешите доступ в настройках браузера и попробуйте снова." />
+          <Notice text={t('modals.deviceSettings.denied')} />
           <Button
             type="button"
             variant="outline"
@@ -192,7 +194,7 @@ export function DeviceSettingsModal() {
             leadingIcon={<RefreshCw className="h-4 w-4" />}
             onClick={() => acquire(cameraId || undefined, micId || undefined)}
           >
-            Повторить
+            {t('modals.deviceSettings.retry')}
           </Button>
         </div>
       ) : (
@@ -219,13 +221,14 @@ export function DeviceSettingsModal() {
           {wantCamera && (
             <div className="space-y-1.5">
               <Label htmlFor="device-camera">
-                <Camera className="mr-1 inline h-4 w-4" /> Камера
+                <Camera className="mr-1 inline h-4 w-4" /> {t('modals.deviceSettings.cameraLabel')}
               </Label>
               <DeviceSelect
                 id="device-camera"
                 value={cameraId}
                 devices={cameras}
-                fallbackLabel="Камера"
+                fallbackLabel={t('modals.deviceSettings.cameraFallback')}
+                noDevicesLabel={t('modals.deviceSettings.noDevices')}
                 onChange={onPickCamera}
               />
             </div>
@@ -235,19 +238,20 @@ export function DeviceSettingsModal() {
           {wantMic && (
             <div className="space-y-1.5">
               <Label htmlFor="device-mic">
-                <Mic className="mr-1 inline h-4 w-4" /> Микрофон
+                <Mic className="mr-1 inline h-4 w-4" /> {t('modals.deviceSettings.micLabel')}
               </Label>
               <DeviceSelect
                 id="device-mic"
                 value={micId}
                 devices={mics}
-                fallbackLabel="Микрофон"
+                fallbackLabel={t('modals.deviceSettings.micFallback')}
+                noDevicesLabel={t('modals.deviceSettings.noDevices')}
                 onChange={onPickMic}
               />
               <div
                 className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted"
                 role="meter"
-                aria-label="Уровень микрофона"
+                aria-label={t('modals.deviceSettings.micLevelAria')}
                 aria-valuenow={level}
                 aria-valuemin={0}
                 aria-valuemax={100}
@@ -264,10 +268,10 @@ export function DeviceSettingsModal() {
 
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={cancel}>
-          Отмена
+          {t('modals.deviceSettings.cancel')}
         </Button>
         <Button type="button" variant="primary" disabled={status !== 'ready'} onClick={saveAndClose}>
-          Сохранить
+          {t('modals.deviceSettings.save')}
         </Button>
       </DialogFooter>
     </>
@@ -279,12 +283,14 @@ function DeviceSelect({
   value,
   devices,
   fallbackLabel,
+  noDevicesLabel,
   onChange,
 }: {
   id: string;
   value: string;
   devices: MediaDeviceInfo[];
   fallbackLabel: string;
+  noDevicesLabel: string;
   onChange: (id: string) => void;
 }) {
   return (
@@ -295,7 +301,7 @@ function DeviceSelect({
         onChange={(e) => onChange(e.target.value)}
         className="h-11 w-full appearance-none rounded-xl border border-border bg-input/40 px-3.5 pr-9 text-sm text-foreground transition-colors focus:border-accent-muted focus:outline-none focus:ring-2 focus:ring-input-focus"
       >
-        {devices.length === 0 && <option value="">Устройства не найдены</option>}
+        {devices.length === 0 && <option value="">{noDevicesLabel}</option>}
         {devices.map((d, i) => (
           <option key={d.deviceId || i} value={d.deviceId}>
             {d.label || `${fallbackLabel} ${i + 1}`}

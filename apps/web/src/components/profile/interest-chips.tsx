@@ -8,6 +8,7 @@
  * interests shared with the current viewer) gets a brighter aurora treatment so
  * common ground stands out. `max` truncates with a subtle "+N" overflow chip.
  */
+import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { normalizeInterest } from '@/features/profile/interests';
@@ -28,6 +29,7 @@ export function InterestChips({
   withLabel?: boolean;
   className?: string;
 }) {
+  const t = useTranslations('profile');
   if (!interests || interests.length === 0) return null;
 
   const shown = typeof max === 'number' ? interests.slice(0, max) : interests;
@@ -39,7 +41,7 @@ export function InterestChips({
       {withLabel && (
         <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
           <Sparkles className="h-3 w-3 text-[var(--color-neon-violet)]" aria-hidden="true" />
-          Интересы
+          {t('header.interestsLabel')}
         </span>
       )}
       {shown.map((tag) => {

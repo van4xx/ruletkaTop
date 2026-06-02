@@ -1,11 +1,16 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
+import { useTranslations } from 'next-intl';
 import { Users } from 'lucide-react';
 import { FriendsClient } from '@/features/friends/friends-client';
 
-export const metadata: Metadata = {
-  title: 'Друзья',
-  description: 'Список друзей, заявки и быстрый переход к общению.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('social');
+  return {
+    title: t('friendsMetaTitle'),
+    description: t('friendsMetaDescription'),
+  };
+}
 
 /**
  * /friends — the social hub. A static, atmospheric header (server-rendered)
@@ -13,6 +18,7 @@ export const metadata: Metadata = {
  * presence and mutations.
  */
 export default function FriendsPage() {
+  const t = useTranslations('social');
   return (
     <div className="relative overflow-hidden">
       {/* Ambient neon glows, consistent with the landing aesthetic. */}
@@ -27,8 +33,10 @@ export default function FriendsPage() {
             <Users className="h-6 w-6" aria-hidden="true" />
           </span>
           <div>
-            <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">Друзья</h1>
-            <p className="text-sm text-muted-foreground">Ваши собеседники и заявки в одном месте.</p>
+            <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+              {t('friendsHeading')}
+            </h1>
+            <p className="text-sm text-muted-foreground">{t('friendsSubtitle')}</p>
           </div>
         </header>
 

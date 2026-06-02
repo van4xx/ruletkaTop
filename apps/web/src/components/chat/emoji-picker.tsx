@@ -6,15 +6,16 @@
  * tab navigation. Inserts the chosen emoji via `onSelect`.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Smile } from 'lucide-react';
 import { IconButton } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 
-const CATEGORIES: { id: string; label: string; emojis: string[] }[] = [
+const CATEGORIES: { id: string; labelKey: string; emojis: string[] }[] = [
   {
     id: 'smileys',
-    label: 'Смайлы',
+    labelKey: 'emojiCategorySmileys',
     emojis: [
       '😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😜', '🤪', '😎',
       '🥳', '🤩', '😏', '😌', '🙃', '😉', '😇', '🤗', '🤔', '🤨',
@@ -24,7 +25,7 @@ const CATEGORIES: { id: string; label: string; emojis: string[] }[] = [
   },
   {
     id: 'gestures',
-    label: 'Жесты',
+    labelKey: 'emojiCategoryGestures',
     emojis: [
       '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '👏', '🙌', '🙏',
       '🤝', '💪', '👋', '🤙', '✊', '👊', '🫶', '👀', '🫡', '🤌',
@@ -32,7 +33,7 @@ const CATEGORIES: { id: string; label: string; emojis: string[] }[] = [
   },
   {
     id: 'hearts',
-    label: 'Сердца',
+    labelKey: 'emojiCategoryHearts',
     emojis: [
       '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💖', '💗',
       '💓', '💞', '💕', '💘', '💝', '❣️', '💔', '❤️‍🔥', '💟', '♥️',
@@ -40,7 +41,7 @@ const CATEGORIES: { id: string; label: string; emojis: string[] }[] = [
   },
   {
     id: 'fun',
-    label: 'Веселье',
+    labelKey: 'emojiCategoryFun',
     emojis: [
       '🔥', '✨', '🎉', '🎊', '💯', '⭐', '🌟', '💫', '🥂', '🍾',
       '🎁', '🌹', '🌈', '☀️', '⚡', '💥', '🎶', '🚀', '👑', '💎',
@@ -49,6 +50,7 @@ const CATEGORIES: { id: string; label: string; emojis: string[] }[] = [
 ];
 
 export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void }) {
+  const t = useTranslations('social');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(CATEGORIES[0]!.id);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -77,7 +79,7 @@ export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void })
         type="button"
         variant="ghost"
         size="md"
-        aria-label="Эмодзи"
+        aria-label={t('emoji')}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={cn(open && 'text-[var(--color-neon-cyan)]')}
@@ -94,7 +96,7 @@ export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void })
             transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
             className="glass-panel absolute bottom-12 left-0 z-50 w-72 origin-bottom-left overflow-hidden rounded-2xl shadow-xl"
             role="dialog"
-            aria-label="Выбор эмодзи"
+            aria-label={t('emojiPicker')}
           >
             {/* Category tabs */}
             <div className="flex items-center gap-1 border-b border-border/60 p-1.5">
@@ -108,8 +110,8 @@ export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void })
                     c.id === active ? 'bg-card/80' : 'hover:bg-card/50',
                   )}
                   aria-pressed={c.id === active}
-                  aria-label={c.label}
-                  title={c.label}
+                  aria-label={t(c.labelKey)}
+                  title={t(c.labelKey)}
                 >
                   {c.emojis[0]}
                 </button>
@@ -127,7 +129,7 @@ export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void })
                     // Keep open for multi-insert; common UX for chat pickers.
                   }}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-xl transition-transform hover:scale-125 hover:bg-card/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Эмодзи ${emoji}`}
+                  aria-label={t('emojiAria', { emoji })}
                 >
                   {emoji}
                 </button>

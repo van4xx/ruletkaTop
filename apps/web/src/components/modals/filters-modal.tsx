@@ -11,6 +11,7 @@
  * range is always available.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Crown, RotateCcw, SlidersHorizontal, Sparkles, Venus, Mars, Users } from 'lucide-react';
 import type { CountryCode, GenderPreference, MatchFilters } from '@ruletka/shared-types';
 import {
@@ -33,18 +34,25 @@ import { useIsPremium } from '@/features/economy/use-me';
 const AGE_MIN = 18;
 const AGE_MAX = 100;
 
-const GENDERS: Array<{ value: GenderPreference; label: string; icon: React.ElementType }> = [
-  { value: 'any', label: 'Любой', icon: Users },
-  { value: 'male', label: 'Парни', icon: Mars },
-  { value: 'female', label: 'Девушки', icon: Venus },
-];
+const GENDER_ICONS: Record<GenderPreference, React.ElementType> = {
+  any: Users,
+  male: Mars,
+  female: Venus,
+};
 
 export function FiltersModal() {
   const { close, open } = useModal();
+  const t = useTranslations('chrome');
   const committed = useFiltersStore((s) => s.filters);
   const setFilters = useFiltersStore((s) => s.setFilters);
   const reset = useFiltersStore((s) => s.reset);
   const isPremium = useIsPremium();
+
+  const GENDERS: Array<{ value: GenderPreference; label: string; icon: React.ElementType }> = [
+    { value: 'any', label: t('modals.filters.genderAny'), icon: GENDER_ICONS.any },
+    { value: 'male', label: t('modals.filters.genderMale'), icon: GENDER_ICONS.male },
+    { value: 'female', label: t('modals.filters.genderFemale'), icon: GENDER_ICONS.female },
+  ];
 
   // Local editable draft (clamped to the slider's 18..100 range).
   const [draft, setDraft] = useState<MatchFilters>(() => ({
@@ -94,11 +102,11 @@ export function FiltersModal() {
       <DialogHeader>
         <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/50 px-2.5 py-1 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-          Фильтры поиска
+          {t('modals.filters.eyebrow')}
         </span>
-        <DialogTitle>Кого ищем</DialogTitle>
+        <DialogTitle>{t('modals.filters.title')}</DialogTitle>
         <DialogDescription>
-          Настройте, с кем вас будет соединять рулетка. Чем шире фильтры — тем быстрее коннект.
+          {t('modals.filters.description')}
         </DialogDescription>
       </DialogHeader>
 
@@ -106,16 +114,16 @@ export function FiltersModal() {
         {/* Gender preference */}
         <fieldset>
           <div className="mb-2 flex items-center justify-between">
-            <legend className="text-sm font-medium text-foreground">Пол собеседника</legend>
+            <legend className="text-sm font-medium text-foreground">{t('modals.filters.genderLegend')}</legend>
             {premiumLocked && (
               <Badge variant="warning" size="sm" className="gap-1">
-                <Crown className="h-3 w-3" /> Премиум
+                <Crown className="h-3 w-3" /> {t('modals.filters.premiumBadge')}
               </Badge>
             )}
           </div>
           <div
             role="radiogroup"
-            aria-label="Пол собеседника"
+            aria-label={t('modals.filters.genderAria')}
             className={cn('grid grid-cols-3 gap-2', premiumLocked && 'opacity-60')}
           >
             {GENDERS.map((g) => {
@@ -149,7 +157,7 @@ export function FiltersModal() {
         {/* Age range */}
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <Label htmlFor="age-range">Возраст</Label>
+            <Label htmlFor="age-range">{t('modals.filters.ageLabel')}</Label>
             <span className="text-sm font-semibold tabular-nums text-foreground">
               {draft.ageMin}–{draft.ageMax}
               {draft.ageMax >= AGE_MAX ? '+' : ''}
@@ -165,7 +173,7 @@ export function FiltersModal() {
             onValueChange={([min, max]) =>
               setDraft((d) => ({ ...d, ageMin: min ?? AGE_MIN, ageMax: max ?? AGE_MAX }))
             }
-            aria-label="Диапазон возраста"
+            aria-label={t('modals.filters.ageRangeAria')}
             className="mt-3"
           />
         </div>
@@ -173,10 +181,10 @@ export function FiltersModal() {
         {/* Countries */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <Label htmlFor="filter-countries">Страны</Label>
+            <Label htmlFor="filter-countries">{t('modals.filters.countriesLabel')}</Label>
             {premiumLocked && (
               <Badge variant="warning" size="sm" className="gap-1">
-                <Crown className="h-3 w-3" /> Премиум
+                <Crown className="h-3 w-3" /> {t('modals.filters.premiumBadge')}
               </Badge>
             )}
           </div>
@@ -184,14 +192,14 @@ export function FiltersModal() {
             id="filter-countries"
             value={draft.countries}
             onChange={(countries: CountryCode[]) => setDraft((d) => ({ ...d, countries }))}
-            placeholder="Любая страна"
+            placeholder={t('modals.filters.countriesPlaceholder')}
             maxSelections={50}
             disabled={premiumLocked}
-            aria-label="Страны собеседников"
+            aria-label={t('modals.filters.countriesAria')}
           />
           {!premiumLocked && (
             <p className="mt-1.5 text-xs text-muted-foreground">
-              Оставьте пустым, чтобы искать по всему миру.
+              {t('modals.filters.countriesHint')}
             </p>
           )}
         </div>
@@ -207,16 +215,16 @@ export function FiltersModal() {
             <div className="flex items-center gap-2">
               <Label htmlFor="filter-shared-interests" className="flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
-                Только с общими интересами
+                {t('modals.filters.sharedInterestsLabel')}
               </Label>
               {premiumLocked && (
                 <Badge variant="warning" size="sm" className="gap-1">
-                  <Crown className="h-3 w-3" /> Премиум
+                  <Crown className="h-3 w-3" /> {t('modals.filters.premiumBadge')}
                 </Badge>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Соединять только с теми, у кого есть хотя бы один общий с вами интерес.
+              {t('modals.filters.sharedInterestsHint')}
             </p>
           </div>
           <Switch
@@ -226,7 +234,7 @@ export function FiltersModal() {
             onCheckedChange={(checked) =>
               setDraft((d) => ({ ...d, sharedInterestsOnly: checked }))
             }
-            aria-label="Только с общими интересами"
+            aria-label={t('modals.filters.sharedInterestsAria')}
             className="mt-0.5 shrink-0"
           />
         </div>
@@ -235,16 +243,16 @@ export function FiltersModal() {
         {premiumLocked && (
           <button
             type="button"
-            onClick={() => open('premium', { reason: 'Фильтры по полу и стране доступны в премиуме.' })}
+            onClick={() => open('premium', { reason: t('modals.filters.upsellReason') })}
             className="flex w-full items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 p-3 text-left transition-colors hover:bg-warning/15"
           >
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning">
               <Sparkles className="h-4.5 w-4.5" aria-hidden="true" />
             </span>
             <span className="text-sm">
-              <span className="font-medium text-foreground">Откройте все фильтры с премиумом</span>
+              <span className="font-medium text-foreground">{t('modals.filters.upsellTitle')}</span>
               <span className="block text-muted-foreground">
-                Поиск по полу и странам, приоритет в очереди и без рекламы.
+                {t('modals.filters.upsellDescription')}
               </span>
             </span>
           </button>
@@ -258,14 +266,14 @@ export function FiltersModal() {
           leadingIcon={<RotateCcw className="h-4 w-4" />}
           onClick={resetAll}
         >
-          Сбросить
+          {t('modals.filters.reset')}
         </Button>
         <div className="flex gap-2">
           <Button type="button" variant="ghost" onClick={close}>
-            Отмена
+            {t('modals.filters.cancel')}
           </Button>
           <Button type="button" variant="primary" onClick={apply} disabled={!isDirty}>
-            Применить
+            {t('modals.filters.apply')}
           </Button>
         </div>
       </DialogFooter>

@@ -1,178 +1,141 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 import { Lock, Trash2 } from 'lucide-react';
 import { LegalLayout, type TocEntry } from '@/components/legal/legal-layout';
-import { Section, P, H3, List, Callout, DefinitionList } from '@/components/legal/legal-content';
+import { Section, P, List, Callout, DefinitionList } from '@/components/legal/legal-content';
 
-export const metadata: Metadata = {
-  title: 'Политика конфиденциальности',
-  description:
-    'Политика конфиденциальности ruletka.top: какие персональные данные мы обрабатываем, на каком основании, как их защищаем и как удалить аккаунт. Соответствует 152-ФЗ.',
-};
-
-const TOC: TocEntry[] = [
-  { id: 'intro', label: 'Общие положения' },
-  { id: 'data', label: 'Какие данные мы храним' },
-  { id: 'purposes', label: 'Цели обработки' },
-  { id: 'consent', label: 'Согласие и основания' },
-  { id: 'sharing', label: 'Передача третьим лицам' },
-  { id: 'security', label: 'Хранение и защита' },
-  { id: 'rights', label: 'Ваши права' },
-  { id: 'deletion', label: 'Удаление аккаунта' },
-  { id: 'contacts', label: 'Контакты' },
-];
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('legal');
+  return {
+    title: t('privacy.metaTitle'),
+    description: t('privacy.metaDescription'),
+  };
+}
 
 export default function PrivacyPage() {
+  const t = useTranslations('legal');
+
+  const TOC: TocEntry[] = [
+    { id: 'intro', label: t('privacy.toc.intro') },
+    { id: 'data', label: t('privacy.toc.data') },
+    { id: 'purposes', label: t('privacy.toc.purposes') },
+    { id: 'consent', label: t('privacy.toc.consent') },
+    { id: 'sharing', label: t('privacy.toc.sharing') },
+    { id: 'security', label: t('privacy.toc.security') },
+    { id: 'rights', label: t('privacy.toc.rights') },
+    { id: 'deletion', label: t('privacy.toc.deletion') },
+    { id: 'contacts', label: t('privacy.toc.contacts') },
+  ];
+
   return (
     <LegalLayout
       eyebrow={
         <>
           <Lock className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-          Конфиденциальность
+          {t('privacy.eyebrow')}
         </>
       }
       title={
         <>
-          Политика <span className="text-gradient-neon">конфиденциальности</span>
+          {t('privacy.title1')} <span className="text-gradient-neon">{t('privacy.title2')}</span>
         </>
       }
-      lede="Мы обрабатываем минимум данных, необходимый для работы сервиса, и относимся к ним бережно. Документ подготовлен с учётом Федерального закона № 152-ФЗ «О персональных данных»."
-      updatedAt="1 июня 2026"
+      lede={t('privacy.lede')}
+      updatedAt={t('privacy.updatedAt')}
       toc={TOC}
     >
-      <Section id="intro" index={1} title="Общие положения">
-        <P>
-          Настоящая Политика описывает, какие персональные данные обрабатывает сервис ruletka.top
-          (далее — «Сервис»), с какой целью и на каком правовом основании, а также какие права есть
-          у вас как у субъекта персональных данных.
-        </P>
-        <P>
-          Используя Сервис, вы соглашаетесь с условиями этой Политики. Оператором обработки данных
-          выступает администрация ruletka.top.
-        </P>
+      <Section id="intro" index={1} title={t('privacy.intro.title')}>
+        <P>{t('privacy.intro.p1')}</P>
+        <P>{t('privacy.intro.p2')}</P>
       </Section>
 
-      <Section id="data" index={2} title="Какие данные мы храним">
-        <P>Мы стремимся собирать как можно меньше данных. В обработку могут попадать:</P>
+      <Section id="data" index={2} title={t('privacy.data.title')}>
+        <P>{t('privacy.data.intro')}</P>
         <DefinitionList
           items={[
-            {
-              term: 'Учётные данные',
-              desc: 'Адрес электронной почты и защищённый (хешированный) пароль для входа.',
-            },
-            {
-              term: 'Данные профиля',
-              desc: 'Никнейм, пол, дата рождения (для подтверждения 18+), страна, языки, статус и аватар — указываются вами добровольно.',
-            },
-            {
-              term: 'Технические данные',
-              desc: 'IP-адрес, тип устройства и браузера, идентификатор сессии — для безопасности и предотвращения злоупотреблений.',
-            },
-            {
-              term: 'Данные общения',
-              desc: 'Текстовые сообщения в чатах и метаданные звонков (время, длительность). Видеопоток передаётся напрямую между собеседниками и не записывается Сервисом.',
-            },
-            {
-              term: 'Платёжные данные',
-              desc: 'Историю покупок монет и подписок. Реквизиты карт обрабатываются платёжным провайдером — мы их не храним.',
-            },
+            { term: t('privacy.data.accountTerm'), desc: t('privacy.data.accountDesc') },
+            { term: t('privacy.data.profileTerm'), desc: t('privacy.data.profileDesc') },
+            { term: t('privacy.data.technicalTerm'), desc: t('privacy.data.technicalDesc') },
+            { term: t('privacy.data.commsTerm'), desc: t('privacy.data.commsDesc') },
+            { term: t('privacy.data.paymentTerm'), desc: t('privacy.data.paymentDesc') },
           ]}
         />
       </Section>
 
-      <Section id="purposes" index={3} title="Цели обработки">
+      <Section id="purposes" index={3} title={t('privacy.purposes.title')}>
         <List
           variant="dot"
           items={[
-            'Предоставление доступа к видео- и голосовой рулетке, чатам, друзьям и другим функциям.',
-            'Подбор собеседников и работа фильтров (пол, страна).',
-            'Подтверждение совершеннолетия и защита несовершеннолетних.',
-            'Обеспечение безопасности, модерация и рассмотрение жалоб.',
-            'Проведение платежей за монеты и премиум-подписку.',
-            'Информирование о важных изменениях в работе Сервиса.',
+            t('privacy.purposes.item1'),
+            t('privacy.purposes.item2'),
+            t('privacy.purposes.item3'),
+            t('privacy.purposes.item4'),
+            t('privacy.purposes.item5'),
+            t('privacy.purposes.item6'),
           ]}
         />
       </Section>
 
-      <Section id="consent" index={4} title="Согласие и правовые основания">
-        <P>
-          Обработка данных осуществляется на основании вашего согласия, которое вы даёте при
-          регистрации, а также для исполнения договора (оказания услуг Сервиса) и в рамках законных
-          интересов оператора (безопасность, предотвращение мошенничества).
-        </P>
-        <P>
-          Согласие можно отозвать в любой момент, удалив аккаунт. Отзыв согласия не влияет на
-          законность обработки, осуществлённой до его отзыва.
-        </P>
+      <Section id="consent" index={4} title={t('privacy.consent.title')}>
+        <P>{t('privacy.consent.p1')}</P>
+        <P>{t('privacy.consent.p2')}</P>
       </Section>
 
-      <Section id="sharing" index={5} title="Передача третьим лицам">
-        <P>Мы не продаём ваши персональные данные. Передача возможна только:</P>
+      <Section id="sharing" index={5} title={t('privacy.sharing.title')}>
+        <P>{t('privacy.sharing.intro')}</P>
         <List
           variant="dot"
           items={[
-            'Платёжному провайдеру — для проведения транзакций (без хранения реквизитов на нашей стороне).',
-            'Поставщикам инфраструктуры (хостинг, передача медиа) — в объёме, необходимом для работы Сервиса.',
-            'Правоохранительным органам — по обоснованному законному запросу.',
+            t('privacy.sharing.item1'),
+            t('privacy.sharing.item2'),
+            t('privacy.sharing.item3'),
           ]}
         />
-        <P>
-          Все привлекаемые партнёры обязаны обеспечивать конфиденциальность и защиту данных не ниже
-          уровня, описанного в этой Политике.
-        </P>
+        <P>{t('privacy.sharing.outro')}</P>
       </Section>
 
-      <Section id="security" index={6} title="Хранение и защита">
-        <P>
-          Данные хранятся на серверах с ограниченным доступом. Пароли хранятся только в виде
-          необратимых хешей, передача данных защищается шифрованием (TLS).
-        </P>
-        <P>
-          Мы храним персональные данные не дольше, чем это необходимо для целей обработки или чем
-          требует закон. После удаления аккаунта данные стираются или обезличиваются.
-        </P>
+      <Section id="security" index={6} title={t('privacy.security.title')}>
+        <P>{t('privacy.security.p1')}</P>
+        <P>{t('privacy.security.p2')}</P>
       </Section>
 
-      <Section id="rights" index={7} title="Ваши права">
-        <P>В отношении своих персональных данных вы вправе:</P>
+      <Section id="rights" index={7} title={t('privacy.rights.title')}>
+        <P>{t('privacy.rights.intro')}</P>
         <List
           variant="check"
           items={[
-            'Получать информацию об обработке и запрашивать копию ваших данных.',
-            'Требовать уточнения, исправления неточных или неполных данных.',
-            'Требовать удаления данных и отзывать согласие на обработку.',
-            'Ограничивать обработку и возражать против неё в случаях, предусмотренных законом.',
-            'Обжаловать действия оператора в уполномоченный орган по защите прав субъектов персональных данных.',
+            t('privacy.rights.item1'),
+            t('privacy.rights.item2'),
+            t('privacy.rights.item3'),
+            t('privacy.rights.item4'),
+            t('privacy.rights.item5'),
           ]}
         />
       </Section>
 
-      <Section id="deletion" index={8} title="Удаление аккаунта и данных">
+      <Section id="deletion" index={8} title={t('privacy.deletion.title')}>
         <Callout tone="warning" icon={<Trash2 className="h-5 w-5" />}>
-          <p className="font-semibold text-foreground">Вы можете удалить аккаунт в любой момент.</p>
+          <p className="font-semibold text-foreground">{t('privacy.deletion.calloutTitle')}</p>
           <p>
-            Удаление доступно в{' '}
+            {t('privacy.deletion.calloutBodyPre')}{' '}
             <Link href="/settings" className="text-[var(--color-neon-cyan)] hover:underline">
-              настройках
+              {t('privacy.deletion.calloutLink')}
             </Link>{' '}
-            аккаунта. После подтверждения профиль, история общения и связанные данные удаляются
-            безвозвратно.
+            {t('privacy.deletion.calloutBodyPost')}
           </p>
         </Callout>
-        <P>
-          Часть данных (например, сведения о транзакциях) может храниться в обезличенном виде в
-          течение срока, установленного законодательством, для целей бухгалтерского и налогового
-          учёта.
-        </P>
+        <P>{t('privacy.deletion.p1')}</P>
       </Section>
 
-      <Section id="contacts" index={9} title="Контакты">
+      <Section id="contacts" index={9} title={t('privacy.contacts.title')}>
         <P>
-          По вопросам обработки персональных данных и реализации ваших прав обращайтесь через{' '}
+          {t('privacy.contacts.p1Pre')}{' '}
           <Link href="/help" className="text-[var(--color-neon-cyan)] hover:underline">
-            раздел помощи
+            {t('privacy.contacts.p1Link')}
           </Link>
-          . Мы ответим в разумный срок, установленный законодательством.
+          {t('privacy.contacts.p1Post')}
         </P>
       </Section>
     </LegalLayout>

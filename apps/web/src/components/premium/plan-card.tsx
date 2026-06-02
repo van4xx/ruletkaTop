@@ -5,6 +5,7 @@
  * price, and a subscribe CTA. The middle/featured plan gets the gradient border
  * and a "популярный" ribbon.
  */
+import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Check, Crown, Sparkles } from 'lucide-react';
 import type { PremiumPlan } from '@ruletka/shared-types';
@@ -13,18 +14,6 @@ import { cn } from '@/lib/cn';
 import { formatRub } from '@/features/economy/format';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
-
-function cadence(intervalDays: number): string {
-  if (intervalDays % 30 === 0) {
-    const m = Math.round(intervalDays / 30);
-    return m === 1 ? 'в месяц' : `за ${m} мес.`;
-  }
-  if (intervalDays % 7 === 0) {
-    const w = Math.round(intervalDays / 7);
-    return w === 1 ? 'в неделю' : `за ${w} нед.`;
-  }
-  return intervalDays === 1 ? 'в день' : `за ${intervalDays} дн.`;
-}
 
 export interface PlanCardProps {
   plan: PremiumPlan;
@@ -46,6 +35,22 @@ export function PlanCard({
   onSubscribe,
   index = 0,
 }: PlanCardProps) {
+  const t = useTranslations('economy');
+
+  const cadence = (intervalDays: number): string => {
+    if (intervalDays % 30 === 0) {
+      const m = Math.round(intervalDays / 30);
+      return m === 1 ? t('planCard.cadenceMonthly') : t('planCard.cadenceEveryMonths', { count: m });
+    }
+    if (intervalDays % 7 === 0) {
+      const w = Math.round(intervalDays / 7);
+      return w === 1 ? t('planCard.cadenceWeekly') : t('planCard.cadenceEveryWeeks', { count: w });
+    }
+    return intervalDays === 1
+      ? t('planCard.cadenceDaily')
+      : t('planCard.cadenceEveryDays', { count: intervalDays });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 22 }}
@@ -70,12 +75,12 @@ export function PlanCard({
           <span className="absolute right-5 top-5">
             {current ? (
               <Badge variant="success" size="sm" dot>
-                Активно
+                {t('planCard.active')}
               </Badge>
             ) : (
               <Badge variant="aurora" size="sm">
                 <Sparkles className="h-3 w-3" aria-hidden="true" />
-                Популярный
+                {t('planCard.popular')}
               </Badge>
             )}
           </span>
@@ -115,7 +120,7 @@ export function PlanCard({
           disabled={(disabled && !loading) || current}
           onClick={() => onSubscribe(plan)}
         >
-          {current ? 'Текущий план' : 'Оформить'}
+          {current ? t('planCard.current') : t('planCard.subscribe')}
         </Button>
       </div>
     </motion.div>

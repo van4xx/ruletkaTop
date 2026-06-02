@@ -7,6 +7,7 @@
  * profile is unavailable. Higher-ranked (bigger spend) cards get a warmer glow.
  */
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Crown } from 'lucide-react';
 import type { TopPlacement } from '@ruletka/shared-types';
 import { Avatar, Skeleton, codeToFlag } from '@ruletka/ui';
@@ -28,9 +29,10 @@ function rankChip(rank: number): string {
 }
 
 export function TopCard({ placement, rank }: TopCardProps) {
+  const t = useTranslations('economy');
   const { data: profile, isLoading } = useTopProfile(placement.userId);
 
-  const nickname = profile?.nickname ?? 'Гость';
+  const nickname = profile?.nickname ?? t('topCard.guest');
   const flag = profile?.country ? codeToFlag(profile.country) : '🌍';
   const podium = rank <= 3;
 
@@ -41,7 +43,7 @@ export function TopCard({ placement, rank }: TopCardProps) {
         'group relative flex w-64 shrink-0 items-center gap-3 overflow-hidden rounded-2xl p-3',
         'glass-panel transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5',
       )}
-      aria-label={`${nickname} — место №${rank} в Топе`}
+      aria-label={t('topCard.rankAria', { nickname, rank })}
     >
       {/* Podium glow. */}
       {podium && (
@@ -85,7 +87,9 @@ export function TopCard({ placement, rank }: TopCardProps) {
         </span>
         <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
           <span aria-hidden="true">{flag}</span>
-          <span className="tabular-nums">{formatNumber(placement.coinsSpent)} монет</span>
+          <span className="tabular-nums">
+            {t('topCard.coinsSpent', { amount: formatNumber(placement.coinsSpent) })}
+          </span>
         </span>
       </span>
     </Link>

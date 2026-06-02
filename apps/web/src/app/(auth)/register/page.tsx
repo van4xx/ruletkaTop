@@ -1,16 +1,21 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { RegisterForm } from '@/components/auth/register-form';
 import { RedirectIfAuthed } from '@/components/auth/redirect-if-authed';
 
-export const metadata: Metadata = {
-  title: 'Регистрация',
-  description: 'Создай аккаунт ruletka.top — случайные видеозвонки, подарки и друзья со всего мира.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('auth');
+  return {
+    title: t('meta.register.title'),
+    description: t('meta.register.description'),
+  };
+}
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  const t = await getTranslations('auth');
   return (
-    <AuthShell pitch="Присоединяйся к эфиру">
+    <AuthShell pitch={t('shell.pitch.register')}>
       <RedirectIfAuthed />
       <RegisterForm />
     </AuthShell>

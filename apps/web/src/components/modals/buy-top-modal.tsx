@@ -12,6 +12,7 @@
 import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations } from 'next-intl';
 import { ArrowDownToLine, ArrowUpToLine, Crown, Trophy } from 'lucide-react';
 import { topPurchaseSchema, type TopPurchaseDto } from '@ruletka/shared-types';
 import {
@@ -34,31 +35,32 @@ import { usePurchaseTop } from '@/features/top/use-top';
 import { useCoinBalance } from '@/hooks/wallet/use-wallet';
 import { BalancePill, FieldError, InsufficientCoins } from './shared';
 
-/** Duration presets surfaced as quick chips (hours). */
+/** Duration presets surfaced as quick chips (hours), with their i18n key. */
 const DURATIONS = [
-  { hours: 1, label: '1 час' },
-  { hours: 6, label: '6 часов' },
-  { hours: 24, label: '1 день' },
-  { hours: 72, label: '3 дня' },
-  { hours: 168, label: 'неделя' },
+  { hours: 1, key: 'duration1h' },
+  { hours: 6, key: 'duration6h' },
+  { hours: 24, key: 'duration24h' },
+  { hours: 72, key: 'duration72h' },
+  { hours: 168, key: 'duration168h' },
 ] as const;
 
 const MIN_COINS = 10;
 const MAX_COINS = 100_000;
 
-/** Qualitative priority label from the spend-rate (coins per hour). */
-function priorityTier(coins: number, hours: number): { label: string; pct: number } {
+/** Qualitative priority tier key from the spend-rate (coins per hour). */
+function priorityTier(coins: number, hours: number): { key: string; pct: number } {
   const perHour = hours > 0 ? coins / hours : coins;
   // Map a coins/hour rate onto a 0..100 strength bar (log-ish, capped).
   const pct = Math.max(6, Math.min(100, Math.round((Math.log10(perHour + 1) / 3) * 100)));
-  if (pct >= 75) return { label: 'Максимальный', pct };
-  if (pct >= 45) return { label: 'Высокий', pct };
-  if (pct >= 22) return { label: 'Средний', pct };
-  return { label: 'Базовый', pct };
+  if (pct >= 75) return { key: 'tierMax', pct };
+  if (pct >= 45) return { key: 'tierHigh', pct };
+  if (pct >= 22) return { key: 'tierMid', pct };
+  return { key: 'tierBase', pct };
 }
 
 export function BuyTopModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { presetLane } = useModalProps<'buy-top'>();
   const purchase = usePurchaseTop();
   const balance = useCoinBalance();
@@ -89,17 +91,23 @@ export function BuyTopModal() {
   const onSubmit = (values: TopPurchaseDto) => {
     purchase.mutate(values, {
       onSuccess: () => {
-        toast.success('Вы в Топе!', {
-          description: `Размещение в ленте «${values.lane === 'left' ? 'слева' : 'справа'}» активно.`,
+        const lane =
+          values.lane === 'left'
+            ? t('modals.buyTop.laneLeftWord')
+            : t('modals.buyTop.laneRightWord');
+        toast.success(t('modals.buyTop.successTitle'), {
+          description: t('modals.buyTop.successDescription', { lane }),
         });
         close();
       },
       onError: (err) => {
         if (err instanceof ApiClientError && (err.status === 402 || err.status === 422)) {
-          toast.error('Недостаточно монет', { description: 'Пополните баланс и попробуйте снова.' });
+          toast.error(t('modals.buyTop.errInsufficientTitle'), {
+            description: t('modals.buyTop.errInsufficientDescription'),
+          });
           return;
         }
-        toast.error('Не удалось купить размещение');
+        toast.error(t('modals.buyTop.errGeneric'));
       },
     });
   };
@@ -110,13 +118,13 @@ export function BuyTopModal() {
         <div className="flex items-center justify-between gap-2 pr-8">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/50 px-2.5 py-1 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
             <Trophy className="h-3.5 w-3.5 text-[var(--color-neon-magenta)]" aria-hidden="true" />
-            Продвижение
+            {t('modals.buyTop.eyebrow')}
           </span>
           <BalancePill balance={balance} />
         </div>
-        <DialogTitle>Попасть в Топ</DialogTitle>
+        <DialogTitle>{t('modals.buyTop.title')}</DialogTitle>
         <DialogDescription>
-          Разместите профиль в бегущей ленте Топа. Чем больше монет на час — тем выше приоритет.
+          {t('modals.buyTop.description')}
         </DialogDescription>
       </DialogHeader>
 
@@ -127,11 +135,11 @@ export function BuyTopModal() {
           name="lane"
           render={({ field }) => (
             <fieldset>
-              <legend className="mb-2 text-sm font-medium text-foreground">Полоса</legend>
-              <div role="radiogroup" aria-label="Полоса" className="grid grid-cols-2 gap-2">
+              <legend className="mb-2 text-sm font-medium text-foreground">{t('modals.buyTop.laneLegend')}</legend>
+              <div role="radiogroup" aria-label={t('modals.buyTop.laneAria')} className="grid grid-cols-2 gap-2">
                 {([
-                  { value: 'left', label: 'Слева', icon: ArrowUpToLine, hint: 'движется влево' },
-                  { value: 'right', label: 'Справа', icon: ArrowDownToLine, hint: 'движется вправо' },
+                  { value: 'left', label: t('modals.buyTop.laneLeft'), icon: ArrowUpToLine, hint: t('modals.buyTop.laneLeftHint') },
+                  { value: 'right', label: t('modals.buyTop.laneRight'), icon: ArrowDownToLine, hint: t('modals.buyTop.laneRightHint') },
                 ] as const).map((opt) => {
                   const Icon = opt.icon;
                   const selected = field.value === opt.value;
@@ -170,9 +178,9 @@ export function BuyTopModal() {
           render={({ field }) => (
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <Label>Длительность</Label>
+                <Label>{t('modals.buyTop.durationLabel')}</Label>
                 <span className="text-sm font-semibold tabular-nums text-foreground">
-                  {field.value} ч
+                  {t('modals.buyTop.durationValue', { hours: field.value })}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -192,7 +200,7 @@ export function BuyTopModal() {
                           : 'border-border bg-card/40 text-muted-foreground hover:border-border-strong hover:text-foreground',
                       )}
                     >
-                      {d.label}
+                      {t(`modals.buyTop.${d.key}`)}
                     </button>
                   );
                 })}
@@ -206,7 +214,7 @@ export function BuyTopModal() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <Label htmlFor="top-coins" required>
-              Ставка монет
+              {t('modals.buyTop.coinsLabel')}
             </Label>
             <span className="inline-flex items-center gap-1 text-sm font-semibold tabular-nums text-[var(--coin)]">
               <CoinIcon size="sm" />
@@ -227,7 +235,7 @@ export function BuyTopModal() {
                     field.onChange(v ?? MIN_COINS);
                     setCoinsText(String(v ?? MIN_COINS));
                   }}
-                  aria-label="Ставка монет"
+                  aria-label={t('modals.buyTop.coinsAria')}
                   className="mb-3"
                 />
                 <Input
@@ -256,9 +264,9 @@ export function BuyTopModal() {
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
               <Crown className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
-              Прогноз приоритета
+              {t('modals.buyTop.priorityTitle')}
             </span>
-            <span className="font-semibold text-accent">{tier.label}</span>
+            <span className="font-semibold text-accent">{t(`modals.buyTop.${tier.key}`)}</span>
           </div>
           <div
             className="h-2 w-full overflow-hidden rounded-full bg-muted"
@@ -266,7 +274,7 @@ export function BuyTopModal() {
             aria-valuenow={tier.pct}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Сила размещения"
+            aria-label={t('modals.buyTop.strengthAria')}
           >
             <div
               className="h-full rounded-full bg-aurora transition-[width] duration-300"
@@ -274,7 +282,7 @@ export function BuyTopModal() {
             />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Прогноз ориентировочный. Итоговое место зависит от ставок других участников.
+            {t('modals.buyTop.priorityNote')}
           </p>
         </div>
 
@@ -282,7 +290,7 @@ export function BuyTopModal() {
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={close}>
-            Отмена
+            {t('modals.buyTop.cancel')}
           </Button>
           <Button
             type="submit"
@@ -291,7 +299,7 @@ export function BuyTopModal() {
             loading={purchase.isPending}
             leadingIcon={<Trophy className="h-4 w-4" />}
           >
-            Купить за {formatNumber(coins || 0)}
+            {t('modals.buyTop.buyFor', { coins: formatNumber(coins || 0) })}
           </Button>
         </DialogFooter>
       </form>

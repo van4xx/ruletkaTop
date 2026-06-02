@@ -5,6 +5,7 @@
  * with the warm gold coin economy color, a bonus ribbon, and a "выгодно"
  * (best-value) highlight on the cheapest-per-coin package.
  */
+import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import type { CoinPackage } from '@ruletka/shared-types';
@@ -34,6 +35,7 @@ export function CoinPackageCard({
   onBuy,
   index = 0,
 }: CoinPackageCardProps) {
+  const t = useTranslations('economy');
   const total = pkg.coins + pkg.bonusCoins;
 
   return (
@@ -57,7 +59,7 @@ export function CoinPackageCard({
         <span className="absolute right-4 top-4">
           <Badge variant="aurora" size="sm">
             <Sparkles className="h-3 w-3" aria-hidden="true" />
-            Выгодно
+            {t('package.bestValue')}
           </Badge>
         </span>
       )}
@@ -72,16 +74,16 @@ export function CoinPackageCard({
           <span className="font-display text-3xl font-extrabold tabular-nums text-foreground">
             {formatNumber(pkg.coins)}
           </span>
-          <span className="text-sm font-medium text-muted-foreground">монет</span>
+          <span className="text-sm font-medium text-muted-foreground">{t('package.coinsSuffix')}</span>
         </div>
         {pkg.bonusCoins > 0 && (
           <p className="mt-1.5 inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-neon-cyan)]">
-            +{formatNumber(pkg.bonusCoins)} бонусных
+            {t('package.bonus', { amount: formatNumber(pkg.bonusCoins) })}
           </p>
         )}
         {pkg.bonusCoins > 0 && (
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Итого {formatNumber(total)} монет
+            {t('package.total', { amount: formatNumber(total) })}
           </p>
         )}
       </div>
@@ -97,9 +99,12 @@ export function CoinPackageCard({
         loading={loading}
         disabled={disabled && !loading}
         onClick={() => onBuy(pkg)}
-        aria-label={`Купить ${formatNumber(pkg.coins)} монет за ${formatRub(pkg.priceRub)}`}
+        aria-label={t('package.buyAria', {
+          coins: formatNumber(pkg.coins),
+          price: formatRub(pkg.priceRub),
+        })}
       >
-        Купить
+        {t('package.buy')}
       </Button>
     </motion.div>
   );

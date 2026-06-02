@@ -13,6 +13,7 @@
  */
 import { memo } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Coins, Plus } from 'lucide-react';
 import { ROUTES } from '@/config/nav';
@@ -25,6 +26,7 @@ interface CoinPillProps {
 }
 
 function CoinPillImpl({ balance, className }: CoinPillProps) {
+  const t = useTranslations('chrome');
   const reduceMotion = useReducedMotion();
   const display = balance === null ? null : new Intl.NumberFormat('ru-RU').format(balance);
 
@@ -39,7 +41,11 @@ function CoinPillImpl({ balance, className }: CoinPillProps) {
     >
       <Link
         href={ROUTES.wallet}
-        aria-label={display === null ? 'Баланс монет' : `Баланс: ${display} монет`}
+        aria-label={
+          display === null
+            ? t('coinPill.balanceAria')
+            : t('coinPill.balanceValueAria', { amount: display })
+        }
         className="inline-flex items-center gap-1.5 rounded-full text-sm font-medium tabular-nums outline-none"
       >
         <Coins className="h-4 w-4 text-warning" aria-hidden="true" />
@@ -66,7 +72,7 @@ function CoinPillImpl({ balance, className }: CoinPillProps) {
       </Link>
       <Link
         href={ROUTES.coins}
-        aria-label="Пополнить баланс"
+        aria-label={t('coinPill.topUpAria')}
         className={cn(
           'inline-flex h-6 w-6 items-center justify-center rounded-full outline-none',
           'bg-primary/15 text-primary transition-colors',

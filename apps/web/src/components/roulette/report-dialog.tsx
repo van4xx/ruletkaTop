@@ -6,6 +6,7 @@
  * longer want to talk to this one) — the parent decides via `onReported`.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Flag } from 'lucide-react';
 import {
   Button,
@@ -33,14 +34,14 @@ export interface ReportDialogProps {
   onReported?: () => void;
 }
 
-const REASONS: { value: ReportReason; label: string }[] = [
-  { value: 'nudity', label: 'Нагота / 18+' },
-  { value: 'harassment', label: 'Оскорбления' },
-  { value: 'minor', label: 'Несовершеннолетний' },
-  { value: 'violence', label: 'Насилие' },
-  { value: 'spam', label: 'Спам' },
-  { value: 'scam', label: 'Мошенничество' },
-  { value: 'other', label: 'Другое' },
+const REASONS: { value: ReportReason; labelKey: string }[] = [
+  { value: 'nudity', labelKey: 'report.reasonNudity' },
+  { value: 'harassment', labelKey: 'report.reasonHarassment' },
+  { value: 'minor', labelKey: 'report.reasonMinor' },
+  { value: 'violence', labelKey: 'report.reasonViolence' },
+  { value: 'spam', labelKey: 'report.reasonSpam' },
+  { value: 'scam', labelKey: 'report.reasonScam' },
+  { value: 'other', labelKey: 'report.reasonOther' },
 ];
 
 export function ReportDialog({
@@ -50,6 +51,7 @@ export function ReportDialog({
   peerName,
   onReported,
 }: ReportDialogProps) {
+  const t = useTranslations('roulette');
   const report = useReportUser();
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
@@ -63,8 +65,8 @@ export function ReportDialog({
     };
     report.mutate(dto, {
       onSuccess: () => {
-        toast.success('Жалоба отправлена', {
-          description: 'Спасибо — модерация рассмотрит её.',
+        toast.success(t('report.successTitle'), {
+          description: t('report.successDescription'),
         });
         setReason(null);
         setDetails('');
@@ -72,7 +74,7 @@ export function ReportDialog({
         onReported?.();
       },
       onError: (err: unknown) => {
-        toast.error(err instanceof Error ? err.message : 'Не удалось отправить жалобу');
+        toast.error(err instanceof Error ? err.message : t('report.error'));
       },
     });
   }
@@ -83,15 +85,17 @@ export function ReportDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Flag className="h-5 w-5 text-warning" />
-            Пожаловаться на {peerName}
+            {t('report.title', { name: peerName })}
           </DialogTitle>
-          <DialogDescription>
-            Выберите причину. Жалобы анонимны и помогают сохранять безопасность.
-          </DialogDescription>
+          <DialogDescription>{t('report.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div role="radiogroup" aria-label="Причина жалобы" className="grid grid-cols-2 gap-2">
+          <div
+            role="radiogroup"
+            aria-label={t('report.reasonGroupAriaLabel')}
+            className="grid grid-cols-2 gap-2"
+          >
             {REASONS.map((r) => {
               const selected = reason === r.value;
               return (
@@ -109,20 +113,20 @@ export function ReportDialog({
                       : 'border-border bg-card/40 text-muted-foreground hover:text-foreground hover:bg-card/70',
                   )}
                 >
-                  {r.label}
+                  {t(r.labelKey)}
                 </button>
               );
             })}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="report-details">Подробнее (необязательно)</Label>
+            <Label htmlFor="report-details">{t('report.detailsLabel')}</Label>
             <Textarea
               id="report-details"
               value={details}
               maxLength={1000}
               onChange={(e) => setDetails(e.target.value)}
-              placeholder="Опишите, что произошло…"
+              placeholder={t('report.detailsPlaceholder')}
               rows={3}
             />
           </div>
@@ -130,7 +134,7 @@ export function ReportDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Отмена
+            {t('report.cancel')}
           </Button>
           <Button
             variant="danger"
@@ -139,7 +143,7 @@ export function ReportDialog({
             className="gap-2"
           >
             {report.isPending ? <Spinner size="sm" tone="current" /> : <Flag className="h-4 w-4" />}
-            Отправить жалобу
+            {t('report.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>

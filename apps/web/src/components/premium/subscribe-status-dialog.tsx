@@ -6,6 +6,7 @@
  *   pending         → charge captured, activating premium via webhook
  *   error           → reason + retry
  */
+import { useTranslations } from 'next-intl';
 import { CheckCircle2, Crown, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import type { PremiumPlan } from '@ruletka/shared-types';
 import {
@@ -35,6 +36,8 @@ export function SubscribeStatusDialog({
   onClose,
   onRetry,
 }: SubscribeStatusDialogProps) {
+  const t = useTranslations('economy');
+  const tc = useTranslations('common');
   const open = phase === 'starting' || phase === 'pending' || phase === 'active' || phase === 'error';
 
   return (
@@ -43,21 +46,21 @@ export function SubscribeStatusDialog({
         <DialogHeader>
           <DialogTitle>
             {phase === 'error'
-              ? 'Подписка не оформлена'
+              ? t('subscribeStatus.titleError')
               : phase === 'pending'
-                ? 'Активируем премиум'
+                ? t('subscribeStatus.titlePending')
                 : phase === 'active'
-                  ? 'Премиум активен'
-                  : 'Готовим оплату'}
+                  ? t('subscribeStatus.titleActive')
+                  : t('subscribeStatus.titlePreparing')}
           </DialogTitle>
           <DialogDescription>
             {phase === 'error'
-              ? error ?? 'Попробуйте ещё раз.'
+              ? error ?? t('subscribeStatus.descError')
               : phase === 'pending'
-                ? 'Оплата прошла. Премиум активируется в течение нескольких секунд.'
+                ? t('subscribeStatus.descPending')
                 : phase === 'active'
-                  ? `План «${plan?.title ?? ''}» подключён.`
-                  : 'Открываем защищённое окно CloudPayments. Данные карты не попадают на наш сервер.'}
+                  ? t('subscribeStatus.descActive', { title: plan?.title ?? '' })
+                  : t('subscribeStatus.descPreparing')}
           </DialogDescription>
         </DialogHeader>
 
@@ -66,12 +69,12 @@ export function SubscribeStatusDialog({
           {phase === 'starting' && (
             <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden="true" />
-              Безопасная рекуррентная оплата
+              {t('subscribeStatus.secure')}
             </p>
           )}
           {phase === 'pending' && (
             <p className="text-center text-xs text-muted-foreground">
-              Можно закрыть это окно — статус обновится автоматически.
+              {t('subscribeStatus.pendingHint')}
             </p>
           )}
         </div>
@@ -81,15 +84,15 @@ export function SubscribeStatusDialog({
             {phase === 'error' ? (
               <>
                 <Button variant="ghost" onClick={onClose}>
-                  Отмена
+                  {tc('cancel')}
                 </Button>
                 <Button onClick={onRetry} leadingIcon={<Crown className="h-4 w-4" />}>
-                  Повторить
+                  {t('subscribeStatus.retry')}
                 </Button>
               </>
             ) : (
               <Button onClick={onClose} block>
-                Готово
+                {t('subscribeStatus.done')}
               </Button>
             )}
           </DialogFooter>

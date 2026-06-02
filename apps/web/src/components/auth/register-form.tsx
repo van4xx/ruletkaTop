@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { AtSign, CircleAlert, UserRound } from 'lucide-react';
 import type { CountryCode } from '@ruletka/shared-types';
 import { Button, CountrySelect, Input, toast } from '@ruletka/ui';
@@ -39,6 +40,7 @@ function maxBirthDate(): string {
 }
 
 export function RegisterForm() {
+  const t = useTranslations('auth');
   const registerMutation = useRegister();
 
   // CAPTCHA token (Cloudflare Turnstile). Held outside RHF since it's not a
@@ -75,7 +77,7 @@ export function RegisterForm() {
     const payload = captchaToken ? { ...values, captchaToken } : values;
     registerMutation.mutate(payload, {
       onSuccess: () => {
-        toast.success('Аккаунт создан', { description: 'Добро пожаловать в эфир!' });
+        toast.success(t('register.successToast'), { description: t('register.successToastDescription') });
         // Hard navigation so the just-set auth cookies ride the next request.
         window.location.assign('/dashboard');
       },
@@ -84,7 +86,7 @@ export function RegisterForm() {
 
   const apiMessage =
     registerMutation.error?.status === 409
-      ? 'Email или никнейм уже заняты'
+      ? t('register.conflict')
       : registerMutation.error?.message;
 
   const busy = isSubmitting || registerMutation.isPending;
@@ -95,8 +97,8 @@ export function RegisterForm() {
   return (
     <div>
       <header className="mb-7">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Создать аккаунт</h1>
-        <p className="mt-2 text-muted-foreground">Пара шагов — и ты в эфире.</p>
+        <h1 className="font-display text-3xl font-bold tracking-tight">{t('register.title')}</h1>
+        <p className="mt-2 text-muted-foreground">{t('register.subtitle')}</p>
       </header>
 
       <AnimatePresence>
@@ -115,14 +117,14 @@ export function RegisterForm() {
       </AnimatePresence>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <FormField label="Email" required error={errors.email?.message}>
+        <FormField label={t('fields.email')} required error={errors.email?.message}>
           {(field) => (
             <Input
               {...field}
               type="email"
               inputMode="email"
               autoComplete="email"
-              placeholder="you@example.com"
+              placeholder={t('fields.emailPlaceholder')}
               leadingIcon={<AtSign />}
               {...register('email')}
             />
@@ -130,16 +132,16 @@ export function RegisterForm() {
         </FormField>
 
         <FormField
-          label="Никнейм"
+          label={t('register.nickname')}
           required
           error={errors.nickname?.message}
-          hint="3–24 символа: латиница, цифры и _"
+          hint={t('register.nicknameHint')}
         >
           {(field) => (
             <Input
               {...field}
               autoComplete="username"
-              placeholder="cosmic_fox"
+              placeholder={t('register.nicknamePlaceholder')}
               leadingIcon={<UserRound />}
               {...register('nickname')}
             />
@@ -147,16 +149,16 @@ export function RegisterForm() {
         </FormField>
 
         <FormField
-          label="Пароль"
+          label={t('fields.password')}
           required
           error={errors.password?.message}
-          hint="Минимум 8 символов"
+          hint={t('register.passwordHint')}
         >
           {(field) => (
             <PasswordField
               {...field}
               autoComplete="new-password"
-              placeholder="Придумай пароль"
+              placeholder={t('register.passwordPlaceholder')}
               showStrength
               value={passwordValue}
               {...register('password')}
@@ -165,7 +167,7 @@ export function RegisterForm() {
         </FormField>
 
         {/* Gender — accessible segmented radiogroup. */}
-        <FormField label="Пол" required error={errors.gender?.message}>
+        <FormField label={t('register.gender')} required error={errors.gender?.message}>
           {(field) => (
             <Controller
               control={control}
@@ -173,7 +175,7 @@ export function RegisterForm() {
               render={({ field: { value, onChange } }) => (
                 <SegmentedControl
                   id={field.id}
-                  aria-label="Пол"
+                  aria-label={t('register.gender')}
                   options={GENDER_OPTIONS}
                   value={value}
                   onChange={onChange}
@@ -184,7 +186,7 @@ export function RegisterForm() {
         </FormField>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <FormField label="Дата рождения" required error={errors.birthDate?.message}>
+          <FormField label={t('register.birthDate')} required error={errors.birthDate?.message}>
             {(field) => (
               <Input
                 {...field}
@@ -196,7 +198,7 @@ export function RegisterForm() {
             )}
           </FormField>
 
-          <FormField label="Язык интерфейса" error={errors.locale?.message}>
+          <FormField label={t('register.locale')} error={errors.locale?.message}>
             {(field) => (
               <Controller
                 control={control}
@@ -204,7 +206,7 @@ export function RegisterForm() {
                 render={({ field: { value, onChange } }) => (
                   <SegmentedControl
                     id={field.id}
-                    aria-label="Язык интерфейса"
+                    aria-label={t('register.locale')}
                     options={LOCALE_OPTIONS}
                     value={value ?? 'ru'}
                     onChange={onChange}
@@ -216,7 +218,7 @@ export function RegisterForm() {
         </div>
 
         {/* Country — single-select wrapper around the multi-select picker. */}
-        <FormField label="Страна" required error={errors.country?.message}>
+        <FormField label={t('register.country')} required error={errors.country?.message}>
           {(field) => (
             <Controller
               control={control}
@@ -224,8 +226,8 @@ export function RegisterForm() {
               render={({ field: { value, onChange } }) => (
                 <CountrySelect
                   id={field.id}
-                  aria-label="Страна"
-                  placeholder="Выбери страну"
+                  aria-label={t('register.country')}
+                  placeholder={t('register.countryPlaceholder')}
                   maxSelections={1}
                   value={value ? [value] : []}
                   onChange={(codes) => onChange(codes[codes.length - 1] ?? ('' as CountryCode))}
@@ -247,21 +249,21 @@ export function RegisterForm() {
           disabled={submitDisabled}
           className="mt-1"
         >
-          Создать аккаунт
+          {t('register.submit')}
         </Button>
 
         <p className="text-center text-xs text-muted-foreground">
-          Регистрируясь, ты подтверждаешь, что тебе есть {MIN_AGE} лет.
+          {t('register.ageConfirm', { minAge: MIN_AGE })}
         </p>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        Уже есть аккаунт?{' '}
+        {t('register.haveAccount')}{' '}
         <Link
           href="/login"
           className="font-semibold text-foreground underline-offset-4 transition-colors hover:text-[var(--color-neon-cyan)] hover:underline"
         >
-          Войти
+          {t('register.signIn')}
         </Link>
       </p>
     </div>

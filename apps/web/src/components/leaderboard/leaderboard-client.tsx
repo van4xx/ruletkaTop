@@ -13,6 +13,7 @@
  * Loading / empty / error states are all handled per board.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Coins, Crown, Gift, TrendingUp } from 'lucide-react';
 import type { LeaderboardMetric } from '@ruletka/shared-types';
 import { Tabs, TabsContent, TabsList, TabsTrigger, TooltipProvider } from '@ruletka/ui';
@@ -23,28 +24,21 @@ import { LeaderboardPodium } from './leaderboard-podium';
 import { LeaderboardRow, LeaderboardListSkeleton } from './leaderboard-list';
 import { useLeaderboard } from './use-leaderboard';
 
-const METRICS: { value: LeaderboardMetric; label: string; icon: typeof Gift }[] = [
-  { value: 'gifts', label: 'Подарки', icon: Gift },
-  { value: 'coins', label: 'Монеты', icon: Coins },
-  { value: 'top', label: 'Дни в Топе', icon: TrendingUp },
+const METRICS: { value: LeaderboardMetric; labelKey: string; icon: typeof Gift }[] = [
+  { value: 'gifts', labelKey: 'leaderboard.metricGifts', icon: Gift },
+  { value: 'coins', labelKey: 'leaderboard.metricCoins', icon: Coins },
+  { value: 'top', labelKey: 'leaderboard.metricTopDays', icon: TrendingUp },
 ];
 
-const EMPTY_COPY: Record<LeaderboardMetric, { title: string; description: string }> = {
-  gifts: {
-    title: 'Пока никто не получал подарков',
-    description: 'Дарите подарки любимым собеседникам — и они поднимутся в этом зале славы.',
-  },
-  coins: {
-    title: 'Рейтинг по монетам пуст',
-    description: 'Пополняйте баланс и поднимайтесь в рейтинге самых заметных участников.',
-  },
-  top: {
-    title: 'Дорожки Топа свободны',
-    description: 'Купите место в Топе — и начните копить дни в зале славы.',
-  },
+/** `misc.leaderboard.*` key suffixes for each metric's empty state. */
+const EMPTY_COPY: Record<LeaderboardMetric, { titleKey: string; descriptionKey: string }> = {
+  gifts: { titleKey: 'leaderboard.emptyGiftsTitle', descriptionKey: 'leaderboard.emptyGiftsDesc' },
+  coins: { titleKey: 'leaderboard.emptyCoinsTitle', descriptionKey: 'leaderboard.emptyCoinsDesc' },
+  top: { titleKey: 'leaderboard.emptyTopTitle', descriptionKey: 'leaderboard.emptyTopDesc' },
 };
 
 function MetricBoard({ metric }: { metric: LeaderboardMetric }) {
+  const t = useTranslations('misc');
   const { user } = useAuth();
   const board = useLeaderboard(metric);
 
@@ -59,8 +53,8 @@ function MetricBoard({ metric }: { metric: LeaderboardMetric }) {
   if (board.isError) {
     return (
       <ErrorState
-        title="Не удалось загрузить рейтинг"
-        description="Данные временно недоступны. Попробуйте обновить."
+        title={t('leaderboard.errorTitle')}
+        description={t('leaderboard.errorDesc')}
         onRetry={board.refetch}
       />
     );
@@ -81,8 +75,8 @@ function MetricBoard({ metric }: { metric: LeaderboardMetric }) {
     return (
       <EmptyState
         icon={<Crown className="h-7 w-7" aria-hidden="true" />}
-        title={EMPTY_COPY[metric].title}
-        description={EMPTY_COPY[metric].description}
+        title={t(EMPTY_COPY[metric].titleKey)}
+        description={t(EMPTY_COPY[metric].descriptionKey)}
       />
     );
   }
@@ -91,7 +85,7 @@ function MetricBoard({ metric }: { metric: LeaderboardMetric }) {
     <>
       {/* Podium (top 3) */}
       <section
-        aria-label="Тройка лидеров"
+        aria-label={t('leaderboard.podiumAria')}
         className="relative overflow-hidden rounded-3xl px-4 pb-6 pt-12 sm:px-8 sm:pt-14"
       >
         <div
@@ -104,9 +98,9 @@ function MetricBoard({ metric }: { metric: LeaderboardMetric }) {
 
       {/* The rest of the ranking */}
       {rest.length > 0 && (
-        <section aria-label="Остальные участники">
+        <section aria-label={t('leaderboard.restAria')}>
           <h2 className="mb-3 px-1 font-display text-sm font-bold uppercase tracking-widest text-muted-foreground">
-            Рейтинг
+            {t('leaderboard.ranking')}
           </h2>
           <ol className="space-y-2.5">
             {rest.map((entry) => (
@@ -123,9 +117,9 @@ function MetricBoard({ metric }: { metric: LeaderboardMetric }) {
 
       {/* The caller's own position, if outside the visible slice. */}
       {showMe && (
-        <section aria-label="Ваше место">
+        <section aria-label={t('leaderboard.myPlaceAria')}>
           <h2 className="mb-3 px-1 font-display text-sm font-bold uppercase tracking-widest text-muted-foreground">
-            Вы
+            {t('leaderboard.you')}
           </h2>
           <ol>
             <LeaderboardRow entry={showMe} metric={metric} isMe />
@@ -137,6 +131,7 @@ function MetricBoard({ metric }: { metric: LeaderboardMetric }) {
 }
 
 export function LeaderboardClient() {
+  const t = useTranslations('misc');
   const [metric, setMetric] = useState<LeaderboardMetric>('gifts');
 
   return (
@@ -145,26 +140,26 @@ export function LeaderboardClient() {
         eyebrow={
           <>
             <Crown className="h-3.5 w-3.5 text-[var(--coin)]" aria-hidden="true" />
-            Лидеры
+            {t('leaderboard.eyebrow')}
           </>
         }
         title={
           <>
-            Зал <span className="text-gradient-neon">славы</span>
+            {t('leaderboard.titlePrefix')} <span className="text-gradient-neon">{t('leaderboard.titleAccent')}</span>
           </>
         }
-        lede="Самые заметные участники сообщества. Поднимайтесь в рейтинге — дарите подарки, пополняйте баланс и держите место в Топе."
+        lede={t('leaderboard.lede')}
       >
         <Tabs
           value={metric}
           onValueChange={(v) => setMetric(v as LeaderboardMetric)}
           className="space-y-8"
         >
-          <TabsList variant="pill" aria-label="Метрика рейтинга">
-            {METRICS.map(({ value, label, icon: Icon }) => (
+          <TabsList variant="pill" aria-label={t('leaderboard.metricTabsAria')}>
+            {METRICS.map(({ value, labelKey, icon: Icon }) => (
               <TabsTrigger key={value} value={value} className="gap-1.5">
                 <Icon className="h-4 w-4" aria-hidden="true" />
-                {label}
+                {t(labelKey)}
               </TabsTrigger>
             ))}
           </TabsList>

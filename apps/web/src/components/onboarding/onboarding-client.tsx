@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import {
   ArrowLeft,
   ArrowRight,
@@ -47,20 +48,22 @@ import { INTERESTS } from './interests';
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 const STEPS: StepperStep[] = [
-  { key: 'welcome', label: 'Старт' },
-  { key: 'avatar', label: 'Фото' },
-  { key: 'identity', label: 'О себе' },
-  { key: 'country', label: 'Страна' },
-  { key: 'languages', label: 'Языки' },
-  { key: 'interests', label: 'Интересы' },
+  { key: 'welcome', labelKey: 'onboarding.stepWelcome' },
+  { key: 'avatar', labelKey: 'onboarding.stepAvatar' },
+  { key: 'identity', labelKey: 'onboarding.stepIdentity' },
+  { key: 'country', labelKey: 'onboarding.stepCountry' },
+  { key: 'languages', labelKey: 'onboarding.stepLanguages' },
+  { key: 'interests', labelKey: 'onboarding.stepInterests' },
 ];
 
-const GENDERS: { value: Gender; label: string; icon: React.ReactNode }[] = [
-  { value: 'female', label: 'Женский', icon: <Venus className="h-5 w-5" /> },
-  { value: 'male', label: 'Мужской', icon: <Mars className="h-5 w-5" /> },
-  { value: 'other', label: 'Другое', icon: <Transgender className="h-5 w-5" /> },
+const GENDERS: { value: Gender; labelKey: string; icon: React.ReactNode }[] = [
+  { value: 'female', labelKey: 'onboarding.genderFemale', icon: <Venus className="h-5 w-5" /> },
+  { value: 'male', labelKey: 'onboarding.genderMale', icon: <Mars className="h-5 w-5" /> },
+  { value: 'other', labelKey: 'onboarding.genderOther', icon: <Transgender className="h-5 w-5" /> },
 ];
 
+// Language self-names are intentionally shown in their own language, so they
+// stay as literals rather than going through the message catalogue.
 const LOCALES: { value: Locale; label: string }[] = [
   { value: 'ru', label: 'Русский' },
   { value: 'en', label: 'English' },
@@ -76,6 +79,7 @@ interface OnboardingState {
 }
 
 export function OnboardingClient() {
+  const t = useTranslations('misc');
   const router = useRouter();
   const { user, isAuthenticated, isReady } = useAuth();
   const profileQuery = useProfile(user?.id);
@@ -128,7 +132,7 @@ export function OnboardingClient() {
 
   // Auth/loading gates.
   if (isReady && !isAuthenticated) {
-    return <SignInRequired description="Войдите, чтобы заполнить профиль." />;
+    return <SignInRequired description={t('onboarding.signInDesc')} />;
   }
   if (!user || profileQuery.isLoading) return <ProfileSkeleton />;
 
@@ -159,7 +163,7 @@ export function OnboardingClient() {
     }
     updateProfile.mutate(dto, {
       onSuccess: () => {
-        toast.success('Профиль готов — добро пожаловать!');
+        toast.success(t('onboarding.profileReady'));
         router.push(ROUTES.home);
       },
       onError: (err) => {
@@ -167,8 +171,8 @@ export function OnboardingClient() {
           err instanceof ApiClientError && Array.isArray(err.body?.message)
             ? err.body!.message.join(', ')
             : err instanceof ApiClientError && err.status === 409
-              ? 'Этот никнейм уже занят.'
-              : 'Не удалось сохранить профиль. Попробуйте ещё раз.';
+              ? t('onboarding.nicknameTaken')
+              : t('onboarding.saveError');
         toast.error(msg);
       },
     });
@@ -194,7 +198,7 @@ export function OnboardingClient() {
         <div className="mb-8 flex items-center justify-between gap-4">
           <span className="glass-panel inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-            Настройка профиля
+            {t('onboarding.badge')}
           </span>
           {!isLast && (
             <button
@@ -202,7 +206,7 @@ export function OnboardingClient() {
               onClick={skip}
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              Пропустить
+              {t('onboarding.skip')}
             </button>
           )}
         </div>
@@ -228,11 +232,10 @@ export function OnboardingClient() {
                   </span>
                   <div>
                     <h2 className="font-display text-2xl font-extrabold tracking-tight">
-                      Привет, {displayName}!
+                      {t('onboarding.welcomeTitle', { name: displayName })}
                     </h2>
                     <p className="mx-auto mt-2 max-w-md text-balance text-muted-foreground">
-                      Давайте за пару шагов настроим профиль — так собеседникам будет интереснее, а
-                      подбор точнее. Это займёт меньше минуты.
+                      {t('onboarding.welcomeText')}
                     </p>
                   </div>
                 </div>
@@ -241,8 +244,8 @@ export function OnboardingClient() {
               {currentKey === 'avatar' && (
                 <div className="space-y-6">
                   <StepHeading
-                    title="Добавьте фото"
-                    subtitle="Аватар повышает доверие. Вставьте ссылку на изображение — можно пропустить и добавить позже."
+                    title={t('onboarding.avatarTitle')}
+                    subtitle={t('onboarding.avatarSubtitle')}
                   />
                   <div className="flex flex-col items-center gap-4 sm:flex-row">
                     <Avatar
@@ -252,7 +255,7 @@ export function OnboardingClient() {
                       ring={state.avatarUrl ? 'aurora' : 'none'}
                     />
                     <div className="w-full flex-1">
-                      <Label htmlFor="ob-avatar">Ссылка на аватар</Label>
+                      <Label htmlFor="ob-avatar">{t('onboarding.avatarLabel')}</Label>
                       <Input
                         id="ob-avatar"
                         type="url"
@@ -264,7 +267,7 @@ export function OnboardingClient() {
                         className="mt-1.5"
                       />
                       <p className="mt-1.5 text-xs text-muted-foreground">
-                        Подойдёт прямая ссылка на JPG/PNG.
+                        {t('onboarding.avatarHint')}
                       </p>
                     </div>
                   </div>
@@ -274,15 +277,15 @@ export function OnboardingClient() {
               {currentKey === 'identity' && (
                 <div className="space-y-6">
                   <StepHeading
-                    title="Расскажите о себе"
-                    subtitle="Пол и дата рождения нужны для подбора и подтверждения возраста."
+                    title={t('onboarding.identityTitle')}
+                    subtitle={t('onboarding.identitySubtitle')}
                   />
                   <div>
-                    <Label>Пол</Label>
+                    <Label>{t('onboarding.genderLabel')}</Label>
                     <div
                       className="mt-2 flex flex-col gap-3 sm:flex-row"
                       role="radiogroup"
-                      aria-label="Пол"
+                      aria-label={t('onboarding.genderLabel')}
                     >
                       {GENDERS.map((g) => (
                         <OptionCard
@@ -290,13 +293,13 @@ export function OnboardingClient() {
                           selected={state.gender === g.value}
                           onClick={() => setState((s) => ({ ...s, gender: g.value }))}
                           icon={g.icon}
-                          label={g.label}
+                          label={t(g.labelKey)}
                         />
                       ))}
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="ob-birth">Дата рождения</Label>
+                    <Label htmlFor="ob-birth">{t('onboarding.birthDateLabel')}</Label>
                     <Input
                       id="ob-birth"
                       type="date"
@@ -310,13 +313,13 @@ export function OnboardingClient() {
                     />
                     <p id="ob-birth-hint" className="mt-1.5 text-xs text-muted-foreground">
                       {state.birthDate && birthInFuture ? (
-                        <span className="text-destructive">Дата не может быть в будущем.</span>
+                        <span className="text-destructive">{t('onboarding.birthFuture')}</span>
                       ) : state.birthDate && !ageValid ? (
                         <span className="text-destructive">
-                          Регистрация и общение доступны только с {MIN_AGE} лет.
+                          {t('onboarding.ageTooYoung', { minAge: MIN_AGE })}
                         </span>
                       ) : (
-                        <>Сервис только для совершеннолетних (18+).</>
+                        <>{t('onboarding.ageAdultsOnly')}</>
                       )}
                     </p>
                   </div>
@@ -326,17 +329,17 @@ export function OnboardingClient() {
               {currentKey === 'country' && (
                 <div className="space-y-6">
                   <StepHeading
-                    title="Откуда вы?"
-                    subtitle="Страна помогает находить близких по духу собеседников."
+                    title={t('onboarding.countryTitle')}
+                    subtitle={t('onboarding.countrySubtitle')}
                   />
                   <div>
-                    <Label htmlFor="ob-country">Страна</Label>
+                    <Label htmlFor="ob-country">{t('onboarding.countryLabel')}</Label>
                     <div className="mt-1.5">
                       <CountrySelect
                         id="ob-country"
-                        aria-label="Страна"
+                        aria-label={t('onboarding.countryLabel')}
                         maxSelections={1}
-                        placeholder="Выберите страну"
+                        placeholder={t('onboarding.countryPlaceholder')}
                         value={state.country ? [state.country] : []}
                         onChange={(codes: CountryCode[]) =>
                           setState((s) => ({ ...s, country: codes[codes.length - 1] ?? null }))
@@ -350,8 +353,8 @@ export function OnboardingClient() {
               {currentKey === 'languages' && (
                 <div className="space-y-6">
                   <StepHeading
-                    title="На каких языках общаетесь?"
-                    subtitle="Выберите один или несколько — так мы точнее подберём собеседников."
+                    title={t('onboarding.languagesTitle')}
+                    subtitle={t('onboarding.languagesSubtitle')}
                   />
                   <div className="flex flex-wrap gap-2.5">
                     {LOCALES.map((l) => {
@@ -375,7 +378,7 @@ export function OnboardingClient() {
                     })}
                   </div>
                   {state.languages.length === 0 && (
-                    <p className="text-xs text-destructive">Выберите хотя бы один язык.</p>
+                    <p className="text-xs text-destructive">{t('onboarding.languagesEmpty')}</p>
                   )}
                 </div>
               )}
@@ -383,8 +386,8 @@ export function OnboardingClient() {
               {currentKey === 'interests' && (
                 <div className="space-y-6">
                   <StepHeading
-                    title="Что вам интересно?"
-                    subtitle="Необязательно — но помогает разбить лёд. Выберите близкие темы."
+                    title={t('onboarding.interestsTitle')}
+                    subtitle={t('onboarding.interestsSubtitle')}
                   />
                   <div className="flex flex-wrap gap-2.5">
                     {INTERESTS.map((it) => {
@@ -403,7 +406,7 @@ export function OnboardingClient() {
                           }
                         >
                           <span aria-hidden="true">{it.emoji}</span>
-                          {it.label}
+                          {t(it.labelKey)}
                         </SelectChip>
                       );
                     })}
@@ -424,7 +427,7 @@ export function OnboardingClient() {
             leadingIcon={<ArrowLeft className="h-4 w-4" />}
             className={cn(step === 0 && 'invisible')}
           >
-            Назад
+            {t('onboarding.back')}
           </Button>
 
           {isLast ? (
@@ -435,7 +438,7 @@ export function OnboardingClient() {
               loading={updateProfile.isPending}
               trailingIcon={!updateProfile.isPending ? <Check className="h-5 w-5" /> : undefined}
             >
-              Завершить
+              {t('onboarding.finish')}
             </Button>
           ) : (
             <Button
@@ -445,7 +448,7 @@ export function OnboardingClient() {
               disabled={!canNext}
               trailingIcon={<ArrowRight className="h-5 w-5" />}
             >
-              {step === 0 ? 'Начать' : 'Далее'}
+              {step === 0 ? t('onboarding.begin') : t('onboarding.next')}
             </Button>
           )}
         </div>
@@ -456,7 +459,7 @@ export function OnboardingClient() {
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <div className="glass-panel flex items-center gap-3 rounded-full px-5 py-3">
             <Spinner size="sm" role="presentation" label="" />
-            <span className="text-sm text-muted-foreground">Сохраняем профиль…</span>
+            <span className="text-sm text-muted-foreground">{t('onboarding.saving')}</span>
           </div>
         </div>
       )}

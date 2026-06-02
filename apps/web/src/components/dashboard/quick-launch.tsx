@@ -9,6 +9,7 @@
  */
 import Link from 'next/link';
 import { motion, type Variants } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { ArrowRight, Mic, SlidersHorizontal, Video } from 'lucide-react';
 import { ROUTES } from '@/config/nav';
 import { cn } from '@/lib/cn';
@@ -30,8 +31,10 @@ interface LaunchConfig {
   mode: 'video' | 'voice';
   href: string;
   icon: typeof Video;
-  title: string;
-  subtitle: string;
+  /** `misc.dashboard.*` key for the card title. */
+  titleKey: string;
+  /** `misc.dashboard.*` key for the card subtitle. */
+  subtitleKey: string;
   /** Tailwind gradient stops for the card's living glow. */
   gradient: string;
   /** Accent variable used for the icon halo + sweep. */
@@ -43,8 +46,8 @@ const LAUNCH: readonly LaunchConfig[] = [
     mode: 'video',
     href: ROUTES.video,
     icon: Video,
-    title: 'Видеочат',
-    subtitle: 'Случайные видеозвонки со всем миром',
+    titleKey: 'dashboard.quickLaunchVideoTitle',
+    subtitleKey: 'dashboard.quickLaunchVideoSubtitle',
     gradient: 'from-[var(--color-neon-violet)]/35 via-[var(--color-neon-magenta)]/20 to-transparent',
     accent: 'var(--color-neon-violet)',
   },
@@ -52,16 +55,18 @@ const LAUNCH: readonly LaunchConfig[] = [
     mode: 'voice',
     href: ROUTES.voice,
     icon: Mic,
-    title: 'Голосовой чат',
-    subtitle: 'Только голос — чисто и анонимно',
+    titleKey: 'dashboard.quickLaunchVoiceTitle',
+    subtitleKey: 'dashboard.quickLaunchVoiceSubtitle',
     gradient: 'from-[var(--color-neon-cyan)]/35 via-[color-mix(in_oklch,var(--color-neon-cyan)_60%,var(--color-neon-violet))]/15 to-transparent',
     accent: 'var(--color-neon-cyan)',
   },
 ] as const;
 
 function LaunchCard({ config }: { config: LaunchConfig }) {
+  const t = useTranslations('misc');
   const modals = useAppModals();
   const Icon = config.icon;
+  const title = t(config.titleKey);
 
   return (
     <motion.div variants={card} className="relative">
@@ -71,7 +76,7 @@ function LaunchCard({ config }: { config: LaunchConfig }) {
           'group relative block h-full overflow-hidden rounded-3xl',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         )}
-        aria-label={`${config.title} — начать`}
+        aria-label={t('dashboard.launchStartAria', { title })}
       >
         {/* Living gradient wash that intensifies on hover. */}
         <span
@@ -114,19 +119,19 @@ function LaunchCard({ config }: { config: LaunchConfig }) {
                 />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ backgroundColor: config.accent }} />
               </span>
-              В эфире
+              {t('dashboard.onAir')}
             </span>
           </div>
 
           {/* Right padding leaves room for the absolutely-positioned Фильтры pill. */}
           <div className="pr-24">
             <h3 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
-              {config.title}
+              {title}
             </h3>
-            <p className="mt-1 text-sm text-muted-foreground">{config.subtitle}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t(config.subtitleKey)}</p>
 
             <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              Начать
+              {t('dashboard.start')}
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1.5" />
             </span>
           </div>
@@ -144,10 +149,10 @@ function LaunchCard({ config }: { config: LaunchConfig }) {
           'transition-colors hover:bg-background/90 hover:text-foreground',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         )}
-        aria-label={`Фильтры для режима «${config.title}»`}
+        aria-label={t('dashboard.filtersForModeAria', { title })}
       >
         <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-        Фильтры
+        {t('dashboard.filters')}
       </button>
     </motion.div>
   );

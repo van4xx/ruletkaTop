@@ -6,6 +6,7 @@
  * Hidden entirely when the viewer has no subscription (`status: 'none'`).
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { CalendarClock, Crown, ShieldCheck, TriangleAlert } from 'lucide-react';
 import type { Subscription } from '@ruletka/shared-types';
@@ -35,6 +36,7 @@ export interface SubscriptionStatusProps {
 }
 
 export function SubscriptionStatus({ subscription, isLoading, authenticated }: SubscriptionStatusProps) {
+  const t = useTranslations('economy');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const cancel = useCancelPremium();
 
@@ -65,14 +67,14 @@ export function SubscriptionStatus({ subscription, isLoading, authenticated }: S
   const handleCancel = () => {
     cancel.mutate(undefined, {
       onSuccess: () => {
-        toast.success('Подписка отменена', {
+        toast.success(t('subscriptionStatus.cancelSuccess'), {
           description: currentPeriodEnd
-            ? `Доступ сохранится до ${formatDateTime(currentPeriodEnd)}.`
-            : 'Доступ сохранится до конца оплаченного периода.',
+            ? t('subscriptionStatus.cancelSuccessUntil', { date: formatDateTime(currentPeriodEnd) })
+            : t('subscriptionStatus.cancelSuccessGeneric'),
         });
         setConfirmOpen(false);
       },
-      onError: () => toast.error('Не удалось отменить подписку'),
+      onError: () => toast.error(t('subscriptionStatus.cancelError')),
     });
   };
 
@@ -101,19 +103,24 @@ export function SubscriptionStatus({ subscription, isLoading, authenticated }: S
         <div>
           <div className="flex items-center gap-2">
             <p className="font-display text-base font-bold">
-              Премиум · {subscription.plan}
+              {t('subscriptionStatus.planLabel', { plan: subscription.plan })}
             </p>
             <Badge
               variant={isPastDue ? 'danger' : isCanceled ? 'warning' : 'success'}
               size="sm"
             >
-              {isPastDue ? 'Просрочено' : isCanceled ? 'Отменяется' : 'Активно'}
+              {isPastDue
+                ? t('subscriptionStatus.statusPastDue')
+                : isCanceled
+                  ? t('subscriptionStatus.statusCanceled')
+                  : t('subscriptionStatus.statusActive')}
             </Badge>
           </div>
           {currentPeriodEnd && (
             <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-              {isCanceled ? 'Доступ до' : 'Продление'} {formatDateTime(currentPeriodEnd)}
+              {isCanceled ? t('subscriptionStatus.accessUntil') : t('subscriptionStatus.renewal')}{' '}
+              {formatDateTime(currentPeriodEnd)}
             </p>
           )}
         </div>
@@ -121,26 +128,26 @@ export function SubscriptionStatus({ subscription, isLoading, authenticated }: S
 
       {isActive && !cancelAtPeriodEnd && (
         <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(true)}>
-          Отменить подписку
+          {t('subscriptionStatus.cancel')}
         </Button>
       )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Отменить премиум?</DialogTitle>
+            <DialogTitle>{t('subscriptionStatus.confirmTitle')}</DialogTitle>
             <DialogDescription>
-              Подписка не будет продлеваться. Премиум-возможности останутся доступны до конца
-              оплаченного периода
-              {currentPeriodEnd ? ` (${formatDateTime(currentPeriodEnd)})` : ''}.
+              {t('subscriptionStatus.confirmDescription', {
+                periodSuffix: currentPeriodEnd ? ` (${formatDateTime(currentPeriodEnd)})` : '',
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
-              Оставить премиум
+              {t('subscriptionStatus.keepPremium')}
             </Button>
             <Button variant="danger" loading={cancel.isPending} onClick={handleCancel}>
-              Отменить подписку
+              {t('subscriptionStatus.cancel')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -13,6 +13,7 @@
  * wire the navigation/room-join here once the direct-call room contract is set.
  */
 import { useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { Mic, PhoneIncoming, PhoneOff, Video } from 'lucide-react';
 import {
@@ -31,6 +32,7 @@ const AUTO_DECLINE_MS = 30_000;
 
 export function CallInviteModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { callId, fromUserId, type, nickname, avatarUrl } = useModalProps<'call-invite'>();
 
   // Look up the caller only if we weren't handed their display info.
@@ -48,7 +50,7 @@ export function CallInviteModal() {
     staleTime: 60_000,
   });
 
-  const displayName = nickname ?? caller.data?.nickname ?? 'Входящий звонок';
+  const displayName = nickname ?? caller.data?.nickname ?? t('modals.callInvite.fallbackName');
   const displayAvatar = avatarUrl ?? caller.data?.avatarUrl ?? null;
   const isVideo = type === 'video';
 
@@ -74,9 +76,11 @@ export function CallInviteModal() {
       <DialogHeader className="items-center text-center">
         <span className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/50 px-2.5 py-1 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
           {isVideo ? <Video className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-          {isVideo ? 'Видеозвонок' : 'Голосовой звонок'}
+          {isVideo ? t('modals.callInvite.video') : t('modals.callInvite.voice')}
         </span>
-        <DialogTitle className="sr-only">Входящий звонок от {displayName}</DialogTitle>
+        <DialogTitle className="sr-only">
+          {t('modals.callInvite.incomingTitle', { name: displayName })}
+        </DialogTitle>
       </DialogHeader>
 
       <div className="flex flex-col items-center gap-4 py-2">
@@ -92,7 +96,7 @@ export function CallInviteModal() {
         <div className="text-center">
           <p className="font-display text-xl font-bold text-foreground">{displayName}</p>
           <DialogDescription className="mt-0.5">
-            {isVideo ? 'приглашает в видеозвонок' : 'приглашает в голосовой звонок'}
+            {isVideo ? t('modals.callInvite.invitesVideo') : t('modals.callInvite.invitesVoice')}
           </DialogDescription>
         </div>
 
@@ -103,12 +107,12 @@ export function CallInviteModal() {
               variant="danger"
               size="lg"
               className="size-14 rounded-full p-0"
-              aria-label="Отклонить"
+              aria-label={t('modals.callInvite.decline')}
               onClick={decline}
             >
               <PhoneOff className="h-6 w-6" />
             </Button>
-            <span className="text-xs text-muted-foreground">Отклонить</span>
+            <span className="text-xs text-muted-foreground">{t('modals.callInvite.decline')}</span>
           </div>
           <div className="flex flex-col items-center gap-1.5">
             <Button
@@ -116,12 +120,12 @@ export function CallInviteModal() {
               variant="primary"
               size="lg"
               className="size-14 rounded-full p-0"
-              aria-label="Принять"
+              aria-label={t('modals.callInvite.accept')}
               onClick={accept}
             >
               <PhoneIncoming className="h-6 w-6" />
             </Button>
-            <span className="text-xs text-muted-foreground">Принять</span>
+            <span className="text-xs text-muted-foreground">{t('modals.callInvite.accept')}</span>
           </div>
         </div>
       </div>

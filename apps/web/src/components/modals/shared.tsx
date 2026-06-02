@@ -9,6 +9,7 @@
  * same markup in each one.
  */
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Crown, Sparkles, TriangleAlert } from 'lucide-react';
 import { Badge, Button, CoinBalance, CoinIcon } from '@ruletka/ui';
 import { ROUTES } from '@/config/nav';
@@ -55,6 +56,7 @@ export function InsufficientCoins({
   needed?: number;
   className?: string;
 }) {
+  const t = useTranslations('chrome');
   const { open } = useModal();
   const shortfall = needed != null && balance != null ? Math.max(0, needed - balance) : undefined;
   return (
@@ -67,16 +69,16 @@ export function InsufficientCoins({
       <div className="flex items-start gap-2.5">
         <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
         <div className="text-sm">
-          <p className="font-medium text-foreground">Не хватает монет</p>
+          <p className="font-medium text-foreground">{t('modals.shared.insufficientTitle')}</p>
           <p className="text-muted-foreground">
             {shortfall != null && shortfall > 0 ? (
               <>
-                Нужно ещё{' '}
+                {t('modals.shared.needMore')}{' '}
                 <span className="font-semibold text-foreground tabular-nums">{shortfall}</span>{' '}
                 <CoinIcon size="xs" className="-mt-0.5 inline text-[var(--coin)]" />
               </>
             ) : (
-              'Пополните баланс, чтобы продолжить.'
+              t('modals.shared.topUpPrompt')
             )}
           </p>
         </div>
@@ -89,17 +91,18 @@ export function InsufficientCoins({
         leadingIcon={<CoinIcon size="sm" className="text-[var(--coin)]" />}
         onClick={() => open('buy-coins', shortfall ? { shortfall } : {})}
       >
-        Пополнить
+        {t('modals.shared.topUp')}
       </Button>
     </div>
   );
 }
 
-/** A compact balance pill labelled "Ваш баланс". */
+/** A compact balance pill labelled with the user's balance. */
 export function BalancePill({ balance }: { balance: number | null }) {
+  const t = useTranslations('chrome');
   return (
     <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-      Баланс
+      {t('modals.shared.balance')}
       <CoinBalance amount={balance ?? 0} variant="pill" size="sm" />
     </span>
   );
@@ -111,7 +114,7 @@ export function BalancePill({ balance }: { balance: number | null }) {
  * gender/country filters). Opens the premium modal in-place.
  */
 export function PremiumGate({
-  title = 'Только для премиум',
+  title,
   description,
   reason,
 }: {
@@ -119,6 +122,7 @@ export function PremiumGate({
   description?: string;
   reason?: string;
 }) {
+  const t = useTranslations('chrome');
   const { open } = useModal();
   return (
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center">
@@ -126,9 +130,11 @@ export function PremiumGate({
         <Crown className="h-6 w-6" aria-hidden="true" />
       </span>
       <div className="space-y-1">
-        <p className="font-display text-base font-bold text-foreground">{title}</p>
+        <p className="font-display text-base font-bold text-foreground">
+          {title ?? t('modals.shared.premiumGateTitle')}
+        </p>
         <p className="text-sm text-muted-foreground">
-          {description ?? 'Эта возможность доступна премиум-участникам.'}
+          {description ?? t('modals.shared.premiumGateDescription')}
         </p>
       </div>
       <Button
@@ -138,7 +144,7 @@ export function PremiumGate({
         leadingIcon={<Sparkles className="h-4 w-4" />}
         onClick={() => open('premium', reason ? { reason } : {})}
       >
-        Подключить премиум
+        {t('modals.shared.premiumGateCta')}
       </Button>
     </div>
   );

@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Gift, Search, UserPlus, UserRound } from 'lucide-react';
 import { objectIdSchema, type PublicProfile } from '@ruletka/shared-types';
 import {
@@ -68,6 +69,7 @@ function useDebounced<T>(value: T, ms: number): T {
 
 export function SearchUsersModal() {
   const { open } = useModal();
+  const t = useTranslations('chrome');
   const [term, setTerm] = useState('');
   const debounced = useDebounced(term, 350);
   const isIdLike = useMemo(() => objectIdSchema.safeParse(debounced.trim()).success, [debounced]);
@@ -86,25 +88,25 @@ export function SearchUsersModal() {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Найти людей</DialogTitle>
+        <DialogTitle>{t('modals.searchUsers.title')}</DialogTitle>
         <DialogDescription>
-          Поиск по нику или ID профиля. Откройте профиль или сразу добавьте в друзья.
+          {t('modals.searchUsers.description')}
         </DialogDescription>
       </DialogHeader>
 
       <Input
         value={term}
         onChange={(e) => setTerm(e.target.value)}
-        placeholder="Ник или ID профиля"
+        placeholder={t('modals.searchUsers.inputPlaceholder')}
         leadingIcon={<Search className="h-4 w-4" />}
         autoFocus
-        aria-label="Поиск людей"
+        aria-label={t('modals.searchUsers.inputAria')}
       />
 
       <div className="mt-4 max-h-[50vh] min-h-[8rem] space-y-2 overflow-y-auto pr-1">
         {debounced.trim().length < 2 && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Введите минимум 2 символа, чтобы начать поиск.
+            {t('modals.searchUsers.minChars')}
           </p>
         )}
 
@@ -113,16 +115,16 @@ export function SearchUsersModal() {
 
         {results.isError && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Не удалось выполнить поиск. Попробуйте ещё раз.
+            {t('modals.searchUsers.searchError')}
           </p>
         )}
 
         {showEmpty && (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            <p>Никого не нашлось.</p>
+            <p>{t('modals.searchUsers.emptyTitle')}</p>
             {!isIdLike && (
               <p className="mt-1 text-xs">
-                Поиск по тексту скоро появится — пока попробуйте вставить 24-значный ID профиля.
+                {t('modals.searchUsers.emptyHint')}
               </p>
             )}
           </div>
@@ -143,6 +145,7 @@ function ResultRow({
   onAction: ReturnType<typeof useModal>['open'];
 }) {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card/40 p-2.5">
       <Avatar
@@ -165,14 +168,14 @@ function ResultRow({
           )}
         </span>
         <span className="block text-xs text-muted-foreground">
-          {profile.age} лет · {profile.country}
+          {t('modals.searchUsers.ageCountry', { age: profile.age, country: profile.country })}
         </span>
       </Link>
       <div className="flex shrink-0 items-center gap-1">
         <IconButton
           size="sm"
           variant="ghost"
-          aria-label={`Подарок для ${profile.nickname}`}
+          aria-label={t('modals.searchUsers.giftAria', { name: profile.nickname })}
           onClick={() => onAction('gift-picker', { toUserId: profile.id, toNickname: profile.nickname, context: 'profile' })}
         >
           <Gift className="h-4 w-4" />
@@ -180,14 +183,14 @@ function ResultRow({
         <IconButton
           size="sm"
           variant="ghost"
-          aria-label={`Добавить ${profile.nickname} в друзья`}
+          aria-label={t('modals.searchUsers.addFriendAria', { name: profile.nickname })}
           onClick={() => onAction('add-friend', { presetUserId: profile.id, nickname: profile.nickname })}
         >
           <UserPlus className="h-4 w-4" />
         </IconButton>
         <Button asChild size="sm" variant="outline" leadingIcon={<UserRound className="h-4 w-4" />}>
           <Link href={`/profile/${profile.id}`} onClick={close}>
-            Профиль
+            {t('modals.searchUsers.profile')}
           </Link>
         </Button>
       </div>

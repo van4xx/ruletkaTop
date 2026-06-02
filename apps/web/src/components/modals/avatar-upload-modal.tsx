@@ -16,6 +16,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { ImagePlus, Link2, Upload } from 'lucide-react';
 import { z } from 'zod';
 import type { PublicProfile, UpdateProfileDto } from '@ruletka/shared-types';
@@ -43,6 +44,7 @@ const urlSchema = z.string().url();
 
 export function AvatarUploadModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { currentUrl } = useModalProps<'avatar-upload'>();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -64,21 +66,23 @@ export function AvatarUploadModal() {
     onSuccess: (updated: PublicProfile) => {
       qc.setQueryData(meKey, updated);
       void qc.invalidateQueries({ queryKey: meKey });
-      toast.success('Аватар обновлён');
+      toast.success(t('modals.avatarUpload.savedTitle'));
       close();
     },
-    onError: () => toast.error('Не удалось обновить аватар'),
+    onError: () => toast.error(t('modals.avatarUpload.errGeneric')),
   });
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      toast.error('Выберите изображение');
+      toast.error(t('modals.avatarUpload.errNotImage'));
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Файл слишком большой', { description: 'Максимум 5 МБ.' });
+      toast.error(t('modals.avatarUpload.errTooLargeTitle'), {
+        description: t('modals.avatarUpload.errTooLargeDescription'),
+      });
       return;
     }
     if (localPreview) URL.revokeObjectURL(localPreview);
@@ -88,7 +92,7 @@ export function AvatarUploadModal() {
   function saveUrl() {
     const trimmed = url.trim();
     if (!urlSchema.safeParse(trimmed).success) {
-      setUrlError('Введите корректную ссылку на изображение (https://…).');
+      setUrlError(t('modals.avatarUpload.invalidUrl'));
       return;
     }
     setUrlError(null);
@@ -100,30 +104,30 @@ export function AvatarUploadModal() {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Сменить аватар</DialogTitle>
-        <DialogDescription>Загрузите новое фото профиля или вставьте ссылку.</DialogDescription>
+        <DialogTitle>{t('modals.avatarUpload.title')}</DialogTitle>
+        <DialogDescription>{t('modals.avatarUpload.description')}</DialogDescription>
       </DialogHeader>
 
       <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
         {/* Live preview */}
         <div className="flex shrink-0 flex-col items-center gap-2">
-          <Avatar size="xl" src={preview || undefined} alt="Предпросмотр аватара" ring="aurora" />
-          <span className="text-xs text-muted-foreground">Предпросмотр</span>
+          <Avatar size="xl" src={preview || undefined} alt={t('modals.avatarUpload.previewAlt')} ring="aurora" />
+          <span className="text-xs text-muted-foreground">{t('modals.avatarUpload.preview')}</span>
         </div>
 
         <div className="w-full">
           <Tabs value={mode} onValueChange={(v) => setMode(v as 'url' | 'file')}>
             <TabsList className="w-full">
               <TabsTrigger value="url" className="flex-1">
-                <Link2 className="mr-1.5 h-4 w-4" /> По ссылке
+                <Link2 className="mr-1.5 h-4 w-4" /> {t('modals.avatarUpload.tabUrl')}
               </TabsTrigger>
               <TabsTrigger value="file" className="flex-1">
-                <Upload className="mr-1.5 h-4 w-4" /> Загрузить
+                <Upload className="mr-1.5 h-4 w-4" /> {t('modals.avatarUpload.tabFile')}
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="url" className="space-y-1.5 pt-3">
-              <Label htmlFor="avatar-url">Ссылка на изображение</Label>
+              <Label htmlFor="avatar-url">{t('modals.avatarUpload.urlLabel')}</Label>
               <Input
                 id="avatar-url"
                 type="url"
@@ -133,7 +137,7 @@ export function AvatarUploadModal() {
                   setUrl(e.target.value);
                   if (urlError) setUrlError(null);
                 }}
-                placeholder="https://example.com/avatar.jpg"
+                placeholder={t('modals.avatarUpload.urlPlaceholder')}
                 invalid={!!urlError}
                 autoComplete="off"
                 spellCheck={false}
@@ -156,11 +160,10 @@ export function AvatarUploadModal() {
                 leadingIcon={<ImagePlus className="h-4 w-4" />}
                 onClick={() => fileRef.current?.click()}
               >
-                {localPreview ? 'Выбрать другое фото' : 'Выбрать фото'}
+                {localPreview ? t('modals.avatarUpload.pickAnother') : t('modals.avatarUpload.pickPhoto')}
               </Button>
               <p className="rounded-lg border border-border/60 bg-card/40 p-2.5 text-xs text-muted-foreground">
-                Загрузка файлов скоро появится. Пока сохраните аватар по ссылке на вкладке «По
-                ссылке» — например, из вашего облака или соцсети.
+                {t('modals.avatarUpload.fileNotice')}
               </p>
             </TabsContent>
           </Tabs>
@@ -169,15 +172,15 @@ export function AvatarUploadModal() {
 
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={close}>
-          Отмена
+          {t('modals.avatarUpload.cancel')}
         </Button>
         {mode === 'url' ? (
           <Button type="button" variant="primary" loading={save.isPending} onClick={saveUrl}>
-            Сохранить
+            {t('modals.avatarUpload.save')}
           </Button>
         ) : (
-          <Button type="button" variant="primary" disabled title="Нужен эндпоинт загрузки файлов">
-            Сохранить
+          <Button type="button" variant="primary" disabled title={t('modals.avatarUpload.saveDisabledTitle')}>
+            {t('modals.avatarUpload.save')}
           </Button>
         )}
       </DialogFooter>

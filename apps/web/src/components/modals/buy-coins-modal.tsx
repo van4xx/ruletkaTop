@@ -11,6 +11,7 @@
  *   webhook-driven credit lands (the hook polls the balance).
  */
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { CheckCircle2, Loader2, ShoppingBag, Sparkles, TriangleAlert } from 'lucide-react';
 import type { CoinPackage } from '@ruletka/shared-types';
 import {
@@ -33,6 +34,7 @@ import { BalancePill, FullPageLink } from './shared';
 
 export function BuyCoinsModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { presetPackageCode, shortfall } = useModalProps<'buy-coins'>();
   const packages = useCoinPackages();
   const buy = useBuyCoins();
@@ -58,25 +60,30 @@ export function BuyCoinsModal() {
     return (
       <StatusPanel
         icon={<Loader2 className="h-7 w-7 animate-spin text-accent" />}
-        title="Зачисляем монеты…"
-        description="Платёж принят. Монеты появятся на балансе через несколько секунд."
+        title={t('modals.buyCoins.pendingTitle')}
+        description={t('modals.buyCoins.pendingDescription')}
       >
         <Button type="button" variant="ghost" onClick={close}>
-          Закрыть
+          {t('modals.buyCoins.close')}
         </Button>
       </StatusPanel>
     );
   }
 
   if (buy.phase === 'credited') {
+    const amount = buy.activePackage
+      ? t('modals.buyCoins.creditedAmount', {
+          amount: formatNumber(buy.activePackage.coins + buy.activePackage.bonusCoins),
+        })
+      : '';
     return (
       <StatusPanel
         icon={<CheckCircle2 className="h-7 w-7 text-success" />}
-        title="Готово!"
-        description={`Баланс пополнен${buy.activePackage ? ` на ${formatNumber(buy.activePackage.coins + buy.activePackage.bonusCoins)}` : ''}. Спасибо!`}
+        title={t('modals.buyCoins.creditedTitle')}
+        description={t('modals.buyCoins.creditedDescription', { amount })}
       >
         <Button type="button" variant="primary" onClick={() => { buy.reset(); close(); }}>
-          Отлично
+          {t('modals.buyCoins.thanks')}
         </Button>
       </StatusPanel>
     );
@@ -86,15 +93,15 @@ export function BuyCoinsModal() {
     return (
       <StatusPanel
         icon={<TriangleAlert className="h-7 w-7 text-danger" />}
-        title="Платёж не прошёл"
-        description={buy.error ?? 'Что-то пошло не так. Попробуйте ещё раз.'}
+        title={t('modals.buyCoins.errorTitle')}
+        description={buy.error ?? t('modals.buyCoins.errorDescription')}
       >
         <Button type="button" variant="ghost" onClick={buy.reset}>
-          Назад
+          {t('modals.buyCoins.back')}
         </Button>
         {buy.activePackage && (
           <Button type="button" variant="primary" onClick={() => buy.buy(buy.activePackage!)}>
-            Повторить
+            {t('modals.buyCoins.retry')}
           </Button>
         )}
       </StatusPanel>
@@ -108,20 +115,15 @@ export function BuyCoinsModal() {
         <div className="flex items-center justify-between gap-2 pr-8">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/50 px-2.5 py-1 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
             <ShoppingBag className="h-3.5 w-3.5 text-[var(--coin)]" aria-hidden="true" />
-            Магазин монет
+            {t('modals.buyCoins.eyebrow')}
           </span>
           <BalancePill balance={balance} />
         </div>
-        <DialogTitle>Пополнить баланс</DialogTitle>
+        <DialogTitle>{t('modals.buyCoins.title')}</DialogTitle>
         <DialogDescription>
-          {shortfall && shortfall > 0 ? (
-            <>
-              Не хватает <span className="font-semibold text-foreground">{shortfall}</span> монет.
-              Выберите пакет, чтобы продолжить.
-            </>
-          ) : (
-            'Монеты нужны для подарков и мест в Топе. Оплата защищена CloudPayments.'
-          )}
+          {shortfall && shortfall > 0
+            ? t('modals.buyCoins.descShortfall', { shortfall })
+            : t('modals.buyCoins.descDefault')}
         </DialogDescription>
       </DialogHeader>
 
@@ -131,13 +133,13 @@ export function BuyCoinsModal() {
 
         {packages.isError && (
           <div className="rounded-xl border border-border/60 bg-card/40 p-6 text-center text-sm text-muted-foreground">
-            Не удалось загрузить пакеты.{' '}
+            {t('modals.buyCoins.loadError')}{' '}
             <button
               type="button"
               onClick={() => packages.refetch()}
               className="font-medium text-accent hover:underline"
             >
-              Повторить
+              {t('modals.buyCoins.retry')}
             </button>
           </div>
         )}
@@ -156,9 +158,9 @@ export function BuyCoinsModal() {
       </div>
 
       <DialogFooter className="sm:justify-between">
-        <FullPageLink href="/coins">Открыть магазин целиком</FullPageLink>
+        <FullPageLink href="/coins">{t('modals.buyCoins.openFullStore')}</FullPageLink>
         <Button type="button" variant="ghost" onClick={close} disabled={buy.isBusy}>
-          Закрыть
+          {t('modals.buyCoins.close')}
         </Button>
       </DialogFooter>
     </>
@@ -180,6 +182,7 @@ function PackageRow({
   disabled: boolean;
   onBuy: () => void;
 }) {
+  const t = useTranslations('chrome');
   const total = pkg.coins + pkg.bonusCoins;
   return (
     <button
@@ -203,16 +206,16 @@ function PackageRow({
           <span className="font-display text-base font-bold tabular-nums text-foreground">
             {formatNumber(total)}
           </span>
-          <span className="text-sm text-muted-foreground">монет</span>
+          <span className="text-sm text-muted-foreground">{t('modals.buyCoins.coins')}</span>
           {best && (
             <Badge variant="aurora" size="sm" className="gap-1">
-              <Sparkles className="h-3 w-3" /> Выгодно
+              <Sparkles className="h-3 w-3" /> {t('modals.buyCoins.bestValue')}
             </Badge>
           )}
         </span>
         {pkg.bonusCoins > 0 && (
           <span className="text-xs font-medium text-success">
-            +{formatNumber(pkg.bonusCoins)} бонусом
+            {t('modals.buyCoins.bonus', { amount: formatNumber(pkg.bonusCoins) })}
           </span>
         )}
       </span>

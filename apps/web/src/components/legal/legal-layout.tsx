@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, type Variants } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/cn';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -83,7 +84,8 @@ function useScrollSpy(ids: string[]): string | null {
 }
 
 export function LegalLayout({ eyebrow, title, lede, updatedAt, toc, children }: LegalLayoutProps) {
-  const ids = toc.map((t) => t.id);
+  const tl = useTranslations('legal');
+  const ids = toc.map((entry) => entry.id);
   const active = useScrollSpy(ids);
   const mobileNavRef = useRef<HTMLDivElement>(null);
 
@@ -115,7 +117,7 @@ export function LegalLayout({ eyebrow, title, lede, updatedAt, toc, children }: 
           <p className="mt-4 text-balance text-base text-muted-foreground sm:text-lg">{lede}</p>
           {updatedAt && (
             <p className="mt-4 text-xs text-muted-foreground/70">
-              Последнее обновление: <time>{updatedAt}</time>
+              {tl('layout.lastUpdated')} <time>{updatedAt}</time>
             </p>
           )}
         </motion.header>
@@ -123,7 +125,7 @@ export function LegalLayout({ eyebrow, title, lede, updatedAt, toc, children }: 
 
       {/* Mobile TOC — horizontal chip rail, sticky under the site header. */}
       <nav
-        aria-label="Содержание"
+        aria-label={tl('layout.toc')}
         className="sticky top-16 z-30 mt-6 border-y border-border/60 bg-background/70 backdrop-blur lg:hidden"
       >
         <div
@@ -154,9 +156,9 @@ export function LegalLayout({ eyebrow, title, lede, updatedAt, toc, children }: 
         <div className="grid gap-10 lg:grid-cols-[16rem_1fr] lg:gap-14">
           {/* Desktop sticky TOC */}
           <aside className="hidden lg:block">
-            <nav aria-label="Содержание" className="sticky top-24">
+            <nav aria-label={tl('layout.toc')} className="sticky top-24">
               <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Содержание
+                {tl('layout.toc')}
               </p>
               <ul className="space-y-0.5 border-l border-border/60">
                 {toc.map((t) => {

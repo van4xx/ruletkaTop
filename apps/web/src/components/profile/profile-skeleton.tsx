@@ -1,11 +1,13 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Skeleton } from '@ruletka/ui';
 
 /** Loading placeholder for a profile page — mirrors hero + stats + tabs layout. */
 export function ProfileSkeleton() {
+  const t = useTranslations('profile');
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Загрузка профиля">
+    <div className="space-y-6" aria-busy="true" aria-label={t('skeleton.loading')}>
       {/* Hero */}
       <div className="glass-panel overflow-hidden rounded-3xl">
         <Skeleton shape="block" className="h-32 rounded-none sm:h-44" />

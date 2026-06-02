@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Check, Gift, UserPlus } from 'lucide-react';
 import type { PublicProfile } from '@ruletka/shared-types';
 import {
@@ -41,6 +42,7 @@ function MetaChip({ children }: { children: React.ReactNode }) {
 }
 
 export function PersonCard({ profile, index = 0 }: { profile: PublicProfile; index?: number }) {
+  const t = useTranslations('misc');
   const country = COUNTRY_BY_CODE.get(profile.country);
   const sendRequest = useSendFriendRequest();
   const [sent, setSent] = useState(false);
@@ -51,14 +53,16 @@ export function PersonCard({ profile, index = 0 }: { profile: PublicProfile; ind
     sendRequest.mutate(profile.id, {
       onSuccess: () => {
         setSent(true);
-        toast.success('Заявка отправлена', { description: `${profile.nickname} получит уведомление.` });
+        toast.success(t('search.requestSentTitle'), {
+          description: t('search.requestSentDesc', { name: profile.nickname }),
+        });
       },
       onError: (err) => {
         if (err instanceof ApiClientError && err.status === 409) {
           setSent(true);
-          toast.info('Заявка уже существует или вы уже друзья.');
+          toast.info(t('search.requestExists'));
         } else {
-          toast.error('Не удалось отправить заявку.');
+          toast.error(t('search.requestError'));
         }
       },
     });
@@ -76,7 +80,7 @@ export function PersonCard({ profile, index = 0 }: { profile: PublicProfile; ind
           <Link
             href={profileHref}
             className="shrink-0 rounded-full"
-            aria-label={`Профиль ${profile.nickname}`}
+            aria-label={t('search.profileAria', { name: profile.nickname })}
           >
             <Avatar
               src={profile.avatarUrl}
@@ -120,20 +124,20 @@ export function PersonCard({ profile, index = 0 }: { profile: PublicProfile; ind
             disabled={sent}
             onClick={addFriend}
           >
-            {sent ? 'Отправлено' : 'В друзья'}
+            {sent ? t('search.addFriendSent') : t('search.addFriend')}
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
               <IconButton
                 variant="glass"
                 size="sm"
-                aria-label={`Подарить подарок: ${profile.nickname}`}
+                aria-label={t('search.sendGiftAria', { name: profile.nickname })}
                 onClick={() => setGiftOpen(true)}
               >
                 <Gift aria-hidden="true" />
               </IconButton>
             </TooltipTrigger>
-            <TooltipContent>Отправить подарок</TooltipContent>
+            <TooltipContent>{t('search.sendGiftTooltip')}</TooltipContent>
           </Tooltip>
         </div>
       </motion.div>

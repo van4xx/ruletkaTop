@@ -13,6 +13,7 @@
  * `prefers-reduced-motion` (globals.css). Fully responsive + a11y-labelled.
  */
 import type { ReactNode } from 'react';
+import { useFormatter, useTranslations } from 'next-intl';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { CalendarDays } from 'lucide-react';
 import type { OnlineStatus, PublicProfile } from '@ruletka/shared-types';
@@ -20,7 +21,6 @@ import { Avatar, codeToFlag, COUNTRY_BY_CODE } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 import { ProfileBadges } from '@/components/social/profile-badges';
 import { InterestChips } from './interest-chips';
-import { GENDER_LABEL, ageLabel } from './profile-meta';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -33,12 +33,12 @@ const rise: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT } },
 };
 
-/** Russian presence labels + dot colour per status. */
-const PRESENCE: Record<OnlineStatus, { label: string; dot: string; text: string }> = {
-  online: { label: 'В сети', dot: 'bg-success', text: 'text-success' },
-  away: { label: 'Отошёл', dot: 'bg-warning', text: 'text-warning' },
-  in_call: { label: 'В разговоре', dot: 'bg-accent', text: 'text-accent' },
-  offline: { label: 'Не в сети', dot: 'bg-subtle-foreground', text: 'text-muted-foreground' },
+/** Dot + text colour per presence status (label is translated at render). */
+const PRESENCE: Record<OnlineStatus, { dot: string; text: string }> = {
+  online: { dot: 'bg-success', text: 'text-success' },
+  away: { dot: 'bg-warning', text: 'text-warning' },
+  in_call: { dot: 'bg-accent', text: 'text-accent' },
+  offline: { dot: 'bg-subtle-foreground', text: 'text-muted-foreground' },
 };
 
 function MetaChip({ children }: { children: ReactNode }) {
@@ -61,10 +61,12 @@ export function ProfileHeader({
   coverUrl?: string | null;
   actions?: ReactNode;
 }) {
+  const t = useTranslations('profile');
+  const format = useFormatter();
   const reduce = useReducedMotion();
   const country = COUNTRY_BY_CODE.get(profile.country);
   const presence = status ? PRESENCE[status] : null;
-  const joined = new Date(profile.createdAt).toLocaleDateString('ru-RU', {
+  const joined = format.dateTime(new Date(profile.createdAt), {
     month: 'long',
     year: 'numeric',
   });
@@ -147,7 +149,7 @@ export function ProfileHeader({
               </h1>
               {/* Presence + badges line. */}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                {presence && (
+                {presence && status && (
                   <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium', presence.text)}>
                     <span className="relative flex h-2 w-2">
                       {status === 'online' && (
@@ -155,7 +157,7 @@ export function ProfileHeader({
                       )}
                       <span className={cn('relative inline-flex h-2 w-2 rounded-full', presence.dot)} />
                     </span>
-                    {presence.label}
+                    {t(`presence.${status}`)}
                   </span>
                 )}
                 {profile.badges.length > 0 && <ProfileBadges badges={profile.badges} size="sm" />}
@@ -179,21 +181,21 @@ export function ProfileHeader({
 
         {/* Meta chips. */}
         <motion.div variants={rise} className="mt-4 flex flex-wrap items-center gap-2">
-          <MetaChip>{GENDER_LABEL[profile.gender]}</MetaChip>
-          <MetaChip>{ageLabel(profile.age)}</MetaChip>
+          <MetaChip>{t(`gender.${profile.gender}`)}</MetaChip>
+          <MetaChip>{t('age', { age: profile.age })}</MetaChip>
           <MetaChip>
             <span aria-hidden="true">{codeToFlag(profile.country)}</span>
             <span>{country?.name ?? profile.country}</span>
           </MetaChip>
           {profile.languages.length > 0 && (
             <MetaChip>
-              <span className="text-muted-foreground">Языки:</span>
+              <span className="text-muted-foreground">{t('header.languagesLabel')}</span>
               <span className="uppercase">{profile.languages.join(', ')}</span>
             </MetaChip>
           )}
           <MetaChip>
             <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-            <span className="text-muted-foreground">в эфире с</span>
+            <span className="text-muted-foreground">{t('header.joinedLine')}</span>
             <span>{joined}</span>
           </MetaChip>
         </motion.div>

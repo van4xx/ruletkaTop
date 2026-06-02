@@ -25,6 +25,7 @@
  * we poll for `window.turnstile` becoming available after the script loads.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 /** Public site key — when absent, the widget is a no-op (dev/local). */
 export const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
@@ -117,6 +118,7 @@ export interface TurnstileWidgetProps {
  * (renders nothing) when unconfigured — callers can render it unconditionally.
  */
 export function TurnstileWidget({ onToken, theme = 'dark', className }: TurnstileWidgetProps) {
+  const t = useTranslations('auth');
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const onTokenRef = useRef(onToken);
@@ -183,7 +185,7 @@ export function TurnstileWidget({ onToken, theme = 'dark', className }: Turnstil
       <div ref={containerRef} />
       {failed && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Не удалось загрузить проверку. Обновите страницу или попробуйте позже.
+          {t('turnstile.loadFailed')}
         </p>
       )}
     </div>

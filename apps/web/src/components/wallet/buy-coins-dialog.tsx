@@ -16,6 +16,7 @@
  * widget and polls the balance once the webhook credits the coins.
  */
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import Script from 'next/script';
 import { ShieldCheck, ShoppingBag } from 'lucide-react';
 import {
@@ -39,6 +40,7 @@ export interface BuyCoinsDialogProps {
 }
 
 export function BuyCoinsDialog({ open, onOpenChange }: BuyCoinsDialogProps) {
+  const t = useTranslations('economy');
   const packages = useCoinPackages();
   const buy = useBuyCoins();
 
@@ -75,11 +77,10 @@ export function BuyCoinsDialog({ open, onOpenChange }: BuyCoinsDialogProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 text-[var(--coin)]" aria-hidden="true" />
-              Пополнить баланс
+              {t('buyCoins.title')}
             </DialogTitle>
             <DialogDescription>
-              Выберите пакет монет. Оплата проходит в защищённом окне CloudPayments — данные карты не
-              попадают на наш сервер.
+              {t('buyCoins.description')}
             </DialogDescription>
           </DialogHeader>
 
@@ -96,8 +97,8 @@ export function BuyCoinsDialog({ open, onOpenChange }: BuyCoinsDialogProps) {
             </div>
           ) : packages.isError ? (
             <ErrorState
-              title="Не удалось загрузить пакеты"
-              description="Каталог монет временно недоступен."
+              title={t('buyCoins.errorTitle')}
+              description={t('buyCoins.errorDescription')}
               onRetry={() => packages.refetch()}
             />
           ) : (
@@ -117,7 +118,7 @@ export function BuyCoinsDialog({ open, onOpenChange }: BuyCoinsDialogProps) {
               </div>
               <p className="mt-1 inline-flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                 <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden="true" />
-                Безопасная оплата CloudPayments
+                {t('buyCoins.secure')}
               </p>
             </>
           )}

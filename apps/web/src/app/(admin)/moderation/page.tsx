@@ -1,12 +1,16 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { ModerationClient } from '@/components/moderation/moderation-client';
 
-export const metadata: Metadata = {
-  title: 'Модерация',
-  description: 'Очередь проверки нарушений: улики, метки, авто-действия.',
-  // Privileged, internal tool — keep it out of search indexes entirely.
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('misc');
+  return {
+    title: t('moderation.metaTitle'),
+    description: t('moderation.metaDescription'),
+    // Privileged, internal tool — keep it out of search indexes entirely.
+    robots: { index: false, follow: false },
+  };
+}
 
 /**
  * /moderation — the admin/moderator review queue.

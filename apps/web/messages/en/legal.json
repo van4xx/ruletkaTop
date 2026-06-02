@@ -1,0 +1,303 @@
+{
+  "layout": {
+    "toc": "Contents",
+    "lastUpdated": "Last updated:"
+  },
+  "about": {
+    "metaTitle": "About",
+    "metaDescription": "About ruletka.top — the next-generation video and voice roulette. Our mission, our values, and what sets us apart.",
+    "eyebrow": "About",
+    "title1": "Meet the world",
+    "title2": "in a single click",
+    "lede": "ruletka.top is the next-generation video and voice roulette. We're building a space for easy, lively, and safe encounters with people from all over the world.",
+    "toc": {
+      "mission": "Mission",
+      "different": "What sets us apart",
+      "values": "Our values",
+      "numbers": "By the numbers",
+      "join": "Join us"
+    },
+    "mission": {
+      "title": "Our mission",
+      "p1": "The world has grown closer, yet genuine, spontaneous encounters have become rarer. We bring back the feeling of a chance, warm connection — when in a single second a new person appears before you, someone you can talk to about anything.",
+      "p2": "Our goal is to make this kind of connection instant, engaging, and — above all — safe for everyone involved."
+    },
+    "different": {
+      "title": "What sets us apart",
+      "item1": "Instant connect — matched with a random partner in under a second.",
+      "item2": "Video and voice — chat with your camera on or off, whichever feels right for you.",
+      "item3": "A living economy — send animated gifts and climb into the live Top.",
+      "item4": "Friends and chats — keep the connections you liked and continue the conversation.",
+      "item5": "Fair moderation — reporting and blocking tools that work on your side."
+    },
+    "values": {
+      "title": "Our values",
+      "intro": "Everything we do rests on four principles:",
+      "safety": {
+        "title": "Safety",
+        "text": "Moderation, reporting and blocking, and a strict 18+ limit — comfort and protection come first."
+      },
+      "respect": {
+        "title": "Respect",
+        "text": "We're building a culture of friendly communication where everyone's boundaries are valued."
+      },
+      "borderless": {
+        "title": "Borderless",
+        "text": "People from 120+ countries in one stream. Connection brings us together, wherever you are."
+      },
+      "speed": {
+        "title": "Speed",
+        "text": "Connected in under a second. No queues, no waiting — just live conversation."
+      }
+    },
+    "numbers": {
+      "title": "By the numbers",
+      "countriesValue": "120+",
+      "countriesLabel": "countries live",
+      "connectValue": "<1 sec",
+      "connectLabel": "to connect",
+      "liveValue": "24/7",
+      "liveLabel": "live stream"
+    },
+    "join": {
+      "title": "Join us",
+      "p1": "Ready to meet someone new? The stream is already live — and all you need to start is the desire to connect.",
+      "cta": "Start chatting"
+    }
+  },
+  "help": {
+    "metaTitle": "Help & FAQ",
+    "metaDescription": "The ruletka.top help center: how to get started, safety, coins and premium, and answers to common questions.",
+    "eyebrow": "Support",
+    "title1": "Help &",
+    "title2": "answers",
+    "lede": "Everything you need for a confident start, safe conversations, and working with coins. Can't find an answer? Drop us a line.",
+    "toc": {
+      "start": "Getting started",
+      "safety": "Safety",
+      "coins": "Coins & premium",
+      "faq": "Common questions",
+      "contact": "Contact us"
+    },
+    "start": {
+      "title": "Getting started",
+      "intro": "You can start chatting in just one click:",
+      "step1Pre": "Open the",
+      "step1Video": "video roulette",
+      "step1Or": "or the",
+      "step1Voice": "voice roulette",
+      "step2": "Allow access to your camera and microphone when your browser asks.",
+      "step3": "Press “Start” — we'll match you with a random partner in a fraction of a second.",
+      "step4": "Liked someone? Add them as a friend and keep chatting in your messages.",
+      "tip": "Tip: fill out your profile and complete the quick onboarding — it makes you more interesting to others and improves matching accuracy."
+    },
+    "safety": {
+      "title": "Safety & comfort",
+      "intro": "We want every conversation to stay pleasant. A few simple rules will help you feel safe:",
+      "item1": "Don't share personal details (address, phone number, payment info) with random partners.",
+      "item2": "Use reporting and blocking if someone's behavior makes you uncomfortable.",
+      "item3": "Remember the 18+ age limit and the community standards.",
+      "calloutPre": "Read more about acceptable behavior in the",
+      "calloutLink": "Community Rules"
+    },
+    "coins": {
+      "title": "Coins & premium",
+      "coinsLabel": "Coins",
+      "bodyAfterCoins": "are the currency for gifts and the Top. Premium adds filters and search priority. You can manage your balance and subscription in the relevant sections."
+    },
+    "faqSection": {
+      "title": "Common questions"
+    },
+    "contact": {
+      "title": "Contact us",
+      "intro": "Couldn't find an answer, or run into a problem? Describe the situation and we'll help. We respond to safety and moderation issues as a priority.",
+      "cardTitle": "ruletka.top Support",
+      "cardBodyPre": "Email us at"
+    },
+    "faqGeneral": {
+      "q1": "Do I need to register to start?",
+      "a1": "To open the roulette and look around — no. But to access friends, chats, gifts, and history, you'll need an account. Signing up takes less than a minute.",
+      "q2": "Why can't I find a partner?",
+      "a2": "Connecting usually takes less than a second. If the search is dragging on, check your internet connection and your camera and microphone permissions, then try again. During quiet hours there may be fewer people in the stream.",
+      "q3": "My camera or microphone isn't working — what should I do?",
+      "a3": "Make sure your browser has been granted device access (the camera icon in the address bar), that they're not in use by another app, and, if needed, pick the right device in the call settings.",
+      "q4": "How do I report a partner?",
+      "a4": "During a call and in chat there's a “Report” button. Describe what happened — it helps moderators sort it out faster. You can also end the call and block the user.",
+      "q5": "Are video calls recorded?",
+      "a5": "The video stream is sent directly between partners and is not recorded by the service. Text messages in private chats are saved so you can return to the conversation.",
+      "q6": "How do I delete my account?",
+      "a6Pre": "Open your",
+      "a6Link": "settings",
+      "a6Post": "and choose to delete your account. Once confirmed, your profile and associated data are permanently erased."
+    },
+    "faqBilling": {
+      "q1": "What are coins and what are they for?",
+      "a1": "Coins are the in-app currency. You can use them to send animated gifts during calls and in chats, and to buy a spot in the live Top.",
+      "q2": "Are payments secure?",
+      "a2": "Yes. Payments go through a secure payment provider, and your card details are never stored on our side.",
+      "q3": "What does premium give me?",
+      "a3": "Premium unlocks filters by gender and country, removes ads, and raises your priority in matching. You can cancel the subscription at any time.",
+      "q4": "Can I get a refund?",
+      "a4Pre": "Refunds are handled in accordance with applicable law and the terms of service. If you were charged by mistake, reach out to us via the",
+      "a4Link": "contact form"
+    }
+  },
+  "privacy": {
+    "metaTitle": "Privacy Policy",
+    "metaDescription": "The ruletka.top Privacy Policy: what personal data we process, on what basis, how we protect it, and how to delete your account. Compliant with data protection law.",
+    "eyebrow": "Privacy",
+    "title1": "Privacy",
+    "title2": "Policy",
+    "lede": "We process the minimum data needed to run the service and treat it with care. This document is prepared in line with applicable personal data protection law (Federal Law No. 152-FZ “On Personal Data”).",
+    "updatedAt": "June 1, 2026",
+    "toc": {
+      "intro": "General provisions",
+      "data": "What data we store",
+      "purposes": "Processing purposes",
+      "consent": "Consent & legal basis",
+      "sharing": "Sharing with third parties",
+      "security": "Storage & protection",
+      "rights": "Your rights",
+      "deletion": "Account deletion",
+      "contacts": "Contact"
+    },
+    "intro": {
+      "title": "General provisions",
+      "p1": "This Policy describes what personal data the ruletka.top service (the “Service”) processes, for what purpose and on what legal basis, as well as the rights you have as a data subject.",
+      "p2": "By using the Service, you agree to the terms of this Policy. The data controller is the administration of ruletka.top."
+    },
+    "data": {
+      "title": "What data we store",
+      "intro": "We aim to collect as little data as possible. Processing may cover:",
+      "accountTerm": "Account data",
+      "accountDesc": "Your email address and a secure (hashed) password for signing in.",
+      "profileTerm": "Profile data",
+      "profileDesc": "Nickname, gender, date of birth (to confirm 18+), country, languages, status, and avatar — all provided by you voluntarily.",
+      "technicalTerm": "Technical data",
+      "technicalDesc": "IP address, device and browser type, and session ID — for security and abuse prevention.",
+      "commsTerm": "Communication data",
+      "commsDesc": "Text messages in chats and call metadata (time, duration). The video stream is sent directly between partners and is not recorded by the Service.",
+      "paymentTerm": "Payment data",
+      "paymentDesc": "Your purchase history for coins and subscriptions. Card details are handled by the payment provider — we do not store them."
+    },
+    "purposes": {
+      "title": "Processing purposes",
+      "item1": "Providing access to the video and voice roulette, chats, friends, and other features.",
+      "item2": "Matching partners and running filters (gender, country).",
+      "item3": "Confirming that users are of legal age and protecting minors.",
+      "item4": "Ensuring safety, moderation, and the handling of reports.",
+      "item5": "Processing payments for coins and the premium subscription.",
+      "item6": "Notifying you of important changes to the Service."
+    },
+    "consent": {
+      "title": "Consent & legal basis",
+      "p1": "Data is processed on the basis of your consent, which you give at registration, as well as to perform the contract (providing the Service) and within the controller's legitimate interests (security, fraud prevention).",
+      "p2": "You can withdraw consent at any time by deleting your account. Withdrawing consent does not affect the lawfulness of processing carried out before the withdrawal."
+    },
+    "sharing": {
+      "title": "Sharing with third parties",
+      "intro": "We do not sell your personal data. Sharing is possible only with:",
+      "item1": "The payment provider — to process transactions (without storing card details on our side).",
+      "item2": "Infrastructure providers (hosting, media delivery) — to the extent needed to run the Service.",
+      "item3": "Law enforcement — upon a justified, lawful request.",
+      "outro": "All engaged partners are required to ensure confidentiality and data protection at a level no lower than the one described in this Policy."
+    },
+    "security": {
+      "title": "Storage & protection",
+      "p1": "Data is stored on servers with restricted access. Passwords are stored only as irreversible hashes, and data in transit is protected by encryption (TLS).",
+      "p2": "We keep personal data no longer than necessary for the purposes of processing or than the law requires. After an account is deleted, the data is erased or anonymized."
+    },
+    "rights": {
+      "title": "Your rights",
+      "intro": "With respect to your personal data, you have the right to:",
+      "item1": "Obtain information about the processing and request a copy of your data.",
+      "item2": "Request the clarification or correction of inaccurate or incomplete data.",
+      "item3": "Request the deletion of your data and withdraw your consent to processing.",
+      "item4": "Restrict processing and object to it in the cases provided for by law.",
+      "item5": "Lodge a complaint about the controller's actions with the competent data protection authority."
+    },
+    "deletion": {
+      "title": "Account & data deletion",
+      "calloutTitle": "You can delete your account at any time.",
+      "calloutBodyPre": "Deletion is available in your account",
+      "calloutLink": "settings",
+      "calloutBodyPost": ". Once confirmed, your profile, conversation history, and associated data are permanently erased.",
+      "p1": "Some data (for example, transaction records) may be kept in anonymized form for the period required by law, for accounting and tax purposes."
+    },
+    "contacts": {
+      "title": "Contact",
+      "p1Pre": "For questions about the processing of personal data and the exercise of your rights, reach out via the",
+      "p1Link": "help section",
+      "p1Post": ". We will respond within a reasonable period as required by law."
+    }
+  },
+  "rules": {
+    "metaTitle": "Community Rules",
+    "metaDescription": "The ruletka.top Community Rules: the 18+ age limit, standards of conduct, prohibited content, and how moderation works.",
+    "eyebrow": "Community",
+    "title1": "Community",
+    "title2": "Rules",
+    "lede": "ruletka.top is a space for lively, respectful conversation. These rules are mandatory for everyone and help keep the platform safe.",
+    "updatedAt": "June 1, 2026",
+    "toc": {
+      "age": "Age 18+",
+      "principles": "Core principles",
+      "prohibited": "What's prohibited",
+      "ugc": "Content & moderation",
+      "reports": "Reports & blocking",
+      "consequences": "Consequences of violations"
+    },
+    "age": {
+      "title": "18+ age limit",
+      "calloutTitle": "The Service is intended only for people aged 18 and over.",
+      "calloutBody": "By registering and using ruletka.top, you confirm that you are at least 18 years old. Accounts of users who are not of legal age are deleted without warning.",
+      "p1": "We may request age verification at any time. Giving minors access to an account, as well as taking part in calls on their behalf, is strictly prohibited."
+    },
+    "principles": {
+      "title": "Core principles",
+      "intro": "The community is built on mutual respect. Treat your partners the way you'd want to be treated.",
+      "item1": "Be polite and friendly — even if your interests don't match, just move on to the next partner.",
+      "item2": "Respect personal boundaries: don't insist on continuing a conversation if the other person doesn't want to.",
+      "item3": "Respect privacy: don't publish others' data, screenshots, or recordings without their consent.",
+      "item4": "Be honest — don't impersonate someone else or mislead others."
+    },
+    "prohibited": {
+      "title": "What's prohibited",
+      "intro": "The following are strictly not allowed on the platform:",
+      "item1": "Nudity, sexualized content, and any sexual activity on camera.",
+      "item2": "Insults, harassment, threats, and incitement to hatred on any grounds.",
+      "item3": "Displaying violence, weapons, drug use, and other dangerous behavior.",
+      "item4": "Fraud, spam, advertising, begging, and links to third-party resources intended to deceive.",
+      "item5": "Distributing copyrighted content without the rights holder's permission.",
+      "item6": "Any content involving minors.",
+      "callout": "Some prohibited actions are criminal offenses. In such cases we hand over the relevant materials to law enforcement."
+    },
+    "ugc": {
+      "title": "User content & moderation",
+      "p1": "Your nickname, status, avatar, chat messages, and video stream are user-generated content (UGC). By posting it, you are responsible for ensuring it complies with these rules and the law.",
+      "subheading": "How moderation works",
+      "item1": "Automated filters detect potential violations in profile text and images.",
+      "item2": "User reports reach moderators and are reviewed as a priority.",
+      "item3": "Moderators may hide or remove content, or restrict access to features, without prior notice.",
+      "item4": "Video calls are not recorded by us by default; live moderation is based on reports and the still frames attached to them."
+    },
+    "reports": {
+      "title": "Reports & blocking",
+      "intro": "If a partner breaks the rules, use the “Report” button right during the call or in chat. Describe the situation: it speeds up the review.",
+      "item1": "You can always end the call and block a user — they'll no longer show up for you in the roulette.",
+      "item2": "False and mass reports intended to harm other users are themselves a violation.",
+      "item3Pre": "For moderation questions and disputed decisions, write to the",
+      "item3Link": "help section",
+      "callout": "Report emergencies that threaten life or health immediately to the emergency services in your area."
+    },
+    "consequences": {
+      "title": "Consequences of violations",
+      "intro": "Depending on the severity and recurrence of a violation, we apply proportionate measures:",
+      "item1": "A warning and a temporary restriction of certain features (for example, matching).",
+      "item2": "A temporary account suspension of 24 hours or more.",
+      "item3": "A permanent ban, with loss of access to your coin balance and purchased features.",
+      "item4": "Handing over data to law enforcement where there are signs of a crime.",
+      "outro": "Ban decisions can be appealed through the help section. We'll review your request and respond within a reasonable period."
+    }
+  }
+}

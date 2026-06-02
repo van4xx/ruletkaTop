@@ -15,6 +15,7 @@
  * (validated against the shared `objectIdSchema`).
  */
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { ArrowLeft, Crown, Send } from 'lucide-react';
 import {
   objectIdSchema,
@@ -49,6 +50,7 @@ import { BalancePill, FieldError, InsufficientCoins, ROUTES, FullPageLink } from
 
 export function GiftPickerModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
   const { toUserId, toNickname, context = 'profile' } = useModalProps<'gift-picker'>();
 
   const gifts = useGifts();
@@ -72,7 +74,7 @@ export function GiftPickerModal() {
     if (!selected) return;
     const id = recipient.trim();
     if (!objectIdSchema.safeParse(id).success) {
-      setRecipientError('Введите корректный ID профиля (24 символа).');
+      setRecipientError(t('modals.giftPicker.invalidRecipient'));
       return;
     }
     const dto: SendGiftDto = {
@@ -83,29 +85,31 @@ export function GiftPickerModal() {
     };
     send.mutate(dto, {
       onSuccess: () => {
-        toast.success('Подарок отправлен!', { description: `${selected.title} уже в пути.` });
+        toast.success(t('modals.giftPicker.sentTitle'), {
+          description: t('modals.giftPicker.sentDescription', { title: selected.title }),
+        });
         close();
       },
       onError: (err) => {
         if (err instanceof ApiClientError) {
           if (err.status === 402 || err.status === 422) {
-            toast.error('Недостаточно монет', {
-              description: 'Пополните баланс, чтобы отправить подарок.',
+            toast.error(t('modals.giftPicker.errInsufficientTitle'), {
+              description: t('modals.giftPicker.errInsufficientDescription'),
             });
             return;
           }
           if (err.status === 403) {
-            toast.error('Только для премиум', {
-              description: 'Этот подарок доступен премиум-участникам.',
+            toast.error(t('modals.giftPicker.errPremiumTitle'), {
+              description: t('modals.giftPicker.errPremiumDescription'),
             });
             return;
           }
           if (err.status === 404) {
-            setRecipientError('Получатель не найден.');
+            setRecipientError(t('modals.giftPicker.errRecipientNotFound'));
             return;
           }
         }
-        toast.error('Не удалось отправить подарок');
+        toast.error(t('modals.giftPicker.errGeneric'));
       },
     });
   }
@@ -114,15 +118,17 @@ export function GiftPickerModal() {
     <>
       <DialogHeader>
         <div className="flex items-center justify-between gap-2 pr-8">
-          <DialogTitle>{selected ? 'Подтвердите подарок' : 'Выберите подарок'}</DialogTitle>
+          <DialogTitle>
+            {selected ? t('modals.giftPicker.titleConfirm') : t('modals.giftPicker.titleSelect')}
+          </DialogTitle>
           <BalancePill balance={balance} />
         </div>
         <DialogDescription>
           {selected
-            ? 'Подарок спишется с вашего баланса и придёт получателю мгновенно.'
+            ? t('modals.giftPicker.descConfirm')
             : toNickname
-              ? `Подарок для ${toNickname}. Чем выше редкость — тем ярче впечатление.`
-              : 'Анимированные подарки для звонков, чатов и профилей.'}
+              ? t('modals.giftPicker.descForUser', { name: toNickname })
+              : t('modals.giftPicker.descDefault')}
         </DialogDescription>
       </DialogHeader>
 
@@ -139,20 +145,20 @@ export function GiftPickerModal() {
 
           {gifts.isError && (
             <div className="rounded-xl border border-border/60 bg-card/40 p-6 text-center text-sm text-muted-foreground">
-              Не удалось загрузить подарки.{' '}
+              {t('modals.giftPicker.loadError')}{' '}
               <button
                 type="button"
                 onClick={() => gifts.refetch()}
                 className="font-medium text-accent hover:underline"
               >
-                Повторить
+                {t('modals.giftPicker.retry')}
               </button>
             </div>
           )}
 
           {!gifts.isLoading && !gifts.isError && grouped.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Каталог подарков пока пуст.
+              {t('modals.giftPicker.emptyCatalog')}
             </p>
           )}
 
@@ -177,7 +183,7 @@ export function GiftPickerModal() {
                             setSelected(gift);
                             setRecipientError(null);
                           }}
-                          aria-label={`${gift.title} — ${formatNumber(gift.priceCoins)} монет`}
+                          aria-label={t('modals.giftPicker.giftAria', { title: gift.title, price: formatNumber(gift.priceCoins) })}
                           className={cn(
                             'group relative flex w-full flex-col items-center gap-1 rounded-xl border border-border/60 bg-card/40 p-2 transition-colors',
                             'hover:border-accent-muted hover:bg-card/70',
@@ -187,7 +193,7 @@ export function GiftPickerModal() {
                           {giftLocked && (
                             <span
                               className="absolute right-1.5 top-1.5 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-warning/90 text-[var(--color-background)]"
-                              title="Только для премиум"
+                              title={t('modals.giftPicker.premiumOnly')}
                             >
                               <Crown className="h-3 w-3" aria-hidden="true" />
                             </span>
@@ -240,9 +246,9 @@ export function GiftPickerModal() {
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center">
               <Crown className="h-7 w-7 text-warning" aria-hidden="true" />
               <p className="text-sm text-foreground">
-                Этот подарок могут дарить только премиум-участники.
+                {t('modals.giftPicker.premiumGiftNotice')}
               </p>
-              <FullPageLink href={ROUTES.me}>Открыть профиль</FullPageLink>
+              <FullPageLink href={ROUTES.me}>{t('modals.giftPicker.openProfile')}</FullPageLink>
             </div>
           ) : (
             <>
@@ -254,7 +260,7 @@ export function GiftPickerModal() {
               {!recipientFixed && (
                 <div className="space-y-1.5">
                   <Label htmlFor="gift-recipient" required>
-                    ID получателя
+                    {t('modals.giftPicker.recipientLabel')}
                   </Label>
                   <Input
                     id="gift-recipient"
@@ -263,7 +269,7 @@ export function GiftPickerModal() {
                       setRecipient(e.target.value);
                       if (recipientError) setRecipientError(null);
                     }}
-                    placeholder="например, 663f1a2b9c0e4d5f6a7b8c9d"
+                    placeholder={t('modals.giftPicker.recipientPlaceholder')}
                     invalid={!!recipientError}
                     autoComplete="off"
                     spellCheck={false}
@@ -274,8 +280,10 @@ export function GiftPickerModal() {
               {recipientFixed && (
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">
-                    Получатель:{' '}
-                    <span className="font-medium text-foreground">{toNickname ?? 'выбран'}</span>
+                    {t('modals.giftPicker.recipientLine')}{' '}
+                    <span className="font-medium text-foreground">
+                      {toNickname ?? t('modals.giftPicker.recipientChosen')}
+                    </span>
                   </p>
                   <FieldError>{recipientError}</FieldError>
                 </div>
@@ -283,14 +291,14 @@ export function GiftPickerModal() {
 
               {/* Message */}
               <div className="space-y-1.5">
-                <Label htmlFor="gift-message">Сообщение (необязательно)</Label>
+                <Label htmlFor="gift-message">{t('modals.giftPicker.messageLabel')}</Label>
                 <Textarea
                   id="gift-message"
                   rows={2}
                   maxLength={200}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Добавьте тёплые слова…"
+                  placeholder={t('modals.giftPicker.messagePlaceholder')}
                 />
               </div>
             </>
@@ -306,11 +314,11 @@ export function GiftPickerModal() {
             leadingIcon={<ArrowLeft className="h-4 w-4" />}
             onClick={() => setSelected(null)}
           >
-            К каталогу
+            {t('modals.giftPicker.backToCatalog')}
           </Button>
         ) : (
           <Button type="button" variant="ghost" onClick={close}>
-            Закрыть
+            {t('modals.giftPicker.close')}
           </Button>
         )}
 
@@ -323,7 +331,7 @@ export function GiftPickerModal() {
             leadingIcon={<Send className="h-4 w-4" />}
             onClick={handleSend}
           >
-            Подарить за {formatNumber(selected.priceCoins)}
+            {t('modals.giftPicker.sendFor', { price: formatNumber(selected.priceCoins) })}
           </Button>
         )}
       </DialogFooter>

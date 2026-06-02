@@ -6,6 +6,7 @@
  * row links into the thread.
  */
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { Conversation, OnlineStatus, PublicProfile } from '@ruletka/shared-types';
 import { Avatar, Skeleton } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -22,6 +23,7 @@ export function ConversationListItem({
   status: OnlineStatus;
   active?: boolean;
 }) {
+  const t = useTranslations('social');
   const unread = conversation.unreadCount > 0;
 
   return (
@@ -49,7 +51,7 @@ export function ConversationListItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate font-display text-[0.95rem] font-semibold tracking-tight">
-            {peer?.nickname ?? 'Собеседник'}
+            {peer?.nickname ?? t('interlocutor')}
           </span>
           {conversation.lastMessageAt && (
             <time
@@ -70,12 +72,12 @@ export function ConversationListItem({
               unread ? 'font-medium text-foreground' : 'text-muted-foreground',
             )}
           >
-            {conversation.lastMessagePreview ?? 'Нет сообщений'}
+            {conversation.lastMessagePreview ?? t('noMessages')}
           </p>
           {unread && (
             <span
               className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-neon-violet)] to-[var(--color-neon-magenta)] px-1.5 text-xs font-bold text-white shadow-[0_2px_10px_-2px_var(--color-neon-violet)]"
-              aria-label={`${conversation.unreadCount} непрочитанных`}
+              aria-label={t('unreadCount', { count: conversation.unreadCount })}
             >
               {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
             </span>

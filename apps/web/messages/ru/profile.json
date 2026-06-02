@@ -1,0 +1,119 @@
+{
+  "meta": {
+    "publicTitle": "Профиль",
+    "publicDescription": "Публичный профиль пользователя ruletka.top.",
+    "myTitle": "Мой профиль",
+    "myDescription": "Ваш профиль, подарки и настройки.",
+    "editTitle": "Редактирование профиля"
+  },
+  "presence": {
+    "online": "В сети",
+    "away": "Отошёл",
+    "in_call": "В разговоре",
+    "offline": "Не в сети"
+  },
+  "gender": {
+    "male": "Мужской",
+    "female": "Женский",
+    "other": "Другое"
+  },
+  "age": "{age, plural, one {# год} few {# года} many {# лет} other {# лет}}",
+  "header": {
+    "languagesLabel": "Языки:",
+    "joinedLine": "в эфире с",
+    "interestsLabel": "Интересы"
+  },
+  "skeleton": {
+    "loading": "Загрузка профиля"
+  },
+  "stats": {
+    "ariaLabel": "Статистика профиля",
+    "giftsLabel": "Получено в подарках",
+    "viewsLabel": "Просмотров профиля",
+    "viewsLockedAria": "Просмотры профиля доступны с Премиумом",
+    "viewsLockedReason": "Смотрите, кто заходил в профили.",
+    "hidden": "Скрыто",
+    "viewsLockedCaption": "Просмотры · Премиум",
+    "friendsLabel": "Друзей",
+    "topLabel": "Топ эфира",
+    "topPlacedOwn": "Вы в Топе",
+    "topPlacedOther": "В Топе"
+  },
+  "actions": {
+    "message": "Написать",
+    "videoCall": "Видеозвонок",
+    "sendGift": "Подарить",
+    "more": "Ещё действия",
+    "addFriend": "Добавить в друзья",
+    "report": "Пожаловаться",
+    "block": "Заблокировать",
+    "authGift": "Войдите, чтобы дарить подарки",
+    "authFriend": "Войдите, чтобы добавлять друзей",
+    "authReport": "Войдите, чтобы пожаловаться",
+    "authBlock": "Войдите, чтобы заблокировать"
+  },
+  "premium": {
+    "viewsTitle": "Кто смотрел профиль",
+    "viewsPremiumActive": "Премиум-доступ активен",
+    "viewsCountSuffix": "просмотров профиля",
+    "viewsRollingNote": "Полный список посетителей с именами скоро появится — мы уже считаем каждый визит.",
+    "viewsLockedReason": "Узнайте, кто заходил в ваш профиль.",
+    "viewsLockedCaption": "{count} просмотров · откройте с Премиумом",
+    "badge": "Премиум",
+    "upsellTitlePrefix": "Откройте",
+    "upsellTitleHighlight": "Премиум",
+    "upsellSubtitle": "Больше возможностей для общения",
+    "perkViews": "Кто смотрел ваш профиль",
+    "perkPriority": "Приоритет в поиске собеседников",
+    "perkGifts": "Эксклюзивные подарки и значок",
+    "upsellButton": "Стать Премиум"
+  },
+  "tabs": {
+    "gifts": "Подарки",
+    "about": "О себе",
+    "activity": "Активность",
+    "giftsError": "Не удалось загрузить подарки.",
+    "giftsEmptyTitleOwn": "У вас пока нет подарков",
+    "giftsEmptyTitleOther": "Пока нет подарков",
+    "giftsEmptyHintOwn": "Подарки от собеседников появятся здесь — выходите в эфир и общайтесь.",
+    "giftsEmptyHintOther": "Станьте первым, кто подарит что-нибудь.",
+    "aboutGenderAge": "Пол · возраст",
+    "aboutGenderAgeValue": "{gender} · {age}",
+    "aboutCountry": "Страна",
+    "aboutLanguages": "Языки",
+    "aboutLanguagesEmpty": "не указаны",
+    "aboutJoined": "В эфире с",
+    "aboutNoBio": "Пользователь пока не добавил описание.",
+    "interestsLabel": "Интересы",
+    "activityOnlineTitle": "Сейчас в сети",
+    "activityOnlineMeta": "Можно написать или позвонить",
+    "activityLoading": "Загрузка активности…",
+    "activityGiftReceived": "Получен подарок · {title}",
+    "activityJoined": "Присоединился к ruletka.top"
+  },
+  "giftFallbackTitle": "Подарок",
+  "giftsShowcase": {
+    "emptyTitle": "Пока нет подарков",
+    "countLine": "{count, plural, one {# подарок} few {# подарка} many {# подарков} other {# подарков}}"
+  },
+  "relativeDate": {
+    "today": "сегодня",
+    "yesterday": "вчера",
+    "daysAgo": "{days, plural, one {# день назад} few {# дня назад} many {# дней назад} other {# дней назад}}"
+  },
+  "sendGift": {
+    "title": "Подарок для {name}",
+    "description": "Выберите подарок — стоимость спишется с вашего баланса.",
+    "loading": "Загрузка подарков",
+    "catalogError": "Не удалось загрузить каталог подарков.",
+    "messagePlaceholder": "Добавьте сообщение (необязательно)",
+    "messageAria": "Сообщение к подарку",
+    "sentTitle": "Подарок отправлен!",
+    "sentDescription": "{title} → {name}",
+    "errorInsufficient": "Недостаточно монет.",
+    "errorPremiumOnly": "Этот подарок доступен только Premium-пользователям.",
+    "errorGeneric": "Не удалось отправить подарок.",
+    "submitWithPrice": "Отправить за {price}",
+    "submitEmpty": "Выберите подарок"
+  }
+}

@@ -23,6 +23,7 @@
  */
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { MailWarning, Send, X } from 'lucide-react';
 import { toast } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -33,6 +34,7 @@ import { useResendVerification } from '@/features/auth/use-auth-email';
 const DISMISS_KEY = 'ruletka.verify-email-banner.dismissed';
 
 export function VerifyEmailBanner() {
+  const t = useTranslations('auth');
   const { user, isAuthenticated, isReady } = useAuth();
   const resend = useResendVerification();
   const reduce = useReducedMotion();
@@ -64,12 +66,12 @@ export function VerifyEmailBanner() {
   function handleResend() {
     resend.mutate(undefined, {
       onSuccess: () =>
-        toast.success('Письмо отправлено', {
-          description: 'Проверьте почту и перейдите по ссылке из письма.',
+        toast.success(t('banner.resendSuccessToast'), {
+          description: t('banner.resendSuccessToastDescription'),
         }),
       onError: () =>
-        toast.error('Не удалось отправить письмо', {
-          description: 'Попробуйте ещё раз чуть позже.',
+        toast.error(t('banner.resendErrorToast'), {
+          description: t('banner.resendErrorToastDescription'),
         }),
     });
   }
@@ -91,10 +93,11 @@ export function VerifyEmailBanner() {
               aria-hidden="true"
             />
             <p className="min-w-0 flex-1 truncate text-sm text-foreground/90">
-              <span className="font-semibold">Подтвердите email.</span>{' '}
+              <span className="font-semibold">{t('banner.titlePrefix')}</span>{' '}
               <span className="text-muted-foreground">
-                Мы отправили ссылку{user?.email ? <> на {user.email}</> : null}. Без подтверждения
-                часть функций ограничена.
+                {user?.email
+                  ? t('banner.bodyWithEmail', { email: user.email })
+                  : t('banner.bodyNoEmail')}
               </span>
             </p>
 
@@ -112,15 +115,15 @@ export function VerifyEmailBanner() {
             >
               <Send className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">
-                {resend.isPending ? 'Отправляем…' : 'Выслать письмо снова'}
+                {resend.isPending ? t('banner.sending') : t('banner.resendLong')}
               </span>
-              <span className="sm:hidden">{resend.isPending ? '…' : 'Выслать'}</span>
+              <span className="sm:hidden">{resend.isPending ? t('banner.sendingShort') : t('banner.resendShort')}</span>
             </button>
 
             <button
               type="button"
               onClick={dismiss}
-              aria-label="Скрыть напоминание"
+              aria-label={t('banner.dismiss')}
               className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <X className="h-4 w-4" aria-hidden="true" />

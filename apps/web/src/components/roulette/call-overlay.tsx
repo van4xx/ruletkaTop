@@ -6,6 +6,7 @@
  * Rendered over the remote video (top-left) or above the avatar in voice mode.
  */
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { codeToFlag, COUNTRY_BY_CODE, Avatar, Badge } from '@ruletka/ui';
 import type { PeerInfo } from '@ruletka/shared-types';
@@ -31,12 +32,6 @@ export interface CallOverlayProps {
   className?: string;
 }
 
-const GENDER_LABEL: Record<PeerInfo['gender'], string> = {
-  male: 'М',
-  female: 'Ж',
-  other: '',
-};
-
 export function CallOverlay({
   peer,
   status,
@@ -45,8 +40,15 @@ export function CallOverlay({
   compact = false,
   className,
 }: CallOverlayProps) {
+  const t = useTranslations('roulette');
   const connected = status === 'connected';
   const reconnecting = status === 'reconnecting';
+  const genderLabel =
+    peer.gender === 'male'
+      ? t('overlay.genderMale')
+      : peer.gender === 'female'
+        ? t('overlay.genderFemale')
+        : '';
   // Keep the timer running across a transient reconnect — the call hasn't ended.
   const timer = useCallTimer(connected || reconnecting);
   const countryName = COUNTRY_BY_CODE.get(peer.country)?.name ?? peer.country;
@@ -80,7 +82,7 @@ export function CallOverlay({
           </span>
           <span className="shrink-0 text-sm text-muted-foreground">
             {peer.age}
-            {GENDER_LABEL[peer.gender] ? `, ${GENDER_LABEL[peer.gender]}` : ''}
+            {genderLabel ? `, ${genderLabel}` : ''}
           </span>
         </div>
         <div className="mt-0.5 flex items-center gap-2">
@@ -95,7 +97,9 @@ export function CallOverlay({
             <Badge variant="aurora" size="sm" className="max-w-[12rem] gap-1">
               <Sparkles className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="truncate">
-                {moreShared > 0 ? `общие интересы: ${topShared} +${moreShared}` : `общий интерес: ${topShared}`}
+                {moreShared > 0
+                  ? t('overlay.sharedInterestsMany', { interest: topShared, count: moreShared })
+                  : t('overlay.sharedInterestOne', { interest: topShared })}
               </span>
             </Badge>
           </div>
@@ -117,7 +121,7 @@ export function CallOverlay({
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
             </span>
-            Восстановление…
+            {t('overlay.reconnecting')}
           </Badge>
         ) : (
           <Badge variant="accent" size="sm" className="gap-1">
@@ -125,7 +129,7 @@ export function CallOverlay({
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
             </span>
-            Соединение…
+            {t('overlay.connecting')}
           </Badge>
         )}
       </div>

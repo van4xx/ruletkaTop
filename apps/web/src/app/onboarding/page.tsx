@@ -1,11 +1,15 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { OnboardingClient } from '@/components/onboarding/onboarding-client';
 
-export const metadata: Metadata = {
-  title: 'Настройка профиля',
-  description: 'Завершите настройку профиля ruletka.top за несколько шагов.',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('misc');
+  return {
+    title: t('onboarding.metaTitle'),
+    description: t('onboarding.metaDescription'),
+    robots: { index: false, follow: false },
+  };
+}
 
 /**
  * /onboarding — guided, multi-step profile completion shown after registration.

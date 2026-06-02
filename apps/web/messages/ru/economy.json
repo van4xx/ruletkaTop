@@ -1,0 +1,255 @@
+{
+  "states": {
+    "errorTitle": "Что-то пошло не так",
+    "errorDescription": "Не удалось загрузить данные. Попробуйте ещё раз."
+  },
+  "balanceHero": {
+    "label": "Ваш баланс",
+    "coinsSuffix": "монет",
+    "amountAria": "{amount} монет",
+    "error": "Не удалось обновить баланс.",
+    "hint": "Монеты — за подарки, Топ и больше"
+  },
+  "coinBalance": {
+    "balanceAria": "Баланс монет",
+    "balanceTopUpAria": "Баланс: {amount} монет. Пополнить"
+  },
+  "topMarquee": {
+    "onAir": "в эфире {country}"
+  },
+  "coins": {
+    "eyebrow": "Магазин монет",
+    "titlePrefix": "Монеты для",
+    "titleHighlight": "подарков и Топа",
+    "lede": "Пополняйте баланс, чтобы дарить анимированные подарки, покупать места в Топе и открывать больше возможностей.",
+    "packagesHeading": "Выберите пакет",
+    "packagesErrorTitle": "Не удалось загрузить пакеты",
+    "packagesErrorDescription": "Каталог монет временно недоступен.",
+    "ledgerHeading": "История операций"
+  },
+  "package": {
+    "bestValue": "Выгодно",
+    "coinsSuffix": "монет",
+    "bonus": "+{amount} бонусных",
+    "total": "Итого {amount} монет",
+    "buy": "Купить",
+    "buyAria": "Купить {coins} монет за {price}"
+  },
+  "checkout": {
+    "titleError": "Платёж не завершён",
+    "titleCredited": "Монеты зачислены",
+    "titlePending": "Подтверждаем оплату",
+    "titlePreparing": "Готовим оплату",
+    "descError": "Попробуйте ещё раз или выберите другой способ оплаты.",
+    "descCredited": "{amount} монет уже на вашем балансе.",
+    "descPending": "Оплата прошла. Зачисляем монеты — это занимает несколько секунд.",
+    "descPreparing": "Открываем защищённое окно CloudPayments. Данные карты не попадают на наш сервер.",
+    "coinsBadge": "{amount} монет",
+    "secure": "Безопасная оплата CloudPayments",
+    "retry": "Повторить оплату",
+    "done": "Отлично"
+  },
+  "transactionList": {
+    "errorTitle": "Не удалось загрузить историю",
+    "errorDescription": "История операций временно недоступна.",
+    "emptyTitle": "Пока нет операций",
+    "emptyDescription": "Купите монеты или отправьте первый подарок — операции появятся здесь.",
+    "balanceLine": "баланс {amount}",
+    "loadMore": "Показать ещё"
+  },
+  "txType": {
+    "purchase": "Покупка монет",
+    "bonus": "Бонус",
+    "gift_in": "Подарок получен",
+    "refund": "Возврат",
+    "gift_out": "Подарок отправлен",
+    "top": "Место в Топе"
+  },
+  "gifts": {
+    "eyebrow": "Магазин подарков",
+    "titlePrefix": "Дарите",
+    "titleHighlight": "эмоции",
+    "lede": "Анимированные подарки для звонков, чатов и профилей. Чем выше редкость — тем ярче впечатление.",
+    "topUp": "Пополнить",
+    "premiumBannerText": "Некоторые подарки доступны только премиум-участникам.",
+    "premiumBannerCta": "Подробнее о премиуме",
+    "errorTitle": "Не удалось загрузить подарки",
+    "errorDescription": "Каталог подарков временно недоступен.",
+    "emptyTitle": "Подарков пока нет",
+    "emptyDescription": "Каталог скоро пополнится — загляните позже."
+  },
+  "giftCard": {
+    "premiumOnly": "Только для премиум",
+    "premiumLabel": "Премиум",
+    "send": "Подарить"
+  },
+  "sendGift": {
+    "title": "Отправить подарок",
+    "description": "Подарок спишется с вашего баланса монет и придёт получателю мгновенно.",
+    "lockedText": "Этот подарок могут дарить только премиум-участники.",
+    "lockedCta": "Подключить премиум",
+    "recipientLabel": "ID получателя",
+    "recipientPlaceholder": "Например, 663f1a2b9c0e4d5f6a7b8c9d",
+    "recipientHint": "Откройте профиль собеседника и скопируйте его идентификатор.",
+    "messageLabel": "Сообщение (необязательно)",
+    "messagePlaceholder": "Добавьте тёплые слова…",
+    "submit": "Подарить за {amount}",
+    "toastSuccess": "Подарок отправлен!",
+    "toastSuccessDescription": "{title} уже в пути.",
+    "errorInsufficientField": "Недостаточно монет на балансе.",
+    "errorInsufficientToast": "Недостаточно монет",
+    "errorInsufficientToastDescription": "Пополните баланс, чтобы отправить подарок.",
+    "errorPremiumToast": "Только для премиум",
+    "errorPremiumToastDescription": "Этот подарок доступен премиум-участникам.",
+    "errorRecipientNotFound": "Получатель не найден.",
+    "errorGeneric": "Не удалось отправить подарок"
+  },
+  "premium": {
+    "eyebrow": "Премиум",
+    "titlePrefix": "Больше",
+    "titleHighlight": "возможностей",
+    "lede": "Фильтры по полу и стране, эфир без рекламы, приоритет в поиске и премиум-статус. Отменить можно в любой момент.",
+    "highlightFiltersTitle": "Фильтры",
+    "highlightFiltersText": "Подбор по полу и стране собеседника.",
+    "highlightNoAdsTitle": "Без рекламы",
+    "highlightNoAdsText": "Чистый эфир без баннеров и пауз.",
+    "highlightPriorityTitle": "Приоритет",
+    "highlightPriorityText": "Вас находят быстрее в очереди поиска.",
+    "highlightStatusTitle": "Статус",
+    "highlightStatusText": "Премиум-бейдж и эксклюзивные подарки.",
+    "plansHeading": "Тарифы",
+    "plansErrorTitle": "Не удалось загрузить тарифы",
+    "plansErrorDescription": "Список тарифов временно недоступен.",
+    "plansEmptyTitle": "Тарифы скоро появятся",
+    "plansEmptyDescription": "Мы готовим премиум-планы — загляните чуть позже.",
+    "billingNote": "Оплата проходит через CloudPayments. Подписка продлевается автоматически, отменить можно в любой момент."
+  },
+  "planCard": {
+    "active": "Активно",
+    "popular": "Популярный",
+    "cadenceMonthly": "в месяц",
+    "cadenceEveryMonths": "за {count} мес.",
+    "cadenceWeekly": "в неделю",
+    "cadenceEveryWeeks": "за {count} нед.",
+    "cadenceDaily": "в день",
+    "cadenceEveryDays": "за {count} дн.",
+    "current": "Текущий план",
+    "subscribe": "Оформить"
+  },
+  "subscribeStatus": {
+    "titleError": "Подписка не оформлена",
+    "titlePending": "Активируем премиум",
+    "titleActive": "Премиум активен",
+    "titlePreparing": "Готовим оплату",
+    "descError": "Попробуйте ещё раз.",
+    "descPending": "Оплата прошла. Премиум активируется в течение нескольких секунд.",
+    "descActive": "План «{title}» подключён.",
+    "descPreparing": "Открываем защищённое окно CloudPayments. Данные карты не попадают на наш сервер.",
+    "secure": "Безопасная рекуррентная оплата",
+    "pendingHint": "Можно закрыть это окно — статус обновится автоматически.",
+    "retry": "Повторить",
+    "done": "Готово"
+  },
+  "subscriptionStatus": {
+    "planLabel": "Премиум · {plan}",
+    "statusPastDue": "Просрочено",
+    "statusCanceled": "Отменяется",
+    "statusActive": "Активно",
+    "accessUntil": "Доступ до",
+    "renewal": "Продление",
+    "cancel": "Отменить подписку",
+    "cancelSuccess": "Подписка отменена",
+    "cancelSuccessUntil": "Доступ сохранится до {date}.",
+    "cancelSuccessGeneric": "Доступ сохранится до конца оплаченного периода.",
+    "cancelError": "Не удалось отменить подписку",
+    "confirmTitle": "Отменить премиум?",
+    "confirmDescription": "Подписка не будет продлеваться. Премиум-возможности останутся доступны до конца оплаченного периода{periodSuffix}.",
+    "keepPremium": "Оставить премиум"
+  },
+  "top": {
+    "eyebrow": "Топ эфира",
+    "titlePrefix": "Лучшие",
+    "titleHighlight": "в эфире",
+    "lede": "Живая лента самых заметных участников. Купите место — и вас увидят все, кто заходит в рулетку.",
+    "buySpot": "Купить место",
+    "errorTitle": "Не удалось загрузить Топ",
+    "errorDescription": "Лента временно недоступна. Попробуйте обновить.",
+    "ctaTitle": "Хотите оказаться здесь?",
+    "ctaWithCount": "Сейчас в Топе {count, plural, one {# участник} few {# участника} many {# участников} other {# участника}}. Сделайте ставку выше — и поднимитесь в начало ленты.",
+    "ctaEmpty": "Дорожки свободны — станьте первым в Топе прямо сейчас.",
+    "ctaButton": "Купить место в Топе"
+  },
+  "topCard": {
+    "guest": "Гость",
+    "rankAria": "{nickname} — место №{rank} в Топе",
+    "coinsSpent": "{amount} монет"
+  },
+  "topFeed": {
+    "topLaneFree": "Верхняя дорожка свободна — займите место!",
+    "bottomLaneFree": "Нижняя дорожка свободна — займите место!"
+  },
+  "buySpot": {
+    "title": "Купить место в Топе",
+    "description": "Чем больше монет вы вложите, тем выше окажетесь в ленте.",
+    "laneLabel": "Дорожка",
+    "laneTop": "Верхняя",
+    "laneBottom": "Нижняя",
+    "durationLabel": "Длительность",
+    "durationValue": "{hours} ч",
+    "durationSliderAria": "Длительность в часах",
+    "preset6h": "6 часов",
+    "preset1d": "1 день",
+    "preset3d": "3 дня",
+    "preset7d": "7 дней",
+    "coinsLabel": "Ставка в монетах",
+    "balanceLine": "Баланс: <num>{amount}</num> монет",
+    "minCoins": "Минимум 100 монет",
+    "topUp": "Пополнить",
+    "insufficient": "Недостаточно монет на балансе.",
+    "submit": "Купить за {amount}",
+    "toastSuccess": "Вы в Топе!",
+    "toastSuccessTop": "Место в верхней дорожке активно.",
+    "toastSuccessBottom": "Место в нижней дорожке активно.",
+    "errorInsufficient": "Недостаточно монет",
+    "errorInsufficientDescription": "Пополните баланс, чтобы купить место.",
+    "errorGeneric": "Не удалось купить место"
+  },
+  "wallet": {
+    "eyebrow": "Кошелёк",
+    "titlePrefix": "Ваши",
+    "titleHighlight": "монеты и история",
+    "lede": "Следите за балансом и всеми операциями: пополнения, подарки и места в Топе — в одном месте.",
+    "topUp": "Пополнить",
+    "signInRequired": "Войдите, чтобы видеть баланс и историю операций.",
+    "ledgerHeading": "История операций",
+    "coinStore": "Магазин монет"
+  },
+  "walletStats": {
+    "received": "Получено",
+    "spent": "Потрачено",
+    "operations": "Операций"
+  },
+  "walletLedger": {
+    "errorTitle": "Не удалось загрузить историю",
+    "errorDescription": "История операций временно недоступна.",
+    "emptyTitle": "Пока нет операций",
+    "emptyDescription": "Пополните баланс или отправьте первый подарок — все операции появятся здесь.",
+    "emptyAction": "Пополнить баланс",
+    "filterLabel": "Фильтр операций",
+    "filterAll": "Все",
+    "filterIn": "Пополнения",
+    "filterOut": "Списания",
+    "badgeIn": "Пополнение",
+    "badgeOut": "Списание",
+    "noIncome": "Пополнений пока нет.",
+    "noSpending": "Списаний пока нет.",
+    "loadMore": "Показать ещё"
+  },
+  "buyCoins": {
+    "title": "Пополнить баланс",
+    "description": "Выберите пакет монет. Оплата проходит в защищённом окне CloudPayments — данные карты не попадают на наш сервер.",
+    "errorTitle": "Не удалось загрузить пакеты",
+    "errorDescription": "Каталог монет временно недоступен.",
+    "secure": "Безопасная оплата CloudPayments"
+  }
+}

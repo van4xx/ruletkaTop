@@ -6,22 +6,24 @@
  * Failed optimistic sends expose a retry affordance.
  */
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { AlertCircle, Check, CheckCheck, Clock, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { formatClock } from '@/features/chat/lib/format';
 import type { ChatMessage } from '@/features/chat/use-thread';
 
 function Ticks({ message }: { message: ChatMessage }) {
+  const t = useTranslations('social');
   if (message.failed) {
-    return <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-label="Не отправлено" />;
+    return <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-label={t('messageNotSent')} />;
   }
   if (message.pending) {
-    return <Clock className="h-3.5 w-3.5 opacity-70" aria-label="Отправляется" />;
+    return <Clock className="h-3.5 w-3.5 opacity-70" aria-label={t('messageSending')} />;
   }
   if (message.readAt) {
-    return <CheckCheck className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-label="Прочитано" />;
+    return <CheckCheck className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-label={t('messageRead')} />;
   }
-  return <Check className="h-3.5 w-3.5 opacity-80" aria-label="Отправлено" />;
+  return <Check className="h-3.5 w-3.5 opacity-80" aria-label={t('messageSent')} />;
 }
 
 export function MessageBubble({
@@ -36,6 +38,7 @@ export function MessageBubble({
   showTail?: boolean;
   onRetry?: (message: ChatMessage) => void;
 }) {
+  const t = useTranslations('social');
   return (
     <motion.div
       layout="position"
@@ -78,7 +81,7 @@ export function MessageBubble({
             type="button"
             onClick={() => onRetry(message)}
             className="absolute -left-9 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-destructive/15 text-destructive transition-colors hover:bg-destructive/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
-            aria-label="Повторить отправку"
+            aria-label={t('retrySend')}
           >
             <RotateCw className="h-3.5 w-3.5" />
           </button>

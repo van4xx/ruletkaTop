@@ -10,37 +10,38 @@
  * shows a misleading "bad" state before the first measurement lands.
  */
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import type { QualityLevel, QualitySample } from '@/features/roulette/types';
 import { cn } from '@/lib/cn';
 
-/** Bars lit + accent color + label per level. Colors track the neon palette. */
+/** Bars lit + accent color + label key per level. Colors track the neon palette. */
 const LEVELS: Record<
   QualityLevel,
-  { bars: number; color: string; glow: string; label: string }
+  { bars: number; color: string; glow: string; labelKey: string }
 > = {
   great: {
     bars: 4,
     color: 'var(--color-neon-cyan)',
     glow: 'rgba(34,211,238,0.55)',
-    label: 'Отличная связь',
+    labelKey: 'quality.great',
   },
   good: {
     bars: 3,
     color: 'var(--color-neon-violet)',
     glow: 'rgba(139,92,246,0.5)',
-    label: 'Хорошая связь',
+    labelKey: 'quality.good',
   },
   poor: {
     bars: 2,
     color: '#fbbf24', // amber-400
     glow: 'rgba(251,191,36,0.5)',
-    label: 'Слабая связь',
+    labelKey: 'quality.poor',
   },
   bad: {
     bars: 1,
     color: '#f87171', // red-400
     glow: 'rgba(248,113,113,0.55)',
-    label: 'Плохая связь',
+    labelKey: 'quality.bad',
   },
 };
 
@@ -56,13 +57,15 @@ export interface QualityIndicatorProps {
 }
 
 export function QualityIndicator({ quality, compact = false, className }: QualityIndicatorProps) {
+  const t = useTranslations('roulette');
   if (!quality) return null;
   const cfg = LEVELS[quality.level];
+  const label = t(cfg.labelKey);
   const rttLabel =
     quality.rttMs != null && Number.isFinite(quality.rttMs)
-      ? `${Math.round(quality.rttMs)} мс`
+      ? t('quality.rtt', { ms: Math.round(quality.rttMs) })
       : null;
-  const title = rttLabel ? `${cfg.label} · пинг ${rttLabel}` : cfg.label;
+  const title = rttLabel ? t('quality.titleWithPing', { label, rtt: rttLabel }) : label;
 
   return (
     <motion.span

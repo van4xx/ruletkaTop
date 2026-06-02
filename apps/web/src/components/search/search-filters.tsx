@@ -5,6 +5,7 @@
  * and a single-select country picker (reusing the design system's
  * {@link CountrySelect}). Purely presentational — state lives in the page.
  */
+import { useTranslations } from 'next-intl';
 import { Search, X } from 'lucide-react';
 import type { CountryCode, Gender } from '@ruletka/shared-types';
 import { CountrySelect, IconButton, Input } from '@ruletka/ui';
@@ -12,11 +13,11 @@ import { cn } from '@/lib/cn';
 
 export type GenderFilter = Gender | 'any';
 
-const GENDERS: { value: GenderFilter; label: string }[] = [
-  { value: 'any', label: 'Все' },
-  { value: 'female', label: 'Женский' },
-  { value: 'male', label: 'Мужской' },
-  { value: 'other', label: 'Другое' },
+const GENDERS: { value: GenderFilter; labelKey: string }[] = [
+  { value: 'any', labelKey: 'search.filterGenderAny' },
+  { value: 'female', labelKey: 'search.filterGenderFemale' },
+  { value: 'male', labelKey: 'search.filterGenderMale' },
+  { value: 'other', labelKey: 'search.filterGenderOther' },
 ];
 
 export interface SearchFiltersProps {
@@ -38,6 +39,7 @@ export function SearchFilters({
   country,
   onCountryChange,
 }: SearchFiltersProps) {
+  const t = useTranslations('misc');
   return (
     <div className="glass-panel space-y-4 rounded-2xl p-4 sm:p-5">
       {/* Query */}
@@ -51,7 +53,7 @@ export function SearchFilters({
         <Input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Имя или ID профиля…"
+          placeholder={t('search.filterQueryPlaceholder')}
           size="lg"
           leadingIcon={<Search className="h-5 w-5" />}
           trailingIcon={
@@ -60,14 +62,14 @@ export function SearchFilters({
                 type="button"
                 variant="ghost"
                 size="sm"
-                aria-label="Очистить поиск"
+                aria-label={t('search.filterClearAria')}
                 onClick={() => onQueryChange('')}
               >
                 <X aria-hidden="true" />
               </IconButton>
             ) : undefined
           }
-          aria-label="Поиск людей"
+          aria-label={t('search.filterSearchAria')}
           autoComplete="off"
           spellCheck={false}
         />
@@ -77,12 +79,12 @@ export function SearchFilters({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
         <div className="flex-1">
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Пол
+            {t('search.filterGender')}
           </span>
           <div
             className="inline-flex w-full rounded-xl bg-card/50 p-1 ring-1 ring-border/60 sm:w-auto"
             role="radiogroup"
-            aria-label="Фильтр по полу"
+            aria-label={t('search.filterGenderAria')}
           >
             {GENDERS.map((g) => {
               const active = gender === g.value;
@@ -101,7 +103,7 @@ export function SearchFilters({
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {g.label}
+                  {t(g.labelKey)}
                 </button>
               );
             })}
@@ -110,14 +112,14 @@ export function SearchFilters({
 
         <div className="flex-1">
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Страна
+            {t('search.filterCountry')}
           </span>
           <CountrySelect
             value={country ? [country] : []}
             onChange={(codes) => onCountryChange(codes[codes.length - 1] ?? null)}
             maxSelections={1}
-            placeholder="Любая страна"
-            aria-label="Фильтр по стране"
+            placeholder={t('search.filterCountryPlaceholder')}
+            aria-label={t('search.filterCountryAria')}
           />
         </div>
       </div>

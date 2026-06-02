@@ -7,6 +7,7 @@
  */
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   CameraOff,
@@ -36,6 +37,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 /** Idle pre-flight hero (before the first Start). */
 export function IdleScreen({ isVideo }: { isVideo: boolean }) {
+  const t = useTranslations('roulette');
   return (
     <Shell>
       <div className="relative grid h-24 w-24 place-items-center">
@@ -49,12 +51,10 @@ export function IdleScreen({ isVideo }: { isVideo: boolean }) {
       </div>
       <div className="space-y-2">
         <h2 className="font-display text-2xl font-bold text-foreground drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
-          {isVideo ? 'Видеорулетка' : 'Голосовая рулетка'}
+          {isVideo ? t('modeName.video') : t('modeName.voice')}
         </h2>
         <p className="text-balance text-sm text-muted-foreground">
-          {isVideo
-            ? 'Нажмите «Начать» — мы попросим доступ к камере и микрофону и найдём собеседника.'
-            : 'Нажмите «Начать» — мы попросим доступ к микрофону и найдём собеседника.'}
+          {isVideo ? t('status.idle.video') : t('status.idle.voice')}
         </p>
       </div>
     </Shell>
@@ -69,6 +69,7 @@ export function SearchingScreen({
   positionHint: number | null;
   longWait: boolean;
 }) {
+  const t = useTranslations('roulette');
   return (
     <Shell>
       <div className="relative grid h-28 w-28 place-items-center" aria-hidden="true">
@@ -79,13 +80,13 @@ export function SearchingScreen({
         </span>
       </div>
       <div className="space-y-2" role="status" aria-live="polite">
-        <h2 className="font-display text-xl font-bold">Ищем собеседника…</h2>
+        <h2 className="font-display text-xl font-bold">{t('status.searching.title')}</h2>
         <p className="text-sm text-muted-foreground">
           {longWait
-            ? 'Пока тихо в эфире. Попробуйте смягчить фильтры — найдём быстрее.'
+            ? t('status.searching.longWait')
             : positionHint != null && positionHint > 0
-              ? `Вы в очереди: позиция ${positionHint}`
-              : 'Это займёт пару секунд.'}
+              ? t('status.searching.position', { position: positionHint })
+              : t('status.searching.default')}
         </p>
       </div>
     </Shell>
@@ -94,12 +95,13 @@ export function SearchingScreen({
 
 /** Brief interstitial when a peer leaves before auto-requeue. */
 export function EndedScreen() {
+  const t = useTranslations('roulette');
   return (
     <Shell>
       <Spinner size="lg" tone="accent" />
       <div className="space-y-1">
-        <h2 className="font-display text-lg font-bold">Собеседник отключился</h2>
-        <p className="text-sm text-muted-foreground">Ищем следующего…</p>
+        <h2 className="font-display text-lg font-bold">{t('status.ended.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('status.ended.subtitle')}</p>
       </div>
     </Shell>
   );
@@ -111,6 +113,7 @@ export function EndedScreen() {
  * EndedScreen — we're trying to resume, not find someone new.
  */
 export function ReconnectingScreen({ attempt }: { attempt: number }) {
+  const t = useTranslations('roulette');
   return (
     <Shell>
       <span className="relative inline-flex h-16 w-16 items-center justify-center rounded-2xl glass-panel text-[var(--color-neon-cyan)]">
@@ -118,12 +121,12 @@ export function ReconnectingScreen({ attempt }: { attempt: number }) {
       </span>
       <div className="space-y-1">
         <h2 className="font-display text-lg font-bold drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
-          Восстанавливаем соединение…
+          {t('status.reconnecting.title')}
         </h2>
         <p className="text-sm text-muted-foreground">
           {attempt > 1
-            ? `Связь нестабильна. Попытка ${attempt} — не закрывайте окно.`
-            : 'Связь прервалась. Пробуем восстановить — не закрывайте окно.'}
+            ? t('status.reconnecting.retry', { attempt })
+            : t('status.reconnecting.first')}
         </p>
       </div>
     </Shell>
@@ -138,17 +141,23 @@ export function ErrorScreen({
   error: RouletteError;
   onRetry: () => void;
 }) {
-  const map = {
-    denied: { Icon: MicOff, title: 'Нет доступа к устройствам' },
-    notfound: { Icon: CameraOff, title: 'Устройство не найдено' },
-    inuse: { Icon: AlertTriangle, title: 'Устройство занято' },
-    insecure: { Icon: AlertTriangle, title: 'Небезопасное соединение' },
-    socket: { Icon: WifiOff, title: 'Нет соединения' },
-    timeout: { Icon: WifiOff, title: 'Превышено время ожидания' },
-    unknown: { Icon: AlertTriangle, title: 'Что-то пошло не так' },
+  const t = useTranslations('roulette');
+  const tc = useTranslations('common');
+  const ICONS = {
+    denied: MicOff,
+    notfound: CameraOff,
+    inuse: AlertTriangle,
+    insecure: AlertTriangle,
+    socket: WifiOff,
+    timeout: WifiOff,
+    unknown: AlertTriangle,
   } as const;
-  const { Icon, title } = map[error.kind] ?? map.unknown;
-  const isAuth = error.kind === 'socket' && /войдите/i.test(error.message);
+  const Icon = ICONS[error.kind] ?? ICONS.unknown;
+  const title = t(`status.error.${error.kind in ICONS ? error.kind : 'unknown'}`);
+  // The auth case is a `socket` error whose message is the localized sign-in
+  // prompt; compare against the same key (locale-independent) rather than the
+  // text itself.
+  const isAuth = error.kind === 'socket' && error.message === t('errors.signInToStart');
 
   return (
     <Shell>
@@ -168,12 +177,12 @@ export function ErrorScreen({
         <Button asChild variant="primary" className="gap-2">
           <Link href="/login">
             <LogIn className="h-4 w-4" />
-            Войти
+            {tc('signIn')}
           </Link>
         </Button>
       ) : (
         <Button variant="primary" onClick={onRetry}>
-          Попробовать снова
+          {t('status.error.retry')}
         </Button>
       )}
     </Shell>
@@ -182,24 +191,27 @@ export function ErrorScreen({
 
 /** Shown when there is definitively no session token. */
 export function SignInScreen({ isVideo }: { isVideo: boolean }) {
+  const t = useTranslations('roulette');
+  const tc = useTranslations('common');
   return (
     <Shell>
       <span className="inline-flex h-16 w-16 items-center justify-center rounded-2xl glass-panel">
         <LogIn className="h-8 w-8 text-[var(--color-neon-violet)]" />
       </span>
       <div className="space-y-2">
-        <h2 className="font-display text-xl font-bold">Войдите, чтобы начать</h2>
+        <h2 className="font-display text-xl font-bold">{t('status.signIn.title')}</h2>
         <p className="text-balance text-sm text-muted-foreground">
-          {isVideo ? 'Видеорулетка' : 'Голосовая рулетка'} доступна авторизованным
-          пользователям. Это займёт минуту.
+          {t('status.signIn.body', {
+            mode: isVideo ? t('modeName.video') : t('modeName.voice'),
+          })}
         </p>
       </div>
       <div className="flex gap-3">
         <Button asChild variant="primary">
-          <Link href="/login">Войти</Link>
+          <Link href="/login">{tc('signIn')}</Link>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/register">Регистрация</Link>
+          <Link href="/register">{tc('signUp')}</Link>
         </Button>
       </div>
     </Shell>

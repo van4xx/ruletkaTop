@@ -17,6 +17,7 @@
  */
 import { memo, useEffect } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Bell,
@@ -44,6 +45,7 @@ const KIND: Record<AppNotification['kind'], { icon: LucideIcon; color: string }>
 };
 
 function NotificationsBellImpl() {
+  const t = useTranslations('chrome');
   const { items, unread, markAllRead } = useNotificationsPreview();
   const { open, toggle, close, triggerRef, panelRef } = usePopover();
   const reduceMotion = useReducedMotion();
@@ -64,7 +66,9 @@ function NotificationsBellImpl() {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={
-          unread > 0 ? `Уведомления, ${unread} новых` : 'Уведомления'
+          unread > 0
+            ? t('notifications.triggerAriaCount', { count: unread })
+            : t('notifications.triggerAria')
         }
         className={cn(
           'relative inline-flex h-9 w-9 items-center justify-center rounded-full',
@@ -106,7 +110,7 @@ function NotificationsBellImpl() {
           <motion.div
             ref={panelRef}
             role="dialog"
-            aria-label="Уведомления"
+            aria-label={t('notifications.panelAria')}
             initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
@@ -118,10 +122,10 @@ function NotificationsBellImpl() {
             )}
           >
             <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
-              <p className="font-display text-sm font-bold">Уведомления</p>
+              <p className="font-display text-sm font-bold">{t('notifications.title')}</p>
               {unread > 0 && (
                 <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[0.65rem] font-semibold text-primary tabular-nums">
-                  {unread} новых
+                  {t('notifications.unreadBadge', { count: unread })}
                 </span>
               )}
             </div>
@@ -132,7 +136,7 @@ function NotificationsBellImpl() {
                   <Bell className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <p className="max-w-[14rem] text-sm text-muted-foreground">
-                  Здесь появятся новые события — заявки, подарки и звонки.
+                  {t('notifications.empty')}
                 </p>
               </div>
             ) : (
@@ -179,7 +183,7 @@ function NotificationsBellImpl() {
                   'focus-visible:ring-2 focus-visible:ring-ring',
                 )}
               >
-                Все уведомления
+                {t('notifications.viewAll')}
               </Link>
             </div>
           </motion.div>

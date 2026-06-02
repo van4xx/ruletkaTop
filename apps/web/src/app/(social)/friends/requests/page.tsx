@@ -14,6 +14,7 @@
  * without a manual reload.
  */
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -61,6 +62,7 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 type Tab = 'incoming' | 'outgoing';
 
 export default function FriendRequestsPage() {
+  const t = useTranslations('social');
   const { isAuthenticated, isReady } = useAuth();
   const [tab, setTab] = useState<Tab>('incoming');
   const qc = useQueryClient();
@@ -94,12 +96,12 @@ export default function FriendRequestsPage() {
     setBusyId(item.friendshipId);
     accept.mutate(item.friendshipId, {
       onSuccess: () => {
-        toast.success('Заявка принята', {
-          description: `${item.profile.nickname} теперь у вас в друзьях.`,
+        toast.success(t('requestAcceptedToast'), {
+          description: t('requestAcceptedDescription', { name: item.profile.nickname }),
         });
       },
       onError: (err) => {
-        toast.error(acceptErrorMessage(err));
+        toast.error(acceptErrorMessage(err, t));
       },
       onSettled: () => setBusyId(null),
     });
@@ -108,8 +110,8 @@ export default function FriendRequestsPage() {
   function onDecline(item: FriendRequestItem) {
     setBusyId(item.friendshipId);
     remove.mutate(item.friendshipId, {
-      onSuccess: () => toast.success('Заявка отклонена'),
-      onError: () => toast.error('Не удалось отклонить заявку.'),
+      onSuccess: () => toast.success(t('requestDeclinedToast')),
+      onError: () => toast.error(t('declineFailed')),
       onSettled: () => setBusyId(null),
     });
   }
@@ -117,8 +119,8 @@ export default function FriendRequestsPage() {
   function onCancel(item: FriendRequestItem) {
     setBusyId(item.friendshipId);
     remove.mutate(item.friendshipId, {
-      onSuccess: () => toast.success('Заявка отменена'),
-      onError: () => toast.error('Не удалось отменить заявку.'),
+      onSuccess: () => toast.success(t('requestCancelledToast')),
+      onError: () => toast.error(t('cancelFailed')),
       onSettled: () => setBusyId(null),
     });
   }
@@ -128,30 +130,30 @@ export default function FriendRequestsPage() {
       eyebrow={
         <>
           <UserPlus className="h-3.5 w-3.5 text-[var(--color-neon-violet)]" aria-hidden="true" />
-          Заявки в друзья
+          {t('requestsEyebrow')}
         </>
       }
       title={
         <>
-          Заявки <span className="text-gradient-neon">в друзья</span>
+          {t('requestsTitlePrefix')} <span className="text-gradient-neon">{t('requestsTitleAccent')}</span>
         </>
       }
-      lede="Принимайте входящие заявки и следите за отправленными. Принятые друзья появятся в разделе «Друзья»."
+      lede={t('requestsLede')}
       actions={
         <AddFriendDialog
-          trigger={<Button leadingIcon={<UserPlus className="h-4 w-4" />}>Добавить друга</Button>}
+          trigger={<Button leadingIcon={<UserPlus className="h-4 w-4" />}>{t('addFriend')}</Button>}
         />
       }
     >
       {isReady && !isAuthenticated ? (
-        <SignInRequired description="Войдите, чтобы видеть заявки в друзья и отправлять новые." />
+        <SignInRequired description={t('signInToSeeRequests')} />
       ) : (
         <div className="mx-auto max-w-2xl space-y-6">
           <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
             <TabsList className="w-full sm:w-auto">
               <TabsTrigger value="incoming" className="flex-1 sm:flex-none">
                 <ArrowDownLeft className="h-4 w-4" aria-hidden="true" />
-                Входящие
+                {t('tabIncoming')}
                 {incoming.length > 0 && (
                   <span className="ml-1.5 rounded-full bg-[var(--color-neon-magenta)]/20 px-1.5 text-[0.6875rem] font-semibold text-[var(--color-neon-magenta)]">
                     {incoming.length}
@@ -160,7 +162,7 @@ export default function FriendRequestsPage() {
               </TabsTrigger>
               <TabsTrigger value="outgoing" className="flex-1 sm:flex-none">
                 <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-                Исходящие
+                {t('tabOutgoing')}
                 {outgoing.length > 0 && (
                   <span className="ml-1.5 rounded-full bg-white/10 px-1.5 text-[0.6875rem] font-semibold text-muted-foreground">
                     {outgoing.length}
@@ -175,15 +177,15 @@ export default function FriendRequestsPage() {
                 <CardGridSkeleton count={3} />
               ) : requestsQuery.isError ? (
                 <ErrorState
-                  title="Не удалось загрузить заявки"
-                  description="Проверьте соединение и попробуйте ещё раз."
+                  title={t('loadRequestsError')}
+                  description={t('loadRequestsErrorDescription')}
                   onRetry={() => void requestsQuery.refetch()}
                 />
               ) : incoming.length === 0 ? (
                 <EmptyState
                   icon={<Inbox className="h-6 w-6" />}
-                  title="Нет входящих заявок"
-                  description="Когда кто-то захочет добавить вас в друзья, заявка появится здесь."
+                  title={t('noIncomingTitle')}
+                  description={t('noIncomingDescription')}
                 />
               ) : (
                 <ul className="space-y-3">
@@ -203,21 +205,21 @@ export default function FriendRequestsPage() {
                               disabled={busyId === item.friendshipId}
                               onClick={() => onAccept(item)}
                             >
-                              Принять
+                              {t('accept')}
                             </Button>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <IconButton
                                   variant="ghost"
                                   size="sm"
-                                  aria-label="Отклонить заявку"
+                                  aria-label={t('declineRequest')}
                                   disabled={busyId === item.friendshipId}
                                   onClick={() => onDecline(item)}
                                 >
                                   <X aria-hidden="true" />
                                 </IconButton>
                               </TooltipTrigger>
-                              <TooltipContent>Отклонить</TooltipContent>
+                              <TooltipContent>{t('decline')}</TooltipContent>
                             </Tooltip>
                           </>
                         }
@@ -234,15 +236,15 @@ export default function FriendRequestsPage() {
                 <CardGridSkeleton count={2} />
               ) : requestsQuery.isError ? (
                 <ErrorState
-                  title="Не удалось загрузить заявки"
-                  description="Проверьте соединение и попробуйте ещё раз."
+                  title={t('loadRequestsError')}
+                  description={t('loadRequestsErrorDescription')}
                   onRetry={() => void requestsQuery.refetch()}
                 />
               ) : outgoing.length === 0 ? (
                 <EmptyState
                   icon={<Send className="h-6 w-6" />}
-                  title="Нет исходящих заявок"
-                  description="Отправьте заявку по ID профиля — она появится здесь и будет ждать ответа."
+                  title={t('noOutgoingTitle')}
+                  description={t('noOutgoingDescription')}
                   action={
                     <AddFriendDialog
                       trigger={
@@ -251,7 +253,7 @@ export default function FriendRequestsPage() {
                           size="sm"
                           leadingIcon={<UserPlus className="h-4 w-4" />}
                         >
-                          Отправить заявку
+                          {t('sendRequest')}
                         </Button>
                       }
                     />
@@ -269,7 +271,7 @@ export default function FriendRequestsPage() {
                           <>
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-xs font-medium text-muted-foreground">
                               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                              Ожидает
+                              {t('pending')}
                             </span>
                             <Button
                               variant="outline"
@@ -279,7 +281,7 @@ export default function FriendRequestsPage() {
                               disabled={busyId === item.friendshipId}
                               onClick={() => onCancel(item)}
                             >
-                              Отменить
+                              {t('cancel')}
                             </Button>
                           </>
                         }
@@ -338,11 +340,11 @@ function RequestRow({
   );
 }
 
-/** Map an accept failure to a friendly Russian message. */
-function acceptErrorMessage(err: unknown): string {
+/** Map an accept failure to a friendly, localized message. */
+function acceptErrorMessage(err: unknown, t: (key: string) => string): string {
   if (err instanceof ApiClientError) {
-    if (err.status === 404) return 'Заявка не найдена — возможно, она уже обработана.';
-    if (err.status === 403) return 'Эта заявка адресована не вам.';
+    if (err.status === 404) return t('acceptNotFound');
+    if (err.status === 403) return t('acceptForbidden');
   }
-  return 'Не удалось принять заявку.';
+  return t('acceptFailed');
 }

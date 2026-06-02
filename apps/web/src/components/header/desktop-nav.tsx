@@ -11,6 +11,7 @@
  */
 import { memo } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { LayoutGroup, motion } from 'framer-motion';
 import { PRIMARY_NAV } from '@/config/nav';
 import { cn } from '@/lib/cn';
@@ -21,10 +22,12 @@ interface DesktopNavProps {
 }
 
 function DesktopNavImpl({ pathname }: DesktopNavProps) {
+  const t = useTranslations('chrome');
+  const tn = useTranslations('nav');
   return (
     <LayoutGroup id="primary-nav">
       <nav
-        aria-label="Основная навигация"
+        aria-label={t('desktopNav.aria')}
         className="relative hidden items-center gap-1 lg:flex"
       >
         {PRIMARY_NAV.map((item) => {
@@ -35,7 +38,7 @@ function DesktopNavImpl({ pathname }: DesktopNavProps) {
               key={item.key}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              title={item.description}
+              title={tn(`${item.key}.description`)}
               className={cn(
                 'relative inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium',
                 'outline-none transition-colors duration-200',
@@ -57,7 +60,7 @@ function DesktopNavImpl({ pathname }: DesktopNavProps) {
                 </motion.span>
               )}
               <Icon className="h-4 w-4" aria-hidden="true" />
-              <span>{item.label}</span>
+              <span>{tn(`${item.key}.label`)}</span>
             </Link>
           );
         })}

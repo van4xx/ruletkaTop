@@ -13,6 +13,7 @@
  * (TanStack infinite query). Loading / empty / error states are all handled.
  */
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Bell, BellRing, CheckCheck } from 'lucide-react';
 import { Button } from '@ruletka/ui';
 import { useAuth } from '@/features/auth';
@@ -25,6 +26,7 @@ import { NotificationList, NotificationListSkeleton } from '@/components/notific
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 export default function NotificationsPage() {
+  const t = useTranslations('misc');
   const { isAuthenticated, isReady } = useAuth();
   const {
     items,
@@ -46,15 +48,15 @@ export default function NotificationsPage() {
       eyebrow={
         <>
           <BellRing className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-          Уведомления
+          {t('notifications.eyebrow')}
         </>
       }
       title={
         <>
-          Центр <span className="text-gradient-neon">уведомлений</span>
+          {t('notifications.titlePrefix')} <span className="text-gradient-neon">{t('notifications.titleAccent')}</span>
         </>
       }
-      lede="Заявки в друзья, сообщения, подарки и звонки — всё в одном месте и в реальном времени."
+      lede={t('notifications.lede')}
       actions={
         showList ? (
           <Button
@@ -63,7 +65,7 @@ export default function NotificationsPage() {
             onClick={markAllRead}
             disabled={unread === 0}
           >
-            Прочитать всё
+            {t('notifications.markAll')}
             {unread > 0 && (
               <span className="ml-1 rounded-full bg-[var(--color-neon-magenta)]/20 px-1.5 text-xs font-semibold text-[var(--color-neon-magenta)]">
                 {unread}
@@ -74,12 +76,12 @@ export default function NotificationsPage() {
       }
     >
       {isReady && !isAuthenticated ? (
-        <SignInRequired description="Войдите, чтобы получать уведомления о заявках, сообщениях и подарках." />
+        <SignInRequired description={t('notifications.signInDesc')} />
       ) : isError && !showList ? (
         <div className="mx-auto max-w-2xl">
           <ErrorState
-            title="Не удалось загрузить уведомления"
-            description="Данные временно недоступны. Попробуйте обновить."
+            title={t('notifications.errorTitle')}
+            description={t('notifications.errorDesc')}
             onRetry={refetch}
           />
         </div>
@@ -95,11 +97,11 @@ export default function NotificationsPage() {
         >
           <EmptyState
             icon={<Bell className="h-6 w-6" />}
-            title="Пока тихо"
-            description="Новые уведомления появятся здесь сразу, как только что-то произойдёт — заявка в друзья, сообщение или подарок."
+            title={t('notifications.emptyTitle')}
+            description={t('notifications.emptyDesc')}
           />
           <p className="mx-auto mt-4 max-w-md text-center text-xs text-muted-foreground/70">
-            Уведомления приходят в реальном времени, пока открыт сайт.
+            {t('notifications.emptyHint')}
           </p>
         </motion.div>
       ) : (
@@ -108,7 +110,7 @@ export default function NotificationsPage() {
           {hasMore && (
             <div className="flex justify-center">
               <Button variant="outline" onClick={fetchMore} loading={isFetchingMore}>
-                Показать ещё
+                {t('notifications.showMore')}
               </Button>
             </div>
           )}

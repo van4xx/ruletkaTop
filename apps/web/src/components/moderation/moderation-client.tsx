@@ -6,11 +6,13 @@
  * the page can set metadata while this owns the interactive, gated content.
  */
 import { ShieldAlert } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { EconomyShell } from '@/components/economy/economy-shell';
 import { RequireAdmin } from '@/features/moderation/require-admin';
 import { ModerationQueue } from './moderation-queue';
 
 export function ModerationClient() {
+  const t = useTranslations('misc');
   return (
     <EconomyShell
       eyebrow={
@@ -21,10 +23,10 @@ export function ModerationClient() {
       }
       title={
         <>
-          Очередь <span className="text-gradient-neon">модерации</span>
+          {t('moderation.titlePrefix')} <span className="text-gradient-neon">{t('moderation.titleAccent')}</span>
         </>
       }
-      lede="Проверяйте отмеченные ИИ события: улики, метки и авто-действия. Подтверждайте нарушения или отклоняйте ложные срабатывания."
+      lede={t('moderation.lede')}
     >
       <RequireAdmin>
         <ModerationQueue />

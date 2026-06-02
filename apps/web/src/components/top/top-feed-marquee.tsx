@@ -8,6 +8,7 @@
  * The two API lanes (`left`, `right`) drive the two rows; cards are ordered by
  * priority (spend) descending, so rank = index + 1 within a lane.
  */
+import { useTranslations } from 'next-intl';
 import { ArrowRight } from 'lucide-react';
 import type { TopPlacement } from '@ruletka/shared-types';
 import { Marquee, Skeleton } from '@ruletka/ui';
@@ -57,6 +58,7 @@ export interface TopFeedMarqueeProps {
 }
 
 export function TopFeedMarquee({ left, right, isLoading }: TopFeedMarqueeProps) {
+  const t = useTranslations('economy');
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -72,14 +74,14 @@ export function TopFeedMarquee({ left, right, isLoading }: TopFeedMarqueeProps) 
       {left.length > 0 ? (
         <Row placements={left} direction="right" />
       ) : (
-        <LaneHint label="Верхняя дорожка свободна — займите место!" />
+        <LaneHint label={t('topFeed.topLaneFree')} />
       )}
 
       {/* Bottom row → scrolls LEFT. */}
       {right.length > 0 ? (
         <Row placements={right} direction="left" />
       ) : (
-        <LaneHint label="Нижняя дорожка свободна — займите место!" />
+        <LaneHint label={t('topFeed.bottomLaneFree')} />
       )}
     </div>
   );

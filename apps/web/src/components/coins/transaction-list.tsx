@@ -14,6 +14,7 @@ import {
   RotateCcw,
   ShoppingCart,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { CoinTransaction, CoinTxType } from '@ruletka/shared-types';
 import { Badge, Button, Skeleton, Spinner } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -22,17 +23,18 @@ import { EmptyState, ErrorState } from '@/components/economy/states';
 
 const TX_META: Record<
   CoinTxType,
-  { label: string; icon: typeof Gift; tone: 'in' | 'out' }
+  { icon: typeof Gift; tone: 'in' | 'out' }
 > = {
-  purchase: { label: 'Покупка монет', icon: ShoppingCart, tone: 'in' },
-  bonus: { label: 'Бонус', icon: Sparkles, tone: 'in' },
-  gift_in: { label: 'Подарок получен', icon: Gift, tone: 'in' },
-  refund: { label: 'Возврат', icon: RotateCcw, tone: 'in' },
-  gift_out: { label: 'Подарок отправлен', icon: Gift, tone: 'out' },
-  top: { label: 'Место в Топе', icon: Crown, tone: 'out' },
+  purchase: { icon: ShoppingCart, tone: 'in' },
+  bonus: { icon: Sparkles, tone: 'in' },
+  gift_in: { icon: Gift, tone: 'in' },
+  refund: { icon: RotateCcw, tone: 'in' },
+  gift_out: { icon: Gift, tone: 'out' },
+  top: { icon: Crown, tone: 'out' },
 };
 
 function TxRow({ tx }: { tx: CoinTransaction }) {
+  const t = useTranslations('economy');
   const meta = TX_META[tx.type];
   const Icon = meta.icon;
   const positive = tx.delta > 0;
@@ -48,7 +50,7 @@ function TxRow({ tx }: { tx: CoinTransaction }) {
         <Icon className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{meta.label}</p>
+        <p className="truncate text-sm font-medium text-foreground">{t(`txType.${tx.type}`)}</p>
         <p className="text-xs text-muted-foreground">{formatDateTime(tx.createdAt)}</p>
       </div>
       <div className="flex flex-col items-end">
@@ -67,7 +69,7 @@ function TxRow({ tx }: { tx: CoinTransaction }) {
           {formatNumber(tx.delta)}
         </span>
         <span className="text-[0.6875rem] text-muted-foreground tabular-nums">
-          баланс {formatNumber(tx.balanceAfter)}
+          {t('transactionList.balanceLine', { amount: formatNumber(tx.balanceAfter) })}
         </span>
       </div>
     </li>
@@ -93,6 +95,7 @@ export function TransactionList({
   onLoadMore,
   onRetry,
 }: TransactionListProps) {
+  const t = useTranslations('economy');
   if (isLoading) {
     return (
       <div className="glass-panel divide-y divide-border/50 rounded-2xl">
@@ -113,8 +116,8 @@ export function TransactionList({
   if (isError) {
     return (
       <ErrorState
-        title="Не удалось загрузить историю"
-        description="История операций временно недоступна."
+        title={t('transactionList.errorTitle')}
+        description={t('transactionList.errorDescription')}
         onRetry={onRetry}
       />
     );
@@ -124,8 +127,8 @@ export function TransactionList({
     return (
       <EmptyState
         icon={<ShoppingCart className="h-6 w-6" />}
-        title="Пока нет операций"
-        description="Купите монеты или отправьте первый подарок — операции появятся здесь."
+        title={t('transactionList.emptyTitle')}
+        description={t('transactionList.emptyDescription')}
       />
     );
   }
@@ -146,7 +149,7 @@ export function TransactionList({
             onClick={onLoadMore}
             disabled={isFetchingNextPage}
           >
-            {isFetchingNextPage ? <Spinner size="sm" tone="current" /> : 'Показать ещё'}
+            {isFetchingNextPage ? <Spinner size="sm" tone="current" /> : t('transactionList.loadMore')}
           </Button>
         </div>
       )}

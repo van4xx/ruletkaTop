@@ -6,20 +6,22 @@
  * hub without competing with the quick-launch CTAs below.
  */
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/features/auth';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
-/** Russian time-of-day greeting. */
-function greeting(date = new Date()): string {
+/** Time-of-day greeting message key. */
+function greetingKey(date = new Date()): string {
   const h = date.getHours();
-  if (h >= 5 && h < 12) return 'Доброе утро';
-  if (h >= 12 && h < 18) return 'Добрый день';
-  if (h >= 18 && h < 23) return 'Добрый вечер';
-  return 'Доброй ночи';
+  if (h >= 5 && h < 12) return 'dashboard.greetingMorning';
+  if (h >= 12 && h < 18) return 'dashboard.greetingDay';
+  if (h >= 18 && h < 23) return 'dashboard.greetingEvening';
+  return 'dashboard.greetingNight';
 }
 
 export function DashboardWelcome() {
+  const t = useTranslations('misc');
   const { user } = useAuth();
   const name = user?.nickname;
 
@@ -36,10 +38,10 @@ export function DashboardWelcome() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-neon-cyan)] opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-neon-cyan)]" />
           </span>
-          Сейчас в эфире — присоединяйся
+          {t('dashboard.liveBadge')}
         </span>
         <h1 className="font-display text-3xl font-extrabold leading-[1.05] tracking-tight sm:text-4xl">
-          {greeting()}
+          {t(greetingKey())}
           {name ? (
             <>
               ,<br className="sm:hidden" />{' '}
@@ -48,7 +50,7 @@ export function DashboardWelcome() {
           ) : null}
         </h1>
         <p className="mt-3 max-w-xl text-balance text-muted-foreground">
-          Твой центр управления: запусти рулетку, загляни в Топ и оставайся на связи с друзьями.
+          {t('dashboard.welcomeLede')}
         </p>
       </div>
     </motion.header>

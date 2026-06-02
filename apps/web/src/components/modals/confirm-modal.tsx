@@ -7,6 +7,7 @@
  * confirm button shows a spinner until it settles, then the modal closes.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Button,
   DialogDescription,
@@ -18,16 +19,22 @@ import { useModal, useModalProps } from '@/lib/stores/modal-store';
 
 export function ConfirmModal() {
   const { close } = useModal();
+  const t = useTranslations('chrome');
+  const tc = useTranslations('common');
   const {
     title,
     body,
-    confirmLabel = 'Подтвердить',
-    cancelLabel = 'Отмена',
+    confirmLabel,
+    cancelLabel,
     danger = false,
     onConfirm,
     onCancel,
   } = useModalProps<'confirm'>();
   const [busy, setBusy] = useState(false);
+
+  // Caller-provided copy wins; otherwise fall back to the localized defaults.
+  const confirmText = confirmLabel ?? t('modals.confirm.confirm');
+  const cancelText = cancelLabel ?? tc('cancel');
 
   async function handleConfirm() {
     try {
@@ -58,7 +65,7 @@ export function ConfirmModal() {
       </DialogHeader>
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={handleCancel} disabled={busy}>
-          {cancelLabel}
+          {cancelText}
         </Button>
         <Button
           type="button"
@@ -66,7 +73,7 @@ export function ConfirmModal() {
           loading={busy}
           onClick={handleConfirm}
         >
-          {confirmLabel}
+          {confirmText}
         </Button>
       </DialogFooter>
     </>

@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Avatar } from '@ruletka/ui';
 import { useVolumeMeter } from '@/hooks/roulette/use-volume-meter';
 import { cn } from '@/lib/cn';
@@ -41,6 +42,7 @@ export function VoiceVisualizer({
   compact = false,
   className,
 }: VoiceVisualizerProps) {
+  const t = useTranslations('roulette');
   const bands = compact ? 18 : 32;
   const { bandsRef, levelRef, activeRef } = useVolumeMeter(stream, bands);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -171,7 +173,7 @@ export function VoiceVisualizer({
 
       {/* SR-only live status so screen-reader users know audio is active. */}
       <span className="sr-only" role="status">
-        {activeRef.current ? `${name}: аудио активно` : `${name}`}
+        {activeRef.current ? t('voiceVisualizer.audioActive', { name }) : name}
       </span>
     </div>
   );

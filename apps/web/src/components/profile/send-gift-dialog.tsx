@@ -6,6 +6,7 @@
  * wallet invalidation stay centralised. Sends with `context: 'profile'`.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Gift as GiftIcon, Coins, Lock } from 'lucide-react';
 import type { Gift } from '@ruletka/shared-types';
 import {
@@ -41,6 +42,8 @@ export function SendGiftDialog({
   recipientName: string;
   onSent?: () => void;
 }) {
+  const t = useTranslations('profile');
+  const tc = useTranslations('common');
   const { isPremium } = useAuth();
   const giftsQuery = useGifts();
   const grouped = useGiftsByRarity(giftsQuery.data);
@@ -65,8 +68,8 @@ export function SendGiftDialog({
       },
       {
         onSuccess: () => {
-          toast.success('Подарок отправлен!', {
-            description: `${selected.title} → ${recipientName}`,
+          toast.success(t('sendGift.sentTitle'), {
+            description: t('sendGift.sentDescription', { title: selected.title, name: recipientName }),
           });
           reset();
           onOpenChange(false);
@@ -75,10 +78,10 @@ export function SendGiftDialog({
         onError: (err) => {
           const msg =
             err instanceof ApiClientError && err.status === 422
-              ? 'Недостаточно монет.'
+              ? t('sendGift.errorInsufficient')
               : err instanceof ApiClientError && err.status === 403
-                ? 'Этот подарок доступен только Premium-пользователям.'
-                : 'Не удалось отправить подарок.';
+                ? t('sendGift.errorPremiumOnly')
+                : t('sendGift.errorGeneric');
           toast.error(msg);
         },
       },
@@ -95,16 +98,16 @@ export function SendGiftDialog({
     >
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Подарок для {recipientName}</DialogTitle>
-          <DialogDescription>Выберите подарок — стоимость спишется с вашего баланса.</DialogDescription>
+          <DialogTitle>{t('sendGift.title', { name: recipientName })}</DialogTitle>
+          <DialogDescription>{t('sendGift.description')}</DialogDescription>
         </DialogHeader>
 
         {giftsQuery.isLoading ? (
           <div className="flex justify-center py-10">
-            <Spinner size="lg" tone="accent" label="Загрузка подарков" />
+            <Spinner size="lg" tone="accent" label={t('sendGift.loading')} />
           </div>
         ) : giftsQuery.isError ? (
-          <ErrorState onRetry={() => void giftsQuery.refetch()} description="Не удалось загрузить каталог подарков." />
+          <ErrorState onRetry={() => void giftsQuery.refetch()} description={t('sendGift.catalogError')} />
         ) : (
           <div className="max-h-[50vh] space-y-4 overflow-y-auto pr-1">
             {grouped.map(({ rarity, gifts }) => {
@@ -163,9 +166,9 @@ export function SendGiftDialog({
               <Textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value.slice(0, 200))}
-                placeholder="Добавьте сообщение (необязательно)"
+                placeholder={t('sendGift.messagePlaceholder')}
                 rows={2}
-                aria-label="Сообщение к подарку"
+                aria-label={t('sendGift.messageAria')}
               />
               <p className="mt-1 text-right text-xs text-muted-foreground">{message.length}/200</p>
             </div>
@@ -174,7 +177,7 @@ export function SendGiftDialog({
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Отмена
+            {tc('cancel')}
           </Button>
           <Button
             variant="primary"
@@ -183,7 +186,7 @@ export function SendGiftDialog({
             loading={sendGift.isPending}
             onClick={handleSend}
           >
-            {selected ? `Отправить за ${selected.priceCoins}` : 'Выберите подарок'}
+            {selected ? t('sendGift.submitWithPrice', { price: selected.priceCoins }) : t('sendGift.submitEmpty')}
           </Button>
         </DialogFooter>
       </DialogContent>

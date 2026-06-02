@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Send, X } from 'lucide-react';
 import { IconButton, Input } from '@ruletka/ui';
 import type { ChatLine } from '@/features/roulette/types';
@@ -22,6 +23,7 @@ export interface CallChatProps {
 }
 
 export function CallChat({ open, onClose, messages, onSend, peerName }: CallChatProps) {
+  const t = useTranslations('roulette');
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -48,11 +50,11 @@ export function CallChat({ open, onClose, messages, onSend, peerName }: CallChat
             'glass-panel pointer-events-auto flex flex-col overflow-hidden rounded-2xl',
             'h-[min(70vh,28rem)] w-full sm:w-80',
           )}
-          aria-label={`Чат с ${peerName}`}
+          aria-label={t('chat.ariaLabel', { name: peerName })}
         >
           <header className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-            <span className="font-display text-sm font-bold">Чат</span>
-            <IconButton aria-label="Закрыть чат" variant="ghost" size="sm" onClick={onClose}>
+            <span className="font-display text-sm font-bold">{t('chat.title')}</span>
+            <IconButton aria-label={t('chat.close')} variant="ghost" size="sm" onClick={onClose}>
               <X />
             </IconButton>
           </header>
@@ -60,7 +62,7 @@ export function CallChat({ open, onClose, messages, onSend, peerName }: CallChat
           <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
             {messages.length === 0 ? (
               <p className="mt-6 text-center text-xs text-muted-foreground">
-                Сообщения видны только вам двоим и исчезнут после звонка.
+                {t('chat.empty')}
               </p>
             ) : (
               messages.map((m) => (
@@ -87,14 +89,14 @@ export function CallChat({ open, onClose, messages, onSend, peerName }: CallChat
             <Input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Сообщение…"
+              placeholder={t('chat.placeholder')}
               maxLength={500}
-              aria-label="Текст сообщения"
+              aria-label={t('chat.messageAriaLabel')}
               className="h-10"
             />
             <IconButton
               type="submit"
-              aria-label="Отправить"
+              aria-label={t('chat.send')}
               variant="primary"
               size="md"
               disabled={!draft.trim()}

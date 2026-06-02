@@ -12,6 +12,7 @@
  *   • {@link PremiumUpsellCard} — a gradient-bordered card pitching premium with
  *     its headline perks; hidden for users who are already premium.
  */
+import { useTranslations } from 'next-intl';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Crown, Eye, Lock, Sparkles, TrendingUp } from 'lucide-react';
 import { Button } from '@ruletka/ui';
@@ -30,6 +31,7 @@ export function ProfileViewsPanel({
   isPremium: boolean;
   views: number;
 }) {
+  const t = useTranslations('profile');
   const { open } = useModal();
 
   if (isPremium) {
@@ -45,18 +47,18 @@ export function ProfileViewsPanel({
             <Eye className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
-            <h2 className="font-display text-base font-bold tracking-tight">Кто смотрел профиль</h2>
-            <p className="text-sm text-muted-foreground">Премиум-доступ активен</p>
+            <h2 className="font-display text-base font-bold tracking-tight">{t('premium.viewsTitle')}</h2>
+            <p className="text-sm text-muted-foreground">{t('premium.viewsPremiumActive')}</p>
           </div>
         </div>
         <div className="mt-4 flex items-baseline gap-2">
           <span className="font-display text-3xl font-extrabold tabular-nums text-gradient-neon">
             {formatNumber(views)}
           </span>
-          <span className="text-sm text-muted-foreground">просмотров профиля</span>
+          <span className="text-sm text-muted-foreground">{t('premium.viewsCountSuffix')}</span>
         </div>
         <p className="mt-3 rounded-xl bg-card/40 px-3.5 py-2.5 text-xs text-muted-foreground ring-1 ring-border/50">
-          Полный список посетителей с именами скоро появится — мы уже считаем каждый визит.
+          {t('premium.viewsRollingNote')}
         </p>
       </motion.div>
     );
@@ -66,7 +68,7 @@ export function ProfileViewsPanel({
   return (
     <button
       type="button"
-      onClick={() => open('premium', { reason: 'Узнайте, кто заходил в ваш профиль.' })}
+      onClick={() => open('premium', { reason: t('premium.viewsLockedReason') })}
       className={cn(
         'group relative w-full overflow-hidden rounded-3xl p-5 text-left ring-1 ring-border/60 transition-colors sm:p-6',
         'hover:ring-[var(--color-neon-violet)]/50',
@@ -83,15 +85,15 @@ export function ProfileViewsPanel({
             <Lock className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h2 className="font-display text-base font-bold tracking-tight">Кто смотрел профиль</h2>
+            <h2 className="font-display text-base font-bold tracking-tight">{t('premium.viewsTitle')}</h2>
             <p className="truncate text-sm text-muted-foreground">
-              {formatNumber(views)} просмотров · откройте с Премиумом
+              {t('premium.viewsLockedCaption', { count: formatNumber(views) })}
             </p>
           </div>
         </div>
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-neon-violet)]/15 px-2.5 py-1 text-[0.6875rem] font-semibold text-[var(--color-neon-violet)]">
           <Sparkles className="h-3 w-3" aria-hidden="true" />
-          Премиум
+          {t('premium.badge')}
         </span>
       </div>
     </button>
@@ -100,13 +102,14 @@ export function ProfileViewsPanel({
 
 /* ── Premium upsell card ──────────────────────────────────────────────── */
 
-const PERKS: Array<{ icon: typeof Eye; text: string }> = [
-  { icon: Eye, text: 'Кто смотрел ваш профиль' },
-  { icon: TrendingUp, text: 'Приоритет в поиске собеседников' },
-  { icon: Crown, text: 'Эксклюзивные подарки и значок' },
+const PERKS: Array<{ icon: typeof Eye; key: 'perkViews' | 'perkPriority' | 'perkGifts' }> = [
+  { icon: Eye, key: 'perkViews' },
+  { icon: TrendingUp, key: 'perkPriority' },
+  { icon: Crown, key: 'perkGifts' },
 ];
 
 export function PremiumUpsellCard() {
+  const t = useTranslations('profile');
   const { open } = useModal();
   const reduce = useReducedMotion();
 
@@ -130,19 +133,20 @@ export function PremiumUpsellCard() {
             </span>
             <div>
               <h2 className="font-display text-lg font-bold tracking-tight">
-                Откройте <span className="text-gradient-neon">Премиум</span>
+                {t('premium.upsellTitlePrefix')}{' '}
+                <span className="text-gradient-neon">{t('premium.upsellTitleHighlight')}</span>
               </h2>
-              <p className="text-sm text-muted-foreground">Больше возможностей для общения</p>
+              <p className="text-sm text-muted-foreground">{t('premium.upsellSubtitle')}</p>
             </div>
           </div>
 
           <ul className="mt-4 grid gap-2">
-            {PERKS.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-center gap-2.5 text-sm text-foreground/90">
+            {PERKS.map(({ icon: Icon, key }) => (
+              <li key={key} className="flex items-center gap-2.5 text-sm text-foreground/90">
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-card/60 text-[var(--color-neon-violet)] ring-1 ring-border/50">
                   <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                 </span>
-                {text}
+                {t(`premium.${key}`)}
               </li>
             ))}
           </ul>
@@ -154,7 +158,7 @@ export function PremiumUpsellCard() {
             leadingIcon={<Sparkles className="h-4 w-4" aria-hidden="true" />}
             onClick={() => open('premium', {})}
           >
-            Стать Премиум
+            {t('premium.upsellButton')}
           </Button>
         </div>
       </div>

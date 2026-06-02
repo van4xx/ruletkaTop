@@ -5,6 +5,7 @@
  * the gold coin treatment. Handles loading (skeleton) and error states inline.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { animate, motion, useReducedMotion } from 'framer-motion';
 import { TrendingUp, Wallet as WalletIcon } from 'lucide-react';
 import { CoinIcon, Skeleton } from '@ruletka/ui';
@@ -51,6 +52,7 @@ export interface BalanceHeroProps {
 }
 
 export function BalanceHero({ balance, isLoading, isError, className }: BalanceHeroProps) {
+  const t = useTranslations('economy');
   const ready = !isLoading && !isError && balance != null;
   const display = useCountUp(balance ?? 0, ready);
 
@@ -72,7 +74,7 @@ export function BalanceHero({ balance, isLoading, isError, className }: BalanceH
         <div>
           <span className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <WalletIcon className="h-4 w-4" aria-hidden="true" />
-            Ваш баланс
+            {t('balanceHero.label')}
           </span>
           <div className="mt-2 flex items-center gap-3">
             <CoinIcon size="xl" glow className="text-[var(--coin)]" />
@@ -83,21 +85,23 @@ export function BalanceHero({ balance, isLoading, isError, className }: BalanceH
             ) : (
               <span
                 className="font-display text-5xl font-extrabold tabular-nums leading-none text-foreground"
-                aria-label={`${formatNumber(balance ?? 0)} монет`}
+                aria-label={t('balanceHero.amountAria', { amount: formatNumber(balance ?? 0) })}
               >
                 {formatNumber(display)}
               </span>
             )}
-            <span className="self-end pb-1 text-base font-medium text-muted-foreground">монет</span>
+            <span className="self-end pb-1 text-base font-medium text-muted-foreground">
+              {t('balanceHero.coinsSuffix')}
+            </span>
           </div>
           {isError && (
-            <p className="mt-2 text-sm text-destructive">Не удалось обновить баланс.</p>
+            <p className="mt-2 text-sm text-destructive">{t('balanceHero.error')}</p>
           )}
         </div>
 
         <div className="inline-flex items-center gap-2 self-start rounded-2xl border border-border/60 bg-card/40 px-4 py-3 text-sm text-muted-foreground sm:self-auto">
           <TrendingUp className="h-4 w-4 shrink-0 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-          <span>Монеты — за подарки, Топ и больше</span>
+          <span>{t('balanceHero.hint')}</span>
         </div>
       </div>
     </motion.div>

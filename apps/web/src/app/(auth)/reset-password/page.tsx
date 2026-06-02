@@ -1,20 +1,25 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { getTranslations } from 'next-intl/server';
 import { Spinner } from '@ruletka/ui';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { ResetPasswordForm } from '@/components/auth/reset-password-form';
 
-export const metadata: Metadata = {
-  title: 'Новый пароль',
-  description: 'Задайте новый пароль для аккаунта ruletka.top.',
-  // Token-bearing utility flow — never index.
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('auth');
+  return {
+    title: t('meta.resetPassword.title'),
+    description: t('meta.resetPassword.description'),
+    // Token-bearing utility flow — never index.
+    robots: { index: false, follow: false },
+  };
+}
 
-function FormFallback() {
+async function FormFallback() {
+  const t = await getTranslations('auth');
   return (
     <div className="flex min-h-[20rem] items-center justify-center">
-      <Spinner size="lg" label="Загрузка" />
+      <Spinner size="lg" label={t('shell.loading')} />
     </div>
   );
 }
@@ -25,9 +30,10 @@ function FormFallback() {
  * The form reads `?token=` via `useSearchParams`, so it's wrapped in `Suspense`
  * (App Router requirement for client search-param reads).
  */
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage() {
+  const t = await getTranslations('auth');
   return (
-    <AuthShell pitch="Один шаг — и снова в эфире">
+    <AuthShell pitch={t('shell.pitch.resetPassword')}>
       <Suspense fallback={<FormFallback />}>
         <ResetPasswordForm />
       </Suspense>

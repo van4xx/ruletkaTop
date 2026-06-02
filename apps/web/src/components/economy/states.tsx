@@ -6,6 +6,7 @@
  * consistent (and avoids re-implementing skeleton grids four times).
  */
 import type { ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { motion, type Variants } from 'framer-motion';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button, Skeleton } from '@ruletka/ui';
@@ -47,8 +48,8 @@ export function CardGridSkeleton({ count = 4, className }: { count?: number; cla
 
 /** Inline error panel with a retry affordance. */
 export function ErrorState({
-  title = 'Что-то пошло не так',
-  description = 'Не удалось загрузить данные. Попробуйте ещё раз.',
+  title,
+  description,
   onRetry,
   className,
 }: {
@@ -57,6 +58,8 @@ export function ErrorState({
   onRetry?: () => void;
   className?: string;
 }) {
+  const t = useTranslations('economy');
+  const tc = useTranslations('common');
   return (
     <motion.div
       role="alert"
@@ -76,12 +79,14 @@ export function ErrorState({
         <AlertTriangle className="relative h-6 w-6" aria-hidden="true" />
       </span>
       <div className="space-y-1">
-        <h3 className="font-display text-lg font-bold">{title}</h3>
-        <p className="mx-auto max-w-md text-sm text-muted-foreground">{description}</p>
+        <h3 className="font-display text-lg font-bold">{title ?? t('states.errorTitle')}</h3>
+        <p className="mx-auto max-w-md text-sm text-muted-foreground">
+          {description ?? t('states.errorDescription')}
+        </p>
       </div>
       {onRetry && (
         <Button variant="outline" size="sm" leadingIcon={<RefreshCw className="h-4 w-4" />} onClick={onRetry}>
-          Повторить
+          {tc('retry')}
         </Button>
       )}
     </motion.div>

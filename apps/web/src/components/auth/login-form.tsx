@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { AtSign, CircleAlert } from 'lucide-react';
 import { Button, Input, toast } from '@ruletka/ui';
 import { loginFormSchema, type LoginFormValues } from '@/features/auth/schemas';
@@ -28,6 +29,7 @@ function safeNext(next: string | null): string {
 }
 
 export function LoginForm() {
+  const t = useTranslations('auth');
   const params = useSearchParams();
   const login = useLogin();
 
@@ -44,7 +46,7 @@ export function LoginForm() {
   const onSubmit = handleSubmit((values) => {
     login.mutate(values, {
       onSuccess: () => {
-        toast.success('С возвращением!');
+        toast.success(t('login.successToast'));
         // Hard navigation: guarantees the freshly-set presence + httpOnly refresh
         // cookies ride the next request. A client router.replace here races Next's
         // prefetch/router cache and bounced to /login; the dashboard re-acquires the
@@ -56,7 +58,7 @@ export function LoginForm() {
 
   const apiMessage =
     login.error?.status === 401
-      ? 'Неверный email или пароль'
+      ? t('login.invalidCredentials')
       : login.error?.message;
 
   const busy = isSubmitting || login.isPending;
@@ -64,9 +66,9 @@ export function LoginForm() {
   return (
     <div>
       <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold tracking-tight">С возвращением</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">{t('login.title')}</h1>
         <p className="mt-2 text-muted-foreground">
-          Войди, чтобы продолжить общение в эфире.
+          {t('login.subtitle')}
         </p>
       </header>
 
@@ -86,7 +88,7 @@ export function LoginForm() {
       </AnimatePresence>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <FormField label="Email" required error={errors.email?.message}>
+        <FormField label={t('fields.email')} required error={errors.email?.message}>
           {(field) => (
             <Input
               {...field}
@@ -94,16 +96,16 @@ export function LoginForm() {
               inputMode="email"
               autoComplete="email"
               autoFocus
-              placeholder="you@example.com"
+              placeholder={t('fields.emailPlaceholder')}
               leadingIcon={<AtSign />}
               {...register('email')}
             />
           )}
         </FormField>
 
-        <FormField label="Пароль" required error={errors.password?.message}>
+        <FormField label={t('fields.password')} required error={errors.password?.message}>
           {(field) => (
-            <PasswordField {...field} autoComplete="current-password" placeholder="••••••••" {...register('password')} />
+            <PasswordField {...field} autoComplete="current-password" placeholder={t('fields.passwordPlaceholder')} {...register('password')} />
           )}
         </FormField>
 
@@ -112,22 +114,22 @@ export function LoginForm() {
             href="/forgot-password"
             className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-[var(--color-neon-cyan)] hover:underline"
           >
-            Забыли пароль?
+            {t('login.forgotPassword')}
           </Link>
         </div>
 
         <Button type="submit" variant="primary" size="lg" block loading={busy}>
-          Войти
+          {t('login.submit')}
         </Button>
       </form>
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
-        Нет аккаунта?{' '}
+        {t('login.noAccount')}{' '}
         <Link
           href="/register"
           className="font-semibold text-foreground underline-offset-4 transition-colors hover:text-[var(--color-neon-cyan)] hover:underline"
         >
-          Создать
+          {t('login.createAccount')}
         </Link>
       </p>
     </div>

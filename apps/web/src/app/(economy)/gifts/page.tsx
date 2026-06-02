@@ -9,6 +9,7 @@
  *   (from GET /profile/me) both in the UI and enforced server-side.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Crown, Gift as GiftIcon, Sparkles } from 'lucide-react';
 import type { Gift } from '@ruletka/shared-types';
@@ -23,6 +24,7 @@ import { useIsPremium } from '@/features/economy/use-me';
 import { useCoinBalance } from '@/hooks/wallet/use-wallet';
 
 export default function GiftsPage() {
+  const t = useTranslations('economy');
   const gifts = useGifts();
   const grouped = useGiftsByRarity(gifts.data);
   const isPremium = useIsPremium();
@@ -35,20 +37,21 @@ export default function GiftsPage() {
         eyebrow={
           <>
             <Sparkles className="h-3.5 w-3.5 text-[var(--color-neon-magenta)]" aria-hidden="true" />
-            Магазин подарков
+            {t('gifts.eyebrow')}
           </>
         }
         title={
           <>
-            Дарите <span className="text-gradient-neon">эмоции</span>
+            {t('gifts.titlePrefix')}{' '}
+            <span className="text-gradient-neon">{t('gifts.titleHighlight')}</span>
           </>
         }
-        lede="Анимированные подарки для звонков, чатов и профилей. Чем выше редкость — тем ярче впечатление."
+        lede={t('gifts.lede')}
         actions={
           <div className="flex items-center gap-3">
             <CoinBalance amount={balance ?? 0} variant="pill" />
             <Button asChild variant="outline" size="sm">
-              <Link href="/coins">Пополнить</Link>
+              <Link href="/coins">{t('gifts.topUp')}</Link>
             </Button>
           </div>
         }
@@ -61,11 +64,11 @@ export default function GiftsPage() {
                 <Crown className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
               </span>
               <p className="text-sm text-foreground">
-                Некоторые подарки доступны только премиум-участникам.
+                {t('gifts.premiumBannerText')}
               </p>
             </div>
             <Button asChild size="sm" variant="secondary">
-              <Link href="/premium">Подробнее о премиуме</Link>
+              <Link href="/premium">{t('gifts.premiumBannerCta')}</Link>
             </Button>
           </div>
         )}
@@ -74,15 +77,15 @@ export default function GiftsPage() {
           <CardGridSkeleton count={8} className="lg:grid-cols-4" />
         ) : gifts.isError ? (
           <ErrorState
-            title="Не удалось загрузить подарки"
-            description="Каталог подарков временно недоступен."
+            title={t('gifts.errorTitle')}
+            description={t('gifts.errorDescription')}
             onRetry={() => gifts.refetch()}
           />
         ) : grouped.length === 0 ? (
           <EmptyState
             icon={<GiftIcon className="h-6 w-6" />}
-            title="Подарков пока нет"
-            description="Каталог скоро пополнится — загляните позже."
+            title={t('gifts.emptyTitle')}
+            description={t('gifts.emptyDescription')}
           />
         ) : (
           <div className="space-y-12">

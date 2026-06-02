@@ -8,6 +8,7 @@
  * `objectIdSchema` before the mutation fires.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { UserPlus } from 'lucide-react';
 import { objectIdSchema } from '@ruletka/shared-types';
 import {
@@ -27,6 +28,8 @@ import { ApiClientError } from '@/lib/api';
 import { useSendFriendRequest } from '@/features/friends/use-friends';
 
 export function AddFriendDialog({ trigger }: { trigger?: React.ReactNode }) {
+  const t = useTranslations('social');
+  const tc = useTranslations('common');
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -42,23 +45,23 @@ export function AddFriendDialog({ trigger }: { trigger?: React.ReactNode }) {
     const trimmed = value.trim();
     const parsed = objectIdSchema.safeParse(trimmed);
     if (!parsed.success) {
-      setError('Введите корректный ID профиля (24 символа).');
+      setError(t('invalidProfileId'));
       return;
     }
     setError(null);
     sendRequest.mutate(trimmed, {
       onSuccess: () => {
-        toast.success('Заявка отправлена', { description: 'Дождитесь, пока пользователь её примет.' });
+        toast.success(t('requestSentToast'), { description: t('requestSentDescription') });
         reset();
         setOpen(false);
       },
       onError: (err) => {
         const message =
           err instanceof ApiClientError && err.status === 409
-            ? 'Заявка уже существует или вы уже друзья.'
+            ? t('requestExists')
             : err instanceof ApiClientError && err.status === 400
-              ? 'Нельзя отправить заявку этому пользователю.'
-              : 'Не удалось отправить заявку. Попробуйте позже.';
+              ? t('cannotSendToUser')
+              : t('sendRequestFailed');
         setError(message);
       },
     });
@@ -75,20 +78,20 @@ export function AddFriendDialog({ trigger }: { trigger?: React.ReactNode }) {
       <DialogTrigger asChild>
         {trigger ?? (
           <Button variant="primary" size="sm" leadingIcon={<UserPlus className="h-4 w-4" />}>
-            Добавить друга
+            {t('addFriend')}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Добавить друга</DialogTitle>
+          <DialogTitle>{t('addFriendTitle')}</DialogTitle>
           <DialogDescription>
-            Отправьте заявку по ID профиля. ID можно скопировать на странице профиля пользователя.
+            {t('addFriendDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-2">
-          <Label htmlFor="friend-id">ID профиля</Label>
+          <Label htmlFor="friend-id">{t('profileIdLabel')}</Label>
           <Input
             id="friend-id"
             value={value}
@@ -96,7 +99,7 @@ export function AddFriendDialog({ trigger }: { trigger?: React.ReactNode }) {
               setValue(e.target.value);
               if (error) setError(null);
             }}
-            placeholder="например, 65f1a2b3c4d5e6f7a8b9c0d1"
+            placeholder={t('profileIdPlaceholder')}
             invalid={Boolean(error)}
             autoComplete="off"
             spellCheck={false}
@@ -110,10 +113,10 @@ export function AddFriendDialog({ trigger }: { trigger?: React.ReactNode }) {
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Отмена
+              {tc('cancel')}
             </Button>
             <Button type="submit" variant="primary" loading={sendRequest.isPending}>
-              Отправить заявку
+              {t('sendRequest')}
             </Button>
           </DialogFooter>
         </form>

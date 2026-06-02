@@ -1,0 +1,255 @@
+{
+  "states": {
+    "errorTitle": "Something went wrong",
+    "errorDescription": "We couldn't load the data. Please try again."
+  },
+  "balanceHero": {
+    "label": "Your balance",
+    "coinsSuffix": "coins",
+    "amountAria": "{amount} coins",
+    "error": "Couldn't refresh your balance.",
+    "hint": "Coins — for gifts, the Top and more"
+  },
+  "coinBalance": {
+    "balanceAria": "Coin balance",
+    "balanceTopUpAria": "Balance: {amount} coins. Top up"
+  },
+  "topMarquee": {
+    "onAir": "on air {country}"
+  },
+  "coins": {
+    "eyebrow": "Coin store",
+    "titlePrefix": "Coins for",
+    "titleHighlight": "gifts and the Top",
+    "lede": "Top up your balance to send animated gifts, buy spots in the Top, and unlock more features.",
+    "packagesHeading": "Choose a pack",
+    "packagesErrorTitle": "Couldn't load the packs",
+    "packagesErrorDescription": "The coin catalogue is temporarily unavailable.",
+    "ledgerHeading": "Transaction history"
+  },
+  "package": {
+    "bestValue": "Best value",
+    "coinsSuffix": "coins",
+    "bonus": "+{amount} bonus",
+    "total": "{amount} coins total",
+    "buy": "Buy",
+    "buyAria": "Buy {coins} coins for {price}"
+  },
+  "checkout": {
+    "titleError": "Payment not completed",
+    "titleCredited": "Coins credited",
+    "titlePending": "Confirming payment",
+    "titlePreparing": "Preparing payment",
+    "descError": "Please try again or choose another payment method.",
+    "descCredited": "{amount} coins are already in your balance.",
+    "descPending": "Payment went through. Crediting your coins — this takes a few seconds.",
+    "descPreparing": "Opening the secure CloudPayments window. Your card details never reach our server.",
+    "coinsBadge": "{amount} coins",
+    "secure": "Secure payment by CloudPayments",
+    "retry": "Retry payment",
+    "done": "Great"
+  },
+  "transactionList": {
+    "errorTitle": "Couldn't load the history",
+    "errorDescription": "Transaction history is temporarily unavailable.",
+    "emptyTitle": "No transactions yet",
+    "emptyDescription": "Buy coins or send your first gift — your transactions will show up here.",
+    "balanceLine": "balance {amount}",
+    "loadMore": "Show more"
+  },
+  "txType": {
+    "purchase": "Coin purchase",
+    "bonus": "Bonus",
+    "gift_in": "Gift received",
+    "refund": "Refund",
+    "gift_out": "Gift sent",
+    "top": "Spot in the Top"
+  },
+  "gifts": {
+    "eyebrow": "Gift store",
+    "titlePrefix": "Send",
+    "titleHighlight": "emotions",
+    "lede": "Animated gifts for calls, chats and profiles. The rarer the gift, the bigger the impression.",
+    "topUp": "Top up",
+    "premiumBannerText": "Some gifts are available to premium members only.",
+    "premiumBannerCta": "Learn more about premium",
+    "errorTitle": "Couldn't load the gifts",
+    "errorDescription": "The gift catalogue is temporarily unavailable.",
+    "emptyTitle": "No gifts yet",
+    "emptyDescription": "The catalogue will be stocked soon — check back later."
+  },
+  "giftCard": {
+    "premiumOnly": "Premium only",
+    "premiumLabel": "Premium",
+    "send": "Send gift"
+  },
+  "sendGift": {
+    "title": "Send a gift",
+    "description": "The gift will be deducted from your coin balance and reach the recipient instantly.",
+    "lockedText": "Only premium members can send this gift.",
+    "lockedCta": "Get premium",
+    "recipientLabel": "Recipient ID",
+    "recipientPlaceholder": "For example, 663f1a2b9c0e4d5f6a7b8c9d",
+    "recipientHint": "Open the person's profile and copy their ID.",
+    "messageLabel": "Message (optional)",
+    "messagePlaceholder": "Add a few warm words…",
+    "submit": "Send for {amount}",
+    "toastSuccess": "Gift sent!",
+    "toastSuccessDescription": "{title} is on its way.",
+    "errorInsufficientField": "Not enough coins in your balance.",
+    "errorInsufficientToast": "Not enough coins",
+    "errorInsufficientToastDescription": "Top up your balance to send the gift.",
+    "errorPremiumToast": "Premium only",
+    "errorPremiumToastDescription": "This gift is available to premium members.",
+    "errorRecipientNotFound": "Recipient not found.",
+    "errorGeneric": "Couldn't send the gift"
+  },
+  "premium": {
+    "eyebrow": "Premium",
+    "titlePrefix": "More",
+    "titleHighlight": "possibilities",
+    "lede": "Gender and country filters, ad-free calls, priority in matching, and premium status. Cancel anytime.",
+    "highlightFiltersTitle": "Filters",
+    "highlightFiltersText": "Match by your partner's gender and country.",
+    "highlightNoAdsTitle": "No ads",
+    "highlightNoAdsText": "Clean calls with no banners or breaks.",
+    "highlightPriorityTitle": "Priority",
+    "highlightPriorityText": "You're found faster in the matching queue.",
+    "highlightStatusTitle": "Status",
+    "highlightStatusText": "A premium badge and exclusive gifts.",
+    "plansHeading": "Plans",
+    "plansErrorTitle": "Couldn't load the plans",
+    "plansErrorDescription": "The list of plans is temporarily unavailable.",
+    "plansEmptyTitle": "Plans coming soon",
+    "plansEmptyDescription": "We're preparing premium plans — check back a little later.",
+    "billingNote": "Payments are handled by CloudPayments. Your subscription renews automatically and can be cancelled anytime."
+  },
+  "planCard": {
+    "active": "Active",
+    "popular": "Popular",
+    "cadenceMonthly": "per month",
+    "cadenceEveryMonths": "for {count} mo.",
+    "cadenceWeekly": "per week",
+    "cadenceEveryWeeks": "for {count} wk.",
+    "cadenceDaily": "per day",
+    "cadenceEveryDays": "for {count} days",
+    "current": "Current plan",
+    "subscribe": "Subscribe"
+  },
+  "subscribeStatus": {
+    "titleError": "Subscription not completed",
+    "titlePending": "Activating premium",
+    "titleActive": "Premium active",
+    "titlePreparing": "Preparing payment",
+    "descError": "Please try again.",
+    "descPending": "Payment went through. Premium will activate within a few seconds.",
+    "descActive": "The “{title}” plan is now active.",
+    "descPreparing": "Opening the secure CloudPayments window. Your card details never reach our server.",
+    "secure": "Secure recurring payment",
+    "pendingHint": "You can close this window — the status will update automatically.",
+    "retry": "Retry",
+    "done": "Done"
+  },
+  "subscriptionStatus": {
+    "planLabel": "Premium · {plan}",
+    "statusPastDue": "Past due",
+    "statusCanceled": "Cancelling",
+    "statusActive": "Active",
+    "accessUntil": "Access until",
+    "renewal": "Renews",
+    "cancel": "Cancel subscription",
+    "cancelSuccess": "Subscription cancelled",
+    "cancelSuccessUntil": "Access stays active until {date}.",
+    "cancelSuccessGeneric": "Access stays active until the end of the paid period.",
+    "cancelError": "Couldn't cancel the subscription",
+    "confirmTitle": "Cancel premium?",
+    "confirmDescription": "Your subscription won't renew. Premium features stay available until the end of the paid period{periodSuffix}.",
+    "keepPremium": "Keep premium"
+  },
+  "top": {
+    "eyebrow": "Top on air",
+    "titlePrefix": "The best",
+    "titleHighlight": "on air",
+    "lede": "A live feed of the most noticeable members. Buy a spot — and everyone who enters the roulette will see you.",
+    "buySpot": "Buy a spot",
+    "errorTitle": "Couldn't load the Top",
+    "errorDescription": "The feed is temporarily unavailable. Try refreshing.",
+    "ctaTitle": "Want to be here?",
+    "ctaWithCount": "There {count, plural, one {is # member} other {are # members}} in the Top right now. Bid higher — and rise to the front of the feed.",
+    "ctaEmpty": "The lanes are open — be the first in the Top right now.",
+    "ctaButton": "Buy a spot in the Top"
+  },
+  "topCard": {
+    "guest": "Guest",
+    "rankAria": "{nickname} — spot #{rank} in the Top",
+    "coinsSpent": "{amount} coins"
+  },
+  "topFeed": {
+    "topLaneFree": "The top lane is open — claim a spot!",
+    "bottomLaneFree": "The bottom lane is open — claim a spot!"
+  },
+  "buySpot": {
+    "title": "Buy a spot in the Top",
+    "description": "The more coins you put in, the higher you'll rank in the feed.",
+    "laneLabel": "Lane",
+    "laneTop": "Top",
+    "laneBottom": "Bottom",
+    "durationLabel": "Duration",
+    "durationValue": "{hours} h",
+    "durationSliderAria": "Duration in hours",
+    "preset6h": "6 hours",
+    "preset1d": "1 day",
+    "preset3d": "3 days",
+    "preset7d": "7 days",
+    "coinsLabel": "Bid in coins",
+    "balanceLine": "Balance: <num>{amount}</num> coins",
+    "minCoins": "Minimum 100 coins",
+    "topUp": "Top up",
+    "insufficient": "Not enough coins in your balance.",
+    "submit": "Buy for {amount}",
+    "toastSuccess": "You're in the Top!",
+    "toastSuccessTop": "Your spot in the top lane is active.",
+    "toastSuccessBottom": "Your spot in the bottom lane is active.",
+    "errorInsufficient": "Not enough coins",
+    "errorInsufficientDescription": "Top up your balance to buy a spot.",
+    "errorGeneric": "Couldn't buy the spot"
+  },
+  "wallet": {
+    "eyebrow": "Wallet",
+    "titlePrefix": "Your",
+    "titleHighlight": "coins and history",
+    "lede": "Track your balance and every transaction: top-ups, gifts and spots in the Top — all in one place.",
+    "topUp": "Top up",
+    "signInRequired": "Sign in to see your balance and transaction history.",
+    "ledgerHeading": "Transaction history",
+    "coinStore": "Coin store"
+  },
+  "walletStats": {
+    "received": "Received",
+    "spent": "Spent",
+    "operations": "Transactions"
+  },
+  "walletLedger": {
+    "errorTitle": "Couldn't load the history",
+    "errorDescription": "Transaction history is temporarily unavailable.",
+    "emptyTitle": "No transactions yet",
+    "emptyDescription": "Top up your balance or send your first gift — every transaction will show up here.",
+    "emptyAction": "Top up balance",
+    "filterLabel": "Filter transactions",
+    "filterAll": "All",
+    "filterIn": "Top-ups",
+    "filterOut": "Spending",
+    "badgeIn": "Top-up",
+    "badgeOut": "Spending",
+    "noIncome": "No top-ups yet.",
+    "noSpending": "No spending yet.",
+    "loadMore": "Show more"
+  },
+  "buyCoins": {
+    "title": "Top up balance",
+    "description": "Choose a coin pack. Payment goes through the secure CloudPayments window — your card details never reach our server.",
+    "errorTitle": "Couldn't load the packs",
+    "errorDescription": "The coin catalogue is temporarily unavailable.",
+    "secure": "Secure payment by CloudPayments"
+  }
+}

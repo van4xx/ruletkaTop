@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ArrowRight, CornerDownLeft, Search } from 'lucide-react';
 import {
   Dialog,
@@ -39,18 +40,24 @@ function normalize(value: string): string {
   return value.toLowerCase().trim();
 }
 
-/** Score a nav item against a query; `-1` means "no match". */
-function matches(item: NavItem, q: string): boolean {
+/**
+ * Score a nav item against a query; `false` means "no match".
+ *
+ * The haystack uses the LOCALIZED label + description (so search works in the
+ * active language) plus the item's raw `keywords` aliases (kept untranslated on
+ * purpose — they let users find a page by a word that isn't in its label).
+ */
+function matches(item: NavItem, q: string, label: string, description: string): boolean {
   if (!q) return true;
-  const haystack = [item.label, item.description, ...(item.keywords ?? [])]
-    .join(' ')
-    .toLowerCase();
+  const haystack = [label, description, ...(item.keywords ?? [])].join(' ').toLowerCase();
   // Every whitespace-separated term must appear somewhere (AND search).
   return q.split(/\s+/).every((term) => haystack.includes(term));
 }
 
 export function CommandPalette() {
   const router = useRouter();
+  const t = useTranslations('chrome');
+  const tn = useTranslations('nav');
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -59,8 +66,10 @@ export function CommandPalette() {
 
   const results = useMemo(() => {
     const q = normalize(query);
-    return COMMAND_ITEMS.filter((item) => matches(item, q));
-  }, [query]);
+    return COMMAND_ITEMS.filter((item) =>
+      matches(item, q, tn(`${item.key}.label`), tn(`${item.key}.description`)),
+    );
+  }, [query, tn]);
 
   // Keep the highlighted row in range as results shrink/grow.
   useEffect(() => {
@@ -138,9 +147,9 @@ export function CommandPalette() {
         // Let the input keep focus on open instead of the dialog container.
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <DialogTitle className="sr-only">Командная панель</DialogTitle>
+        <DialogTitle className="sr-only">{t('commandPalette.title')}</DialogTitle>
         <DialogDescription className="sr-only">
-          Поиск по разделам. Используйте стрелки для навигации и Enter для перехода.
+          {t('commandPalette.description')}
         </DialogDescription>
 
         {/* Search input row */}
@@ -157,7 +166,7 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKeyDown}
-            placeholder="Куда перейти?"
+            placeholder={t('commandPalette.placeholder')}
             className="h-14 w-full bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
             autoComplete="off"
             autoCorrect="off"
@@ -173,12 +182,12 @@ export function CommandPalette() {
           ref={listRef}
           id={listboxId}
           role="listbox"
-          aria-label="Разделы"
+          aria-label={t('commandPalette.listAria')}
           className="max-h-[min(22rem,60vh)] overflow-y-auto p-2"
         >
           {results.length === 0 ? (
             <li className="px-3 py-10 text-center text-sm text-muted-foreground">
-              Ничего не найдено по запросу{' '}
+              {t('commandPalette.empty')}{' '}
               <span className="font-medium text-foreground">«{query}»</span>
             </li>
           ) : (
@@ -212,10 +221,10 @@ export function CommandPalette() {
                     </span>
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate text-sm font-medium text-foreground">
-                        {item.label}
+                        {tn(`${item.key}.label`)}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {item.description}
+                        {tn(`${item.key}.description`)}
                       </span>
                     </span>
                     <ArrowRight
@@ -239,13 +248,13 @@ export function CommandPalette() {
           <span className="inline-flex items-center gap-1.5">
             <kbd className="rounded border border-border/70 bg-card/50 px-1 py-0.5">↑</kbd>
             <kbd className="rounded border border-border/70 bg-card/50 px-1 py-0.5">↓</kbd>
-            навигация
+            {t('commandPalette.hintNavigate')}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <kbd className="inline-flex items-center gap-1 rounded border border-border/70 bg-card/50 px-1 py-0.5">
               <CornerDownLeft className="h-3 w-3" aria-hidden="true" />
             </kbd>
-            перейти
+            {t('commandPalette.hintGo')}
           </span>
         </div>
       </DialogContent>

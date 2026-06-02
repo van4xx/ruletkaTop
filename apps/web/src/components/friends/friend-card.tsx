@@ -9,6 +9,7 @@
  */
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { MessageCircle, MoreVertical, Phone, UserMinus, UserX, Video } from 'lucide-react';
 import type { FriendSummary, OnlineStatus } from '@ruletka/shared-types';
 import {
@@ -28,11 +29,11 @@ import { ROUTES } from '@/config/nav';
 import { cn } from '@/lib/cn';
 import { ProfileBadges } from '@/components/social/profile-badges';
 
-const STATUS_LABEL: Record<OnlineStatus, string> = {
-  online: 'В сети',
-  offline: 'Не в сети',
-  in_call: 'В звонке',
-  away: 'Отошёл',
+const STATUS_LABEL_KEY: Record<OnlineStatus, string> = {
+  online: 'statusOnline',
+  offline: 'statusOffline',
+  in_call: 'statusInCall',
+  away: 'statusAway',
 };
 
 const STATUS_TONE: Record<OnlineStatus, string> = {
@@ -51,6 +52,7 @@ export interface FriendCardProps {
 }
 
 export function FriendCard({ friend, status, onRemove, onBlock, busy }: FriendCardProps) {
+  const t = useTranslations('social');
   const { profile } = friend;
   const profileHref = `/profile/${profile.id}`;
   // Direct-call / direct-message deep links consumed by the roulette + chat
@@ -71,7 +73,7 @@ export function FriendCard({ friend, status, onRemove, onBlock, busy }: FriendCa
         busy && 'pointer-events-none opacity-60',
       )}
     >
-      <Link href={profileHref} className="relative shrink-0 rounded-full" aria-label={`Профиль ${profile.nickname}`}>
+      <Link href={profileHref} className="relative shrink-0 rounded-full" aria-label={t('profileOf', { name: profile.nickname })}>
         <Avatar
           src={profile.avatarUrl}
           alt={profile.nickname}
@@ -91,58 +93,58 @@ export function FriendCard({ friend, status, onRemove, onBlock, busy }: FriendCa
           </Link>
           <ProfileBadges badges={profile.badges} size="sm" iconOnly />
         </div>
-        <p className={cn('mt-0.5 text-sm font-medium', STATUS_TONE[status])}>{STATUS_LABEL[status]}</p>
+        <p className={cn('mt-0.5 text-sm font-medium', STATUS_TONE[status])}>{t(STATUS_LABEL_KEY[status])}</p>
       </div>
 
       {/* Quick actions */}
       <div className="flex items-center gap-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button asChild variant="glass" size="sm" className="px-3" aria-label="Написать сообщение">
+            <Button asChild variant="glass" size="sm" className="px-3" aria-label={t('sendMessage')}>
               <Link href={chatHref}>
                 <MessageCircle aria-hidden="true" />
-                <span className="hidden sm:inline">Чат</span>
+                <span className="hidden sm:inline">{t('chat')}</span>
               </Link>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Написать сообщение</TooltipContent>
+          <TooltipContent>{t('sendMessage')}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
             {canCall ? (
-              <IconButton asChild variant="glass" size="sm" aria-label="Видеозвонок">
+              <IconButton asChild variant="glass" size="sm" aria-label={t('videoCall')}>
                 <Link href={callHref}>
                   <Video aria-hidden="true" />
                 </Link>
               </IconButton>
             ) : (
-              <IconButton variant="glass" size="sm" aria-label="Сейчас недоступен для звонка" disabled>
+              <IconButton variant="glass" size="sm" aria-label={t('unavailableForCall')} disabled>
                 {status === 'in_call' ? <Phone aria-hidden="true" /> : <Video aria-hidden="true" />}
               </IconButton>
             )}
           </TooltipTrigger>
-          <TooltipContent>{canCall ? 'Позвонить' : 'Сейчас недоступен'}</TooltipContent>
+          <TooltipContent>{canCall ? t('call') : t('unavailable')}</TooltipContent>
         </Tooltip>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <IconButton variant="ghost" size="sm" aria-label="Ещё действия">
+            <IconButton variant="ghost" size="sm" aria-label={t('moreActions')}>
               <MoreVertical aria-hidden="true" />
             </IconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild>
-              <Link href={profileHref}>Открыть профиль</Link>
+              <Link href={profileHref}>{t('openProfile')}</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem destructive onSelect={() => onRemove(friend.friendshipId)}>
               <UserMinus aria-hidden="true" />
-              Удалить из друзей
+              {t('removeFriend')}
             </DropdownMenuItem>
             <DropdownMenuItem destructive onSelect={() => onBlock(profile.id)}>
               <UserX aria-hidden="true" />
-              Заблокировать
+              {t('block')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

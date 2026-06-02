@@ -14,6 +14,7 @@
  */
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Coins, Crown, Eye, Lock, Pencil, Plus, Sparkles } from 'lucide-react';
 import { Avatar, Skeleton, codeToFlag } from '@ruletka/ui';
 import { useAuth } from '@/features/auth';
@@ -30,6 +31,7 @@ const COINS_ROUTE = '/coins';
 const PREMIUM_ROUTE = '/premium';
 
 export function ProfileBlock() {
+  const t = useTranslations('misc');
   const { user } = useAuth();
   const profileQuery = useProfile(user?.id);
   const walletQuery = useWallet();
@@ -41,7 +43,7 @@ export function ProfileBlock() {
   const balance = walletQuery.data?.balanceCoins ?? null;
 
   return (
-    <DashboardCard label="Профиль" padded={false}>
+    <DashboardCard label={t('dashboard.profileLabel')} padded={false}>
       {/* Aurora cover strip behind the avatar. */}
       <div aria-hidden="true" className="relative h-20 sm:h-24">
         <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-neon-violet)]/40 via-[var(--color-neon-magenta)]/25 to-[var(--color-neon-cyan)]/30" />
@@ -71,13 +73,13 @@ export function ProfileBlock() {
                 {nickname}
               </h2>
               {isPremium && (
-                <Crown className="h-4 w-4 shrink-0 text-warning" aria-label="Премиум" />
+                <Crown className="h-4 w-4 shrink-0 text-warning" aria-label={t('dashboard.premiumAria')} />
               )}
             </div>
             {profile ? (
               <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span aria-hidden="true">{codeToFlag(profile.country)}</span>
-                {isPremium ? 'Премиум-аккаунт' : 'Базовый аккаунт'}
+                {isPremium ? t('dashboard.premiumAccount') : t('dashboard.basicAccount')}
               </p>
             ) : (
               <Skeleton className="mt-1 h-3 w-24" />
@@ -92,7 +94,7 @@ export function ProfileBlock() {
               'transition-colors hover:bg-card/80 hover:text-foreground',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
             )}
-            aria-label="Редактировать профиль"
+            aria-label={t('dashboard.profileEditAria')}
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
@@ -105,13 +107,13 @@ export function ProfileBlock() {
               <Coins className="h-4.5 w-4.5" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">Баланс</p>
+              <p className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">{t('dashboard.balance')}</p>
               {walletQuery.isLoading ? (
                 <Skeleton className="mt-0.5 h-5 w-16" />
               ) : (
                 <p className="font-display text-lg font-bold tabular-nums leading-none">
                   {balance != null ? formatNumber(balance) : '—'}
-                  <span className="ml-1 text-xs font-medium text-muted-foreground">монет</span>
+                  <span className="ml-1 text-xs font-medium text-muted-foreground">{t('dashboard.coinsUnit')}</span>
                 </p>
               )}
             </div>
@@ -129,7 +131,7 @@ export function ProfileBlock() {
             )}
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Пополнить
+            {t('dashboard.topUp')}
           </button>
         </div>
 
@@ -153,6 +155,7 @@ function ProfileViewsTeaser({
   views: number | null;
   loading: boolean;
 }) {
+  const t = useTranslations('misc');
   if (loading) {
     return <Skeleton className="mt-3 h-14 w-full rounded-2xl" />;
   }
@@ -171,11 +174,11 @@ function ProfileViewsTeaser({
           </span>
           <div>
             <p className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
-              Кто смотрел профиль
+              {t('dashboard.profileViewsTitle')}
             </p>
             <p className="font-display text-lg font-bold tabular-nums leading-none">
               {formatNumber(views ?? 0)}
-              <span className="ml-1 text-xs font-medium text-muted-foreground">просмотров</span>
+              <span className="ml-1 text-xs font-medium text-muted-foreground">{t('dashboard.profileViewsUnit')}</span>
             </p>
           </div>
         </div>
@@ -183,7 +186,7 @@ function ProfileViewsTeaser({
           href="/profile/me"
           className="text-xs font-medium text-[var(--color-neon-cyan)] transition-colors hover:text-foreground"
         >
-          Открыть
+          {t('dashboard.open')}
         </Link>
       </motion.div>
     );
@@ -208,13 +211,13 @@ function ProfileViewsTeaser({
           <Lock className="h-4 w-4" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">Кто смотрел профиль</p>
-          <p className="truncate text-xs text-muted-foreground">Доступно с Премиумом</p>
+          <p className="truncate text-sm font-semibold">{t('dashboard.profileViewsTitle')}</p>
+          <p className="truncate text-xs text-muted-foreground">{t('dashboard.profileViewsLockedDesc')}</p>
         </div>
       </div>
       <span className="relative inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-neon-violet)]/15 px-2.5 py-1 text-[0.6875rem] font-semibold text-[var(--color-neon-violet)]">
         <Sparkles className="h-3 w-3" aria-hidden="true" />
-        Премиум
+        {t('dashboard.premium')}
       </span>
     </Link>
   );

@@ -1,0 +1,119 @@
+{
+  "meta": {
+    "publicTitle": "Profile",
+    "publicDescription": "Public profile of a ruletka.top user.",
+    "myTitle": "My profile",
+    "myDescription": "Your profile, gifts and settings.",
+    "editTitle": "Edit profile"
+  },
+  "presence": {
+    "online": "Online",
+    "away": "Away",
+    "in_call": "In a call",
+    "offline": "Offline"
+  },
+  "gender": {
+    "male": "Male",
+    "female": "Female",
+    "other": "Other"
+  },
+  "age": "{age, plural, one {# year old} other {# years old}}",
+  "header": {
+    "languagesLabel": "Languages:",
+    "joinedLine": "live since",
+    "interestsLabel": "Interests"
+  },
+  "skeleton": {
+    "loading": "Loading profile"
+  },
+  "stats": {
+    "ariaLabel": "Profile stats",
+    "giftsLabel": "Received in gifts",
+    "viewsLabel": "Profile views",
+    "viewsLockedAria": "Profile views are available with Premium",
+    "viewsLockedReason": "See who visited your profiles.",
+    "hidden": "Hidden",
+    "viewsLockedCaption": "Views · Premium",
+    "friendsLabel": "Friends",
+    "topLabel": "Live Top",
+    "topPlacedOwn": "You're in the Top",
+    "topPlacedOther": "In the Top"
+  },
+  "actions": {
+    "message": "Message",
+    "videoCall": "Video call",
+    "sendGift": "Send a gift",
+    "more": "More actions",
+    "addFriend": "Add friend",
+    "report": "Report",
+    "block": "Block",
+    "authGift": "Sign in to send gifts",
+    "authFriend": "Sign in to add friends",
+    "authReport": "Sign in to report",
+    "authBlock": "Sign in to block"
+  },
+  "premium": {
+    "viewsTitle": "Who viewed your profile",
+    "viewsPremiumActive": "Premium access active",
+    "viewsCountSuffix": "profile views",
+    "viewsRollingNote": "The full list of visitors with names is coming soon — we're already counting every visit.",
+    "viewsLockedReason": "Find out who visited your profile.",
+    "viewsLockedCaption": "{count} views · unlock with Premium",
+    "badge": "Premium",
+    "upsellTitlePrefix": "Unlock",
+    "upsellTitleHighlight": "Premium",
+    "upsellSubtitle": "More ways to connect",
+    "perkViews": "See who viewed your profile",
+    "perkPriority": "Priority in the matchmaking queue",
+    "perkGifts": "Exclusive gifts and a badge",
+    "upsellButton": "Go Premium"
+  },
+  "tabs": {
+    "gifts": "Gifts",
+    "about": "About",
+    "activity": "Activity",
+    "giftsError": "Couldn't load gifts.",
+    "giftsEmptyTitleOwn": "You don't have any gifts yet",
+    "giftsEmptyTitleOther": "No gifts yet",
+    "giftsEmptyHintOwn": "Gifts from people you meet will show up here — go live and start chatting.",
+    "giftsEmptyHintOther": "Be the first to send a gift.",
+    "aboutGenderAge": "Gender · age",
+    "aboutGenderAgeValue": "{gender} · {age}",
+    "aboutCountry": "Country",
+    "aboutLanguages": "Languages",
+    "aboutLanguagesEmpty": "not specified",
+    "aboutJoined": "Live since",
+    "aboutNoBio": "This user hasn't added a bio yet.",
+    "interestsLabel": "Interests",
+    "activityOnlineTitle": "Online now",
+    "activityOnlineMeta": "You can message or call",
+    "activityLoading": "Loading activity…",
+    "activityGiftReceived": "Gift received · {title}",
+    "activityJoined": "Joined ruletka.top"
+  },
+  "giftFallbackTitle": "Gift",
+  "giftsShowcase": {
+    "emptyTitle": "No gifts yet",
+    "countLine": "{count, plural, one {# gift} other {# gifts}}"
+  },
+  "relativeDate": {
+    "today": "today",
+    "yesterday": "yesterday",
+    "daysAgo": "{days, plural, one {# day ago} other {# days ago}}"
+  },
+  "sendGift": {
+    "title": "Gift for {name}",
+    "description": "Pick a gift — its cost will be deducted from your balance.",
+    "loading": "Loading gifts",
+    "catalogError": "Couldn't load the gift catalog.",
+    "messagePlaceholder": "Add a message (optional)",
+    "messageAria": "Gift message",
+    "sentTitle": "Gift sent!",
+    "sentDescription": "{title} → {name}",
+    "errorInsufficient": "Not enough coins.",
+    "errorPremiumOnly": "This gift is available to Premium members only.",
+    "errorGeneric": "Couldn't send the gift.",
+    "submitWithPrice": "Send for {price}",
+    "submitEmpty": "Pick a gift"
+  }
+}

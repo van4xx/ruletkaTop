@@ -8,11 +8,13 @@
  */
 import { Check } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/cn';
 
 export interface StepperStep {
   key: string;
-  label: string;
+  /** `misc.onboarding.*` key for the step label. */
+  labelKey: string;
 }
 
 export function OnboardingStepper({
@@ -23,6 +25,7 @@ export function OnboardingStepper({
   /** Zero-based index of the active step. */
   current: number;
 }) {
+  const t = useTranslations('misc');
   const total = steps.length;
   const progress = total > 1 ? current / (total - 1) : 0;
 
@@ -31,9 +34,9 @@ export function OnboardingStepper({
       {/* Mobile: compact label + bar */}
       <div className="sm:hidden">
         <div className="flex items-baseline justify-between">
-          <p className="font-display text-sm font-semibold">{steps[current]?.label}</p>
+          <p className="font-display text-sm font-semibold">{steps[current] ? t(steps[current]!.labelKey) : ''}</p>
           <p className="text-xs text-muted-foreground">
-            Шаг {current + 1} из {total}
+            {t('onboarding.stepCounter', { current: current + 1, total })}
           </p>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-card/70 ring-1 ring-border/60">
@@ -84,7 +87,7 @@ export function OnboardingStepper({
                   isCurrent ? 'text-foreground' : 'text-muted-foreground',
                 )}
               >
-                {step.label}
+                {t(step.labelKey)}
               </span>
             </li>
           );

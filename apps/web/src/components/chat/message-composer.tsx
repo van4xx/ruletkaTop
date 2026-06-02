@@ -6,6 +6,7 @@
  * signal as the user writes. Caps content at the contract's 4000-char limit.
  */
 import { useLayoutEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { SendHorizontal } from 'lucide-react';
 import { IconButton } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -22,6 +23,7 @@ export function MessageComposer({
   onTyping?: () => void;
   disabled?: boolean;
 }) {
+  const t = useTranslations('social');
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -84,8 +86,8 @@ export function MessageComposer({
         onKeyDown={handleKeyDown}
         rows={1}
         disabled={disabled}
-        placeholder="Сообщение…"
-        aria-label="Текст сообщения"
+        placeholder={t('messagePlaceholder')}
+        aria-label={t('messageInputLabel')}
         className={cn(
           'flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-foreground outline-none',
           'placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60',
@@ -97,7 +99,7 @@ export function MessageComposer({
         type="button"
         variant={canSend ? 'primary' : 'ghost'}
         size="md"
-        aria-label="Отправить"
+        aria-label={t('send')}
         disabled={!canSend}
         onClick={submit}
         className={cn('shrink-0 transition-all', canSend && 'scale-100', !canSend && 'opacity-60')}

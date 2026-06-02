@@ -11,6 +11,7 @@
  * Submits `POST /friends/request { recipientId }` via the friends feature hook.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { UserPlus } from 'lucide-react';
 import { objectIdSchema } from '@ruletka/shared-types';
 import {
@@ -30,6 +31,7 @@ import { FieldError } from './shared';
 
 export function AddFriendModal() {
   const { close, open } = useModal();
+  const t = useTranslations('chrome');
   const { presetUserId, nickname } = useModalProps<'add-friend'>();
   const sendRequest = useSendFriendRequest();
 
@@ -40,20 +42,20 @@ export function AddFriendModal() {
   function submit(recipientId: string) {
     sendRequest.mutate(recipientId, {
       onSuccess: () => {
-        toast.success('Заявка отправлена', {
+        toast.success(t('modals.addFriend.sentTitle'), {
           description: nickname
-            ? `Дождитесь, пока ${nickname} её примет.`
-            : 'Дождитесь, пока пользователь её примет.',
+            ? t('modals.addFriend.sentDescriptionNamed', { name: nickname })
+            : t('modals.addFriend.sentDescriptionGeneric'),
         });
         close();
       },
       onError: (err) => {
         const message =
           err instanceof ApiClientError && err.status === 409
-            ? 'Заявка уже существует или вы уже друзья.'
+            ? t('modals.addFriend.errConflict')
             : err instanceof ApiClientError && err.status === 400
-              ? 'Нельзя отправить заявку этому пользователю.'
-              : 'Не удалось отправить заявку. Попробуйте позже.';
+              ? t('modals.addFriend.errBadRequest')
+              : t('modals.addFriend.errGeneric');
         setError(message);
       },
     });
@@ -64,7 +66,7 @@ export function AddFriendModal() {
     const trimmed = value.trim();
     const parsed = objectIdSchema.safeParse(trimmed);
     if (!parsed.success) {
-      setError('Введите корректный ID профиля (24 символа).');
+      setError(t('modals.addFriend.invalidId'));
       return;
     }
     setError(null);
@@ -74,11 +76,11 @@ export function AddFriendModal() {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Добавить друга</DialogTitle>
+        <DialogTitle>{t('modals.addFriend.title')}</DialogTitle>
         <DialogDescription>
           {hasPreset
-            ? 'Отправить заявку в друзья этому пользователю?'
-            : 'Отправьте заявку по ID профиля. ID можно скопировать на странице профиля.'}
+            ? t('modals.addFriend.descPreset')
+            : t('modals.addFriend.descManual')}
         </DialogDescription>
       </DialogHeader>
 
@@ -86,7 +88,7 @@ export function AddFriendModal() {
         <>
           <div className="rounded-xl border border-border/60 bg-card/40 p-4 text-center">
             <p className="font-display text-lg font-bold text-foreground">
-              {nickname?.trim() || 'Пользователь'}
+              {nickname?.trim() || t('modals.addFriend.fallbackName')}
             </p>
             <p className="mt-0.5 break-all font-mono text-xs text-muted-foreground">
               {presetUserId}
@@ -95,7 +97,7 @@ export function AddFriendModal() {
           <FieldError>{error}</FieldError>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={close}>
-              Отмена
+              {t('modals.addFriend.cancel')}
             </Button>
             <Button
               type="button"
@@ -104,13 +106,13 @@ export function AddFriendModal() {
               leadingIcon={<UserPlus className="h-4 w-4" />}
               onClick={() => submit(presetUserId!)}
             >
-              Отправить заявку
+              {t('modals.addFriend.sendRequest')}
             </Button>
           </DialogFooter>
         </>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-2">
-          <Label htmlFor="add-friend-id">ID профиля</Label>
+          <Label htmlFor="add-friend-id">{t('modals.addFriend.idLabel')}</Label>
           <Input
             id="add-friend-id"
             value={value}
@@ -118,7 +120,7 @@ export function AddFriendModal() {
               setValue(e.target.value);
               if (error) setError(null);
             }}
-            placeholder="например, 65f1a2b3c4d5e6f7a8b9c0d1"
+            placeholder={t('modals.addFriend.idPlaceholder')}
             invalid={Boolean(error)}
             autoComplete="off"
             spellCheck={false}
@@ -128,13 +130,13 @@ export function AddFriendModal() {
 
           <DialogFooter>
             <Button type="button" variant="link" className="mr-auto" onClick={() => open('search-users')}>
-              Найти по нику
+              {t('modals.addFriend.findByNickname')}
             </Button>
             <Button type="button" variant="ghost" onClick={close}>
-              Отмена
+              {t('modals.addFriend.cancel')}
             </Button>
             <Button type="submit" variant="primary" loading={sendRequest.isPending}>
-              Отправить заявку
+              {t('modals.addFriend.sendRequest')}
             </Button>
           </DialogFooter>
         </form>

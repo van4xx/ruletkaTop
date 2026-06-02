@@ -10,6 +10,7 @@
  * loading (shimmer rows), empty (graceful lane hints), and error states.
  */
 import { Crown, Flame } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@ruletka/ui';
 import { TopFeedMarquee } from '@/components/top/top-feed-marquee';
 import { ErrorState } from '@/components/economy/states';
@@ -20,26 +21,27 @@ import { DashboardCard, WidgetHeader } from './dashboard-card';
 const TOP_ROUTE = '/top';
 
 export function TopFeedWidget() {
+  const t = useTranslations('misc');
   const feed = useTopFeed();
   const modals = useAppModals();
 
   const total = (feed.data?.left.length ?? 0) + (feed.data?.right.length ?? 0);
 
   return (
-    <DashboardCard label="Топ эфира">
+    <DashboardCard label={t('dashboard.topFeedLabel')}>
       <WidgetHeader
         icon={<Flame className="h-4 w-4" aria-hidden="true" />}
         accent="var(--color-neon-magenta)"
-        title="Топ эфира"
+        title={t('dashboard.topFeedTitle')}
         count={total > 0 ? total : null}
         href={TOP_ROUTE}
-        linkLabel="Весь Топ"
+        linkLabel={t('dashboard.topFeedViewAll')}
       />
 
       {feed.isError ? (
         <ErrorState
-          title="Топ недоступен"
-          description="Не удалось загрузить ленту. Попробуйте обновить."
+          title={t('dashboard.topFeedErrorTitle')}
+          description={t('dashboard.topFeedErrorDesc')}
           onRetry={() => feed.refetch()}
         />
       ) : (
@@ -64,11 +66,11 @@ export function TopFeedWidget() {
             />
             <div className="absolute inset-0 -z-10 rounded-2xl ring-1 ring-border/60" aria-hidden="true" />
             <div className="min-w-0">
-              <h3 className="font-display text-base font-bold tracking-tight">Хотите оказаться здесь?</h3>
+              <h3 className="font-display text-base font-bold tracking-tight">{t('dashboard.topFeedCtaTitle')}</h3>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {total > 0
-                  ? 'Сделайте ставку выше — и поднимитесь в начало ленты.'
-                  : 'Дорожки свободны — станьте первым в Топе.'}
+                  ? t('dashboard.topFeedCtaWithEntries')
+                  : t('dashboard.topFeedCtaEmpty')}
               </p>
             </div>
             <Button
@@ -76,7 +78,7 @@ export function TopFeedWidget() {
               leadingIcon={<Crown className="h-4 w-4" />}
               onClick={() => modals.open(MODAL.buyTopPlacement, { fallback: TOP_ROUTE })}
             >
-              Купить место в Топе
+              {t('dashboard.topFeedCtaButton')}
             </Button>
           </div>
         </div>

@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { CircleCheckBig, MailWarning, Send, TriangleAlert } from 'lucide-react';
 import { Button, Spinner, toast } from '@ruletka/ui';
 import { useAuth } from '@/features/auth/use-auth';
@@ -62,6 +63,7 @@ function StateFrame({
 
 /** A "resend verification" button shown to signed-in users on failure. */
 function ResendButton() {
+  const t = useTranslations('auth');
   const resend = useResendVerification();
   return (
     <Button
@@ -73,23 +75,24 @@ function ResendButton() {
       onClick={() =>
         resend.mutate(undefined, {
           onSuccess: () =>
-            toast.success('Письмо отправлено', {
-              description: 'Проверьте почту и перейдите по новой ссылке.',
+            toast.success(t('verifyEmail.resendSuccessToast'), {
+              description: t('verifyEmail.resendSuccessToastDescription'),
             }),
           onError: () =>
-            toast.error('Не удалось отправить письмо', {
-              description: 'Попробуйте ещё раз чуть позже.',
+            toast.error(t('verifyEmail.resendErrorToast'), {
+              description: t('verifyEmail.resendErrorToastDescription'),
             }),
         })
       }
     >
       <Send className="h-4 w-4" aria-hidden="true" />
-      Выслать письмо заново
+      {t('verifyEmail.resend')}
     </Button>
   );
 }
 
 export function VerifyEmailView() {
+  const t = useTranslations('auth');
   const params = useSearchParams();
   const token = params.get('token')?.trim() ?? '';
   const { isAuthenticated } = useAuth();
@@ -117,20 +120,19 @@ export function VerifyEmailView() {
       <StateFrame
         icon={<MailWarning className="h-7 w-7 text-warning" aria-hidden="true" />}
         iconClassName="border border-warning/40 bg-warning/10"
-        title="Ссылка недействительна"
+        title={t('verifyEmail.noToken.title')}
         actions={
           isAuthenticated ? (
             <ResendButton />
           ) : (
             <Button asChild variant="primary" size="lg" block>
-              <Link href="/login">Войти</Link>
+              <Link href="/login">{t('verifyEmail.noToken.signIn')}</Link>
             </Button>
           )
         }
       >
         <p>
-          В ссылке не хватает токена подтверждения. Откройте письмо ещё раз и перейдите по ссылке
-          целиком.
+          {t('verifyEmail.noToken.body')}
         </p>
       </StateFrame>
     );
@@ -142,15 +144,15 @@ export function VerifyEmailView() {
       <StateFrame
         icon={<CircleCheckBig className="h-7 w-7 text-success" aria-hidden="true" />}
         iconClassName="border border-success/40 bg-success/10"
-        title="Email подтверждён"
+        title={t('verifyEmail.success.title')}
         actions={
           <Button asChild variant="primary" size="lg" block>
-            <Link href={isAuthenticated ? '/dashboard' : '/login'}>Перейти в приложение</Link>
+            <Link href={isAuthenticated ? '/dashboard' : '/login'}>{t('verifyEmail.success.continue')}</Link>
           </Button>
         }
       >
         <p>
-          Спасибо! Ваш адрес подтверждён — теперь доступны все возможности ruletka.top.
+          {t('verifyEmail.success.body')}
         </p>
       </StateFrame>
     );
@@ -162,21 +164,19 @@ export function VerifyEmailView() {
       <StateFrame
         icon={<TriangleAlert className="h-7 w-7 text-warning" aria-hidden="true" />}
         iconClassName="border border-warning/40 bg-warning/10"
-        title="Не удалось подтвердить"
+        title={t('verifyEmail.error.title')}
         actions={
           isAuthenticated ? (
             <ResendButton />
           ) : (
             <Button asChild variant="primary" size="lg" block>
-              <Link href="/login">Войти, чтобы выслать заново</Link>
+              <Link href="/login">{t('verifyEmail.error.signInToResend')}</Link>
             </Button>
           )
         }
       >
         <p>
-          Ссылка устарела или уже была использована. {isAuthenticated
-            ? 'Запросите новое письмо — оно придёт на почту за пару минут.'
-            : 'Войдите в аккаунт, чтобы запросить новое письмо.'}
+          {isAuthenticated ? t('verifyEmail.error.bodyAuthed') : t('verifyEmail.error.bodyGuest')}
         </p>
       </StateFrame>
     );
@@ -187,9 +187,9 @@ export function VerifyEmailView() {
     <StateFrame
       icon={<Spinner size="md" />}
       iconClassName="border border-border/70 bg-card/40"
-      title="Подтверждаем email"
+      title={t('verifyEmail.verifying.title')}
     >
-      <p>Секунду — проверяем вашу ссылку.</p>
+      <p>{t('verifyEmail.verifying.body')}</p>
     </StateFrame>
   );
 }

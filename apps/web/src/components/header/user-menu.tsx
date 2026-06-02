@@ -14,6 +14,7 @@
 import { memo, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Crown, LogOut } from 'lucide-react';
 import type { AuthUser } from '@ruletka/shared-types';
 import {
@@ -36,6 +37,9 @@ interface UserMenuProps {
 
 function UserMenuImpl({ user, onLogout }: UserMenuProps) {
   const router = useRouter();
+  const t = useTranslations('chrome');
+  const tc = useTranslations('common');
+  const tn = useTranslations('nav');
   const [signingOut, setSigningOut] = useState(false);
 
   const handleLogout = useCallback(async () => {
@@ -55,7 +59,7 @@ function UserMenuImpl({ user, onLogout }: UserMenuProps) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Меню профиля"
+          aria-label={t('userMenu.triggerAria')}
           className={cn(
             'group inline-flex items-center rounded-full outline-none',
             'transition-transform duration-200 hover:scale-[1.03] active:scale-95',
@@ -88,7 +92,7 @@ function UserMenuImpl({ user, onLogout }: UserMenuProps) {
               {user.isPremium && (
                 <Crown
                   className="h-3.5 w-3.5 shrink-0 text-warning"
-                  aria-label="Премиум"
+                  aria-label={t('userMenu.premiumAria')}
                 />
               )}
             </span>
@@ -98,14 +102,14 @@ function UserMenuImpl({ user, onLogout }: UserMenuProps) {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuLabel>Аккаунт</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('userMenu.sectionAccount')}</DropdownMenuLabel>
         {USER_MENU.map((item) => {
           const Icon = item.icon;
           return (
             <DropdownMenuItem key={item.key} asChild>
               <Link href={item.href} className="cursor-pointer">
                 <Icon aria-hidden="true" />
-                <span>{item.label}</span>
+                <span>{tn(`${item.key}.label`)}</span>
               </Link>
             </DropdownMenuItem>
           );
@@ -124,7 +128,7 @@ function UserMenuImpl({ user, onLogout }: UserMenuProps) {
           className="cursor-pointer"
         >
           <LogOut aria-hidden="true" />
-          <span>{signingOut ? 'Выходим…' : 'Выйти'}</span>
+          <span>{signingOut ? t('userMenu.signingOut') : tc('logout')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

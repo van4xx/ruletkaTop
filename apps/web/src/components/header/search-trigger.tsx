@@ -8,11 +8,13 @@
  * (⌘ on macOS, Ctrl elsewhere). Memoised — it has no props that change.
  */
 import { memo, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Search } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { openCommandPalette } from './command-palette';
 
 function SearchTriggerImpl({ className }: { className?: string }) {
+  const t = useTranslations('chrome');
   const [isMac, setIsMac] = useState(false);
 
   useEffect(() => {
@@ -26,7 +28,7 @@ function SearchTriggerImpl({ className }: { className?: string }) {
     <button
       type="button"
       onClick={openCommandPalette}
-      aria-label="Поиск — открыть командную панель"
+      aria-label={t('search.triggerAria')}
       aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
       className={cn(
         'group inline-flex items-center gap-2 rounded-full py-2 pl-3 pr-2 text-sm',
@@ -37,7 +39,7 @@ function SearchTriggerImpl({ className }: { className?: string }) {
       )}
     >
       <Search className="h-4 w-4" aria-hidden="true" />
-      <span className="hidden xl:inline">Поиск</span>
+      <span className="hidden xl:inline">{t('search.label')}</span>
       <kbd
         aria-hidden="true"
         className="ml-1 hidden items-center gap-0.5 rounded-md border border-border/70 bg-background/60 px-1.5 py-0.5 text-[0.65rem] font-medium tabular-nums xl:inline-flex"

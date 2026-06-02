@@ -7,6 +7,7 @@
  * input. Surfaces the 402/422 insufficient-balance case with a top-up prompt.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
@@ -36,10 +37,10 @@ import { formatNumber } from '@/features/economy/format';
 import { usePurchaseTop } from '@/features/top/use-top';
 
 const DURATION_PRESETS = [
-  { hours: 6, label: '6 часов' },
-  { hours: 24, label: '1 день' },
-  { hours: 72, label: '3 дня' },
-  { hours: 168, label: '7 дней' },
+  { hours: 6, key: 'preset6h' },
+  { hours: 24, key: 'preset1d' },
+  { hours: 72, key: 'preset3d' },
+  { hours: 168, key: 'preset7d' },
 ] as const;
 
 const MIN_COINS = 100;
@@ -51,6 +52,8 @@ export interface BuySpotDialogProps {
 }
 
 export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
+  const t = useTranslations('economy');
+  const tc = useTranslations('common');
   const purchase = usePurchaseTop();
   const [duration, setDuration] = useState(24);
 
@@ -80,19 +83,22 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
   const onSubmit = (values: TopPurchaseDto) => {
     purchase.mutate(values, {
       onSuccess: () => {
-        toast.success('Вы в Топе!', {
-          description: `Место в ${values.lane === 'left' ? 'верхней' : 'нижней'} дорожке активно.`,
+        toast.success(t('buySpot.toastSuccess'), {
+          description:
+            values.lane === 'left'
+              ? t('buySpot.toastSuccessTop')
+              : t('buySpot.toastSuccessBottom'),
         });
         close();
       },
       onError: (err) => {
         if (err instanceof ApiClientError && (err.status === 402 || err.status === 422)) {
-          toast.error('Недостаточно монет', {
-            description: 'Пополните баланс, чтобы купить место.',
+          toast.error(t('buySpot.errorInsufficient'), {
+            description: t('buySpot.errorInsufficientDescription'),
           });
           return;
         }
-        toast.error('Не удалось купить место');
+        toast.error(t('buySpot.errorGeneric'));
       },
     });
   };
@@ -103,22 +109,22 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-[var(--coin)]" aria-hidden="true" />
-            Купить место в Топе
+            {t('buySpot.title')}
           </DialogTitle>
           <DialogDescription>
-            Чем больше монет вы вложите, тем выше окажетесь в ленте.
+            {t('buySpot.description')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Lane picker */}
           <fieldset className="space-y-2">
-            <Label>Дорожка</Label>
-            <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Дорожка">
+            <Label>{t('buySpot.laneLabel')}</Label>
+            <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label={t('buySpot.laneLabel')}>
               {(
                 [
-                  { value: 'left' as TopLane, label: 'Верхняя', icon: ArrowRightToLine },
-                  { value: 'right' as TopLane, label: 'Нижняя', icon: ArrowLeftToLine },
+                  { value: 'left' as TopLane, label: t('buySpot.laneTop'), icon: ArrowRightToLine },
+                  { value: 'right' as TopLane, label: t('buySpot.laneBottom'), icon: ArrowLeftToLine },
                 ] as const
               ).map(({ value, label, icon: Icon }) => {
                 const active = lane === value;
@@ -147,9 +153,9 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
           {/* Duration */}
           <fieldset className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label htmlFor="duration-slider">Длительность</Label>
+              <Label htmlFor="duration-slider">{t('buySpot.durationLabel')}</Label>
               <span className="text-sm font-semibold tabular-nums text-foreground">
-                {duration} ч
+                {t('buySpot.durationValue', { hours: duration })}
               </span>
             </div>
             <Controller
@@ -167,7 +173,7 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
                     field.onChange(next);
                     setDuration(next);
                   }}
-                  aria-label="Длительность в часах"
+                  aria-label={t('buySpot.durationSliderAria')}
                 />
               )}
             />
@@ -187,7 +193,7 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
                       : 'border-border/70 text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {p.label}
+                  {t(`buySpot.${p.key}`)}
                 </button>
               ))}
             </div>
@@ -199,7 +205,7 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
           {/* Coin bid */}
           <fieldset className="space-y-1.5">
             <Label htmlFor="coins" required>
-              Ставка в монетах
+              {t('buySpot.coinsLabel')}
             </Label>
             <Input
               id="coins"
@@ -212,29 +218,28 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
             />
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                {balance !== null ? (
-                  <>
-                    Баланс: <span className="tabular-nums">{formatNumber(balance)}</span> монет
-                  </>
-                ) : (
-                  'Минимум 100 монет'
-                )}
+                {balance !== null
+                  ? t.rich('buySpot.balanceLine', {
+                      amount: formatNumber(balance),
+                      num: (chunks) => <span className="tabular-nums">{chunks}</span>,
+                    })
+                  : t('buySpot.minCoins')}
               </p>
               {insufficient && (
                 <Link href="/coins" className="text-xs font-semibold text-[var(--color-neon-cyan)] hover:underline">
-                  Пополнить
+                  {t('buySpot.topUp')}
                 </Link>
               )}
             </div>
             {errors.coins && <p className="text-xs text-destructive">{errors.coins.message}</p>}
             {insufficient && !errors.coins && (
-              <p className="text-xs text-destructive">Недостаточно монет на балансе.</p>
+              <p className="text-xs text-destructive">{t('buySpot.insufficient')}</p>
             )}
           </fieldset>
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={close}>
-              Отмена
+              {tc('cancel')}
             </Button>
             <Button
               type="submit"
@@ -242,7 +247,7 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
               disabled={insufficient}
               leadingIcon={<Crown className="h-4 w-4" />}
             >
-              Купить за {formatNumber(coins)}
+              {t('buySpot.submit', { amount: formatNumber(coins) })}
             </Button>
           </DialogFooter>
         </form>

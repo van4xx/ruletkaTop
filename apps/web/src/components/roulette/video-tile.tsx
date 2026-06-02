@@ -7,6 +7,7 @@
  * stream is absent or the camera is off.
  */
 import { useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { ShieldAlert, VideoOff } from 'lucide-react';
 import { Avatar } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -43,6 +44,7 @@ export function VideoTile({
   className,
   fit = 'cover',
 }: VideoTileProps) {
+  const t = useTranslations('roulette');
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -83,9 +85,9 @@ export function VideoTile({
         <div className="absolute inset-0 grid place-items-center bg-destructive/25 backdrop-blur-md">
           <div className="flex flex-col items-center gap-2 px-3 text-center">
             <ShieldAlert className="h-7 w-7 text-destructive" aria-hidden="true" />
-            <span className="text-xs font-semibold text-white">Видео скрыто</span>
+            <span className="text-xs font-semibold text-white">{t('videoTile.hiddenTitle')}</span>
             <span className="text-[0.625rem] leading-tight text-white/80">
-              Обнаружен недопустимый контент
+              {t('videoTile.hiddenSubtitle')}
             </span>
           </div>
         </div>
@@ -103,7 +105,7 @@ export function VideoTile({
             ) : null}
             <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               <VideoOff className="h-4 w-4" aria-hidden="true" />
-              {cameraOff ? 'Камера выключена' : 'Нет видео'}
+              {cameraOff ? t('videoTile.cameraOff') : t('videoTile.noVideo')}
             </span>
           </div>
         </div>

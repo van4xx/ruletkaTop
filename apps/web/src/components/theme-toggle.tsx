@@ -8,6 +8,7 @@
  * avoid a hydration mismatch and icon flash.
  */
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -15,15 +16,16 @@ import { cn } from '@/lib/cn';
 const ORDER = ['light', 'dark', 'system'] as const;
 type ThemeChoice = (typeof ORDER)[number];
 
-const LABEL: Record<ThemeChoice, string> = {
-  light: 'Светлая тема',
-  dark: 'Тёмная тема',
-  system: 'Системная тема',
-};
-
 export function ThemeToggle({ className }: { className?: string }) {
+  const t = useTranslations('chrome');
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+
+  const LABEL: Record<ThemeChoice, string> = {
+    light: t('theme.light'),
+    dark: t('theme.dark'),
+    system: t('theme.system'),
+  };
 
   useEffect(() => setMounted(true), []);
 
@@ -60,7 +62,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       type="button"
       onClick={cycle}
       className={baseClass}
-      aria-label={`Тема: ${LABEL[current]}. Нажмите, чтобы переключить`}
+      aria-label={t('theme.toggleAria', { label: LABEL[current] })}
       title={LABEL[current]}
     >
       <Icon className="h-[1.05rem] w-[1.05rem]" />

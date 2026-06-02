@@ -9,6 +9,7 @@
  * shaped so that swap is a one-line change.
  */
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Coins, Plus } from 'lucide-react';
 import { ROUTES } from '@/config/nav';
 import { cn } from '@/lib/cn';
@@ -20,12 +21,17 @@ export interface CoinBalanceProps {
 }
 
 export function CoinBalance({ balance = null, className }: CoinBalanceProps) {
+  const t = useTranslations('economy');
   const display = balance === null ? null : new Intl.NumberFormat('ru-RU').format(balance);
 
   return (
     <Link
       href={ROUTES.top}
-      aria-label={display === null ? 'Баланс монет' : `Баланс: ${display} монет. Пополнить`}
+      aria-label={
+        display === null
+          ? t('coinBalance.balanceAria')
+          : t('coinBalance.balanceTopUpAria', { amount: display })
+      }
       className={cn(
         'group inline-flex items-center gap-1.5 rounded-full pl-2.5 pr-1.5 py-1',
         'border border-border/70 bg-card/40 backdrop-blur',
