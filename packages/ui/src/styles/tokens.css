@@ -1,0 +1,226 @@
+/**
+ * ruletka.top — Design Tokens · "Midnight Aurora"
+ * ─────────────────────────────────────────────────────────────────────────
+ * The single source of visual truth for the entire product.
+ *
+ * AESTHETIC: A nocturnal, premium video-roulette platform. Deep ink-blue
+ * near-black canvas, frosted-glass surfaces, and a CONFIDENT signature
+ * accent that flows from electric violet (#7C5CFF) into cyan (#22D3EE) —
+ * an "aurora" sweep that headlines CTAs, focus rings, and the coin economy.
+ *
+ * COLOR MODEL: All colors are authored in OKLCH for perceptually-uniform
+ * lightness and wide-gamut richness on modern displays, with the hue/chroma
+ * tuned for AA contrast against their intended surfaces.
+ *
+ * THEMING CONTRACT:
+ *   - Raw values live on `:root` (dark, the product default) and `.dark`,
+ *     with a `.light` / `:root.light` override for light mode.
+ *   - `@theme inline` (in `theme.css`) maps these to Tailwind v4 utilities
+ *     (bg-background, text-foreground, border-border, ring-ring, …).
+ *   - Consuming apps import `tokens.css` + `theme.css` (or `globals.css`).
+ *
+ * DARK-FIRST: `:root` is the dark theme so SSR + first paint are dark with
+ * no flash; `.light` opts into the light theme.
+ */
+
+/* ───────────────────────────── Dark (default) ───────────────────────────── */
+:root,
+.dark {
+  color-scheme: dark;
+
+  /* Background layers — from the deepest canvas up to floating overlays. */
+  --background: oklch(0.16 0.022 274);
+  --background-base: oklch(0.13 0.02 274);
+  --background-elevated: oklch(0.2 0.024 273);
+  --background-overlay: oklch(0.24 0.026 272);
+
+  /* Glass — translucent surfaces for cards/menus that sit over the canvas. */
+  --glass: oklch(0.26 0.026 272 / 0.55);
+  --glass-strong: oklch(0.24 0.028 272 / 0.78);
+  --glass-border: oklch(0.99 0 0 / 0.08);
+  --glass-highlight: oklch(0.99 0 0 / 0.06);
+
+  /* Foreground / text. */
+  --foreground: oklch(0.97 0.006 268);
+  --muted: oklch(0.24 0.022 272);
+  --muted-foreground: oklch(0.71 0.018 268);
+  --subtle-foreground: oklch(0.56 0.018 268);
+
+  /* Signature accent — the aurora. `accent` is the violet anchor; the
+     `accent-from` → `accent-to` pair drives the directional gradient. */
+  --accent: oklch(0.68 0.2 287);
+  --accent-foreground: oklch(0.99 0.005 287);
+  --accent-from: oklch(0.66 0.22 287);
+  --accent-via: oklch(0.7 0.17 248);
+  --accent-to: oklch(0.82 0.14 199);
+  --accent-soft: oklch(0.68 0.2 287 / 0.16);
+  --accent-muted: oklch(0.68 0.2 287 / 0.32);
+
+  /* Primary maps to the accent so default CTAs are on-brand; secondary is a
+     calm neutral surface for lower-emphasis actions. */
+  --primary: oklch(0.68 0.2 287);
+  --primary-foreground: oklch(0.99 0.005 287);
+  --secondary: oklch(0.28 0.026 272);
+  --secondary-foreground: oklch(0.95 0.008 268);
+
+  /* Semantic states. */
+  --success: oklch(0.76 0.16 162);
+  --success-foreground: oklch(0.16 0.04 165);
+  --warning: oklch(0.82 0.15 85);
+  --warning-foreground: oklch(0.2 0.05 80);
+  --danger: oklch(0.64 0.22 18);
+  --danger-foreground: oklch(0.99 0.01 18);
+  --info: oklch(0.72 0.15 235);
+  --info-foreground: oklch(0.16 0.04 240);
+
+  /* Rarity ramp (gifts / cosmetics) — common → legendary. */
+  --rarity-common: oklch(0.7 0.02 268);
+  --rarity-rare: oklch(0.7 0.16 235);
+  --rarity-epic: oklch(0.68 0.2 300);
+  --rarity-legendary: oklch(0.82 0.16 78);
+
+  /* Coin economy — warm gold that reads against the cool canvas. */
+  --coin: oklch(0.83 0.15 83);
+  --coin-foreground: oklch(0.24 0.07 73);
+  --coin-shine: oklch(0.93 0.1 96);
+
+  /* Borders, inputs, focus ring. */
+  --border: oklch(0.99 0 0 / 0.1);
+  --border-strong: oklch(0.99 0 0 / 0.16);
+  --input: oklch(0.99 0 0 / 0.08);
+  --input-focus: oklch(0.68 0.2 287 / 0.5);
+  --ring: oklch(0.7 0.19 282);
+
+  /* Decorative gradient stops for atmospheric backgrounds. */
+  --aurora-1: oklch(0.66 0.22 287 / 0.55);
+  --aurora-2: oklch(0.72 0.16 226 / 0.45);
+  --aurora-3: oklch(0.8 0.13 188 / 0.35);
+}
+
+/* ────────────────────────────────── Light ───────────────────────────────── */
+:root.light,
+.light {
+  color-scheme: light;
+
+  --background: oklch(0.98 0.004 270);
+  --background-base: oklch(0.96 0.006 268);
+  --background-elevated: oklch(0.995 0.002 270);
+  --background-overlay: oklch(1 0 0);
+
+  --glass: oklch(1 0 0 / 0.7);
+  --glass-strong: oklch(1 0 0 / 0.85);
+  --glass-border: oklch(0.2 0.03 274 / 0.08);
+  --glass-highlight: oklch(1 0 0 / 0.9);
+
+  --foreground: oklch(0.22 0.026 274);
+  --muted: oklch(0.94 0.008 268);
+  --muted-foreground: oklch(0.48 0.022 270);
+  --subtle-foreground: oklch(0.6 0.02 270);
+
+  --accent: oklch(0.56 0.23 288);
+  --accent-foreground: oklch(0.99 0.005 287);
+  --accent-from: oklch(0.55 0.24 288);
+  --accent-via: oklch(0.58 0.19 250);
+  --accent-to: oklch(0.66 0.16 200);
+  --accent-soft: oklch(0.56 0.23 288 / 0.12);
+  --accent-muted: oklch(0.56 0.23 288 / 0.2);
+
+  --primary: oklch(0.56 0.23 288);
+  --primary-foreground: oklch(0.99 0.005 287);
+  --secondary: oklch(0.93 0.01 268);
+  --secondary-foreground: oklch(0.28 0.026 274);
+
+  --success: oklch(0.62 0.16 162);
+  --success-foreground: oklch(0.99 0.02 165);
+  --warning: oklch(0.7 0.16 70);
+  --warning-foreground: oklch(0.99 0.02 80);
+  --danger: oklch(0.58 0.23 22);
+  --danger-foreground: oklch(0.99 0.01 18);
+  --info: oklch(0.58 0.17 240);
+  --info-foreground: oklch(0.99 0.02 240);
+
+  --rarity-common: oklch(0.55 0.02 268);
+  --rarity-rare: oklch(0.56 0.16 240);
+  --rarity-epic: oklch(0.56 0.21 300);
+  --rarity-legendary: oklch(0.66 0.15 70);
+
+  --coin: oklch(0.74 0.15 78);
+  --coin-foreground: oklch(0.3 0.08 70);
+  --coin-shine: oklch(0.86 0.12 90);
+
+  --border: oklch(0.2 0.03 274 / 0.1);
+  --border-strong: oklch(0.2 0.03 274 / 0.18);
+  --input: oklch(0.2 0.03 274 / 0.08);
+  --input-focus: oklch(0.56 0.23 288 / 0.45);
+  --ring: oklch(0.56 0.23 288);
+
+  --aurora-1: oklch(0.7 0.2 290 / 0.28);
+  --aurora-2: oklch(0.74 0.15 230 / 0.22);
+  --aurora-3: oklch(0.8 0.12 195 / 0.18);
+}
+
+/* ──────────────────────── Mode-independent design scales ─────────────────── */
+:root {
+  /* Radii — generous, soft, modern. */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.375rem;
+  --radius-2xl: 1.75rem;
+  --radius-full: 9999px;
+
+  /* Spacing base (Tailwind multiplies this for p-*, m-*, gap-*, …). */
+  --spacing: 0.25rem;
+
+  /* Elevation — layered, soft shadows tuned for the dark canvas, plus a
+     signature accent "glow" used on primary CTAs and focused controls. */
+  --shadow-xs: 0 1px 2px 0 oklch(0 0 0 / 0.3);
+  --shadow-sm: 0 2px 8px -2px oklch(0 0 0 / 0.35);
+  --shadow-md: 0 8px 24px -6px oklch(0 0 0 / 0.45);
+  --shadow-lg: 0 18px 48px -12px oklch(0 0 0 / 0.55);
+  --shadow-xl: 0 32px 80px -16px oklch(0 0 0 / 0.62);
+  --shadow-glass: 0 8px 32px -8px oklch(0 0 0 / 0.5), inset 0 1px 0 0 oklch(0.99 0 0 / 0.06);
+  --shadow-glow: 0 0 0 1px oklch(0.68 0.2 287 / 0.35), 0 8px 32px -6px oklch(0.66 0.22 287 / 0.5);
+  --shadow-glow-strong:
+    0 0 0 1px oklch(0.68 0.2 287 / 0.5), 0 0 24px -2px oklch(0.66 0.22 287 / 0.6),
+    0 12px 48px -8px oklch(0.7 0.17 248 / 0.55);
+  --shadow-coin: 0 0 20px -2px oklch(0.83 0.15 83 / 0.5);
+
+  /* Typography — a characterful display face paired with a clean body face.
+     Apps wire the actual webfonts to --font-display / --font-sans; these
+     fallback stacks keep the system usable (and on-brand) out of the box. */
+  --font-display:
+    'Clash Display', 'Cabinet Grotesk', 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    'Geist', 'Geist Sans', 'Satoshi', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    'Geist Mono', ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+
+  /* Motion — shared durations + easings so every component animates in the
+     same "voice". Snappy springs for interaction, smooth ease for reveals. */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 420ms;
+
+  /* Layering. */
+  --z-base: 0;
+  --z-sticky: 100;
+  --z-overlay: 1000;
+  --z-modal: 1100;
+  --z-toast: 1200;
+  --z-tooltip: 1300;
+}
+
+/* ─────────────────────────── Reduced-motion guard ────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 1ms;
+    --duration-base: 1ms;
+    --duration-slow: 1ms;
+  }
+}

@@ -1,0 +1,206 @@
+# =============================================================================
+# docker-compose.dev.yml — local/dev infrastructure for ruletka.top
+# -----------------------------------------------------------------------------
+# Run from the repo root:
+#   docker compose -f infra/docker/docker-compose.dev.yml up -d
+#
+# Backing services (mongo, redis, coturn) start by default. The application
+# containers (api, web) live behind the `app` profile so the common workflow —
+# `pnpm dev` on the host against containerized infra — stays fast:
+#   infra only:      docker compose -f infra/docker/docker-compose.dev.yml up -d
+#   full stack:      docker compose -f infra/docker/docker-compose.dev.yml --profile app up -d --build
+#
+# Env is loaded from the repo-root .env (copy .env.example -> .env first).
+# Paths are relative to THIS file (infra/docker/), hence ../../ reaches root.
+# =============================================================================
+
+name: ruletka
+
+services:
+  # ---------------------------------------------------------------------------
+  # MongoDB — primary datastore (db name "ruletka", see MONGODB_URI).
+  # ---------------------------------------------------------------------------
+  mongo:
+    image: mongo:7
+    container_name: ruletka-mongo
+    restart: unless-stopped
+    # Single-node replica set (rs0) → enables retryable writes + multi-document
+    # transactions (parity with production). Initialized via `rs.initiate` on
+    # first bring-up (see infra README).
+    command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - ruletka-net
+    healthcheck:
+      # mongosh ships in mongo:7; ping the admin db to confirm readiness.
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Redis — Socket.io adapter pub/sub, BullMQ queues, caching.
+  # Honors REDIS_PASSWORD when set (empty in dev => no auth).
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: ruletka-redis
+    restart: unless-stopped
+    # `redis-server $REDIS_ARGS` — pass --requirepass only when a password is set.
+    command: ['sh', '-c', 'exec redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}']
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    networks:
+      - ruletka-net
+    healthcheck:
+      # Authenticated PING when a password is configured, plain PING otherwise.
+      test:
+        [
+          'CMD-SHELL',
+          'redis-cli ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} ping | grep -q PONG',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # coturn — STUN/TURN relay for WebRTC.
+  #
+  # Networking: on Linux, `network_mode: host` is the most robust way to handle
+  # the wide, dynamic UDP relay range (and is what you'd use in production).
+  # Docker Desktop (macOS/Windows) does not support host networking well, so
+  # this dev compose PUBLISHES explicit ports (below), which works cross-platform
+  # for the small dev relay range 49160-49200.
+  #
+  # Config: the official coturn image has no envsubst/gettext. coturn also does
+  # NOT interpolate ${VAR} inside the config file. So the static directives are
+  # mounted at coturn's default path (/etc/coturn/turnserver.conf) and the two
+  # env-derived values (secret, realm) are appended as CLI flags. The image's
+  # docker-entrypoint.sh runs `eval echo` on each argument, expanding $VAR from
+  # the container environment; coturn then merges the flags with the file.
+  # ---------------------------------------------------------------------------
+  coturn:
+    image: coturn/coturn:4.12-alpine
+    container_name: ruletka-coturn
+    restart: unless-stopped
+    # Args are expanded from the environment by the image entrypoint, then
+    # merged with the mounted /etc/coturn/turnserver.conf.
+    command:
+      - --static-auth-secret=$TURN_STATIC_AUTH_SECRET
+      - --realm=$TURN_REALM
+    environment:
+      TURN_STATIC_AUTH_SECRET: ${TURN_STATIC_AUTH_SECRET:?set TURN_STATIC_AUTH_SECRET in .env}
+      TURN_REALM: ${TURN_REALM:-ruletka.top}
+    ports:
+      - '3478:3478/udp'
+      - '3478:3478/tcp'
+      - '5349:5349/tcp'
+      # UDP relay range — MUST match min-port/max-port in turnserver.conf.
+      - '49160-49200:49160-49200/udp'
+    volumes:
+      # Mounted at coturn's default config path so it is loaded automatically.
+      - ../coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    networks:
+      - ruletka-net
+    healthcheck:
+      # The image bundles `bash` but not the turnutils probes, so check that the
+      # TURN listener accepts a TCP connection on 3478 via bash's /dev/tcp.
+      test: ['CMD-SHELL', 'timeout 3 bash -c "</dev/tcp/127.0.0.1/3478" || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # api — NestJS API (optional; `app` profile). Built from api.Dockerfile with
+  # the repo root as build context.
+  # ---------------------------------------------------------------------------
+  api:
+    profiles: ['app']
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ruletka-api
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    environment:
+      # Point the API at the in-network service hostnames regardless of what
+      # .env says (those values target host-side `pnpm dev`).
+      API_HOST: 0.0.0.0
+      MONGODB_URI: mongodb://mongo:27017/ruletka
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      TURN_HOST: coturn
+    ports:
+      - '4000:4000'
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      coturn:
+        condition: service_started
+    networks:
+      - ruletka-net
+    healthcheck:
+      # Adjust the path if the API exposes a different health route.
+      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:4000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # web — Next.js web app (optional; `app` profile). Built from web.Dockerfile.
+  # NEXT_PUBLIC_* values are baked at build time; override via build args for
+  # non-local deploys (see web.Dockerfile).
+  # ---------------------------------------------------------------------------
+  web:
+    profiles: ['app']
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://localhost:4000}
+        NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID: ${NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID:-}
+        NEXT_PUBLIC_STUN_URLS: ${NEXT_PUBLIC_STUN_URLS:-stun:localhost:3478}
+        NEXT_PUBLIC_TURN_URLS: ${NEXT_PUBLIC_TURN_URLS:-turn:localhost:3478}
+    container_name: ruletka-web
+    restart: unless-stopped
+    env_file:
+      - ../../.env
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - ruletka-net
+
+# -----------------------------------------------------------------------------
+# Named volumes — persist datastore state across `down`/`up`.
+# -----------------------------------------------------------------------------
+volumes:
+  mongo-data:
+    name: ruletka-mongo-data
+  redis-data:
+    name: ruletka-redis-data
+
+# -----------------------------------------------------------------------------
+# Shared bridge network — every service resolves the others by name.
+# -----------------------------------------------------------------------------
+networks:
+  ruletka-net:
+    name: ruletka-net
+    driver: bridge

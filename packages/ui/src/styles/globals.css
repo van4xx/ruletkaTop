@@ -1,0 +1,15 @@
+/**
+ * ruletka.top — one-line stylesheet entry for consuming apps.
+ *
+ * In your app's root CSS:
+ *
+ *   @import '@ruletka/ui/styles/globals.css';
+ *   @source '../node_modules/@ruletka/ui/src';  // let Tailwind scan UI classes
+ *
+ * This pulls in Tailwind v4, the design tokens, and the theme/utility mapping
+ * in the correct order.
+ */
+@import 'tailwindcss';
+@import './tokens.css';
+@import './theme.css';
+@import './utilities.css';

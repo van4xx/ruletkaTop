@@ -1,0 +1,217 @@
+# =============================================================================
+# docker-compose.prod.yml — production-shaped topology for ruletka.top
+# -----------------------------------------------------------------------------
+# What this gives you over the dev compose:
+#   • A real 3-NODE MongoDB replica set (rs0) → genuine multi-document
+#     TRANSACTIONS + automatic failover (the wallet/auth transactional paths run
+#     for real here; the dev single-node fallback is NOT used).
+#   • Redis with a required password.
+#   • TWO API replicas behind nginx (Socket.io fan-out via the Redis adapter;
+#     nginx pins long-poll sessions with ip_hash — see infra/nginx/nginx.conf).
+#   • coturn for TURN relay.
+#
+# Run (from repo root):
+#   cp .env.example .env   # then fill prod secrets
+#   docker compose -f infra/docker/docker-compose.prod.yml up -d --build
+#
+# ⚠️ HARDENING (do BEFORE exposing to the internet — see PRODUCTION.md):
+#   • Mongo here runs on the ISOLATED `ruletka-net` with NO published ports, so
+#     it is reachable only by the app containers. For internet-facing or
+#     multi-host deploys you MUST enable auth (keyFile/x509) + TLS, or use a
+#     managed RS (MongoDB Atlas) — then set MONGODB_URI accordingly.
+#   • Terminate TLS at nginx (mount real certs); set strong secrets in .env.
+#   • Consider running Mongo nodes on separate hosts/volumes for true HA.
+# =============================================================================
+
+name: ruletka-prod
+
+x-mongo-common: &mongo-common
+  image: mongo:7
+  restart: unless-stopped
+  networks: [ruletka-net]
+  # Replica set, bound to the internal network only (no published ports).
+  command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
+  healthcheck:
+    test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 20s
+
+services:
+  # ── MongoDB replica set (3 voting members) ─────────────────────────────────
+  mongo1:
+    <<: *mongo-common
+    container_name: ruletka-mongo1
+    volumes: [mongo1-data:/data/db]
+  mongo2:
+    <<: *mongo-common
+    container_name: ruletka-mongo2
+    volumes: [mongo2-data:/data/db]
+  mongo3:
+    <<: *mongo-common
+    container_name: ruletka-mongo3
+    volumes: [mongo3-data:/data/db]
+
+  # One-shot: initialise rs0 with all three members, then exit. Idempotent —
+  # re-running is a no-op once the set is already initialised.
+  mongo-init:
+    image: mongo:7
+    container_name: ruletka-mongo-init
+    networks: [ruletka-net]
+    depends_on:
+      mongo1: { condition: service_healthy }
+      mongo2: { condition: service_healthy }
+      mongo3: { condition: service_healthy }
+    restart: 'no'
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Initialising replica set rs0…"
+        mongosh --host mongo1:27017 --quiet --eval '
+          try {
+            rs.status();
+            print("rs0 already initialised");
+          } catch (e) {
+            rs.initiate({
+              _id: "rs0",
+              members: [
+                { _id: 0, host: "mongo1:27017", priority: 2 },
+                { _id: 1, host: "mongo2:27017" },
+                { _id: 2, host: "mongo3:27017" }
+              ]
+            });
+            print("rs0 initiated");
+          }
+        '
+
+  # ── Redis (password-protected) ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ruletka-redis
+    restart: unless-stopped
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"']
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env for prod}
+    volumes: [redis-data:/data]
+    networks: [ruletka-net]
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── coturn (TURN relay) ────────────────────────────────────────────────────
+  coturn:
+    image: coturn/coturn:4.12-alpine
+    container_name: ruletka-coturn
+    restart: unless-stopped
+    command:
+      - --static-auth-secret=$TURN_STATIC_AUTH_SECRET
+      - --realm=$TURN_REALM
+    environment:
+      TURN_STATIC_AUTH_SECRET: ${TURN_STATIC_AUTH_SECRET:?set TURN_STATIC_AUTH_SECRET}
+      TURN_REALM: ${TURN_REALM:-ruletka.top}
+    ports:
+      - '3478:3478/udp'
+      - '3478:3478/tcp'
+      - '5349:5349/tcp'
+      - '49160-49200:49160-49200/udp'
+    volumes:
+      - ../coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    networks: [ruletka-net]
+
+  # ── API (2 replicas; no published ports — only nginx reaches it) ───────────
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    env_file: [../../.env]
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      # All three RS members; driver discovers the primary. Real transactions.
+      MONGODB_URI: mongodb://mongo1:27017,mongo2:27017,mongo3:27017/ruletka?replicaSet=rs0&retryWrites=true&w=majority
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      TURN_HOST: coturn
+    depends_on:
+      mongo-init: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      coturn: { condition: service_started }
+    networks: [ruletka-net]
+    deploy:
+      replicas: 2
+    healthcheck:
+      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:4000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ── Web (Next.js) ──────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}
+        NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID: ${NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID:-}
+        NEXT_PUBLIC_STUN_URLS: ${NEXT_PUBLIC_STUN_URLS}
+        NEXT_PUBLIC_TURN_URLS: ${NEXT_PUBLIC_TURN_URLS}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    restart: unless-stopped
+    env_file: [../../.env]
+    networks: [ruletka-net]
+    depends_on:
+      api: { condition: service_started }
+
+  # ── nginx — TLS terminator + reverse proxy + Socket.io sticky LB ───────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ruletka-nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Built admin SPA (run `pnpm --filter @ruletka/admin build` first → dist/).
+      - ../../apps/admin/dist:/srv/admin:ro
+      # certbot-issued certs + ACME http-01 webroot (shared with the certbot svc).
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
+    networks: [ruletka-net]
+    depends_on:
+      api: { condition: service_started }
+      web: { condition: service_started }
+
+  # ── Certbot (Let's Encrypt) — auto-renews the cert covering all web subdomains
+  #    (ruletka.top, www, api, admin). FIRST issuance is a manual one-shot — see
+  #    DEPLOY.md. This long-running service just renews every 12h. ──
+  certbot:
+    image: certbot/certbot:latest
+    container_name: ruletka-certbot
+    restart: unless-stopped
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet --deploy-hook "nginx -s reload || true"; sleep 12h & wait $${!}; done'
+
+volumes:
+  mongo1-data: { name: ruletka-mongo1-data }
+  mongo2-data: { name: ruletka-mongo2-data }
+  mongo3-data: { name: ruletka-mongo3-data }
+  redis-data: { name: ruletka-redis-prod-data }
+  letsencrypt: { name: ruletka-letsencrypt }
+  certbot-webroot: { name: ruletka-certbot-webroot }
+
+networks:
+  ruletka-net:
+    name: ruletka-net-prod
+    driver: bridge

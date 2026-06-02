@@ -1,0 +1,15 @@
+{
+  "extends": "@ruletka/config/tsconfig/nextjs.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    // `baseUrl` (used to anchor the `@/*` path alias) is deprecated under
+    // TypeScript 6 and errors under `tsc --noEmit`. Acknowledge it the same way
+    // apps/api does, until the repo-wide TS7 migration removes `baseUrl`.
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", ".next", "dist"]
+}

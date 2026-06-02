@@ -1,0 +1,25 @@
+{
+  "name": "ruletka-top",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ruletka.top — production-grade video/voice roulette platform",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,md,json,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,md,json,yaml,yml}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "turbo": "^2.9.16",
+    "typescript": "^6.0.3",
+    "werift": "^0.23.0"
+  }
+}

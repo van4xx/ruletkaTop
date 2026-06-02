@@ -1,0 +1,10 @@
+# Playwright E2E artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/.playwright-mcp/
+
+# Sentry build-time artifacts (auth token cache written by the build plugin).
+.env.sentry-build-plugin
+.sentryclirc

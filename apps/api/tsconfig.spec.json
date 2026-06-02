@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // tsconfig used by ts-jest for the specs. The build tsconfig (tsconfig.json)
+  // deliberately EXCLUDES *.spec.ts and carries no jest globals; this one re-includes
+  // the specs and pulls in @types/jest so `describe/it/expect/jest` are typed.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

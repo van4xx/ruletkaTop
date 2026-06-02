@@ -1,0 +1,75 @@
+name: ruletka
+description: "ruletka.top — random video & voice roulette, social, economy (mobile)."
+publish_to: 'none'
+
+# App version (versionName / CFBundleShortVersionString) + build number.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependencies. Versions verified against pub.dev (2026-06). The FOUNDATION
+# owns this file: feature agents MUST NOT edit it. If a feature truly needs a
+# new package, list it in your summary for the integrator to add here.
+# ─────────────────────────────────────────────────────────────────────────────
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management + dependency injection.
+  flutter_riverpod: ^3.3.1
+
+  # Routing + auth-redirect guard.
+  go_router: ^17.2.3
+
+  # REST client.
+  dio: ^5.9.2
+
+  # Secure token storage (refresh token at rest; access token stays in memory).
+  flutter_secure_storage: ^10.3.1
+
+  # Realtime (matchmaking, signaling, presence, chat, calls, notifications).
+  socket_io_client: ^3.1.4
+
+  # WebRTC for the video/voice roulette.
+  flutter_webrtc: ^1.4.1
+
+  # Camera/mic runtime permissions.
+  permission_handler: ^12.0.2
+
+  # Remote image caching (avatars, gifts, top feed).
+  cached_network_image: ^3.4.1
+
+  # Display + body typefaces (Unbounded + Manrope), fetched at runtime.
+  google_fonts: ^8.1.0
+
+  # CloudPayments widget fallback (hosted checkout) + any embedded web content.
+  webview_flutter: ^4.13.1
+
+  # Date/number formatting + relative timestamps.
+  intl: ^0.20.2
+
+  # ── Push notifications (FCM / APNs) — OPT-IN ────────────────────────────────
+  # Uncomment to enable real push, then `flutter pub get`. The app boots WITHOUT
+  # these (PushService defaults to a keyless no-op); see core/push/. Enabling
+  # also requires the platform config files as an OPS step (NOT in the repo):
+  #   android/app/google-services.json  +  the google-services Gradle plugin
+  #   ios/Runner/GoogleService-Info.plist  +  APNs key in the Firebase console
+  # firebase_core: ^4.1.0
+  # firebase_messaging: ^16.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Local image assets (logos, illustrations) live here. Fonts are loaded via
+  # google_fonts at runtime, so no font files are bundled.
+  assets:
+    - assets/images/

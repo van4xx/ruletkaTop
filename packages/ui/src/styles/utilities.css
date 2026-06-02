@@ -1,0 +1,102 @@
+/**
+ * ruletka.top — signature utility classes
+ * ─────────────────────────────────────────────────────────────────────────
+ * Composable, brand-defining helpers that are awkward to express as plain
+ * Tailwind utilities. Authored with `@utility` so they participate in
+ * Tailwind v4's ordering and can be combined with variants (hover:, dark:, …).
+ */
+
+/* Frosted glass surface — the product's signature container treatment. */
+@utility glass {
+  background-color: var(--glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+@utility glass-strong {
+  background-color: var(--glass-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+/* The aurora gradient as a fill — for chips, accents, decorative bars. */
+@utility bg-aurora {
+  background-image: linear-gradient(
+    115deg,
+    var(--accent-from) 0%,
+    var(--accent-via) 52%,
+    var(--accent-to) 100%
+  );
+}
+
+/* The aurora gradient clipped to text — for headlines and the wordmark. */
+@utility text-aurora {
+  background-image: linear-gradient(
+    115deg,
+    var(--accent-from) 0%,
+    var(--accent-via) 50%,
+    var(--accent-to) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* A thin gradient border via mask compositing (no layout shift). The ring is
+   drawn on a nested ::before so it never affects the element's box. */
+@utility border-aurora {
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(115deg, var(--accent-from), var(--accent-via), var(--accent-to));
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+/* Atmospheric full-bleed aurora glow for page/section backgrounds. */
+@utility bg-aurora-radial {
+  background-image:
+    radial-gradient(60% 80% at 15% 0%, var(--aurora-1) 0%, transparent 60%),
+    radial-gradient(50% 70% at 90% 10%, var(--aurora-2) 0%, transparent 55%),
+    radial-gradient(70% 60% at 60% 100%, var(--aurora-3) 0%, transparent 60%);
+}
+
+/* Soft grain overlay to kill banding on large gradients (premium texture). */
+@utility grain {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+/* Mask the edges of a horizontal scroller (used by the Marquee). */
+@utility mask-fade-x {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 8%,
+    #000 92%,
+    transparent
+  );
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}

@@ -1,0 +1,51 @@
+{
+  "liveBadge": "Live now — jump in",
+  "headline1": "Meet the world",
+  "headline2": "in one click",
+  "subheading": "The next-generation video and voice roulette. Random partners, real conversations, gifts and friends — no borders, no waiting.",
+  "ctaStart": "Start",
+  "ctaVoice": "Voice roulette",
+  "trust": {
+    "instant": "Instant connect",
+    "moderation": "Moderation & reports",
+    "global": "From all over the world"
+  },
+  "topTeaser": {
+    "title": "🔥 Top on air",
+    "viewAll": "See the full Top →"
+  },
+  "stats": {
+    "countries": { "value": "120+", "label": "countries online" },
+    "connect": { "value": "<1 sec", "label": "to connect" },
+    "live": { "value": "24/7", "label": "live, always on" }
+  },
+  "features": {
+    "title": "Everything for real connection",
+    "subtitle": "From random video calls to gifts and premium perks — designed down to the detail.",
+    "video": {
+      "title": "Video roulette",
+      "description": "Instant video calls with random partners from around the world."
+    },
+    "voice": {
+      "title": "Voice roulette",
+      "description": "Voice only, when you'd rather keep the camera off. Clean and anonymous."
+    },
+    "gifts": {
+      "title": "Gifts",
+      "description": "Send animated gifts for coins right during a call."
+    },
+    "friends": {
+      "title": "Friends",
+      "description": "Add the people you click with and come back to chat."
+    },
+    "premium": {
+      "title": "Premium",
+      "description": "Gender and country filters, no ads, and priority in matching."
+    }
+  },
+  "finalCta": {
+    "title": "Ready to meet someone new?",
+    "subtitle": "No sign-up barriers to start. Tap — and you're live.",
+    "button": "Start now"
+  }
+}

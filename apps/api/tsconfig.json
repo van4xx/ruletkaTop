@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@ruletka/config/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": false,
+    "declarationMap": false,
+    // The shared nestjs preset uses moduleResolution "Node" (node10); TypeScript
+    // 6 deprecates it and would emit an error under `tsc --noEmit`. Acknowledge
+    // until the repo-wide TS7 migration.
+    "ignoreDeprecations": "6.0"
+  },
+  // ──────────────────────────────────────────────────────────────────────────
+  // CONSUMING '@ruletka/shared-types' (a TypeScript SOURCE package whose
+  // package.json `types`/`main` point at ./src/index.ts):
+  //
+  // We deliberately use NO `paths` override here. After `pnpm install` the
+  // package is symlinked at node_modules/@ruletka/shared-types, and TypeScript
+  // resolves it through node_modules — which exempts its source files from this
+  // project's `rootDir: ./src` containment check (a `paths`→`../../packages/...`
+  // override instead triggers TS6059 "not under rootDir"). Verified: with the
+  // symlink + type-only imports, `tsc` compiles cleanly and emits a flat
+  // `dist/main.js` with NO `require('@ruletka/shared-types')`.
+  //
+  // RUNTIME SAFETY: the API imports from shared-types with `import type { … }`
+  // ONLY, so every reference is erased at compile time — `node dist/main` never
+  // tries to `require()` an un-transpiled .ts file. Any RUNTIME value (zod
+  // schema) needed must either be passed INTO the generic Zod pipe by the caller
+  // (see createZodValidationPipe) or re-declared locally (see
+  // src/common/jwt-payload.schema.ts). Do NOT add value imports from
+  // shared-types in this package.
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.test.ts"]
+}

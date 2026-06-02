@@ -1,0 +1,16 @@
+{
+  "video": { "label": "Roulette", "description": "Video roulette — random video calls" },
+  "voice": { "label": "Voice roulette", "description": "Talk without a camera" },
+  "friends": { "label": "Friends", "description": "Friends list and requests" },
+  "top": { "label": "Top", "description": "Top profiles — get featured" },
+  "me": { "label": "Profile", "description": "Your profile" },
+  "chats": { "label": "Chats", "description": "Direct messages" },
+  "wallet": { "label": "Wallet", "description": "Coins, payments and history" },
+  "settings": { "label": "Settings", "description": "Account, privacy, notifications" },
+  "dashboard": { "label": "Dashboard", "description": "Your home hub" },
+  "search": { "label": "Find people", "description": "Discover people to talk to" },
+  "notifications": { "label": "Notifications", "description": "Notification center" },
+  "gifts": { "label": "Gifts", "description": "Gift catalog" },
+  "premium": { "label": "Premium", "description": "Premium features" },
+  "leaderboard": { "label": "Leaderboard", "description": "Leaderboard rankings" }
+}

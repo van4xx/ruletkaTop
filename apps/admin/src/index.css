@@ -1,0 +1,11 @@
+/*
+ * Admin SPA stylesheet entry. The shared UI package's barrel pulls in Tailwind
+ * v4 + the design tokens + theme mapping + utilities (glass, animations, base
+ * layer) in the correct order — the whole design system in one import.
+ */
+@import '@ruletka/ui/styles/globals.css';
+
+/* Tailwind v4 auto-scans this app's own sources; the shared UI package lives in
+ * node_modules (symlinked workspace pkg), so it needs an explicit @source or its
+ * component classes get purged. */
+@source '../node_modules/@ruletka/ui/src/**/*.{ts,tsx}';

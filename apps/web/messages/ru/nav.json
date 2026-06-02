@@ -1,0 +1,16 @@
+{
+  "video": { "label": "Рулетка", "description": "Видеорулетка — случайные видеозвонки" },
+  "voice": { "label": "Голосовая рулетка", "description": "Общение без камеры" },
+  "friends": { "label": "Друзья", "description": "Список друзей и заявки" },
+  "top": { "label": "Топ", "description": "Топ профилей — попади в ленту" },
+  "me": { "label": "Профиль", "description": "Твой профиль" },
+  "chats": { "label": "Чаты", "description": "Личные сообщения" },
+  "wallet": { "label": "Кошелёк", "description": "Монеты, платежи и история" },
+  "settings": { "label": "Настройки", "description": "Аккаунт, приватность, уведомления" },
+  "dashboard": { "label": "Дашборд", "description": "Личный кабинет" },
+  "search": { "label": "Поиск людей", "description": "Найти собеседников" },
+  "notifications": { "label": "Уведомления", "description": "Центр уведомлений" },
+  "gifts": { "label": "Подарки", "description": "Каталог подарков" },
+  "premium": { "label": "Премиум", "description": "Премиум-возможности" },
+  "leaderboard": { "label": "Лидерборд", "description": "Таблица лидеров" }
+}

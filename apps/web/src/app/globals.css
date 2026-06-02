@@ -1,0 +1,276 @@
+/* ============================================================================
+ * ruletka.top — global stylesheet (Tailwind CSS v4, CSS-first config)
+ *
+ * Layering:
+ *   1. Tailwind itself.
+ *   2. Design tokens from the shared UI package (`@ruletka/ui`). These define
+ *      the canonical `--background`, `--foreground`, `--primary`, … variables
+ *      (shadcn-style contract) for both light and `.dark` themes.
+ *   3. A local `@layer base` fallback that re-declares the same tokens, so the
+ *      web shell renders correctly even in isolation and documents the exact
+ *      contract the UI package fulfils.
+ *   4. `@theme inline { … }` maps those CSS variables onto Tailwind's color /
+ *      radius scales so utilities like `bg-background`, `text-foreground`,
+ *      `border-border`, `text-primary` resolve. `inline` is required: it bakes
+ *      the *value of the variable* into each utility, so theme switching via
+ *      the `.dark` class works at runtime (without it, utilities would freeze
+ *      the variable at definition time).
+ * ========================================================================== */
+
+@import 'tailwindcss';
+@import '@ruletka/ui/styles/tokens.css';
+/*
+ * The shared UI package's THEME (color/animation mappings + @keyframes) and
+ * UTILITIES (@utility glass / glass-strong / text-gradient-neon, …). Without
+ * these, design-system components that rely on those utilities/animations —
+ * notably every `Dialog`/modal (`glass-strong` background + modal-in/out
+ * motion) — render with NO background (transparent) and no animation. The
+ * app's own `@theme inline` + `@layer base` blocks below are declared AFTER
+ * this import, so they still win for the color contract (no palette change).
+ */
+@import '@ruletka/ui/styles/theme.css';
+@import '@ruletka/ui/styles/utilities.css';
+
+/*
+ * Tailwind v4 auto-detects sources within this app, but the shared design
+ * system (`@ruletka/ui`) lives outside the app root and is consumed as a
+ * symlinked workspace package. Without an explicit @source, the classes its
+ * components emit (Button, Dialog, Tabs, …) get purged from the build. This
+ * path resolves through the symlink to `packages/ui/src`.
+ */
+@source "../../node_modules/@ruletka/ui/src/**/*.{ts,tsx}";
+
+/* Dark theme is driven by a `.dark` class on <html> (next-themes, attribute="class"). */
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+ * Token contract (fallbacks). Colors are authored in OKLCH for perceptual
+ * uniformity. The palette: near-black "void" surfaces + an electric
+ * violet→cyan→magenta neon accent system. Dark is the hero theme.
+ * ------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: oklch(0.985 0.002 280);
+    --foreground: oklch(0.16 0.02 280);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.16 0.02 280);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.16 0.02 280);
+
+    /* Brand / accents */
+    --primary: oklch(0.58 0.24 295);
+    --primary-foreground: oklch(0.99 0.01 295);
+    --secondary: oklch(0.7 0.16 215);
+    --secondary-foreground: oklch(0.16 0.02 280);
+    --accent: oklch(0.72 0.2 350);
+    --accent-foreground: oklch(0.99 0.01 350);
+
+    /* Neutrals */
+    --muted: oklch(0.96 0.004 280);
+    --muted-foreground: oklch(0.5 0.02 280);
+
+    /* Feedback */
+    --destructive: oklch(0.58 0.22 25);
+    --destructive-foreground: oklch(0.99 0.01 25);
+    --success: oklch(0.7 0.17 155);
+    --warning: oklch(0.78 0.16 75);
+
+    /* Lines & focus */
+    --border: oklch(0.9 0.006 280);
+    --input: oklch(0.9 0.006 280);
+    --ring: oklch(0.58 0.24 295);
+
+    /* Three signature neon stops reused by gradients/glows. */
+    --neon-violet: oklch(0.62 0.26 295);
+    --neon-cyan: oklch(0.78 0.16 210);
+    --neon-magenta: oklch(0.7 0.25 350);
+
+    --radius: 0.875rem;
+  }
+
+  .dark {
+    /* Void surfaces — layered near-blacks with a faint cool cast. */
+    --background: oklch(0.16 0.02 280);
+    --foreground: oklch(0.97 0.008 280);
+    --card: oklch(0.205 0.024 285);
+    --card-foreground: oklch(0.97 0.008 280);
+    --popover: oklch(0.19 0.022 285);
+    --popover-foreground: oklch(0.97 0.008 280);
+
+    --primary: oklch(0.68 0.24 296);
+    --primary-foreground: oklch(0.14 0.03 290);
+    --secondary: oklch(0.78 0.15 210);
+    --secondary-foreground: oklch(0.14 0.02 280);
+    --accent: oklch(0.74 0.22 350);
+    --accent-foreground: oklch(0.14 0.03 350);
+
+    --muted: oklch(0.26 0.022 285);
+    --muted-foreground: oklch(0.7 0.02 285);
+
+    --destructive: oklch(0.62 0.23 25);
+    --destructive-foreground: oklch(0.98 0.01 25);
+    --success: oklch(0.74 0.17 155);
+    --warning: oklch(0.82 0.16 80);
+
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 14%);
+    --ring: oklch(0.68 0.24 296);
+
+    --neon-violet: oklch(0.7 0.27 296);
+    --neon-cyan: oklch(0.82 0.16 205);
+    --neon-magenta: oklch(0.74 0.26 350);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Map the contract variables onto Tailwind's theme so utilities resolve.
+ * ------------------------------------------------------------------------- */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-neon-violet: var(--neon-violet);
+  --color-neon-cyan: var(--neon-cyan);
+  --color-neon-magenta: var(--neon-magenta);
+
+  /* Radius scale derived from a single `--radius`. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 10px);
+
+  /* Display/body font families wired up by next/font in layout.tsx. */
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-unbounded), var(--font-manrope), ui-sans-serif, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base element styling + atmosphere.
+ * ------------------------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings:
+      'cv11' on,
+      'ss01' on;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100dvh;
+  }
+
+  /* Visible, on-brand keyboard focus ring everywhere. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background-color: color-mix(in oklch, var(--color-primary) 35%, transparent);
+    color: var(--color-foreground);
+  }
+
+  /* Honour reduced-motion: neutralise long/looping animations. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Reusable atmospheric utilities used by the landing page & header.
+ * ------------------------------------------------------------------------- */
+@layer components {
+  /* Frosted-glass panel. */
+  .glass-panel {
+    background-color: color-mix(in oklch, var(--color-card) 60%, transparent);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid color-mix(in oklch, var(--color-border) 100%, transparent);
+  }
+
+  /* Subtle grain overlay for depth (applied via ::before on the page). */
+  .grain::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Neon gradient text — the product's signature headline treatment. */
+  .text-gradient-neon {
+    background-image: linear-gradient(
+      100deg,
+      var(--color-neon-violet),
+      var(--color-neon-magenta) 45%,
+      var(--color-neon-cyan)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* Two-direction "Top" marquee keyframes (teaser on the landing page). */
+@keyframes marquee-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+@keyframes marquee-down {
+  from {
+    transform: translateY(-50%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,78 @@
+name: CI
+
+# Quality gate for ruletka.top. Runs on every push/PR to main: install →
+# build the shared-types contract → typecheck → lint → test → web build →
+# format check, plus a parallel Flutter analyze job for the mobile app.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Web + API + shared packages (Node / pnpm / Turborepo) ──────────────────
+  node:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm first (reads the pinned version from package.json "packageManager"),
+      # then Node with the pnpm store cached for fast installs.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # The contract is a BUILT package: api/test consume its dist. Build it first.
+      - name: Build shared-types contract
+        run: pnpm --filter @ruletka/shared-types build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Web production build
+        run: pnpm --filter @ruletka/web build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api
+          NEXT_PUBLIC_WS_URL: http://localhost:4000
+
+      - name: Format check
+        run: pnpm format:check
+
+  # ── Mobile (Flutter) — analyze only (build APK is a separate release job) ──
+  mobile:
+    name: flutter analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
