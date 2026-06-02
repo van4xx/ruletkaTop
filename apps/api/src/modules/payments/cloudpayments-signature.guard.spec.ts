@@ -42,9 +42,7 @@ function makeContext(opts: {
 
 describe('CloudPaymentsSignatureGuard — IP allow-list', () => {
   it('allows an allow-listed source with a valid HMAC', () => {
-    const guard = new CloudPaymentsSignatureGuard(
-      configWith(SECRET, '203.0.113.7, 203.0.113.8'),
-    );
+    const guard = new CloudPaymentsSignatureGuard(configWith(SECRET, '203.0.113.7, 203.0.113.8'));
     const ctx = makeContext({ ip: '203.0.113.7', hmac: validHmac(), rawBody: RAW_BODY });
     expect(guard.canActivate(ctx)).toBe(true);
   });

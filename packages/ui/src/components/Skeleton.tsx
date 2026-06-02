@@ -15,8 +15,7 @@ const skeletonVariants = cva('relative overflow-hidden bg-muted/60', {
 });
 
 export interface SkeletonProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof skeletonVariants> {}
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof skeletonVariants> {}
 
 /**
  * A loading placeholder with a brand-tinted shimmer sweep. The shimmer respects
@@ -28,7 +27,12 @@ export const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(function
   ref,
 ) {
   return (
-    <div ref={ref} aria-hidden="true" className={cn(skeletonVariants({ shape }), className)} {...props}>
+    <div
+      ref={ref}
+      aria-hidden="true"
+      className={cn(skeletonVariants({ shape }), className)}
+      {...props}
+    >
       <div
         className="absolute inset-0 animate-shimmer bg-[length:200%_100%]"
         style={{

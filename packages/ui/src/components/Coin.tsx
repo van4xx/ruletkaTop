@@ -39,14 +39,35 @@ export const CoinIcon = React.forwardRef<SVGSVGElement, CoinIconProps>(function 
       {...props}
     >
       <defs>
-        <linearGradient id="ruletka-coin-face" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id="ruletka-coin-face"
+          x1="4"
+          y1="3"
+          x2="20"
+          y2="21"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop offset="0" stopColor="var(--coin-shine)" />
           <stop offset="1" stopColor="var(--coin)" />
         </linearGradient>
       </defs>
       <circle cx="12" cy="12" r="9.5" fill="url(#ruletka-coin-face)" />
-      <circle cx="12" cy="12" r="9.5" stroke="var(--coin-foreground)" strokeOpacity="0.35" strokeWidth="1" />
-      <circle cx="12" cy="12" r="7" stroke="var(--coin-foreground)" strokeOpacity="0.25" strokeWidth="0.75" />
+      <circle
+        cx="12"
+        cy="12"
+        r="9.5"
+        stroke="var(--coin-foreground)"
+        strokeOpacity="0.35"
+        strokeWidth="1"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="7"
+        stroke="var(--coin-foreground)"
+        strokeOpacity="0.25"
+        strokeWidth="0.75"
+      />
       {/* Engraved monogram. */}
       <path
         d="M9.6 16V8h2.9c1.6 0 2.7 1 2.7 2.5 0 1.1-.6 1.9-1.6 2.3l1.9 3.2h-1.9l-1.7-3h-.7v3H9.6Zm1.6-4.4h1.1c.8 0 1.3-.4 1.3-1.1 0-.7-.5-1.1-1.3-1.1h-1.1v2.2Z"
@@ -78,7 +99,8 @@ const balanceVariants = cva(
 const iconForBalanceSize = { sm: 'sm', md: 'sm', lg: 'md' } as const;
 
 export interface CoinBalanceProps
-  extends Omit<React.HTMLAttributes<HTMLSpanElement>, 'children'>,
+  extends
+    Omit<React.HTMLAttributes<HTMLSpanElement>, 'children'>,
     VariantProps<typeof balanceVariants> {
   /** The coin amount. Formatted with locale grouping (e.g. 12,500). */
   amount: number;

@@ -25,19 +25,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModerationLabel } from '@ruletka/shared-types';
 
-import {
-  createClassifier,
-  type ClassificationResult,
-  type NsfwClassifier,
-} from './classifier';
+import { createClassifier, type ClassificationResult, type NsfwClassifier } from './classifier';
 import { canvasToEvidence, drawDownscaledFrame } from './capture';
 import { moderationApi } from './api';
-import {
-  REPORT_MIN_GAP_MS,
-  SAMPLE_INTERVAL_MS,
-  VIOLATION_COOLDOWN_MS,
-  evaluate,
-} from './policy';
+import { REPORT_MIN_GAP_MS, SAMPLE_INTERVAL_MS, VIOLATION_COOLDOWN_MS, evaluate } from './policy';
 
 export interface LocalScreeningOptions {
   /** The live local media stream, or null when not in a call. */
@@ -77,8 +68,7 @@ export function useLocalScreening({
 }: LocalScreeningOptions): LocalScreeningResult {
   const [flagged, setFlagged] = useState(false);
   const [active, setActive] = useState(false);
-  const [lastViolation, setLastViolation] =
-    useState<LocalScreeningResult['lastViolation']>(null);
+  const [lastViolation, setLastViolation] = useState<LocalScreeningResult['lastViolation']>(null);
 
   // Live, non-render handles.
   const videoElRef = useRef<HTMLVideoElement | null>(null);

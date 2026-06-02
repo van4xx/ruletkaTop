@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { countryCodeSchema, genderSchema, localeSchema, objectIdSchema, roleSchema } from './common';
+import {
+  countryCodeSchema,
+  genderSchema,
+  localeSchema,
+  objectIdSchema,
+  roleSchema,
+} from './common';
 
 /**
  * Distinct character classes used by the password-strength floor:

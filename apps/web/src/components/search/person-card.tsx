@@ -155,7 +155,10 @@ export function PersonCard({ profile, index = 0 }: { profile: PublicProfile; ind
 /** Skeleton mirroring the person card while discovery resolves. */
 export function PersonCardSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('glass-panel flex h-full flex-col gap-4 rounded-2xl p-4', className)} aria-hidden="true">
+    <div
+      className={cn('glass-panel flex h-full flex-col gap-4 rounded-2xl p-4', className)}
+      aria-hidden="true"
+    >
       <div className="flex items-start gap-3">
         <Skeleton shape="circle" className="h-14 w-14 shrink-0" />
         <div className="flex-1 space-y-2 pt-1">

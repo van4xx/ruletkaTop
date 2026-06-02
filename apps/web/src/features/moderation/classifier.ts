@@ -115,10 +115,7 @@ function createNsfwjsClassifier(): NsfwClassifier {
       modelPromise = (async () => {
         try {
           // Dynamic import keeps tfjs + the model out of the initial bundle.
-          const [tf, nsfwjs] = await Promise.all([
-            import('@tensorflow/tfjs'),
-            import('nsfwjs'),
-          ]);
+          const [tf, nsfwjs] = await Promise.all([import('@tensorflow/tfjs'), import('nsfwjs')]);
           // Production mode trims tfjs's expensive dev-time tensor checks.
           try {
             (tf as unknown as { enableProdMode?: () => void }).enableProdMode?.();
@@ -126,9 +123,7 @@ function createNsfwjsClassifier(): NsfwClassifier {
             /* non-fatal */
           }
           const url = modelUrl();
-          const model = url
-            ? await nsfwjs.load(url)
-            : await nsfwjs.load();
+          const model = url ? await nsfwjs.load(url) : await nsfwjs.load();
           return model as unknown as NsfwModelLike;
         } catch {
           loadFailed = true;

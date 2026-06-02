@@ -66,8 +66,7 @@ export function GiftPickerModal() {
   const [message, setMessage] = useState('');
 
   const locked = !!selected?.isPremiumOnly && !isPremium;
-  const insufficient =
-    selected != null && balance != null && balance < selected.priceCoins;
+  const insufficient = selected != null && balance != null && balance < selected.priceCoins;
 
   const recipientFixed = Boolean(toUserId);
 
@@ -184,7 +183,10 @@ export function GiftPickerModal() {
                             setSelected(gift);
                             setRecipientError(null);
                           }}
-                          aria-label={t('modals.giftPicker.giftAria', { title: gift.title, price: formatNumber(gift.priceCoins) })}
+                          aria-label={t('modals.giftPicker.giftAria', {
+                            title: gift.title,
+                            price: formatNumber(gift.priceCoins),
+                          })}
                           className={cn(
                             'group relative flex w-full flex-col items-center gap-1 rounded-xl border border-border/60 bg-card/40 p-2 transition-colors',
                             'hover:border-accent-muted hover:bg-card/70',
@@ -200,7 +202,11 @@ export function GiftPickerModal() {
                             </span>
                           )}
                           <div className="w-full">
-                            <GiftMedia url={gift.animationUrl} title={gift.title} rarity={gift.rarity} />
+                            <GiftMedia
+                              url={gift.animationUrl}
+                              title={gift.title}
+                              rarity={gift.rarity}
+                            />
                           </div>
                           <span className="line-clamp-1 text-center text-xs font-medium text-foreground">
                             {gift.title}
@@ -225,7 +231,11 @@ export function GiftPickerModal() {
         <div className="space-y-5">
           <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card/40 p-3">
             <div className="h-20 w-20 shrink-0">
-              <GiftMedia url={selected.animationUrl} title={selected.title} rarity={selected.rarity} />
+              <GiftMedia
+                url={selected.animationUrl}
+                title={selected.title}
+                rarity={selected.rarity}
+              />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -246,16 +256,12 @@ export function GiftPickerModal() {
           {locked ? (
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center">
               <Crown className="h-7 w-7 text-warning" aria-hidden="true" />
-              <p className="text-sm text-foreground">
-                {t('modals.giftPicker.premiumGiftNotice')}
-              </p>
+              <p className="text-sm text-foreground">{t('modals.giftPicker.premiumGiftNotice')}</p>
               <FullPageLink href={ROUTES.me}>{t('modals.giftPicker.openProfile')}</FullPageLink>
             </div>
           ) : (
             <>
-              {insufficient && (
-                <InsufficientCoins balance={balance} needed={selected.priceCoins} />
-              )}
+              {insufficient && <InsufficientCoins balance={balance} needed={selected.priceCoins} />}
 
               {/* Recipient */}
               {!recipientFixed && (

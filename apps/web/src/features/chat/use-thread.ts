@@ -16,11 +16,7 @@
  *            read state on outbound bubbles (sent → read ticks).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  useInfiniteQuery,
-  useQueryClient,
-  type InfiniteData,
-} from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { Message } from '@ruletka/shared-types';
 
 import { api } from '@/lib/api';
@@ -106,9 +102,7 @@ export function useThread(conversationId: string, selfId: string | null): UseThr
     setLocalMessages((prev) => {
       // Reconcile an optimistic bubble from us: drop the matching pending twin.
       if (selfId && m.senderId === selfId) {
-        const withoutPendingTwin = prev.filter(
-          (p) => !(p.pending && p.content === m.content),
-        );
+        const withoutPendingTwin = prev.filter((p) => !(p.pending && p.content === m.content));
         if (withoutPendingTwin.some((p) => p.id === m.id)) return withoutPendingTwin;
         return [...withoutPendingTwin, m];
       }
@@ -144,9 +138,7 @@ export function useThread(conversationId: string, selfId: string | null): UseThr
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items.map((m) =>
-            m.senderId === selfId && !m.readAt ? { ...m, readAt } : m,
-          ),
+          items: page.items.map((m) => (m.senderId === selfId && !m.readAt ? { ...m, readAt } : m)),
         })),
       };
     });
@@ -211,7 +203,10 @@ export function useThread(conversationId: string, selfId: string | null): UseThr
       } else {
         // Fallback: persist over REST and append the returned Message.
         api
-          .request<Message>('/messages', { method: 'POST', json: { conversationId, content: trimmed } })
+          .request<Message>('/messages', {
+            method: 'POST',
+            json: { conversationId, content: trimmed },
+          })
           .then((server) => finalize(true, server))
           .catch(() => finalize(false));
       }

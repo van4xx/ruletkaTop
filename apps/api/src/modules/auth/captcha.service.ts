@@ -5,8 +5,7 @@ import { ConfigService } from '@nestjs/config';
  * Cloudflare Turnstile siteverify endpoint.
  * @see https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
  */
-const TURNSTILE_VERIFY_URL =
-  'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 /** How long we wait on the siteverify call before giving up. */
 const VERIFY_TIMEOUT_MS = 5_000;

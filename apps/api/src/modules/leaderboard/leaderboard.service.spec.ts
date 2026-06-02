@@ -69,7 +69,9 @@ describe('LeaderboardService.getLeaderboard', () => {
     expect(res.me).toBeNull();
 
     // The aggregation groups received gifts by recipient and caps with $limit.
-    const pipeline = (giftsAggregate.mock.calls[0]! as unknown[])[0] as Array<Record<string, unknown>>;
+    const pipeline = (giftsAggregate.mock.calls[0]! as unknown[])[0] as Array<
+      Record<string, unknown>
+    >;
     expect(pipeline).toEqual(
       expect.arrayContaining([
         { $group: { _id: '$toUserId', score: { $sum: '$priceCoins' } } },
@@ -88,7 +90,9 @@ describe('LeaderboardService.getLeaderboard', () => {
     );
     // Only USER_A has a profile; USER_B is dropped from the entries.
     const profilesFind = jest.fn(() =>
-      cursor([{ userId: new Types.ObjectId(USER_A), nickname: 'A', avatarUrl: null, isPremium: false }]),
+      cursor([
+        { userId: new Types.ObjectId(USER_A), nickname: 'A', avatarUrl: null, isPremium: false },
+      ]),
     );
     const { connection } = connectionWith({
       gifttransactions: { aggregate: giftsAggregate },
@@ -116,11 +120,15 @@ describe('LeaderboardService.getLeaderboard', () => {
       .fn()
       // join for the slice…
       .mockReturnValueOnce(
-        cursor([{ userId: new Types.ObjectId(USER_A), nickname: 'A', avatarUrl: null, isPremium: false }]),
+        cursor([
+          { userId: new Types.ObjectId(USER_A), nickname: 'A', avatarUrl: null, isPremium: false },
+        ]),
       )
       // …then the caller's own profile for `me`.
       .mockReturnValueOnce(
-        cursor([{ userId: new Types.ObjectId(CALLER), nickname: 'Me', avatarUrl: null, isPremium: true }]),
+        cursor([
+          { userId: new Types.ObjectId(CALLER), nickname: 'Me', avatarUrl: null, isPremium: true },
+        ]),
       );
     const { connection } = connectionWith({
       gifttransactions: { aggregate: giftsAggregate },
@@ -145,16 +153,18 @@ describe('LeaderboardService.getLeaderboard', () => {
   it('coins metric reads wallet balances desc and counts ahead via balance gt', async () => {
     const walletsCount = jest.fn().mockResolvedValue(2);
     const walletsFindOne = jest.fn().mockResolvedValue({ balanceCoins: 80 });
-    const aggregate = jest.fn(() =>
-      cursor([{ _id: new Types.ObjectId(USER_A), score: 900 }]),
-    );
+    const aggregate = jest.fn(() => cursor([{ _id: new Types.ObjectId(USER_A), score: 900 }]));
     const profilesFind = jest
       .fn()
       .mockReturnValueOnce(
-        cursor([{ userId: new Types.ObjectId(USER_A), nickname: 'A', avatarUrl: null, isPremium: false }]),
+        cursor([
+          { userId: new Types.ObjectId(USER_A), nickname: 'A', avatarUrl: null, isPremium: false },
+        ]),
       )
       .mockReturnValueOnce(
-        cursor([{ userId: new Types.ObjectId(CALLER), nickname: 'Me', avatarUrl: null, isPremium: false }]),
+        cursor([
+          { userId: new Types.ObjectId(CALLER), nickname: 'Me', avatarUrl: null, isPremium: false },
+        ]),
       );
     const { connection, collection } = connectionWith({
       wallets: { aggregate, countDocuments: walletsCount, findOne: walletsFindOne } as never,

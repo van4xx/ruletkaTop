@@ -59,9 +59,7 @@ export function LoginForm() {
   });
 
   const apiMessage =
-    login.error?.status === 401
-      ? t('login.invalidCredentials')
-      : login.error?.message;
+    login.error?.status === 401 ? t('login.invalidCredentials') : login.error?.message;
 
   const busy = isSubmitting || login.isPending;
 
@@ -69,9 +67,7 @@ export function LoginForm() {
     <div>
       <header className="mb-8">
         <h1 className="font-display text-3xl font-bold tracking-tight">{t('login.title')}</h1>
-        <p className="mt-2 text-muted-foreground">
-          {t('login.subtitle')}
-        </p>
+        <p className="mt-2 text-muted-foreground">{t('login.subtitle')}</p>
       </header>
 
       <AnimatePresence>
@@ -107,7 +103,12 @@ export function LoginForm() {
 
         <FormField label={t('fields.password')} required error={errors.password?.message}>
           {(field) => (
-            <PasswordField {...field} autoComplete="current-password" placeholder={t('fields.passwordPlaceholder')} {...register('password')} />
+            <PasswordField
+              {...field}
+              autoComplete="current-password"
+              placeholder={t('fields.passwordPlaceholder')}
+              {...register('password')}
+            />
           )}
         </FormField>
 

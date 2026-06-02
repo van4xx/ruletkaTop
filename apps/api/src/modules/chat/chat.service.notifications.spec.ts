@@ -30,8 +30,7 @@ function messageDoc(content: string): unknown {
     type: 'text',
     content,
     readAt: null,
-    get: (key: string) =>
-      key === 'createdAt' ? new Date('2026-01-01T00:00:00.000Z') : undefined,
+    get: (key: string) => (key === 'createdAt' ? new Date('2026-01-01T00:00:00.000Z') : undefined),
   };
 }
 
@@ -57,11 +56,13 @@ describe('ChatService.sendMessage — context (away) notifications', () => {
     //  - 'profiles' → sender nickname for the notification title
     const connection = {
       collection: jest.fn().mockImplementation((name: string) => ({
-        findOne: jest.fn().mockResolvedValue(
-          name === 'settings'
-            ? { privacy: { whoCanMessage: 'everyone' } }
-            : { nickname: 'Alice' },
-        ),
+        findOne: jest
+          .fn()
+          .mockResolvedValue(
+            name === 'settings'
+              ? { privacy: { whoCanMessage: 'everyone' } }
+              : { nickname: 'Alice' },
+          ),
       })),
     };
 

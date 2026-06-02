@@ -65,5 +65,6 @@ export const BAN_AT_VIOLATION = 3;
  * instant permanent ban + evidence retention + review flag, regardless of score
  * or prior count. `minor` is CSAM-risk; see the CSAM note in the module summary.
  */
-export const ZERO_TOLERANCE_LABELS: readonly import('@ruletka/shared-types').ModerationLabel[] =
-  ['minor'];
+export const ZERO_TOLERANCE_LABELS: readonly import('@ruletka/shared-types').ModerationLabel[] = [
+  'minor',
+];

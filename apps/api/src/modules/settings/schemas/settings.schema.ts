@@ -63,9 +63,7 @@ export class DeviceSettingsEntity implements DeviceSettings {
 }
 
 const PrivacySettingsSchema = SchemaFactory.createForClass(PrivacySettingsEntity);
-const NotificationSettingsSchema = SchemaFactory.createForClass(
-  NotificationSettingsEntity,
-);
+const NotificationSettingsSchema = SchemaFactory.createForClass(NotificationSettingsEntity);
 const DeviceSettingsSchema = SchemaFactory.createForClass(DeviceSettingsEntity);
 
 /**

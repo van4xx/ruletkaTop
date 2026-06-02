@@ -71,7 +71,8 @@ export default function GlobalError({
           </button>
           {error.digest && (
             <p style={{ marginTop: '1.5rem', fontSize: '0.75rem', color: '#71717a' }}>
-              Код ошибки: <span style={{ fontFamily: 'ui-monospace, monospace' }}>{error.digest}</span>
+              Код ошибки:{' '}
+              <span style={{ fontFamily: 'ui-monospace, monospace' }}>{error.digest}</span>
             </p>
           )}
         </div>

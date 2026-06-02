@@ -18,12 +18,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowRight, CornerDownLeft, Search } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@ruletka/ui';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@ruletka/ui';
 import { COMMAND_ITEMS, type NavItem } from '@/config/nav';
 import { cn } from '@/lib/cn';
 
@@ -148,9 +143,7 @@ export function CommandPalette() {
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">{t('commandPalette.title')}</DialogTitle>
-        <DialogDescription className="sr-only">
-          {t('commandPalette.description')}
-        </DialogDescription>
+        <DialogDescription className="sr-only">{t('commandPalette.description')}</DialogDescription>
 
         {/* Search input row */}
         <div className="flex items-center gap-3 border-b border-border/70 px-4">

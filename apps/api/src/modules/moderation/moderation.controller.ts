@@ -104,10 +104,7 @@ export class ModerationController {
   async listReview(
     @Query(createZodValidationPipe(listReviewQuerySchema)) query: ListReviewQuery,
   ): Promise<ReviewPage> {
-    return this.reviewService.listQueue(
-      { cursor: query.cursor, limit: query.limit },
-      query.status,
-    );
+    return this.reviewService.listQueue({ cursor: query.cursor, limit: query.limit }, query.status);
   }
 
   @Post('moderation/review/:id/resolve')

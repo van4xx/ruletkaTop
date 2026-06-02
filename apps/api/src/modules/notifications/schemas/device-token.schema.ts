@@ -4,11 +4,7 @@ import { HydratedDocument, Types } from 'mongoose';
 import type { DevicePushTokenDto } from '@ruletka/shared-types';
 
 /** Mobile push platforms (kept in sync with `devicePushTokenSchema`). */
-const PUSH_PLATFORMS: readonly DevicePushTokenDto['platform'][] = [
-  'android',
-  'ios',
-  'web',
-];
+const PUSH_PLATFORMS: readonly DevicePushTokenDto['platform'][] = ['android', 'ios', 'web'];
 
 /**
  * A mobile push token (FCM / APNs) registered for a user's device. Mirrors

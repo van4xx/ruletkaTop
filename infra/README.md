@@ -91,14 +91,14 @@ host-oriented values in `.env` (`localhost`) do not need editing.
 Defined in [`.env.example`](../.env.example); copy it to `.env`. Variables the
 infra consumes directly:
 
-| Variable                  | Used by            | Notes                                                        |
-| ------------------------- | ------------------ | ------------------------------------------------------------ |
-| `TURN_STATIC_AUTH_SECRET` | coturn, api        | HMAC secret for ephemeral TURN creds. **Required.** Server-only — never sent to clients. |
-| `TURN_REALM`              | coturn             | TURN realm advertised to clients (default `ruletka.top`).    |
-| `REDIS_PASSWORD`          | redis, api         | Empty in dev (no auth). When set, enables `--requirepass` and authenticated healthchecks. |
-| `MONGODB_URI`             | api                | Host default `mongodb://localhost:27017/ruletka`; container override targets `mongo`. |
-| `REDIS_HOST` / `REDIS_PORT` | api              | Host defaults `localhost:6379`; container override targets `redis:6379`. |
-| `NEXT_PUBLIC_*`           | web (build args)   | Inlined into the Next.js bundle at **build** time — pass as `--build-arg` for non-local deploys. |
+| Variable                    | Used by          | Notes                                                                                            |
+| --------------------------- | ---------------- | ------------------------------------------------------------------------------------------------ |
+| `TURN_STATIC_AUTH_SECRET`   | coturn, api      | HMAC secret for ephemeral TURN creds. **Required.** Server-only — never sent to clients.         |
+| `TURN_REALM`                | coturn           | TURN realm advertised to clients (default `ruletka.top`).                                        |
+| `REDIS_PASSWORD`            | redis, api       | Empty in dev (no auth). When set, enables `--requirepass` and authenticated healthchecks.        |
+| `MONGODB_URI`               | api              | Host default `mongodb://localhost:27017/ruletka`; container override targets `mongo`.            |
+| `REDIS_HOST` / `REDIS_PORT` | api              | Host defaults `localhost:6379`; container override targets `redis:6379`.                         |
+| `NEXT_PUBLIC_*`             | web (build args) | Inlined into the Next.js bundle at **build** time — pass as `--build-arg` for non-local deploys. |
 
 Secrets (`*_SECRET`, `*_PASSWORD`, API keys) must never be committed; `.env` is
 git-ignored.
@@ -107,15 +107,15 @@ git-ignored.
 
 ## Exposed ports (dev)
 
-| Service | Host port(s)              | Protocol    | Purpose                              |
-| ------- | ------------------------- | ----------- | ------------------------------------ |
-| mongo   | `27017`                   | TCP         | MongoDB wire protocol                |
-| redis   | `6379`                    | TCP         | Redis                                |
-| coturn  | `3478`                    | UDP + TCP   | STUN / TURN                          |
-| coturn  | `5349`                    | TCP         | STUN / TURN over TLS (TURNS)         |
-| coturn  | `49160-49200`             | UDP         | Media relay range (matches conf)     |
-| api\*   | `4000`                    | TCP         | NestJS API (`/api`) + Socket.io      |
-| web\*   | `3000`                    | TCP         | Next.js                              |
+| Service | Host port(s)  | Protocol  | Purpose                          |
+| ------- | ------------- | --------- | -------------------------------- |
+| mongo   | `27017`       | TCP       | MongoDB wire protocol            |
+| redis   | `6379`        | TCP       | Redis                            |
+| coturn  | `3478`        | UDP + TCP | STUN / TURN                      |
+| coturn  | `5349`        | TCP       | STUN / TURN over TLS (TURNS)     |
+| coturn  | `49160-49200` | UDP       | Media relay range (matches conf) |
+| api\*   | `4000`        | TCP       | NestJS API (`/api`) + Socket.io  |
+| web\*   | `3000`        | TCP       | Next.js                          |
 
 \* Only when started with `--profile app`.
 
@@ -177,11 +177,11 @@ ports). Deploy it as a container or system nginx in front of the app.
 
 Routing:
 
-| Location      | Upstream      | Notes                                                   |
-| ------------- | ------------- | ------------------------------------------------------- |
-| `/socket.io/` | `api:4000`    | WebSocket `Upgrade`/`Connection` headers; 1h read/send timeouts. |
-| `/api`        | `api:4000`    | REST API.                                               |
-| `/`           | `web:3000`    | Next.js (catch-all).                                    |
+| Location      | Upstream   | Notes                                                            |
+| ------------- | ---------- | ---------------------------------------------------------------- |
+| `/socket.io/` | `api:4000` | WebSocket `Upgrade`/`Connection` headers; 1h read/send timeouts. |
+| `/api`        | `api:4000` | REST API.                                                        |
+| `/`           | `web:3000` | Next.js (catch-all).                                             |
 
 Other features: HTTP→HTTPS redirect with an ACME challenge location, TLS 1.2/1.3
 with cert **path placeholders** (`/etc/nginx/certs/{fullchain,privkey}.pem`),

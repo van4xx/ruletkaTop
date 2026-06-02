@@ -21,10 +21,7 @@ const EVIDENCE_QUALITY = 0.6;
  * the video has no frame yet (camera warming up), in which case the canvas is
  * left untouched and callers should skip this tick.
  */
-export function drawDownscaledFrame(
-  video: HTMLVideoElement,
-  canvas: HTMLCanvasElement,
-): boolean {
+export function drawDownscaledFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement): boolean {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   if (!vw || !vh) return false;

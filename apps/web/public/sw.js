@@ -60,23 +60,21 @@ self.addEventListener('notificationclick', (event) => {
   const targetUrl = new URL(targetPath, self.location.origin).href;
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        // Prefer focusing an already-open tab on our origin and navigating it.
-        for (const client of clientList) {
-          if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
-            return client.focus().then((focused) => {
-              if ('navigate' in focused) {
-                return focused.navigate(targetUrl).catch(() => focused);
-              }
-              return focused;
-            });
-          }
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Prefer focusing an already-open tab on our origin and navigating it.
+      for (const client of clientList) {
+        if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
+          return client.focus().then((focused) => {
+            if ('navigate' in focused) {
+              return focused.navigate(targetUrl).catch(() => focused);
+            }
+            return focused;
+          });
         }
-        // Otherwise open a fresh tab at the deep link.
-        if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
-        return undefined;
-      }),
+      }
+      // Otherwise open a fresh tab at the deep link.
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+      return undefined;
+    }),
   );
 });

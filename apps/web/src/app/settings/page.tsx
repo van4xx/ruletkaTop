@@ -39,9 +39,7 @@ export default function SettingsPage() {
             <h1 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-4xl">
               {t('shell.title')}
             </h1>
-            <p className="mt-2 max-w-xl text-muted-foreground">
-              {t('shell.subtitle')}
-            </p>
+            <p className="mt-2 max-w-xl text-muted-foreground">{t('shell.subtitle')}</p>
           </motion.header>
 
           <SettingsView />

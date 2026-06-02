@@ -43,9 +43,7 @@ describe('AdminService — ban / unban', () => {
   });
 
   it('ban: sets isBanned=true, revokes ALL sessions, and publishes a socket disconnect', async () => {
-    userModel.findByIdAndUpdate.mockReturnValue(
-      queryReturning({ _id: userId, isBanned: true }),
-    );
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: true }));
 
     const result = await service.banUser(userId);
 
@@ -76,9 +74,7 @@ describe('AdminService — ban / unban', () => {
   });
 
   it('ban: still succeeds when the disconnect publish fails (best-effort)', async () => {
-    userModel.findByIdAndUpdate.mockReturnValue(
-      queryReturning({ _id: userId, isBanned: true }),
-    );
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: true }));
     redis.publish.mockRejectedValue(new Error('redis down'));
 
     const result = await service.banUser(userId);
@@ -105,9 +101,7 @@ describe('AdminService — ban / unban', () => {
   });
 
   it('unban: clears isBanned and does NOT revoke sessions or publish', async () => {
-    userModel.findByIdAndUpdate.mockReturnValue(
-      queryReturning({ _id: userId, isBanned: false }),
-    );
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: false }));
 
     const result = await service.unbanUser(userId);
 

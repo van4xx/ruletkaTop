@@ -28,8 +28,7 @@ import { isRouteActive } from './lib';
 import { AuthCta } from './auth-cta';
 import { openCommandPalette } from './command-palette';
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])';
 
 interface MobileDrawerProps {
   open: boolean;
@@ -196,7 +195,10 @@ export function MobileDrawer({
                   <span className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-semibold">{user.nickname}</span>
                     {user.isPremium && (
-                      <Crown className="h-3.5 w-3.5 shrink-0 text-warning" aria-label={t('drawer.premiumAria')} />
+                      <Crown
+                        className="h-3.5 w-3.5 shrink-0 text-warning"
+                        aria-label={t('drawer.premiumAria')}
+                      />
                     )}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">{user.email}</span>
@@ -222,7 +224,10 @@ export function MobileDrawer({
             </div>
 
             {/* Nav */}
-            <nav aria-label={t('drawer.mobileNavAria')} className="flex-1 overflow-y-auto px-3 py-3">
+            <nav
+              aria-label={t('drawer.mobileNavAria')}
+              className="flex-1 overflow-y-auto px-3 py-3"
+            >
               <ul className="flex flex-col gap-1">
                 {items.map((item) => {
                   const active = isRouteActive(pathname, item.href);

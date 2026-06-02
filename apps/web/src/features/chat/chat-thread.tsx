@@ -156,7 +156,13 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
       {/* Header */}
       <header className="glass-panel z-10 flex items-center gap-3 border-x-0 border-t-0 px-3 py-2.5 sm:px-4">
-        <IconButton asChild variant="ghost" size="sm" aria-label={t('chatThread.backToChats')} className="lg:hidden">
+        <IconButton
+          asChild
+          variant="ghost"
+          size="sm"
+          aria-label={t('chatThread.backToChats')}
+          className="lg:hidden"
+        >
           <Link href={ROUTES.chats}>
             <ArrowLeft aria-hidden="true" />
           </Link>
@@ -198,7 +204,12 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
             </Link>
           </IconButton>
         ) : (
-          <IconButton variant="glass" size="sm" aria-label={t('chatThread.unavailableForCall')} disabled>
+          <IconButton
+            variant="glass"
+            size="sm"
+            aria-label={t('chatThread.unavailableForCall')}
+            disabled
+          >
             <Phone aria-hidden="true" />
           </IconButton>
         )}
@@ -215,7 +226,10 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
             <ThreadSkeleton />
           ) : thread.isError ? (
             <div className="py-12">
-              <ErrorState onRetry={thread.refetch} description={t('chatThread.loadMessagesError')} />
+              <ErrorState
+                onRetry={thread.refetch}
+                description={t('chatThread.loadMessagesError')}
+              />
             </div>
           ) : (
             <div className="mx-auto flex max-w-2xl flex-col gap-1.5">
@@ -232,7 +246,9 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
                   <span className="text-4xl" aria-hidden="true">
                     👋
                   </span>
-                  <p className="font-display text-base font-semibold">{t('chatThread.startConversation')}</p>
+                  <p className="font-display text-base font-semibold">
+                    {t('chatThread.startConversation')}
+                  </p>
                   <p className="max-w-xs text-sm text-muted-foreground">
                     {peer
                       ? t('chatThread.conversationStartWith', { name: peer.nickname })

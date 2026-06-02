@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   ApiBearerAuth,
@@ -77,10 +68,7 @@ export class ProfilesController {
   @ApiOperation({ summary: 'Fetch a public profile by user id (privacy-gated)' })
   @ApiParam({ name: 'id', description: 'Owning user id (Mongo ObjectId)' })
   @ApiOkResponse({ description: 'Public profile projection' })
-  async getProfile(
-    @Param('id') id: string,
-    @Req() req: Request,
-  ): Promise<PublicProfile> {
+  async getProfile(@Param('id') id: string, @Req() req: Request): Promise<PublicProfile> {
     const viewerId = this.tryGetViewerId(req);
     // Visibility-gated read (everyone / friends / nobody, owner always allowed).
     const profile = await this.profilesService.getPublicProfileFor(viewerId, id);

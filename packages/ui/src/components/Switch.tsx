@@ -46,7 +46,8 @@ const thumbVariants = cva(
 );
 
 export interface SwitchProps
-  extends React.ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>,
+  extends
+    React.ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>,
     VariantProps<typeof switchVariants> {}
 
 /**
@@ -54,13 +55,16 @@ export interface SwitchProps
  * glow; the thumb travels with a gentle spring. Pair with a {@link Label}
  * (via `id`/`htmlFor`) for an accessible, clickable label.
  */
-export const Switch = React.forwardRef<
-  React.ElementRef<typeof SwitchPrimitive.Root>,
-  SwitchProps
->(function Switch({ className, size, ...props }, ref) {
-  return (
-    <SwitchPrimitive.Root ref={ref} className={cn(switchVariants({ size }), className)} {...props}>
-      <SwitchPrimitive.Thumb className={thumbVariants({ size })} />
-    </SwitchPrimitive.Root>
-  );
-});
+export const Switch = React.forwardRef<React.ElementRef<typeof SwitchPrimitive.Root>, SwitchProps>(
+  function Switch({ className, size, ...props }, ref) {
+    return (
+      <SwitchPrimitive.Root
+        ref={ref}
+        className={cn(switchVariants({ size }), className)}
+        {...props}
+      >
+        <SwitchPrimitive.Thumb className={thumbVariants({ size })} />
+      </SwitchPrimitive.Root>
+    );
+  },
+);

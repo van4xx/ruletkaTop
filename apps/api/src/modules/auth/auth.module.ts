@@ -7,15 +7,9 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { CaptchaService } from './captcha.service';
 import { FingerprintService } from './fingerprint.service';
-import {
-  BannedFingerprint,
-  BannedFingerprintSchema,
-} from './schemas/banned-fingerprint.schema';
+import { BannedFingerprint, BannedFingerprintSchema } from './schemas/banned-fingerprint.schema';
 import { Session, SessionSchema } from './schemas/session.schema';
-import {
-  VerificationToken,
-  VerificationTokenSchema,
-} from './schemas/verification-token.schema';
+import { VerificationToken, VerificationTokenSchema } from './schemas/verification-token.schema';
 
 /**
  * Owns authentication: the `/auth` REST surface and refresh-session lifecycle.

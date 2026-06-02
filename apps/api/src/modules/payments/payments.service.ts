@@ -1,12 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -52,12 +46,7 @@ const ACK_OK: CloudPaymentsAck = { code: 0 } as const;
  * @see https://developers.cloudpayments.ru/#uvedomlenie-recurrent
  */
 const RECURRENT_ACTIVE = 'Active';
-const RECURRENT_TERMINAL = new Set([
-  'PastDue',
-  'Cancelled',
-  'Rejected',
-  'Expired',
-]);
+const RECURRENT_TERMINAL = new Set(['PastDue', 'Cancelled', 'Rejected', 'Expired']);
 
 /**
  * Orchestrates the CloudPayments money flow for coin purchases and premium
@@ -110,10 +99,7 @@ export class PaymentsService {
    *
    * @throws NotFoundException when `packageCode` is unknown.
    */
-  async createCoinsCheckout(
-    userId: string,
-    dto: CoinsCheckoutDto,
-  ): Promise<CheckoutWidgetParams> {
+  async createCoinsCheckout(userId: string, dto: CoinsCheckoutDto): Promise<CheckoutWidgetParams> {
     const pkg = await this.coinPackages.findByCode(dto.packageCode);
     if (!pkg) {
       throw new NotFoundException('Coin package not found');
@@ -418,7 +404,12 @@ export class PaymentsService {
     }
     const total = pkg.coins + pkg.bonusCoins;
     // refId namespaced so the refund ledger row is distinct from the purchase.
-    await this.wallet.debit(payment.userId.toString(), total, 'refund', `refund:${payment.invoiceId}`);
+    await this.wallet.debit(
+      payment.userId.toString(),
+      total,
+      'refund',
+      `refund:${payment.invoiceId}`,
+    );
     this.logger.log(
       `Reversed ${total} coins from user ${payment.userId.toString()} for refunded invoice ${payment.invoiceId}`,
     );
@@ -428,9 +419,7 @@ export class PaymentsService {
    * Locate the Payment a notification refers to, preferring our `InvoiceId`
    * (the idempotency key) and falling back to the provider `TransactionId`.
    */
-  private async findByNotification(
-    n: CloudPaymentsNotification,
-  ): Promise<PaymentDocument | null> {
+  private async findByNotification(n: CloudPaymentsNotification): Promise<PaymentDocument | null> {
     if (n.InvoiceId) {
       const byInvoice = await this.paymentModel.findOne({ invoiceId: n.InvoiceId }).exec();
       if (byInvoice) {
@@ -460,10 +449,7 @@ export class PaymentsService {
    * Payment's plan (looked up via SubscriptionId), then the echoed `Data.plan`,
    * defaulting to `monthly`.
    */
-  private async planFromRecurrent(
-    n: CloudPaymentsNotification,
-    _userId: string,
-  ): Promise<string> {
+  private async planFromRecurrent(n: CloudPaymentsNotification, _userId: string): Promise<string> {
     if (n.SubscriptionId) {
       const prior = await this.paymentModel
         .findOne({ subscriptionId: n.SubscriptionId, purpose: 'premium' })
@@ -486,9 +472,11 @@ export class PaymentsService {
     let intervalDays = 30;
     // The premium contract exposes plan lookup only via the concrete service;
     // fall back to a sane default if the catalogue can't be consulted here.
-    const planLookup = (this.premium as Partial<{
-      findPlanByCode(code: string): Promise<{ intervalDays: number } | null>;
-    }>).findPlanByCode;
+    const planLookup = (
+      this.premium as Partial<{
+        findPlanByCode(code: string): Promise<{ intervalDays: number } | null>;
+      }>
+    ).findPlanByCode;
     if (typeof planLookup === 'function') {
       const found = await planLookup.call(this.premium, plan);
       if (found && Number.isFinite(found.intervalDays) && found.intervalDays > 0) {

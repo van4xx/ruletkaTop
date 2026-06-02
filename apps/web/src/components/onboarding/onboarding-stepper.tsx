@@ -34,7 +34,9 @@ export function OnboardingStepper({
       {/* Mobile: compact label + bar */}
       <div className="sm:hidden">
         <div className="flex items-baseline justify-between">
-          <p className="font-display text-sm font-semibold">{steps[current] ? t(steps[current]!.labelKey) : ''}</p>
+          <p className="font-display text-sm font-semibold">
+            {steps[current] ? t(steps[current]!.labelKey) : ''}
+          </p>
           <p className="text-xs text-muted-foreground">
             {t('onboarding.stepCounter', { current: current + 1, total })}
           </p>
@@ -72,7 +74,8 @@ export function OnboardingStepper({
               <span
                 className={cn(
                   'flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ring-1 transition-colors',
-                  isDone && 'bg-[var(--color-neon-violet)]/20 text-foreground ring-[var(--color-neon-violet)]/50',
+                  isDone &&
+                    'bg-[var(--color-neon-violet)]/20 text-foreground ring-[var(--color-neon-violet)]/50',
                   isCurrent &&
                     'bg-gradient-to-br from-[var(--color-neon-violet)] to-[var(--color-neon-magenta)] text-primary-foreground ring-transparent shadow-[0_4px_16px_-4px_var(--color-neon-violet)]',
                   !isDone && !isCurrent && 'bg-card/70 text-muted-foreground ring-border/60',

@@ -51,7 +51,12 @@ services:
     container_name: ruletka-redis
     restart: unless-stopped
     # `redis-server $REDIS_ARGS` — pass --requirepass only when a password is set.
-    command: ['sh', '-c', 'exec redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}']
+    command:
+      [
+        'sh',
+        '-c',
+        'exec redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}',
+      ]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
@@ -62,11 +67,7 @@ services:
       - ruletka-net
     healthcheck:
       # Authenticated PING when a password is configured, plain PING otherwise.
-      test:
-        [
-          'CMD-SHELL',
-          'redis-cli ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} ping | grep -q PONG',
-        ]
+      test: ['CMD-SHELL', 'redis-cli ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} ping | grep -q PONG']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -154,7 +155,11 @@ services:
       - ruletka-net
     healthcheck:
       # Adjust the path if the API exposes a different health route.
-      test: ['CMD-SHELL', 'node -e "fetch(\"http://127.0.0.1:4000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(\"http://127.0.0.1:4000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
       interval: 15s
       timeout: 5s
       retries: 5

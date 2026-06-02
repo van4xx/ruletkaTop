@@ -7,10 +7,7 @@ import { PremiumModule } from '../premium/premium.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { GiftsController } from './gifts.controller';
 import { GiftsService } from './gifts.service';
-import {
-  GiftTransaction,
-  GiftTransactionSchema,
-} from './schemas/gift-transaction.schema';
+import { GiftTransaction, GiftTransactionSchema } from './schemas/gift-transaction.schema';
 import { Gift, GiftSchema } from './schemas/gift.schema';
 
 /**

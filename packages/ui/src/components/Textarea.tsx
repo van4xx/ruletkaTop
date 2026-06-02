@@ -28,9 +28,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(fun
         'placeholder:text-subtle-foreground',
         'focus:border-accent-muted focus:bg-input/60 focus:outline-none focus:ring-2 focus:ring-input-focus',
         'disabled:cursor-not-allowed disabled:opacity-55',
-        invalid
-          ? 'border-danger focus:border-danger focus:ring-danger/40'
-          : 'border-border',
+        invalid ? 'border-danger focus:border-danger focus:ring-danger/40' : 'border-border',
         className,
       )}
       {...props}

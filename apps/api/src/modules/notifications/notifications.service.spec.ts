@@ -40,8 +40,7 @@ function notifDoc(over: Partial<Record<string, unknown>> = {}): unknown {
     read: false,
     actorId: { toString: () => '507f1f77bcf86cd799439022' },
     link: '/profile/x',
-    get: (key: string) =>
-      key === 'createdAt' ? new Date('2026-01-01T00:00:00.000Z') : undefined,
+    get: (key: string) => (key === 'createdAt' ? new Date('2026-01-01T00:00:00.000Z') : undefined),
     ...over,
   };
 }
@@ -104,7 +103,10 @@ describe('NotificationsService', () => {
       expect(redis.publish).toHaveBeenCalledTimes(1);
       const [channel, raw] = redis.publish.mock.calls[0] as [string, string];
       expect(channel).toBe(NOTIFICATION_NEW_CHANNEL);
-      const message = JSON.parse(raw) as { userId: string; notification: { id: string; kind: string } };
+      const message = JSON.parse(raw) as {
+        userId: string;
+        notification: { id: string; kind: string };
+      };
       expect(message.userId).toBe(RECIPIENT);
       // …carrying the lightweight AppNotification projection (no `read`/`actorId`).
       expect(message.notification).toEqual({

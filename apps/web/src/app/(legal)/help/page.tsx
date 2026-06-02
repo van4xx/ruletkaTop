@@ -126,7 +126,8 @@ export default function HelpPage() {
       <Section id="coins" index={3} title={t('help.coins.title')}>
         <P>
           <span className="inline-flex items-center gap-1.5 align-middle font-medium text-foreground">
-            <Coins className="h-4 w-4 text-warning" aria-hidden="true" /> {t('help.coins.coinsLabel')}
+            <Coins className="h-4 w-4 text-warning" aria-hidden="true" />{' '}
+            {t('help.coins.coinsLabel')}
           </span>{' '}
           {t('help.coins.bodyAfterCoins')}
         </P>
@@ -145,7 +146,9 @@ export default function HelpPage() {
               <MessageSquareWarning className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <p className="font-display font-semibold text-foreground">{t('help.contact.cardTitle')}</p>
+              <p className="font-display font-semibold text-foreground">
+                {t('help.contact.cardTitle')}
+              </p>
               <p className="text-sm text-muted-foreground">
                 {t('help.contact.cardBodyPre')}{' '}
                 <a

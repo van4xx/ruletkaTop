@@ -79,11 +79,7 @@ function UserMenuImpl({ user, onLogout }: UserMenuProps) {
       <DropdownMenuContent align="end" sideOffset={10} className="w-60">
         {/* Identity header */}
         <div className="flex items-center gap-3 px-2 py-2">
-          <Avatar
-            size="md"
-            alt={user.nickname}
-            ring={user.isPremium ? 'aurora' : 'none'}
-          />
+          <Avatar size="md" alt={user.nickname} ring={user.isPremium ? 'aurora' : 'none'} />
           <div className="flex min-w-0 flex-col">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-sm font-semibold text-foreground">

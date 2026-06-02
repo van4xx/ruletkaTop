@@ -1,11 +1,5 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOkResponse,
-  ApiOperation,
-  ApiQuery,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 import {
   type JwtPayload,
@@ -36,9 +30,13 @@ export class LeaderboardController {
 
   @Get()
   @ApiOperation({ summary: 'Ranked leaderboard for a metric (+ the caller as `me`)' })
-  @ApiQuery({ name: 'metric', required: false, description: "'gifts' | 'coins' | 'top' (default 'gifts')" })
+  @ApiQuery({
+    name: 'metric',
+    required: false,
+    description: "'gifts' | 'coins' | 'top' (default 'gifts')",
+  })
   @ApiQuery({ name: 'limit', required: false, description: 'Top N (1–100, default 50)' })
-  @ApiOkResponse({ description: 'Ranked entries + the caller\'s own rank' })
+  @ApiOkResponse({ description: "Ranked entries + the caller's own rank" })
   async getLeaderboard(
     @CurrentUser() user: JwtPayload,
     @Query(createZodValidationPipe(leaderboardQuerySchema)) query: LeaderboardQuery,

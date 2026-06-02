@@ -75,7 +75,9 @@ export function CoinsPromoWidget() {
               </span>
             </span>
             <div>
-              <h2 className="font-display text-base font-bold tracking-tight">{t('dashboard.dailyBonusTitle')}</h2>
+              <h2 className="font-display text-base font-bold tracking-tight">
+                {t('dashboard.dailyBonusTitle')}
+              </h2>
               <p className="text-xs text-muted-foreground">{t('dashboard.dailyBonusSubtitle')}</p>
             </div>
           </div>
@@ -111,7 +113,9 @@ export function CoinsPromoWidget() {
                   <Coins className="h-3 w-3 opacity-70" aria-hidden="true" />
                   {reward}
                 </span>
-                <span className="text-[0.5625rem] text-muted-foreground">{t('dashboard.dayShort', { day: i + 1 })}</span>
+                <span className="text-[0.5625rem] text-muted-foreground">
+                  {t('dashboard.dayShort', { day: i + 1 })}
+                </span>
               </motion.li>
             );
           })}

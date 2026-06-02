@@ -89,9 +89,7 @@ export function SearchUsersModal() {
     <>
       <DialogHeader>
         <DialogTitle>{t('modals.searchUsers.title')}</DialogTitle>
-        <DialogDescription>
-          {t('modals.searchUsers.description')}
-        </DialogDescription>
+        <DialogDescription>{t('modals.searchUsers.description')}</DialogDescription>
       </DialogHeader>
 
       <Input
@@ -122,11 +120,7 @@ export function SearchUsersModal() {
         {showEmpty && (
           <div className="py-8 text-center text-sm text-muted-foreground">
             <p>{t('modals.searchUsers.emptyTitle')}</p>
-            {!isIdLike && (
-              <p className="mt-1 text-xs">
-                {t('modals.searchUsers.emptyHint')}
-              </p>
-            )}
+            {!isIdLike && <p className="mt-1 text-xs">{t('modals.searchUsers.emptyHint')}</p>}
           </div>
         )}
 
@@ -176,7 +170,13 @@ function ResultRow({
           size="sm"
           variant="ghost"
           aria-label={t('modals.searchUsers.giftAria', { name: profile.nickname })}
-          onClick={() => onAction('gift-picker', { toUserId: profile.id, toNickname: profile.nickname, context: 'profile' })}
+          onClick={() =>
+            onAction('gift-picker', {
+              toUserId: profile.id,
+              toNickname: profile.nickname,
+              context: 'profile',
+            })
+          }
         >
           <Gift className="h-4 w-4" />
         </IconButton>
@@ -184,7 +184,9 @@ function ResultRow({
           size="sm"
           variant="ghost"
           aria-label={t('modals.searchUsers.addFriendAria', { name: profile.nickname })}
-          onClick={() => onAction('add-friend', { presetUserId: profile.id, nickname: profile.nickname })}
+          onClick={() =>
+            onAction('add-friend', { presetUserId: profile.id, nickname: profile.nickname })
+          }
         >
           <UserPlus className="h-4 w-4" />
         </IconButton>

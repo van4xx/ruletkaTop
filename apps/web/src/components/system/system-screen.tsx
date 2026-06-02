@@ -31,8 +31,7 @@ export function SystemScreen({
   children?: ReactNode;
   tone?: 'brand' | 'danger';
 }) {
-  const glowColor =
-    tone === 'danger' ? 'var(--color-destructive)' : 'var(--color-neon-violet)';
+  const glowColor = tone === 'danger' ? 'var(--color-destructive)' : 'var(--color-neon-violet)';
 
   return (
     <div className="grain relative flex min-h-[calc(100dvh-4rem)] items-center justify-center overflow-hidden px-4 py-16">

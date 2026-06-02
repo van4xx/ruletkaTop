@@ -39,11 +39,7 @@ describe('WsAuthService', () => {
   }
 
   function build(): WsAuthService {
-    return new WsAuthService(
-      redis as never,
-      jwtService as never,
-      connection as never,
-    );
+    return new WsAuthService(redis as never, jwtService as never, connection as never);
   }
 
   beforeEach(() => {
@@ -114,10 +110,16 @@ describe('WsAuthService', () => {
     it('returns true for a banned account, false for an active one', async () => {
       const svc = build();
 
-      usersFindOne.mockResolvedValue({ _id: new Types.ObjectId(VALID_PAYLOAD.sub), isBanned: true });
+      usersFindOne.mockResolvedValue({
+        _id: new Types.ObjectId(VALID_PAYLOAD.sub),
+        isBanned: true,
+      });
       await expect(svc.isBanned(VALID_PAYLOAD.sub)).resolves.toBe(true);
 
-      usersFindOne.mockResolvedValue({ _id: new Types.ObjectId(VALID_PAYLOAD.sub), isBanned: false });
+      usersFindOne.mockResolvedValue({
+        _id: new Types.ObjectId(VALID_PAYLOAD.sub),
+        isBanned: false,
+      });
       await expect(svc.isBanned(VALID_PAYLOAD.sub)).resolves.toBe(false);
     });
 

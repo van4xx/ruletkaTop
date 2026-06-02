@@ -100,10 +100,7 @@ export function useDiscoveryPeople(filters: DiscoveryFilters): DiscoveryResult {
   });
 
   const resolved = useMemo(
-    () =>
-      profileQueries
-        .map((q) => q.data)
-        .filter((p): p is PublicProfile => Boolean(p)),
+    () => profileQueries.map((q) => q.data).filter((p): p is PublicProfile => Boolean(p)),
     [profileQueries],
   );
 

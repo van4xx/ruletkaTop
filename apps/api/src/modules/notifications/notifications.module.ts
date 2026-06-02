@@ -5,24 +5,12 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { PushService } from './push.service';
-import {
-  MOBILE_PUSH_PROVIDER,
-  WEB_PUSH_PROVIDER,
-} from './push/push.types';
+import { MOBILE_PUSH_PROVIDER, WEB_PUSH_PROVIDER } from './push/push.types';
 import { resolveMobilePushProvider } from './push/mobile-push.provider';
 import { resolveWebPushProvider } from './push/web-push.provider';
-import {
-  DeviceToken,
-  DeviceTokenSchema,
-} from './schemas/device-token.schema';
-import {
-  Notification,
-  NotificationSchema,
-} from './schemas/notification.schema';
-import {
-  PushSubscription,
-  PushSubscriptionSchema,
-} from './schemas/push-subscription.schema';
+import { DeviceToken, DeviceTokenSchema } from './schemas/device-token.schema';
+import { Notification, NotificationSchema } from './schemas/notification.schema';
+import { PushSubscription, PushSubscriptionSchema } from './schemas/push-subscription.schema';
 
 /**
  * Owns the `notifications` collection (the in-app center) plus push-subscription

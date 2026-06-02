@@ -28,17 +28,15 @@ import { EmptyState, ErrorState } from '@/components/economy/states';
 
 type Tone = 'in' | 'out';
 
-const TX_META: Record<
-  CoinTxType,
-  { icon: typeof Gift; tone: Tone; badge: BadgeProps['variant'] }
-> = {
-  purchase: { icon: ShoppingCart, tone: 'in', badge: 'coin' },
-  bonus: { icon: Sparkles, tone: 'in', badge: 'success' },
-  gift_in: { icon: Gift, tone: 'in', badge: 'success' },
-  refund: { icon: RotateCcw, tone: 'in', badge: 'accent' },
-  gift_out: { icon: Gift, tone: 'out', badge: 'neutral' },
-  top: { icon: Crown, tone: 'out', badge: 'warning' },
-};
+const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: Tone; badge: BadgeProps['variant'] }> =
+  {
+    purchase: { icon: ShoppingCart, tone: 'in', badge: 'coin' },
+    bonus: { icon: Sparkles, tone: 'in', badge: 'success' },
+    gift_in: { icon: Gift, tone: 'in', badge: 'success' },
+    refund: { icon: RotateCcw, tone: 'in', badge: 'accent' },
+    gift_out: { icon: Gift, tone: 'out', badge: 'neutral' },
+    top: { icon: Crown, tone: 'out', badge: 'warning' },
+  };
 
 type DirectionFilter = 'all' | 'in' | 'out';
 
@@ -188,7 +186,11 @@ export function WalletLedger({
   return (
     <div className="space-y-4">
       {/* Direction filter chips */}
-      <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('walletLedger.filterLabel')}>
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label={t('walletLedger.filterLabel')}
+      >
         {FILTER_KEYS.map((f) => {
           const active = filter === f.value;
           return (
@@ -233,7 +235,11 @@ export function WalletLedger({
               onClick={onLoadMore}
               disabled={isFetchingNextPage}
             >
-              {isFetchingNextPage ? <Spinner size="sm" tone="current" /> : t('walletLedger.loadMore')}
+              {isFetchingNextPage ? (
+                <Spinner size="sm" tone="current" />
+              ) : (
+                t('walletLedger.loadMore')
+              )}
             </Button>
           </div>
         )}

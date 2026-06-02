@@ -82,7 +82,10 @@ export function useModerationAction({ onKick }: UseModerationActionOptions = {})
         }
 
         case 'kick': {
-          toast.error(t('moderation.actionToastKickTitle'), { description: reason, duration: 8000 });
+          toast.error(t('moderation.actionToastKickTitle'), {
+            description: reason,
+            duration: 8000,
+          });
           onKick?.();
           break;
         }

@@ -62,7 +62,13 @@ function StatTile({
       variants={item}
       className="group relative flex items-center gap-3 rounded-2xl bg-card/45 p-3.5 ring-1 ring-border/60 transition-colors hover:ring-border sm:flex-col sm:items-start sm:gap-2.5"
     >
-      <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', t.tint, t.fg)}>
+      <span
+        className={cn(
+          'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+          t.tint,
+          t.fg,
+        )}
+      >
         {icon}
       </span>
       <div className="min-w-0">
@@ -117,7 +123,11 @@ export function ProfileStats({
       aria-label={t('stats.ariaLabel')}
     >
       {/* Gifts value */}
-      <StatTile icon={<Coins className="h-4.5 w-4.5" aria-hidden="true" />} tone="coin" label={t('stats.giftsLabel')}>
+      <StatTile
+        icon={<Coins className="h-4.5 w-4.5" aria-hidden="true" />}
+        tone="coin"
+        label={t('stats.giftsLabel')}
+      >
         {giftsLoading ? (
           <Skeleton className="h-5 w-16" />
         ) : (
@@ -130,7 +140,11 @@ export function ProfileStats({
 
       {/* Profile views */}
       {canSeeViews ? (
-        <StatTile icon={<Eye className="h-4.5 w-4.5" aria-hidden="true" />} tone="cyan" label={t('stats.viewsLabel')}>
+        <StatTile
+          icon={<Eye className="h-4.5 w-4.5" aria-hidden="true" />}
+          tone="cyan"
+          label={t('stats.viewsLabel')}
+        >
           {formatNumber(profileViews)}
         </StatTile>
       ) : (
@@ -158,17 +172,27 @@ export function ProfileStats({
 
       {/* Friends (own profile) */}
       {showFriends && (
-        <StatTile icon={<Users className="h-4.5 w-4.5" aria-hidden="true" />} tone="violet" label={t('stats.friendsLabel')}>
+        <StatTile
+          icon={<Users className="h-4.5 w-4.5" aria-hidden="true" />}
+          tone="violet"
+          label={t('stats.friendsLabel')}
+        >
           {friendsLoading ? <Skeleton className="h-5 w-10" /> : formatNumber(friendsCount ?? 0)}
         </StatTile>
       )}
 
       {/* Top placement */}
-      <StatTile icon={<Trophy className="h-4.5 w-4.5" aria-hidden="true" />} tone="amber" label={t('stats.topLabel')}>
+      <StatTile
+        icon={<Trophy className="h-4.5 w-4.5" aria-hidden="true" />}
+        tone="amber"
+        label={t('stats.topLabel')}
+      >
         {topLoading ? (
           <Skeleton className="h-5 w-14" />
         ) : isTopPlaced ? (
-          <span className="text-gradient-neon">{isOwnProfile ? t('stats.topPlacedOwn') : t('stats.topPlacedOther')}</span>
+          <span className="text-gradient-neon">
+            {isOwnProfile ? t('stats.topPlacedOwn') : t('stats.topPlacedOther')}
+          </span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}

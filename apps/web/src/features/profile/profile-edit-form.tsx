@@ -20,15 +20,7 @@ import {
   type Locale,
   type PublicProfile,
 } from '@ruletka/shared-types';
-import {
-  Avatar,
-  Button,
-  CountrySelect,
-  Input,
-  Label,
-  Textarea,
-  toast,
-} from '@ruletka/ui';
+import { Avatar, Button, CountrySelect, Input, Label, Textarea, toast } from '@ruletka/ui';
 import { ApiClientError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useModal } from '@/lib/stores/modal-store';
@@ -292,7 +284,12 @@ export function ProfileEditForm({
             {t('editForm.cancel')}
           </Button>
         )}
-        <Button type="submit" variant="primary" loading={updateProfile.isPending} disabled={!isDirty}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={updateProfile.isPending}
+          disabled={!isDirty}
+        >
           {t('editForm.save')}
         </Button>
       </div>

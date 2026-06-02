@@ -92,10 +92,7 @@ export function useRecentChats(limit = 4): RecentChatsResult {
   const all = useMemo(() => query.data ?? [], [query.data]);
 
   const conversations = useMemo(() => all.slice(0, limit), [all, limit]);
-  const unreadTotal = useMemo(
-    () => all.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0),
-    [all],
-  );
+  const unreadTotal = useMemo(() => all.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0), [all]);
 
   return {
     conversations,

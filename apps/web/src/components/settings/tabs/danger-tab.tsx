@@ -76,9 +76,7 @@ export function DangerTab() {
       <div className="flex flex-col gap-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-foreground">{t('danger.deleteHeading')}</p>
-          <p className="max-w-md text-xs text-muted-foreground">
-            {t('danger.deleteDescription')}
-          </p>
+          <p className="max-w-md text-xs text-muted-foreground">{t('danger.deleteDescription')}</p>
         </div>
 
         <Dialog open={open} onOpenChange={onOpenChange}>

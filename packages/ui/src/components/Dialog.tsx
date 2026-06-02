@@ -49,11 +49,11 @@ export const DialogOverlay = React.forwardRef<
   );
 });
 
-const contentMotion =
-  'data-[state=open]:animate-modal-in data-[state=closed]:animate-modal-out';
+const contentMotion = 'data-[state=open]:animate-modal-in data-[state=closed]:animate-modal-out';
 
-export interface DialogContentProps
-  extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
+export interface DialogContentProps extends React.ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Content
+> {
   /** Hide the built-in top-right close button (provide your own close action). */
   hideClose?: boolean;
 }

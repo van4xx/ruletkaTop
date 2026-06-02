@@ -61,7 +61,8 @@ export default function SearchPage() {
       }
       title={
         <>
-          {t('search.titlePrefix')} <span className="text-gradient-neon">{t('search.titleAccent')}</span>
+          {t('search.titlePrefix')}{' '}
+          <span className="text-gradient-neon">{t('search.titleAccent')}</span>
         </>
       }
       lede={t('search.lede')}
@@ -92,7 +93,9 @@ export default function SearchPage() {
                 />
                 <p className="text-muted-foreground">
                   {t('search.freeTextNoticePrefix')}{' '}
-                  <span className="font-medium text-foreground">{t('search.freeTextNoticeIdProfile')}</span>{' '}
+                  <span className="font-medium text-foreground">
+                    {t('search.freeTextNoticeIdProfile')}
+                  </span>{' '}
                   {t('search.freeTextNoticeSuffix')}
                 </p>
               </div>
@@ -144,14 +147,8 @@ export default function SearchPage() {
           ) : discovery.people.length === 0 ? (
             <EmptyState
               icon={<Users className="h-6 w-6" />}
-              title={
-                hasActiveFilter ? t('search.emptyFilteredTitle') : t('search.emptyTitle')
-              }
-              description={
-                hasActiveFilter
-                  ? t('search.emptyFilteredDesc')
-                  : t('search.emptyDesc')
-              }
+              title={hasActiveFilter ? t('search.emptyFilteredTitle') : t('search.emptyTitle')}
+              description={hasActiveFilter ? t('search.emptyFilteredDesc') : t('search.emptyDesc')}
               action={
                 hasActiveFilter ? undefined : (
                   <a

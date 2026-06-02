@@ -95,7 +95,11 @@ export const DropdownMenuRadioItem = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
 >(function DropdownMenuRadioItem({ className, children, ...props }, ref) {
   return (
-    <DropdownMenuPrimitive.RadioItem ref={ref} className={cn(itemBase, 'pl-8', className)} {...props}>
+    <DropdownMenuPrimitive.RadioItem
+      ref={ref}
+      className={cn(itemBase, 'pl-8', className)}
+      {...props}
+    >
       <span className="absolute left-2 flex size-4 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
           <Circle className="size-2 fill-accent text-accent" />

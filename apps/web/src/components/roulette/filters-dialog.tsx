@@ -144,10 +144,7 @@ export function FiltersDialog({
 
         <div className="space-y-6">
           {/* Gender (premium) */}
-          <fieldset
-            className={cn('space-y-2.5', !isPremium && 'opacity-60')}
-            disabled={!isPremium}
-          >
+          <fieldset className={cn('space-y-2.5', !isPremium && 'opacity-60')} disabled={!isPremium}>
             <div className="flex items-center justify-between">
               <Label>{t('filters.genderLabel')}</Label>
               {!isPremium && <PremiumTag />}
@@ -221,9 +218,7 @@ export function FiltersDialog({
               <CountrySelect
                 id="filter-countries"
                 value={draft.countries}
-                onChange={(codes: CountryCode[]) =>
-                  setDraft((d) => ({ ...d, countries: codes }))
-                }
+                onChange={(codes: CountryCode[]) => setDraft((d) => ({ ...d, countries: codes }))}
                 placeholder={t('filters.anyCountry')}
                 maxSelections={50}
                 aria-label={t('filters.countriesAriaLabel')}

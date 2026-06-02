@@ -17,13 +17,17 @@ export function ModerationClient() {
     <EconomyShell
       eyebrow={
         <>
-          <ShieldAlert className="h-3.5 w-3.5 text-[var(--color-neon-magenta)]" aria-hidden="true" />
+          <ShieldAlert
+            className="h-3.5 w-3.5 text-[var(--color-neon-magenta)]"
+            aria-hidden="true"
+          />
           Trust &amp; Safety
         </>
       }
       title={
         <>
-          {t('moderation.titlePrefix')} <span className="text-gradient-neon">{t('moderation.titleAccent')}</span>
+          {t('moderation.titlePrefix')}{' '}
+          <span className="text-gradient-neon">{t('moderation.titleAccent')}</span>
         </>
       }
       lede={t('moderation.lede')}

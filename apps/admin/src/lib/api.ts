@@ -14,7 +14,8 @@ import type {
   Role,
 } from '@ruletka/shared-types';
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000/api';
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000/api';
 
 let accessToken: string | null = null;
 export const setAccessToken = (t: string | null) => {
@@ -35,7 +36,10 @@ async function refresh(): Promise<boolean> {
   if (!refreshing) {
     refreshing = (async () => {
       try {
-        const res = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });
+        const res = await fetch(`${API_BASE}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        });
         if (!res.ok) return false;
         const body = (await res.json()) as AuthResponse;
         accessToken = body.tokens?.accessToken ?? null;
@@ -52,10 +56,16 @@ async function refresh(): Promise<boolean> {
 
 async function req<T>(
   path: string,
-  opts: { method?: string; json?: unknown; query?: Record<string, string | undefined>; _retry?: boolean } = {},
+  opts: {
+    method?: string;
+    json?: unknown;
+    query?: Record<string, string | undefined>;
+    _retry?: boolean;
+  } = {},
 ): Promise<T> {
   const url = new URL(path.replace(/^\//, ''), `${API_BASE.replace(/\/$/, '')}/`);
-  if (opts.query) for (const [k, v] of Object.entries(opts.query)) if (v != null) url.searchParams.set(k, v);
+  if (opts.query)
+    for (const [k, v] of Object.entries(opts.query)) if (v != null) url.searchParams.set(k, v);
   const headers: Record<string, string> = {};
   if (accessToken) headers.authorization = `Bearer ${accessToken}`;
   if (opts.json !== undefined) headers['content-type'] = 'application/json';
@@ -99,7 +109,10 @@ export const adminApi = {
     }
   },
   login: async (email: string, password: string): Promise<AuthUser> => {
-    const body = await req<AuthResponse>('/auth/login', { method: 'POST', json: { email, password } });
+    const body = await req<AuthResponse>('/auth/login', {
+      method: 'POST',
+      json: { email, password },
+    });
     accessToken = body.tokens.accessToken;
     return body.user;
   },

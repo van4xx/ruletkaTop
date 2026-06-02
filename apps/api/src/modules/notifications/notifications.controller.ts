@@ -34,10 +34,7 @@ import {
 import { CurrentUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { createZodValidationPipe } from '../../common/zod-validation.pipe';
-import {
-  type NotificationPage,
-  NotificationsService,
-} from './notifications.service';
+import { type NotificationPage, NotificationsService } from './notifications.service';
 import { PushService } from './push.service';
 
 /**
@@ -58,7 +55,11 @@ export class NotificationsController {
 
   @Get()
   @ApiOperation({ summary: "List the caller's notifications, newest first" })
-  @ApiQuery({ name: 'cursor', required: false, description: 'Opaque cursor (notification id) from the previous page' })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Opaque cursor (notification id) from the previous page',
+  })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size (1–50, default 20)' })
   @ApiQuery({ name: 'unreadOnly', required: false, description: 'When true, only unread items' })
   @ApiOkResponse({ description: 'A page of notifications + next cursor' })
@@ -83,10 +84,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Mark a single notification as read' })
   @ApiParam({ name: 'id', description: 'Notification id (Mongo ObjectId)' })
   @ApiNoContentResponse({ description: 'Marked read (idempotent)' })
-  async markRead(
-    @CurrentUser() user: JwtPayload,
-    @Param('id') id: string,
-  ): Promise<void> {
+  async markRead(@CurrentUser() user: JwtPayload, @Param('id') id: string): Promise<void> {
     await this.notificationsService.markRead(id, user.sub);
   }
 

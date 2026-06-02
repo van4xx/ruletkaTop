@@ -83,10 +83,7 @@ export function BuyTopModal() {
   const [coinsText, setCoinsText] = useState(String(500));
 
   const insufficient = balance != null && coins > balance;
-  const tier = useMemo(
-    () => priorityTier(coins || 0, durationHours || 1),
-    [coins, durationHours],
-  );
+  const tier = useMemo(() => priorityTier(coins || 0, durationHours || 1), [coins, durationHours]);
 
   const onSubmit = (values: TopPurchaseDto) => {
     purchase.mutate(values, {
@@ -123,9 +120,7 @@ export function BuyTopModal() {
           <BalancePill balance={balance} />
         </div>
         <DialogTitle>{t('modals.buyTop.title')}</DialogTitle>
-        <DialogDescription>
-          {t('modals.buyTop.description')}
-        </DialogDescription>
+        <DialogDescription>{t('modals.buyTop.description')}</DialogDescription>
       </DialogHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -135,12 +130,30 @@ export function BuyTopModal() {
           name="lane"
           render={({ field }) => (
             <fieldset>
-              <legend className="mb-2 text-sm font-medium text-foreground">{t('modals.buyTop.laneLegend')}</legend>
-              <div role="radiogroup" aria-label={t('modals.buyTop.laneAria')} className="grid grid-cols-2 gap-2">
-                {([
-                  { value: 'left', label: t('modals.buyTop.laneLeft'), icon: ArrowUpToLine, hint: t('modals.buyTop.laneLeftHint') },
-                  { value: 'right', label: t('modals.buyTop.laneRight'), icon: ArrowDownToLine, hint: t('modals.buyTop.laneRightHint') },
-                ] as const).map((opt) => {
+              <legend className="mb-2 text-sm font-medium text-foreground">
+                {t('modals.buyTop.laneLegend')}
+              </legend>
+              <div
+                role="radiogroup"
+                aria-label={t('modals.buyTop.laneAria')}
+                className="grid grid-cols-2 gap-2"
+              >
+                {(
+                  [
+                    {
+                      value: 'left',
+                      label: t('modals.buyTop.laneLeft'),
+                      icon: ArrowUpToLine,
+                      hint: t('modals.buyTop.laneLeftHint'),
+                    },
+                    {
+                      value: 'right',
+                      label: t('modals.buyTop.laneRight'),
+                      icon: ArrowDownToLine,
+                      hint: t('modals.buyTop.laneRightHint'),
+                    },
+                  ] as const
+                ).map((opt) => {
                   const Icon = opt.icon;
                   const selected = field.value === opt.value;
                   return (
@@ -160,7 +173,9 @@ export function BuyTopModal() {
                     >
                       <Icon className="h-4 w-4" aria-hidden="true" />
                       <span>
-                        <span className="block text-sm font-medium text-foreground">{opt.label}</span>
+                        <span className="block text-sm font-medium text-foreground">
+                          {opt.label}
+                        </span>
                         <span className="block text-xs text-muted-foreground">{opt.hint}</span>
                       </span>
                     </button>
@@ -281,9 +296,7 @@ export function BuyTopModal() {
               style={{ width: `${tier.pct}%` }}
             />
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t('modals.buyTop.priorityNote')}
-          </p>
+          <p className="mt-2 text-xs text-muted-foreground">{t('modals.buyTop.priorityNote')}</p>
         </div>
 
         {insufficient && <InsufficientCoins balance={balance} needed={coins} />}

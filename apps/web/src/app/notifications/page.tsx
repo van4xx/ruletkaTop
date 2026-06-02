@@ -21,7 +21,10 @@ import { useNotifications } from '@/features/notifications/use-notifications';
 import { EconomyShell } from '@/components/economy/economy-shell';
 import { EmptyState, ErrorState } from '@/components/economy/states';
 import { SignInRequired } from '@/components/social/state-views';
-import { NotificationList, NotificationListSkeleton } from '@/components/notifications/notification-list';
+import {
+  NotificationList,
+  NotificationListSkeleton,
+} from '@/components/notifications/notification-list';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -53,7 +56,8 @@ export default function NotificationsPage() {
       }
       title={
         <>
-          {t('notifications.titlePrefix')} <span className="text-gradient-neon">{t('notifications.titleAccent')}</span>
+          {t('notifications.titlePrefix')}{' '}
+          <span className="text-gradient-neon">{t('notifications.titleAccent')}</span>
         </>
       }
       lede={t('notifications.lede')}

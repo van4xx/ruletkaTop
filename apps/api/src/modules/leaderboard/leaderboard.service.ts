@@ -87,10 +87,7 @@ export class LeaderboardService {
   // ── Metric scoring ───────────────────────────────────────────────────────────
 
   /** Top `limit` `(userId, score)` rows for a metric, highest score first. */
-  private async topScores(
-    metric: LeaderboardMetric,
-    limit: number,
-  ): Promise<ScoredUser[]> {
+  private async topScores(metric: LeaderboardMetric, limit: number): Promise<ScoredUser[]> {
     const { collection, pipeline } = this.buildScorePipeline(metric, limit);
     const rows = await this.connection
       .collection(collection)
@@ -264,7 +261,10 @@ export class LeaderboardService {
   private async loadProfiles(
     userIds: readonly string[],
   ): Promise<Map<string, { nickname: string; avatarUrl: string | null; isPremium: boolean }>> {
-    const out = new Map<string, { nickname: string; avatarUrl: string | null; isPremium: boolean }>();
+    const out = new Map<
+      string,
+      { nickname: string; avatarUrl: string | null; isPremium: boolean }
+    >();
     if (userIds.length === 0) {
       return out;
     }

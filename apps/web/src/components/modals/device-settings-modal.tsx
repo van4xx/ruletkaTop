@@ -80,11 +80,7 @@ export function DeviceSettingsModal() {
       setStatus('loading');
       try {
         const constraints: MediaStreamConstraints = {
-          video: wantCamera
-            ? nextCameraId
-              ? { deviceId: { exact: nextCameraId } }
-              : true
-            : false,
+          video: wantCamera ? (nextCameraId ? { deviceId: { exact: nextCameraId } } : true) : false,
           audio: wantMic ? (nextMicId ? { deviceId: { exact: nextMicId } } : true) : false,
         };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -177,9 +173,7 @@ export function DeviceSettingsModal() {
     <>
       <DialogHeader>
         <DialogTitle>{t('modals.deviceSettings.title')}</DialogTitle>
-        <DialogDescription>
-          {t('modals.deviceSettings.description')}
-        </DialogDescription>
+        <DialogDescription>{t('modals.deviceSettings.description')}</DialogDescription>
       </DialogHeader>
 
       {status === 'unsupported' ? (
@@ -270,7 +264,12 @@ export function DeviceSettingsModal() {
         <Button type="button" variant="ghost" onClick={cancel}>
           {t('modals.deviceSettings.cancel')}
         </Button>
-        <Button type="button" variant="primary" disabled={status !== 'ready'} onClick={saveAndClose}>
+        <Button
+          type="button"
+          variant="primary"
+          disabled={status !== 'ready'}
+          onClick={saveAndClose}
+        >
           {t('modals.deviceSettings.save')}
         </Button>
       </DialogFooter>

@@ -94,7 +94,9 @@ export function SendGiftDialog({
     send.mutate(values, {
       onSuccess: () => {
         toast.success(t('sendGift.toastSuccess'), {
-          description: gift ? t('sendGift.toastSuccessDescription', { title: gift.title }) : undefined,
+          description: gift
+            ? t('sendGift.toastSuccessDescription', { title: gift.title })
+            : undefined,
         });
         onClose();
       },
@@ -130,9 +132,7 @@ export function SendGiftDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('sendGift.title')}</DialogTitle>
-          <DialogDescription>
-            {t('sendGift.description')}
-          </DialogDescription>
+          <DialogDescription>{t('sendGift.description')}</DialogDescription>
         </DialogHeader>
 
         {gift && (
@@ -153,7 +153,9 @@ export function SendGiftDialog({
                 </div>
                 <div className="mt-1 inline-flex items-center gap-1.5">
                   <CoinIcon size="sm" className="text-[var(--coin)]" />
-                  <span className="text-sm font-bold tabular-nums">{formatNumber(gift.priceCoins)}</span>
+                  <span className="text-sm font-bold tabular-nums">
+                    {formatNumber(gift.priceCoins)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -161,9 +163,7 @@ export function SendGiftDialog({
             {locked ? (
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-warning/30 bg-warning/10 p-5 text-center">
                 <Crown className="h-7 w-7 text-warning" aria-hidden="true" />
-                <p className="text-sm text-foreground">
-                  {t('sendGift.lockedText')}
-                </p>
+                <p className="text-sm text-foreground">{t('sendGift.lockedText')}</p>
                 <Button asChild size="sm" variant="secondary">
                   <Link href="/premium">{t('sendGift.lockedCta')}</Link>
                 </Button>
@@ -184,9 +184,7 @@ export function SendGiftDialog({
                   {errors.toUserId && (
                     <p className="text-xs text-destructive">{errors.toUserId.message}</p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    {t('sendGift.recipientHint')}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('sendGift.recipientHint')}</p>
                 </div>
 
                 {/* Message */}

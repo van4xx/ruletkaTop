@@ -82,7 +82,14 @@ export function BuyCoinsModal() {
         title={t('modals.buyCoins.creditedTitle')}
         description={t('modals.buyCoins.creditedDescription', { amount })}
       >
-        <Button type="button" variant="primary" onClick={() => { buy.reset(); close(); }}>
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => {
+            buy.reset();
+            close();
+          }}
+        >
           {t('modals.buyCoins.thanks')}
         </Button>
       </StatusPanel>

@@ -12,11 +12,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { ArrowLeftToLine, ArrowRightToLine, Coins, Crown, Trophy } from 'lucide-react';
-import {
-  topPurchaseSchema,
-  type TopLane,
-  type TopPurchaseDto,
-} from '@ruletka/shared-types';
+import { topPurchaseSchema, type TopLane, type TopPurchaseDto } from '@ruletka/shared-types';
 import {
   Button,
   CoinIcon,
@@ -85,9 +81,7 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
       onSuccess: () => {
         toast.success(t('buySpot.toastSuccess'), {
           description:
-            values.lane === 'left'
-              ? t('buySpot.toastSuccessTop')
-              : t('buySpot.toastSuccessBottom'),
+            values.lane === 'left' ? t('buySpot.toastSuccessTop') : t('buySpot.toastSuccessBottom'),
         });
         close();
       },
@@ -111,20 +105,26 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
             <Trophy className="h-5 w-5 text-[var(--coin)]" aria-hidden="true" />
             {t('buySpot.title')}
           </DialogTitle>
-          <DialogDescription>
-            {t('buySpot.description')}
-          </DialogDescription>
+          <DialogDescription>{t('buySpot.description')}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {/* Lane picker */}
           <fieldset className="space-y-2">
             <Label>{t('buySpot.laneLabel')}</Label>
-            <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label={t('buySpot.laneLabel')}>
+            <div
+              className="grid grid-cols-2 gap-3"
+              role="radiogroup"
+              aria-label={t('buySpot.laneLabel')}
+            >
               {(
                 [
                   { value: 'left' as TopLane, label: t('buySpot.laneTop'), icon: ArrowRightToLine },
-                  { value: 'right' as TopLane, label: t('buySpot.laneBottom'), icon: ArrowLeftToLine },
+                  {
+                    value: 'right' as TopLane,
+                    label: t('buySpot.laneBottom'),
+                    icon: ArrowLeftToLine,
+                  },
                 ] as const
               ).map(({ value, label, icon: Icon }) => {
                 const active = lane === value;
@@ -226,7 +226,10 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
                   : t('buySpot.minCoins')}
               </p>
               {insufficient && (
-                <Link href="/coins" className="text-xs font-semibold text-[var(--color-neon-cyan)] hover:underline">
+                <Link
+                  href="/coins"
+                  className="text-xs font-semibold text-[var(--color-neon-cyan)] hover:underline"
+                >
                   {t('buySpot.topUp')}
                 </Link>
               )}

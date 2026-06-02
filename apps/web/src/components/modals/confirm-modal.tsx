@@ -8,13 +8,7 @@
  */
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import {
-  Button,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@ruletka/ui';
+import { Button, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@ruletka/ui';
 import { useModal, useModalProps } from '@/lib/stores/modal-store';
 
 export function ConfirmModal() {

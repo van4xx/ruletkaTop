@@ -40,18 +40,18 @@ describe('BlocksService — createBlock target validation', () => {
   });
 
   it('rejects a self-block before any DB work', async () => {
-    await expect(
-      service.createBlock(USER, { blockedUserId: USER }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.createBlock(USER, { blockedUserId: USER })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
     expect(usersService.findById).not.toHaveBeenCalled();
     expect(blockModel.create).not.toHaveBeenCalled();
   });
 
   it('404s when the blocked user does not exist', async () => {
     usersService.findById.mockResolvedValue(null);
-    await expect(
-      service.createBlock(USER, { blockedUserId: TARGET }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.createBlock(USER, { blockedUserId: TARGET })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     expect(blockModel.create).not.toHaveBeenCalled();
   });
 

@@ -12,15 +12,9 @@ import type {
 
 import { MetricsService } from '../../observability/metrics.service';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
-import {
-  NOTIFICATION_NEW_CHANNEL,
-  type NotificationNewMessage,
-} from './notifications.constants';
+import { NOTIFICATION_NEW_CHANNEL, type NotificationNewMessage } from './notifications.constants';
 import { PushService } from './push.service';
-import {
-  Notification,
-  NotificationDocument,
-} from './schemas/notification.schema';
+import { Notification, NotificationDocument } from './schemas/notification.schema';
 
 /** A page of notifications (newest first) plus an opaque cursor. */
 export interface NotificationPage {

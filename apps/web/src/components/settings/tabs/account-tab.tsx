@@ -159,13 +159,21 @@ export function AccountTab() {
               </div>
             </div>
 
-            <FormField label={t('account.profile.nicknameLabel')} required error={errors.nickname?.message}>
+            <FormField
+              label={t('account.profile.nicknameLabel')}
+              required
+              error={errors.nickname?.message}
+            >
               {(field) => (
                 <Input {...field} leadingIcon={<UserRound />} {...register('nickname')} />
               )}
             </FormField>
 
-            <FormField label={t('account.profile.statusLabel')} error={errors.status?.message} hint={t('account.profile.statusHint')}>
+            <FormField
+              label={t('account.profile.statusLabel')}
+              error={errors.status?.message}
+              hint={t('account.profile.statusHint')}
+            >
               {(field) => (
                 <Input
                   {...field}
@@ -180,7 +188,11 @@ export function AccountTab() {
         ) : null}
       </SettingsSection>
 
-      <SettingsSection title={t('account.credentials.title')} description={t('account.credentials.description')} icon={<AtSign />}>
+      <SettingsSection
+        title={t('account.credentials.title')}
+        description={t('account.credentials.description')}
+        icon={<AtSign />}
+      >
         <div className="divide-y divide-border/50">
           <SettingRow
             label={t('account.credentials.emailLabel')}
@@ -199,7 +211,11 @@ export function AccountTab() {
             control={
               <ChangePasswordDialog
                 trigger={
-                  <Button variant="secondary" size="sm" leadingIcon={<KeyRound className="h-4 w-4" />}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leadingIcon={<KeyRound className="h-4 w-4" />}
+                  >
                     {t('account.credentials.changePassword')}
                   </Button>
                 }

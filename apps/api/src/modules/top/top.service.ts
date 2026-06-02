@@ -9,10 +9,7 @@ import type {
 } from '@ruletka/shared-types';
 
 import { WalletService } from '../wallet/wallet.service';
-import {
-  TopPlacement,
-  TopPlacementDocument,
-} from './schemas/top-placement.schema';
+import { TopPlacement, TopPlacementDocument } from './schemas/top-placement.schema';
 
 /** Milliseconds in one hour (for `expiresAt` computation). */
 const HOUR_MS = 60 * 60 * 1000;
@@ -124,10 +121,7 @@ export class TopService {
   }
 
   /** Active placements for one lane, highest priority first. */
-  private async activeForLane(
-    lane: TopLane,
-    now: Date,
-  ): Promise<TopPlacementContract[]> {
+  private async activeForLane(lane: TopLane, now: Date): Promise<TopPlacementContract[]> {
     const docs = await this.placementModel
       .find({ lane, startsAt: { $lte: now }, expiresAt: { $gt: now } })
       .sort({ priority: -1, createdAt: -1 })

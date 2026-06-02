@@ -60,10 +60,8 @@ export class SettingsService {
     return {
       whoCanMessage: doc.privacy.whoCanMessage ?? DEFAULT_PRIVACY.whoCanMessage,
       whoCanCall: doc.privacy.whoCanCall ?? DEFAULT_PRIVACY.whoCanCall,
-      whoCanViewProfile:
-        doc.privacy.whoCanViewProfile ?? DEFAULT_PRIVACY.whoCanViewProfile,
-      showOnlineStatus:
-        doc.privacy.showOnlineStatus ?? DEFAULT_PRIVACY.showOnlineStatus,
+      whoCanViewProfile: doc.privacy.whoCanViewProfile ?? DEFAULT_PRIVACY.whoCanViewProfile,
+      showOnlineStatus: doc.privacy.showOnlineStatus ?? DEFAULT_PRIVACY.showOnlineStatus,
     };
   }
 

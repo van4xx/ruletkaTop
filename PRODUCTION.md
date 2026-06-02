@@ -9,16 +9,18 @@ places where production needs different configuration or topology.
 ## 1. MongoDB — multi-node replica set (transactions)
 
 The economy/auth code uses **multi-document transactions** (atomic wallet debit
-+ credit, atomic user+profile creation). Transactions require a **replica set**.
 
-| | Dev (docker-compose.dev.yml) | Production |
-|---|---|---|
-| Topology | Single-node RS `rs0` | **Multi-node RS (≥3 voting members)** or MongoDB Atlas |
-| `MONGODB_URI` | `…/ruletka?directConnection=true&retryWrites=false` | `mongodb://h1,h2,h3/ruletka?replicaSet=rs0&retryWrites=true&w=majority` (or the Atlas `mongodb+srv://…` URI) |
-| Transactions | Best-effort; the app **degrades to sequential writes** when the single node reports transactions unsupported | **Fully supported** — real ACID transactions run |
-| `directConnection` | `true` (avoids advertised-host topology flakiness over the mapped port) | **omit it** — the driver must discover the RS topology to route to the primary |
+- credit, atomic user+profile creation). Transactions require a **replica set**.
+
+|                    | Dev (docker-compose.dev.yml)                                                                                 | Production                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Topology           | Single-node RS `rs0`                                                                                         | **Multi-node RS (≥3 voting members)** or MongoDB Atlas                                                       |
+| `MONGODB_URI`      | `…/ruletka?directConnection=true&retryWrites=false`                                                          | `mongodb://h1,h2,h3/ruletka?replicaSet=rs0&retryWrites=true&w=majority` (or the Atlas `mongodb+srv://…` URI) |
+| Transactions       | Best-effort; the app **degrades to sequential writes** when the single node reports transactions unsupported | **Fully supported** — real ACID transactions run                                                             |
+| `directConnection` | `true` (avoids advertised-host topology flakiness over the mapped port)                                      | **omit it** — the driver must discover the RS topology to route to the primary                               |
 
 ### Why the dev fallback exists
+
 A single-node RS can momentarily report transactions as unsupported (e.g. the
 node is `SECONDARY`/`STARTUP` during election, or retryable writes are off). To
 keep local dev frictionless, `AuthService` / `WalletService` detect this
@@ -27,6 +29,7 @@ fallback is a **dev convenience only** — on a healthy multi-node prod RS the
 transactional path always runs, so there is no atomicity gap in production.
 
 ### Production checklist
+
 - Provision a **3-node replica set** (or Atlas M10+). Never run prod on a
   single mongod.
 - Use a `MONGODB_URI` **without** `directConnection`, with

@@ -21,10 +21,7 @@ import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { ArrowLeft, AtSign, MailCheck } from 'lucide-react';
 import { Button, Input } from '@ruletka/ui';
-import {
-  forgotPasswordFormSchema,
-  type ForgotPasswordFormValues,
-} from '@/features/auth/schemas';
+import { forgotPasswordFormSchema, type ForgotPasswordFormValues } from '@/features/auth/schemas';
 import { useRequestPasswordReset } from '@/features/auth/use-auth-email';
 import { FormField } from './form-field';
 
@@ -65,22 +62,14 @@ export function ForgotPasswordForm() {
         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl glass-panel">
           <MailCheck className="h-6 w-6 text-[var(--color-neon-cyan)]" aria-hidden="true" />
         </span>
-        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">{t('forgotPassword.sent.title')}</h1>
-        <p className="mt-3 text-muted-foreground">
-          {t('forgotPassword.sent.body')}
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {t('forgotPassword.sent.spamHint')}
-        </p>
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">
+          {t('forgotPassword.sent.title')}
+        </h1>
+        <p className="mt-3 text-muted-foreground">{t('forgotPassword.sent.body')}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t('forgotPassword.sent.spamHint')}</p>
 
         <div className="mt-8 flex flex-col gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="lg"
-            block
-            onClick={() => setSubmitted(false)}
-          >
+          <Button type="button" variant="ghost" size="lg" block onClick={() => setSubmitted(false)}>
             {t('forgotPassword.sent.resend')}
           </Button>
           <Link
@@ -98,10 +87,10 @@ export function ForgotPasswordForm() {
   return (
     <div>
       <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold tracking-tight">{t('forgotPassword.title')}</h1>
-        <p className="mt-2 text-muted-foreground">
-          {t('forgotPassword.subtitle')}
-        </p>
+        <h1 className="font-display text-3xl font-bold tracking-tight">
+          {t('forgotPassword.title')}
+        </h1>
+        <p className="mt-2 text-muted-foreground">{t('forgotPassword.subtitle')}</p>
       </header>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">

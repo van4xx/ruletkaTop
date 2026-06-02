@@ -16,12 +16,7 @@
  * also arrive live over the socket as `notif:new` (kind: 'friend_request'),
  * which the page uses to invalidate the query so the list refreshes.
  */
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
   Block,
   CreateBlockDto,
@@ -47,7 +42,11 @@ export function useFriends(): UseQueryResult<FriendSummary[]> {
     // the consumers expect.
     queryFn: () =>
       api
-        .request<{ items: FriendSummary[]; nextCursor: string | null; hasMore: boolean }>('/friends')
+        .request<{
+          items: FriendSummary[];
+          nextCursor: string | null;
+          hasMore: boolean;
+        }>('/friends')
         .then((r) => r.items),
     staleTime: 30_000,
   });
@@ -58,9 +57,9 @@ export function useFriends(): UseQueryResult<FriendSummary[]> {
  * (`GET /friends/requests` → `{ incoming, outgoing }`). Gate behind auth at the
  * call site (`enabled`) so it doesn't fire for signed-out visitors.
  */
-export function useFriendRequests(
-  options?: { enabled?: boolean },
-): UseQueryResult<FriendRequestsResponse> {
+export function useFriendRequests(options?: {
+  enabled?: boolean;
+}): UseQueryResult<FriendRequestsResponse> {
   return useQuery({
     queryKey: friendsKeys.requests(),
     queryFn: ({ signal }) => api.friends.requests(signal),

@@ -38,7 +38,8 @@ export function SubscribeStatusDialog({
 }: SubscribeStatusDialogProps) {
   const t = useTranslations('economy');
   const tc = useTranslations('common');
-  const open = phase === 'starting' || phase === 'pending' || phase === 'active' || phase === 'error';
+  const open =
+    phase === 'starting' || phase === 'pending' || phase === 'active' || phase === 'error';
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -55,7 +56,7 @@ export function SubscribeStatusDialog({
           </DialogTitle>
           <DialogDescription>
             {phase === 'error'
-              ? error ?? t('subscribeStatus.descError')
+              ? (error ?? t('subscribeStatus.descError'))
               : phase === 'pending'
                 ? t('subscribeStatus.descPending')
                 : phase === 'active'

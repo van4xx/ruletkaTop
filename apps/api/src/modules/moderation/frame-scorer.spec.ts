@@ -30,9 +30,9 @@ type ConfigMap = Record<string, string | undefined>;
 /** Build a ConfigService whose `get(key)` reads from `map` (with defaults). */
 function makeConfig(map: ConfigMap): ConfigService {
   return {
-    get: jest.fn().mockImplementation((key: string, fallback?: string) =>
-      key in map ? map[key] : fallback,
-    ),
+    get: jest
+      .fn()
+      .mockImplementation((key: string, fallback?: string) => (key in map ? map[key] : fallback)),
   } as unknown as ConfigService;
 }
 
@@ -99,9 +99,7 @@ describe('ProviderFrameScorer — disabled (no credentials, no-op)', () => {
 
 describe('ProviderFrameScorer — enabled (credentials configured)', () => {
   it('POSTs the frame as multipart media + the models/creds to the check.json endpoint', async () => {
-    const fetchMock = stubFetch(
-      sightengineOk({ nudity: { none: 0.99, sexual_activity: 0.01 } }),
-    );
+    const fetchMock = stubFetch(sightengineOk({ nudity: { none: 0.99, sexual_activity: 0.01 } }));
     const scorer = new ProviderFrameScorer(makeConfig(ENABLED));
 
     await scorer.score(EVIDENCE);
@@ -172,9 +170,7 @@ describe('ProviderFrameScorer — enabled (credentials configured)', () => {
 
   it('honours a custom SIGHTENGINE_MIN_PROB threshold', async () => {
     stubFetch(sightengineOk({ nudity: { suggestive: 0.35, none: 0.65 } }));
-    const scorer = new ProviderFrameScorer(
-      makeConfig({ ...ENABLED, SIGHTENGINE_MIN_PROB: '0.3' }),
-    );
+    const scorer = new ProviderFrameScorer(makeConfig({ ...ENABLED, SIGHTENGINE_MIN_PROB: '0.3' }));
 
     await expect(scorer.score(EVIDENCE)).resolves.toEqual({ label: 'nudity', score: 0.35 });
   });
@@ -224,8 +220,7 @@ describe('ProviderFrameScorer — fail-open (provider errors never block)', () =
 
   it('fails OPEN when fetch throws (network/abort)', async () => {
     const fetchMock = jest.fn().mockRejectedValue(new Error('network down'));
-    (globalThis as unknown as { fetch: typeof fetch }).fetch =
-      fetchMock as unknown as typeof fetch;
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
     const scorer = new ProviderFrameScorer(makeConfig(ENABLED));
 
     await expect(scorer.score(EVIDENCE)).resolves.toEqual({ label: 'safe', score: 0 });

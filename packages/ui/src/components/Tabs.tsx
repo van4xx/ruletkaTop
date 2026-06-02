@@ -27,7 +27,8 @@ const tabsListVariants = cva('inline-flex items-center', {
 const TabsVariantContext = React.createContext<'pill' | 'underline'>('pill');
 
 export interface TabsListProps
-  extends React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>,
+  extends
+    React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>,
     VariantProps<typeof tabsListVariants> {}
 
 export const TabsList = React.forwardRef<
@@ -72,7 +73,11 @@ export const TabsTrigger = React.forwardRef<
 >(function TabsTrigger({ className, ...props }, ref) {
   const variant = React.useContext(TabsVariantContext);
   return (
-    <TabsPrimitive.Trigger ref={ref} className={cn(triggerVariants({ variant }), className)} {...props} />
+    <TabsPrimitive.Trigger
+      ref={ref}
+      className={cn(triggerVariants({ variant }), className)}
+      {...props}
+    />
   );
 });
 

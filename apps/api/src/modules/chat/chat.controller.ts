@@ -40,9 +40,15 @@ export class ChatController {
 
   @Get('conversations')
   @ApiOperation({ summary: "List the caller's conversations with unread counts" })
-  @ApiQuery({ name: 'cursor', required: false, description: 'Opaque cursor from the previous page' })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Opaque cursor from the previous page',
+  })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size (1–100, default 20)' })
-  @ApiOkResponse({ description: 'A page of conversations (most-recently-active first) + next cursor' })
+  @ApiOkResponse({
+    description: 'A page of conversations (most-recently-active first) + next cursor',
+  })
   async listConversations(
     @CurrentUser() user: JwtPayload,
     @Query(createZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
@@ -53,7 +59,11 @@ export class ChatController {
   @Get('conversations/:id/messages')
   @ApiOperation({ summary: 'Cursor-paginated messages of a conversation (newest first)' })
   @ApiParam({ name: 'id', description: 'Conversation id (Mongo ObjectId)' })
-  @ApiQuery({ name: 'cursor', required: false, description: 'Last message id from the previous page' })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Last message id from the previous page',
+  })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size (1–100, default 20)' })
   @ApiOkResponse({ description: 'A page of messages plus the next cursor' })
   async getMessages(

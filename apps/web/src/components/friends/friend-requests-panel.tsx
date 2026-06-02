@@ -57,7 +57,12 @@ export function FriendRequestsPanel({
                 <p className="truncate text-sm font-medium text-foreground">{r.title}</p>
                 <p className="truncate text-xs text-muted-foreground">{r.body}</p>
               </div>
-              <Button variant="secondary" size="sm" leadingIcon={<Check className="h-4 w-4" />} onClick={onReview}>
+              <Button
+                variant="secondary"
+                size="sm"
+                leadingIcon={<Check className="h-4 w-4" />}
+                onClick={onReview}
+              >
                 {t('view')}
               </Button>
               <IconButton

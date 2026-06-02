@@ -28,7 +28,10 @@ export const TooltipContent = React.forwardRef<
     /** Show the little arrow pointing at the trigger. */
     withArrow?: boolean;
   }
->(function TooltipContent({ className, sideOffset = 6, withArrow = true, children, ...props }, ref) {
+>(function TooltipContent(
+  { className, sideOffset = 6, withArrow = true, children, ...props },
+  ref,
+) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -44,7 +47,9 @@ export const TooltipContent = React.forwardRef<
         {...props}
       >
         {children}
-        {withArrow && <TooltipPrimitive.Arrow className="fill-glass-strong" width={11} height={6} />}
+        {withArrow && (
+          <TooltipPrimitive.Arrow className="fill-glass-strong" width={11} height={6} />
+        )}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );

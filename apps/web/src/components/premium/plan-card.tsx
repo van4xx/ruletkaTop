@@ -40,7 +40,9 @@ export function PlanCard({
   const cadence = (intervalDays: number): string => {
     if (intervalDays % 30 === 0) {
       const m = Math.round(intervalDays / 30);
-      return m === 1 ? t('planCard.cadenceMonthly') : t('planCard.cadenceEveryMonths', { count: m });
+      return m === 1
+        ? t('planCard.cadenceMonthly')
+        : t('planCard.cadenceEveryMonths', { count: m });
     }
     if (intervalDays % 7 === 0) {
       const w = Math.round(intervalDays / 7);
@@ -88,7 +90,10 @@ export function PlanCard({
 
         <div className="flex items-center gap-2">
           <Crown
-            className={cn('h-5 w-5', featured ? 'text-[var(--color-neon-magenta)]' : 'text-warning')}
+            className={cn(
+              'h-5 w-5',
+              featured ? 'text-[var(--color-neon-magenta)]' : 'text-warning',
+            )}
             aria-hidden="true"
           />
           <h3 className="font-display text-lg font-bold tracking-tight">{plan.title}</h3>

@@ -96,8 +96,12 @@ export function GiftsShowcase({
           <GiftIcon className="h-7 w-7" aria-hidden="true" />
         </span>
         <div className="space-y-1">
-          <p className="font-display text-base font-bold">{emptyTitle ?? t('giftsShowcase.emptyTitle')}</p>
-          {emptyHint && <p className="max-w-xs text-pretty text-sm text-muted-foreground">{emptyHint}</p>}
+          <p className="font-display text-base font-bold">
+            {emptyTitle ?? t('giftsShowcase.emptyTitle')}
+          </p>
+          {emptyHint && (
+            <p className="max-w-xs text-pretty text-sm text-muted-foreground">{emptyHint}</p>
+          )}
         </div>
       </div>
     );
@@ -133,7 +137,13 @@ export function GiftsShowcase({
         {aggregated.map((g, i) => {
           const style = RARITY_STYLES[g.rarity];
           return (
-            <motion.li key={g.key} custom={i} variants={tileVariants} initial="hidden" animate="show">
+            <motion.li
+              key={g.key}
+              custom={i}
+              variants={tileVariants}
+              initial="hidden"
+              animate="show"
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div

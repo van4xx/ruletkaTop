@@ -10,9 +10,7 @@ import { TurnService } from './turn.service';
  */
 function turnServiceWith(env: Record<string, string | number>): TurnService {
   const config = {
-    get: jest.fn((key: string, fallback?: unknown) =>
-      key in env ? env[key] : fallback,
-    ),
+    get: jest.fn((key: string, fallback?: unknown) => (key in env ? env[key] : fallback)),
   } as unknown as ConfigService;
   return new TurnService(config);
 }
@@ -87,7 +85,10 @@ describe('TurnService.mintCredentials — coturn use-auth-secret scheme', () => 
   });
 
   it('binds the credential to the user id (different users get different credentials)', () => {
-    const service = turnServiceWith({ TURN_STATIC_AUTH_SECRET: SECRET, TURN_CRED_TTL_SECONDS: TTL });
+    const service = turnServiceWith({
+      TURN_STATIC_AUTH_SECRET: SECRET,
+      TURN_CRED_TTL_SECONDS: TTL,
+    });
     const a = service.mintCredentials('507f1f77bcf86cd799439011');
     const b = service.mintCredentials('507f1f77bcf86cd799439012');
 

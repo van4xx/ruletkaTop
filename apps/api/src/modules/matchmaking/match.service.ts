@@ -18,9 +18,7 @@ import { Match, type MatchDocument } from './schemas/match.schema';
 export class MatchService {
   private readonly logger = new Logger(MatchService.name);
 
-  constructor(
-    @InjectModel(Match.name) private readonly matchModel: Model<MatchDocument>,
-  ) {}
+  constructor(@InjectModel(Match.name) private readonly matchModel: Model<MatchDocument>) {}
 
   /**
    * Records a new pairing and returns its id (hex string). Called the instant
@@ -82,9 +80,7 @@ export class MatchService {
     }
 
     const durationMs = endedAt.getTime() - new Date(updated.startedAt).getTime();
-    this.logger.debug(
-      `Match ${matchId} ended (reason=${reason}, durationMs=${durationMs})`,
-    );
+    this.logger.debug(`Match ${matchId} ended (reason=${reason}, durationMs=${durationMs})`);
     return durationMs;
   }
 

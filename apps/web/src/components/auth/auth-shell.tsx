@@ -53,14 +53,20 @@ function ProofMarquee() {
   return (
     <div className="relative h-64 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_12%,black_88%,transparent)]">
       <div
-        className={cn('flex flex-col gap-3', !reduce && '[animation:marquee-up_22s_linear_infinite]')}
+        className={cn(
+          'flex flex-col gap-3',
+          !reduce && '[animation:marquee-up_22s_linear_infinite]',
+        )}
       >
         {items.map((key, i) => (
           <span
             key={`${key}-${i}`}
             className="glass-panel inline-flex items-center gap-2 self-start rounded-full px-4 py-2 text-sm text-foreground/90"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-neon-cyan)]" aria-hidden="true" />
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-[var(--color-neon-cyan)]"
+              aria-hidden="true"
+            />
             {t(`shell.proof.${key}`)}
           </span>
         ))}

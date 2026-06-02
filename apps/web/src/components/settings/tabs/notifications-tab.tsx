@@ -7,7 +7,15 @@
  */
 import { useEffect, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Bell, Gift, Mail, MessageSquare, MonitorSmartphone, Smartphone, UserPlus } from 'lucide-react';
+import {
+  Bell,
+  Gift,
+  Mail,
+  MessageSquare,
+  MonitorSmartphone,
+  Smartphone,
+  UserPlus,
+} from 'lucide-react';
 import type { NotificationSettings, Settings } from '@ruletka/shared-types';
 import { Button, Switch, toast } from '@ruletka/ui';
 import { useUpdateSettings } from '@/features/settings/use-settings';
@@ -44,7 +52,10 @@ function PushDeviceRow() {
         <SettingRow
           label={
             <span className="inline-flex items-center gap-2">
-              <MonitorSmartphone className="h-4 w-4 text-[var(--color-neon-magenta)]" aria-hidden="true" />
+              <MonitorSmartphone
+                className="h-4 w-4 text-[var(--color-neon-magenta)]"
+                aria-hidden="true"
+              />
               {t('notifications.pushBrowserLabel')}
             </span>
           }
@@ -110,7 +121,11 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
       icon={<Bell />}
       footer={
         <>
-          {dirty && <span className="mr-auto text-xs text-muted-foreground">{t('shell.unsavedChanges')}</span>}
+          {dirty && (
+            <span className="mr-auto text-xs text-muted-foreground">
+              {t('shell.unsavedChanges')}
+            </span>
+          )}
           <Button variant="primary" disabled={!dirty} loading={update.isPending} onClick={save}>
             {tc('save')}
           </Button>
@@ -126,7 +141,10 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
             <SettingRow
               label={
                 <span className="inline-flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
+                  <Smartphone
+                    className="h-4 w-4 text-[var(--color-neon-violet)]"
+                    aria-hidden="true"
+                  />
                   {t('notifications.pushLabel')}
                 </span>
               }
@@ -162,7 +180,11 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
 
         <PushDeviceRow />
 
-        <div className={channelsOff ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}>
+        <div
+          className={
+            channelsOff ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'
+          }
+        >
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {t('notifications.eventsHeading')}
           </p>

@@ -53,7 +53,11 @@ function Login({ onLogin }: { onLogin: (u: AuthUser) => void }) {
       }
       onLogin(u);
     } catch (err) {
-      setError(err instanceof AdminApiError && err.status === 401 ? 'Неверный email или пароль' : 'Не удалось войти');
+      setError(
+        err instanceof AdminApiError && err.status === 401
+          ? 'Неверный email или пароль'
+          : 'Не удалось войти',
+      );
     } finally {
       setBusy(false);
     }
@@ -63,15 +67,31 @@ function Login({ onLogin }: { onLogin: (u: AuthUser) => void }) {
     <div className="grid min-h-dvh place-items-center bg-background px-4 text-foreground">
       <div className="w-full max-w-sm glass-strong rounded-2xl p-7 shadow-xl">
         <div className="mb-6 flex items-center gap-2">
-          <span className="grid size-9 place-items-center rounded-xl bg-aurora text-sm font-bold text-white">R</span>
+          <span className="grid size-9 place-items-center rounded-xl bg-aurora text-sm font-bold text-white">
+            R
+          </span>
           <div>
             <p className="font-display text-lg font-bold leading-none">ruletka.top</p>
             <p className="text-xs text-muted-foreground">Админ-панель</p>
           </div>
         </div>
         <form onSubmit={submit} className="flex flex-col gap-4">
-          <Input type="email" placeholder="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <Input type="password" placeholder="Пароль" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <Input
+            type="email"
+            placeholder="Email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <Input
+            type="password"
+            placeholder="Пароль"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
           {error && <p className="text-sm text-danger">{error}</p>}
           <Button type="submit" variant="primary" block loading={busy}>
             Войти
@@ -101,7 +121,9 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
     <div className="flex min-h-dvh bg-background text-foreground">
       <aside className="flex w-60 shrink-0 flex-col gap-1 border-r border-border bg-background-elevated/40 p-4">
         <div className="mb-6 flex items-center gap-2 px-2">
-          <span className="grid size-8 place-items-center rounded-lg bg-aurora text-sm font-bold text-white">R</span>
+          <span className="grid size-8 place-items-center rounded-lg bg-aurora text-sm font-bold text-white">
+            R
+          </span>
           <span className="font-display font-bold">Админ</span>
         </div>
         {NAV.map((n) => (

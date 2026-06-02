@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  HttpStatus,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -83,9 +76,7 @@ export class PaymentsController {
   @UseGuards(CloudPaymentsSignatureGuard)
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()
-  async check(
-    @Body(notificationPipe) body: CloudPaymentsNotification,
-  ): Promise<CloudPaymentsAck> {
+  async check(@Body(notificationPipe) body: CloudPaymentsNotification): Promise<CloudPaymentsAck> {
     return this.paymentsService.handleCheck(body);
   }
 
@@ -93,9 +84,7 @@ export class PaymentsController {
   @UseGuards(CloudPaymentsSignatureGuard)
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()
-  async pay(
-    @Body(notificationPipe) body: CloudPaymentsNotification,
-  ): Promise<CloudPaymentsAck> {
+  async pay(@Body(notificationPipe) body: CloudPaymentsNotification): Promise<CloudPaymentsAck> {
     return this.paymentsService.handlePay(body);
   }
 
@@ -103,9 +92,7 @@ export class PaymentsController {
   @UseGuards(CloudPaymentsSignatureGuard)
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()
-  async fail(
-    @Body(notificationPipe) body: CloudPaymentsNotification,
-  ): Promise<CloudPaymentsAck> {
+  async fail(@Body(notificationPipe) body: CloudPaymentsNotification): Promise<CloudPaymentsAck> {
     return this.paymentsService.handleFail(body);
   }
 
@@ -133,9 +120,7 @@ export class PaymentsController {
   @UseGuards(CloudPaymentsSignatureGuard)
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()
-  async refund(
-    @Body(notificationPipe) body: CloudPaymentsNotification,
-  ): Promise<CloudPaymentsAck> {
+  async refund(@Body(notificationPipe) body: CloudPaymentsNotification): Promise<CloudPaymentsAck> {
     return this.paymentsService.handleRefund(body);
   }
 }

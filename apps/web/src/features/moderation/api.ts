@@ -11,11 +11,7 @@
  * Request/response shapes come straight from the `@ruletka/shared-types`
  * contract so the wire format stays in lockstep with the backend.
  */
-import type {
-  ModerationViolationDto,
-  ReportStatus,
-  ReviewItem,
-} from '@ruletka/shared-types';
+import type { ModerationViolationDto, ReportStatus, ReviewItem } from '@ruletka/shared-types';
 import { api } from '@/lib/api';
 
 /** A human review decision. `uphold` confirms the violation; `dismiss` clears it. */
@@ -40,10 +36,9 @@ export const moderationApi = {
    * unwrap to the item array for the queue UI (tolerating a bare array too).
    */
   review: async (status?: ReportStatus): Promise<ReviewItem[]> => {
-    const res = await api.request<{ items: ReviewItem[] } | ReviewItem[]>(
-      '/moderation/review',
-      { query: status ? { status } : undefined },
-    );
+    const res = await api.request<{ items: ReviewItem[] } | ReviewItem[]>('/moderation/review', {
+      query: status ? { status } : undefined,
+    });
     return Array.isArray(res) ? res : (res?.items ?? []);
   },
 

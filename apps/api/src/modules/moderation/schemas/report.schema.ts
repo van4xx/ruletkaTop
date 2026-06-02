@@ -13,12 +13,7 @@ const REPORT_REASONS: readonly ReportReason[] = [
   'other',
 ];
 
-const REPORT_STATUSES: readonly ReportStatus[] = [
-  'open',
-  'reviewing',
-  'resolved',
-  'dismissed',
-];
+const REPORT_STATUSES: readonly ReportStatus[] = ['open', 'reviewing', 'resolved', 'dismissed'];
 
 /**
  * A user-submitted abuse report against another user, optionally tied to the

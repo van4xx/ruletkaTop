@@ -48,7 +48,8 @@ const LAUNCH: readonly LaunchConfig[] = [
     icon: Video,
     titleKey: 'dashboard.quickLaunchVideoTitle',
     subtitleKey: 'dashboard.quickLaunchVideoSubtitle',
-    gradient: 'from-[var(--color-neon-violet)]/35 via-[var(--color-neon-magenta)]/20 to-transparent',
+    gradient:
+      'from-[var(--color-neon-violet)]/35 via-[var(--color-neon-magenta)]/20 to-transparent',
     accent: 'var(--color-neon-violet)',
   },
   {
@@ -57,7 +58,8 @@ const LAUNCH: readonly LaunchConfig[] = [
     icon: Mic,
     titleKey: 'dashboard.quickLaunchVoiceTitle',
     subtitleKey: 'dashboard.quickLaunchVoiceSubtitle',
-    gradient: 'from-[var(--color-neon-cyan)]/35 via-[color-mix(in_oklch,var(--color-neon-cyan)_60%,var(--color-neon-violet))]/15 to-transparent',
+    gradient:
+      'from-[var(--color-neon-cyan)]/35 via-[color-mix(in_oklch,var(--color-neon-cyan)_60%,var(--color-neon-violet))]/15 to-transparent',
     accent: 'var(--color-neon-cyan)',
   },
 ] as const;
@@ -106,7 +108,11 @@ function LaunchCard({ config }: { config: LaunchConfig }) {
                 whileHover={{ rotate: -6, scale: 1.05 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 18 }}
               >
-                <Icon className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: config.accent }} aria-hidden="true" />
+                <Icon
+                  className="h-6 w-6 sm:h-7 sm:w-7"
+                  style={{ color: config.accent }}
+                  aria-hidden="true"
+                />
               </motion.span>
             </span>
 
@@ -117,7 +123,10 @@ function LaunchCard({ config }: { config: LaunchConfig }) {
                   className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
                   style={{ backgroundColor: config.accent }}
                 />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ backgroundColor: config.accent }} />
+                <span
+                  className="relative inline-flex h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: config.accent }}
+                />
               </span>
               {t('dashboard.onAir')}
             </span>

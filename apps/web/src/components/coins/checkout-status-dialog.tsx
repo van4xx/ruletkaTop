@@ -47,7 +47,8 @@ export function CheckoutStatusDialog({
   const tc = useTranslations('common');
   // The dialog is visible for every phase except idle and the active widget
   // overlay (where CloudPayments owns the screen).
-  const open = phase === 'starting' || phase === 'pending' || phase === 'credited' || phase === 'error';
+  const open =
+    phase === 'starting' || phase === 'pending' || phase === 'credited' || phase === 'error';
   const total = pkg ? pkg.coins + pkg.bonusCoins : 0;
 
   return (
@@ -65,7 +66,7 @@ export function CheckoutStatusDialog({
           </DialogTitle>
           <DialogDescription>
             {phase === 'error'
-              ? error ?? t('checkout.descError')
+              ? (error ?? t('checkout.descError'))
               : phase === 'credited'
                 ? t('checkout.descCredited', { amount: formatNumber(total) })
                 : phase === 'pending'

@@ -78,8 +78,7 @@ export function ChatsClient() {
       const pid = peerIdOf(c, selfId);
       const peer = pid ? byId.get(pid) : undefined;
       return (
-        peer?.nickname.toLowerCase().includes(q) ||
-        c.lastMessagePreview?.toLowerCase().includes(q)
+        peer?.nickname.toLowerCase().includes(q) || c.lastMessagePreview?.toLowerCase().includes(q)
       );
     });
   }, [conversations, query, byId, selfId]);

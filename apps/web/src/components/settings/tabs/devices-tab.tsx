@@ -45,8 +45,14 @@ export function DevicesTab({ settings }: { settings: Settings }) {
   };
 
   const auto: SelectOption = { value: '', label: t('devices.auto') };
-  const cameraOptions: SelectOption[] = [auto, ...cameras.map((c) => ({ value: c.deviceId, label: c.label }))];
-  const micOptions: SelectOption[] = [auto, ...microphones.map((m) => ({ value: m.deviceId, label: m.label }))];
+  const cameraOptions: SelectOption[] = [
+    auto,
+    ...cameras.map((c) => ({ value: c.deviceId, label: c.label })),
+  ];
+  const micOptions: SelectOption[] = [
+    auto,
+    ...microphones.map((m) => ({ value: m.deviceId, label: m.label })),
+  ];
 
   return (
     <SettingsSection
@@ -57,7 +63,9 @@ export function DevicesTab({ settings }: { settings: Settings }) {
         supported && !labelsHidden ? (
           <>
             {dirty && (
-              <span className="mr-auto text-xs text-muted-foreground">{t('shell.unsavedChanges')}</span>
+              <span className="mr-auto text-xs text-muted-foreground">
+                {t('shell.unsavedChanges')}
+              </span>
             )}
             <Button variant="primary" disabled={!dirty} loading={update.isPending} onClick={save}>
               {tc('save')}
@@ -69,9 +77,7 @@ export function DevicesTab({ settings }: { settings: Settings }) {
       {!supported ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center">
           <ShieldAlert className="h-8 w-8 text-warning" aria-hidden="true" />
-          <p className="text-sm text-muted-foreground">
-            {t('devices.unsupported')}
-          </p>
+          <p className="text-sm text-muted-foreground">{t('devices.unsupported')}</p>
         </div>
       ) : labelsHidden ? (
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border/70 py-10 text-center">
@@ -80,9 +86,7 @@ export function DevicesTab({ settings }: { settings: Settings }) {
           </span>
           <div className="max-w-xs space-y-1">
             <p className="text-sm font-medium text-foreground">{t('devices.permissionTitle')}</p>
-            <p className="text-xs text-muted-foreground">
-              {t('devices.permissionDescription')}
-            </p>
+            <p className="text-xs text-muted-foreground">{t('devices.permissionDescription')}</p>
           </div>
           <Button variant="secondary" onClick={requestPermission}>
             {t('devices.permissionCta')}
@@ -98,7 +102,9 @@ export function DevicesTab({ settings }: { settings: Settings }) {
                 {t('devices.cameraLabel')}
               </span>
             }
-            description={loading ? t('devices.refreshing') : t('devices.found', { count: cameras.length })}
+            description={
+              loading ? t('devices.refreshing') : t('devices.found', { count: cameras.length })
+            }
             control={
               <Select
                 aria-label={t('devices.cameraSelectAria')}
@@ -117,13 +123,17 @@ export function DevicesTab({ settings }: { settings: Settings }) {
                 {t('devices.micLabel')}
               </span>
             }
-            description={loading ? t('devices.refreshing') : t('devices.found', { count: microphones.length })}
+            description={
+              loading ? t('devices.refreshing') : t('devices.found', { count: microphones.length })
+            }
             control={
               <Select
                 aria-label={t('devices.micSelectAria')}
                 options={micOptions}
                 value={draft.preferredMicId ?? ''}
-                onChange={(e) => setDraft((d) => ({ ...d, preferredMicId: e.target.value || null }))}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, preferredMicId: e.target.value || null }))
+                }
               />
             }
           />

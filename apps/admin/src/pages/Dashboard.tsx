@@ -29,16 +29,34 @@ export function Dashboard() {
         </p>
       ) : (
         <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Пользователей" value={d ? fmtInt(d.totalUsers) : '—'} loading={loading} hint={d ? `+${fmtInt(d.newUsers24h)} за 24ч` : undefined} />
-          <StatCard label="Premium" value={d ? fmtInt(d.premiumUsers) : '—'} loading={loading} accent />
-          <StatCard label="Монет в обороте" value={d ? fmtCoins(d.coinsInCirculation) : '—'} loading={loading} />
+          <StatCard
+            label="Пользователей"
+            value={d ? fmtInt(d.totalUsers) : '—'}
+            loading={loading}
+            hint={d ? `+${fmtInt(d.newUsers24h)} за 24ч` : undefined}
+          />
+          <StatCard
+            label="Premium"
+            value={d ? fmtInt(d.premiumUsers) : '—'}
+            loading={loading}
+            accent
+          />
+          <StatCard
+            label="Монет в обороте"
+            value={d ? fmtCoins(d.coinsInCirculation) : '—'}
+            loading={loading}
+          />
           <StatCard label="Забанено" value={d ? fmtInt(d.bannedUsers) : '—'} loading={loading} />
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {QUICK_LINKS.map((c) => (
-          <NavLink key={c.to} to={c.to} className="glass-strong rounded-2xl p-5 ring-1 ring-border/50 transition-colors hover:ring-border">
+          <NavLink
+            key={c.to}
+            to={c.to}
+            className="glass-strong rounded-2xl p-5 ring-1 ring-border/50 transition-colors hover:ring-border"
+          >
             <p className="font-display text-lg font-semibold">{c.title}</p>
             <p className="mt-1 text-sm text-muted-foreground">{c.desc}</p>
           </NavLink>

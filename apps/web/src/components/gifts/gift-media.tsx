@@ -41,10 +41,7 @@ export function GiftMedia({ url, title, rarity, className }: GiftMediaProps) {
       )}
     >
       {/* Rarity glow wash. */}
-      <div
-        aria-hidden="true"
-        className={cn('absolute inset-0 bg-gradient-to-br', style.glow)}
-      />
+      <div aria-hidden="true" className={cn('absolute inset-0 bg-gradient-to-br', style.glow)} />
       {resolved === 'video' && (
         <video
           src={url}

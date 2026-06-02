@@ -20,10 +20,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PremiumService } from '../premium/premium.service';
 import { WalletService } from '../wallet/wallet.service';
 import { Gift, GiftDocument } from './schemas/gift.schema';
-import {
-  GiftTransaction,
-  GiftTransactionDocument,
-} from './schemas/gift-transaction.schema';
+import { GiftTransaction, GiftTransactionDocument } from './schemas/gift-transaction.schema';
 
 /**
  * Default gift catalogue seeded on boot (idempotent upsert by `code`).
@@ -131,10 +128,7 @@ export class GiftsService implements OnModuleInit {
    *
    * @returns the persisted gift transaction in the shared contract shape.
    */
-  async sendGift(
-    fromUserId: string,
-    dto: SendGiftDto,
-  ): Promise<GiftTransactionContract> {
+  async sendGift(fromUserId: string, dto: SendGiftDto): Promise<GiftTransactionContract> {
     if (fromUserId === dto.toUserId) {
       throw new BadRequestException('Cannot send a gift to yourself');
     }
@@ -160,12 +154,7 @@ export class GiftsService implements OnModuleInit {
 
     // Step 5: charge the sender first. Throws InsufficientFundsException (422)
     // without writing anything if funds are short.
-    await this.walletService.debit(
-      fromUserId,
-      gift.priceCoins,
-      'gift_out',
-      giftTxId.toString(),
-    );
+    await this.walletService.debit(fromUserId, gift.priceCoins, 'gift_out', giftTxId.toString());
 
     // Step 6: record the gift. On failure, compensate the debit.
     try {
@@ -208,10 +197,7 @@ export class GiftsService implements OnModuleInit {
    *  - there is NO block between the two in either direction (`403`), so a gift
    *    cannot reach someone the block relationship would forbid in chat.
    */
-  private async assertValidRecipient(
-    fromUserId: string,
-    toUserId: string,
-  ): Promise<void> {
+  private async assertValidRecipient(fromUserId: string, toUserId: string): Promise<void> {
     if (!Types.ObjectId.isValid(toUserId)) {
       throw new NotFoundException('Recipient not found');
     }

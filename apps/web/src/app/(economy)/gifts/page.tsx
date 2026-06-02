@@ -63,9 +63,7 @@ export default function GiftsPage() {
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-warning/20 text-warning">
                 <Crown className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
               </span>
-              <p className="text-sm text-foreground">
-                {t('gifts.premiumBannerText')}
-              </p>
+              <p className="text-sm text-foreground">{t('gifts.premiumBannerText')}</p>
             </div>
             <Button asChild size="sm" variant="secondary">
               <Link href="/premium">{t('gifts.premiumBannerCta')}</Link>
@@ -107,7 +105,9 @@ export default function GiftsPage() {
                     <span
                       aria-hidden="true"
                       className="h-px flex-1"
-                      style={{ background: `linear-gradient(to right, color-mix(in oklch, ${style.color} 40%, transparent), transparent)` }}
+                      style={{
+                        background: `linear-gradient(to right, color-mix(in oklch, ${style.color} 40%, transparent), transparent)`,
+                      }}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

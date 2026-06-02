@@ -38,7 +38,10 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
   const dirty = !samePrivacy(draft, settings.privacy);
 
   // Resolve the enum option keys into localized labels for the native select.
-  const visibilityOptions = VISIBILITY_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }));
+  const visibilityOptions = VISIBILITY_OPTIONS.map((o) => ({
+    value: o.value,
+    label: t(o.labelKey),
+  }));
 
   const save = () => {
     update.mutate(
@@ -57,13 +60,12 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
       icon={<ShieldCheck />}
       footer={
         <>
-          {dirty && <span className="mr-auto text-xs text-muted-foreground">{t('shell.unsavedChanges')}</span>}
-          <Button
-            variant="primary"
-            disabled={!dirty}
-            loading={update.isPending}
-            onClick={save}
-          >
+          {dirty && (
+            <span className="mr-auto text-xs text-muted-foreground">
+              {t('shell.unsavedChanges')}
+            </span>
+          )}
+          <Button variant="primary" disabled={!dirty} loading={update.isPending} onClick={save}>
             {tc('save')}
           </Button>
         </>
@@ -79,7 +81,10 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
               options={visibilityOptions}
               value={draft.whoCanMessage}
               onChange={(e) =>
-                setDraft((d) => ({ ...d, whoCanMessage: e.target.value as PrivacySettings['whoCanMessage'] }))
+                setDraft((d) => ({
+                  ...d,
+                  whoCanMessage: e.target.value as PrivacySettings['whoCanMessage'],
+                }))
               }
             />
           }
@@ -93,7 +98,10 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
               options={visibilityOptions}
               value={draft.whoCanCall}
               onChange={(e) =>
-                setDraft((d) => ({ ...d, whoCanCall: e.target.value as PrivacySettings['whoCanCall'] }))
+                setDraft((d) => ({
+                  ...d,
+                  whoCanCall: e.target.value as PrivacySettings['whoCanCall'],
+                }))
               }
             />
           }

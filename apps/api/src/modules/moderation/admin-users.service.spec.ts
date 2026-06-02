@@ -72,7 +72,13 @@ describe('AdminUsersService.listUsers', () => {
       find: findChain([userRow(USER_A, { isBanned: true }), userRow(USER_B)]),
     } as unknown as Model<UserDocument>;
     const find = profilesFind([
-      { userId: new Types.ObjectId(USER_A), nickname: 'Aa', isPremium: true, country: 'RU', gender: 'male' },
+      {
+        userId: new Types.ObjectId(USER_A),
+        nickname: 'Aa',
+        isPremium: true,
+        country: 'RU',
+        gender: 'male',
+      },
       // USER_B has no profile row → defaults.
     ]);
     const service = new AdminUsersService(userModel, connectionWith(find), {} as AuthService);
@@ -114,7 +120,11 @@ describe('AdminUsersService.listUsers', () => {
     const userModel = {
       find: findChain([userRow(USER_A), userRow(USER_B)]),
     } as unknown as Model<UserDocument>;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), {} as AuthService);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      {} as AuthService,
+    );
 
     const res = await service.listUsers({ limit: 1 });
 
@@ -127,7 +137,11 @@ describe('AdminUsersService.listUsers', () => {
   it('applies role + banned filters and the keyset cursor (_id < cursor)', async () => {
     const find = findChain([]);
     const userModel = { find } as unknown as Model<UserDocument>;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), {} as AuthService);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      {} as AuthService,
+    );
 
     await service.listUsers({ limit: 30, role: 'moderator', banned: true, cursor: USER_A });
 
@@ -142,7 +156,11 @@ describe('AdminUsersService.listUsers', () => {
     const userModel = { find } as unknown as Model<UserDocument>;
     // profiles.find for the nickname lookup returns one match.
     const profileLookup = profilesFind([{ userId: new Types.ObjectId(USER_B) }]);
-    const service = new AdminUsersService(userModel, connectionWith(profileLookup), {} as AuthService);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profileLookup),
+      {} as AuthService,
+    );
 
     await service.listUsers({ limit: 30, q: 'ali.ce' });
 
@@ -161,7 +179,11 @@ describe('AdminUsersService.listUsers', () => {
 describe('AdminUsersService.getUser', () => {
   it('404s an invalid id without touching the DB', async () => {
     const userModel = { findById: jest.fn() } as unknown as Model<UserDocument>;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), {} as AuthService);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      {} as AuthService,
+    );
     await expect(service.getUser('not-an-id')).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -172,7 +194,11 @@ describe('AdminUsersService.getUser', () => {
       exec: jest.fn().mockResolvedValue(null),
     }));
     const userModel = { findById } as unknown as Model<UserDocument>;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), {} as AuthService);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      {} as AuthService,
+    );
     await expect(service.getUser(USER_A)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
@@ -222,7 +248,10 @@ describe('AdminUsersService.setRole', () => {
     const res = await service.setRole(USER_A, 'user', 'admin', ADMIN);
 
     expect(model.findByIdAndUpdate).toHaveBeenCalledTimes(1);
-    const [, update] = model.findByIdAndUpdate.mock.calls[0] as unknown as [unknown, Record<string, unknown>];
+    const [, update] = model.findByIdAndUpdate.mock.calls[0] as unknown as [
+      unknown,
+      Record<string, unknown>,
+    ];
     expect(update).toEqual({ $set: { role: 'user' } });
     expect(revokeAllSessions).toHaveBeenCalledWith(USER_A);
     expect(res.id).toBe(USER_A);

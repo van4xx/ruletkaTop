@@ -8,14 +8,8 @@ import type {
   PushSubscriptionDto,
 } from '@ruletka/shared-types';
 
-import {
-  DeviceToken,
-  DeviceTokenDocument,
-} from './schemas/device-token.schema';
-import {
-  PushSubscription,
-  PushSubscriptionDocument,
-} from './schemas/push-subscription.schema';
+import { DeviceToken, DeviceTokenDocument } from './schemas/device-token.schema';
+import { PushSubscription, PushSubscriptionDocument } from './schemas/push-subscription.schema';
 import {
   MOBILE_PUSH_PROVIDER,
   type MobilePushProvider,
@@ -83,9 +77,7 @@ export class PushService {
     if (!Types.ObjectId.isValid(userId)) {
       return;
     }
-    await this.subModel
-      .deleteOne({ endpoint, userId: new Types.ObjectId(userId) })
-      .exec();
+    await this.subModel.deleteOne({ endpoint, userId: new Types.ObjectId(userId) }).exec();
   }
 
   /**
@@ -117,9 +109,7 @@ export class PushService {
     if (!Types.ObjectId.isValid(userId)) {
       return;
     }
-    await this.tokenModel
-      .deleteOne({ token, userId: new Types.ObjectId(userId) })
-      .exec();
+    await this.tokenModel.deleteOne({ token, userId: new Types.ObjectId(userId) }).exec();
   }
 
   // ── Fan-out ──────────────────────────────────────────────────────────────────

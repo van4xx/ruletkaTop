@@ -61,9 +61,7 @@ export function CallChat({ open, onClose, messages, onSend, peerName }: CallChat
 
           <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
             {messages.length === 0 ? (
-              <p className="mt-6 text-center text-xs text-muted-foreground">
-                {t('chat.empty')}
-              </p>
+              <p className="mt-6 text-center text-xs text-muted-foreground">{t('chat.empty')}</p>
             ) : (
               messages.map((m) => (
                 <div

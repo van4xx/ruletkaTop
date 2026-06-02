@@ -55,7 +55,9 @@ function TopCard({ data, rank }: { data: TopCardData; rank: number }) {
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-sm font-semibold">{data.nick}</span>
-        <span className="text-xs text-muted-foreground">{t('topMarquee.onAir', { country: data.country })}</span>
+        <span className="text-xs text-muted-foreground">
+          {t('topMarquee.onAir', { country: data.country })}
+        </span>
       </span>
     </div>
   );

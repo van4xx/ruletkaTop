@@ -120,13 +120,7 @@ export type AppNotification = z.infer<typeof appNotificationSchema>;
  * token; `event` echoes the offending client event when applicable.
  */
 export const wsErrorPayloadSchema = z.object({
-  code: z.enum([
-    'rate_limited',
-    'too_many_connections',
-    'forbidden',
-    'banned',
-    'unauthorized',
-  ]),
+  code: z.enum(['rate_limited', 'too_many_connections', 'forbidden', 'banned', 'unauthorized']),
   event: z.string().optional(),
   message: z.string().optional(),
 });

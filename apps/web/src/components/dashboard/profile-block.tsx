@@ -73,7 +73,10 @@ export function ProfileBlock() {
                 {nickname}
               </h2>
               {isPremium && (
-                <Crown className="h-4 w-4 shrink-0 text-warning" aria-label={t('dashboard.premiumAria')} />
+                <Crown
+                  className="h-4 w-4 shrink-0 text-warning"
+                  aria-label={t('dashboard.premiumAria')}
+                />
               )}
             </div>
             {profile ? (
@@ -107,13 +110,17 @@ export function ProfileBlock() {
               <Coins className="h-4.5 w-4.5" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">{t('dashboard.balance')}</p>
+              <p className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+                {t('dashboard.balance')}
+              </p>
               {walletQuery.isLoading ? (
                 <Skeleton className="mt-0.5 h-5 w-16" />
               ) : (
                 <p className="font-display text-lg font-bold tabular-nums leading-none">
                   {balance != null ? formatNumber(balance) : '—'}
-                  <span className="ml-1 text-xs font-medium text-muted-foreground">{t('dashboard.coinsUnit')}</span>
+                  <span className="ml-1 text-xs font-medium text-muted-foreground">
+                    {t('dashboard.coinsUnit')}
+                  </span>
                 </p>
               )}
             </div>
@@ -178,7 +185,9 @@ function ProfileViewsTeaser({
             </p>
             <p className="font-display text-lg font-bold tabular-nums leading-none">
               {formatNumber(views ?? 0)}
-              <span className="ml-1 text-xs font-medium text-muted-foreground">{t('dashboard.profileViewsUnit')}</span>
+              <span className="ml-1 text-xs font-medium text-muted-foreground">
+                {t('dashboard.profileViewsUnit')}
+              </span>
             </p>
           </div>
         </div>
@@ -212,7 +221,9 @@ function ProfileViewsTeaser({
         </span>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{t('dashboard.profileViewsTitle')}</p>
-          <p className="truncate text-xs text-muted-foreground">{t('dashboard.profileViewsLockedDesc')}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {t('dashboard.profileViewsLockedDesc')}
+          </p>
         </div>
       </div>
       <span className="relative inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-neon-violet)]/15 px-2.5 py-1 text-[0.6875rem] font-semibold text-[var(--color-neon-violet)]">

@@ -131,9 +131,7 @@ export function VerifyEmailView() {
           )
         }
       >
-        <p>
-          {t('verifyEmail.noToken.body')}
-        </p>
+        <p>{t('verifyEmail.noToken.body')}</p>
       </StateFrame>
     );
   }
@@ -147,13 +145,13 @@ export function VerifyEmailView() {
         title={t('verifyEmail.success.title')}
         actions={
           <Button asChild variant="primary" size="lg" block>
-            <Link href={isAuthenticated ? '/dashboard' : '/login'}>{t('verifyEmail.success.continue')}</Link>
+            <Link href={isAuthenticated ? '/dashboard' : '/login'}>
+              {t('verifyEmail.success.continue')}
+            </Link>
           </Button>
         }
       >
-        <p>
-          {t('verifyEmail.success.body')}
-        </p>
+        <p>{t('verifyEmail.success.body')}</p>
       </StateFrame>
     );
   }

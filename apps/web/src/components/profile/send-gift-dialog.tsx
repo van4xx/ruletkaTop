@@ -70,7 +70,10 @@ export function SendGiftDialog({
       {
         onSuccess: () => {
           toast.success(t('sendGift.sentTitle'), {
-            description: t('sendGift.sentDescription', { title: selected.title, name: recipientName }),
+            description: t('sendGift.sentDescription', {
+              title: selected.title,
+              name: recipientName,
+            }),
           });
           reset();
           onOpenChange(false);
@@ -108,7 +111,10 @@ export function SendGiftDialog({
             <Spinner size="lg" tone="accent" label={t('sendGift.loading')} />
           </div>
         ) : giftsQuery.isError ? (
-          <ErrorState onRetry={() => void giftsQuery.refetch()} description={t('sendGift.catalogError')} />
+          <ErrorState
+            onRetry={() => void giftsQuery.refetch()}
+            description={t('sendGift.catalogError')}
+          />
         ) : (
           <div className="max-h-[50vh] space-y-4 overflow-y-auto pr-1">
             {grouped.map(({ rarity, gifts }) => {
@@ -141,10 +147,15 @@ export function SendGiftDialog({
                         >
                           <div
                             aria-hidden="true"
-                            className={cn('absolute inset-0 bg-gradient-to-br opacity-40', style.glow)}
+                            className={cn(
+                              'absolute inset-0 bg-gradient-to-br opacity-40',
+                              style.glow,
+                            )}
                           />
                           <GiftThumb gift={gift} />
-                          <span className="relative truncate text-[0.625rem] font-medium">{gift.title}</span>
+                          <span className="relative truncate text-[0.625rem] font-medium">
+                            {gift.title}
+                          </span>
                           <span className="relative inline-flex items-center gap-0.5 text-[0.625rem] font-semibold text-[var(--color-neon-cyan)]">
                             {locked ? (
                               <Lock className="h-3 w-3" />
@@ -187,7 +198,9 @@ export function SendGiftDialog({
             loading={sendGift.isPending}
             onClick={handleSend}
           >
-            {selected ? t('sendGift.submitWithPrice', { price: selected.priceCoins }) : t('sendGift.submitEmpty')}
+            {selected
+              ? t('sendGift.submitWithPrice', { price: selected.priceCoins })
+              : t('sendGift.submitEmpty')}
           </Button>
         </DialogFooter>
       </DialogContent>

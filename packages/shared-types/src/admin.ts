@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { countryCodeSchema, genderSchema, isoDateSchema, objectIdSchema, roleSchema } from './common';
+import {
+  countryCodeSchema,
+  genderSchema,
+  isoDateSchema,
+  objectIdSchema,
+  roleSchema,
+} from './common';
 
 /**
  * Admin-panel contract (admin.ruletka.top). All endpoints are role-gated to

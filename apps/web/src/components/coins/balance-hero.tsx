@@ -94,13 +94,14 @@ export function BalanceHero({ balance, isLoading, isError, className }: BalanceH
               {t('balanceHero.coinsSuffix')}
             </span>
           </div>
-          {isError && (
-            <p className="mt-2 text-sm text-destructive">{t('balanceHero.error')}</p>
-          )}
+          {isError && <p className="mt-2 text-sm text-destructive">{t('balanceHero.error')}</p>}
         </div>
 
         <div className="inline-flex items-center gap-2 self-start rounded-2xl border border-border/60 bg-card/40 px-4 py-3 text-sm text-muted-foreground sm:self-auto">
-          <TrendingUp className="h-4 w-4 shrink-0 text-[var(--color-neon-cyan)]" aria-hidden="true" />
+          <TrendingUp
+            className="h-4 w-4 shrink-0 text-[var(--color-neon-cyan)]"
+            aria-hidden="true"
+          />
           <span>{t('balanceHero.hint')}</span>
         </div>
       </div>

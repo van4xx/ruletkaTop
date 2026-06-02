@@ -46,7 +46,9 @@ export function SelectChip({
       )}
       {...rest}
     >
-      {selected && <Check className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-hidden="true" />}
+      {selected && (
+        <Check className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-hidden="true" />
+      )}
       {children}
     </button>
   );

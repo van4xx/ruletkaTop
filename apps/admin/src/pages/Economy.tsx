@@ -5,7 +5,10 @@ import { adminApi } from '../lib/api';
 import { PageTitle, StatCard, fmtCoins, fmtDate, fmtInt } from './ui';
 
 /** Map a ledger `kind` to a readable label + tone. Unknown kinds pass through. */
-const KIND_META: Record<string, { label: string; variant: 'success' | 'danger' | 'coin' | 'accent' | 'neutral' }> = {
+const KIND_META: Record<
+  string,
+  { label: string; variant: 'success' | 'danger' | 'coin' | 'accent' | 'neutral' }
+> = {
   topup: { label: 'Пополнение', variant: 'success' },
   purchase: { label: 'Покупка', variant: 'danger' },
   gift_sent: { label: 'Подарок отправлен', variant: 'danger' },
@@ -40,16 +43,41 @@ export function Economy() {
       <PageTitle title="Экономика" subtitle="Монеты, подарки, Top и население платформы." />
 
       <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Всего пользователей" value={d ? fmtInt(d.totalUsers) : '—'} loading={loading} />
-        <StatCard label="Premium" value={d ? fmtInt(d.premiumUsers) : '—'} loading={loading} accent />
-        <StatCard label="Верифицировано" value={d ? fmtInt(d.verifiedUsers) : '—'} loading={loading} />
+        <StatCard
+          label="Всего пользователей"
+          value={d ? fmtInt(d.totalUsers) : '—'}
+          loading={loading}
+        />
+        <StatCard
+          label="Premium"
+          value={d ? fmtInt(d.premiumUsers) : '—'}
+          loading={loading}
+          accent
+        />
+        <StatCard
+          label="Верифицировано"
+          value={d ? fmtInt(d.verifiedUsers) : '—'}
+          loading={loading}
+        />
         <StatCard label="Забанено" value={d ? fmtInt(d.bannedUsers) : '—'} loading={loading} />
       </div>
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Монет в обороте" value={d ? fmtCoins(d.coinsInCirculation) : '—'} loading={loading} />
-        <StatCard label="Стоимость подарков" value={d ? fmtCoins(d.giftsValueCoins) : '—'} loading={loading} />
-        <StatCard label="Активный Top" value={d ? fmtInt(d.activeTopPlacements) : '—'} loading={loading} />
+        <StatCard
+          label="Монет в обороте"
+          value={d ? fmtCoins(d.coinsInCirculation) : '—'}
+          loading={loading}
+        />
+        <StatCard
+          label="Стоимость подарков"
+          value={d ? fmtCoins(d.giftsValueCoins) : '—'}
+          loading={loading}
+        />
+        <StatCard
+          label="Активный Top"
+          value={d ? fmtInt(d.activeTopPlacements) : '—'}
+          loading={loading}
+        />
         <StatCard
           label="Новые пользователи"
           value={d ? fmtInt(d.newUsers24h) : '—'}
@@ -61,7 +89,11 @@ export function Economy() {
       <section className="glass-strong overflow-hidden rounded-2xl ring-1 ring-border/50">
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
           <h2 className="font-display text-base font-semibold">Последние транзакции</h2>
-          {d && <span className="text-xs text-muted-foreground">{d.recentTransactions.length} записей</span>}
+          {d && (
+            <span className="text-xs text-muted-foreground">
+              {d.recentTransactions.length} записей
+            </span>
+          )}
         </div>
 
         {loading ? (
@@ -80,14 +112,21 @@ export function Economy() {
                   <Badge variant={meta.variant} size="sm">
                     {meta.label}
                   </Badge>
-                  <span className="truncate font-mono text-xs text-muted-foreground" title={t.userId}>
+                  <span
+                    className="truncate font-mono text-xs text-muted-foreground"
+                    title={t.userId}
+                  >
                     {t.userId}
                   </span>
-                  <span className={`ml-auto shrink-0 tabular-nums text-sm font-semibold ${positive ? 'text-success' : 'text-danger'}`}>
+                  <span
+                    className={`ml-auto shrink-0 tabular-nums text-sm font-semibold ${positive ? 'text-success' : 'text-danger'}`}
+                  >
                     {positive ? '+' : ''}
                     {fmtInt(t.amountCoins)}
                   </span>
-                  <span className="w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{fmtDate(t.createdAt)}</span>
+                  <span className="w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                    {fmtDate(t.createdAt)}
+                  </span>
                 </li>
               );
             })}

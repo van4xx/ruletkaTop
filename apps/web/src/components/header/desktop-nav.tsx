@@ -26,10 +26,7 @@ function DesktopNavImpl({ pathname }: DesktopNavProps) {
   const tn = useTranslations('nav');
   return (
     <LayoutGroup id="primary-nav">
-      <nav
-        aria-label={t('desktopNav.aria')}
-        className="relative hidden items-center gap-1 lg:flex"
-      >
+      <nav aria-label={t('desktopNav.aria')} className="relative hidden items-center gap-1 lg:flex">
         {PRIMARY_NAV.map((item) => {
           const active = isRouteActive(pathname, item.href);
           const Icon = item.icon;
@@ -43,9 +40,7 @@ function DesktopNavImpl({ pathname }: DesktopNavProps) {
                 'relative inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium',
                 'outline-none transition-colors duration-200',
                 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                active
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
+                active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {active && (

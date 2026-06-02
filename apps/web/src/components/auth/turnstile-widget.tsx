@@ -183,11 +183,7 @@ export function TurnstileWidget({ onToken, theme = 'dark', className }: Turnstil
   return (
     <div className={className}>
       <div ref={containerRef} />
-      {failed && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t('turnstile.loadFailed')}
-        </p>
-      )}
+      {failed && <p className="mt-1 text-xs text-muted-foreground">{t('turnstile.loadFailed')}</p>}
     </div>
   );
 }

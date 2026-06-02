@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
@@ -90,7 +86,9 @@ describe('ReportsService', () => {
 
       // The dedupe query is scoped to (reporter, target) within a recent window.
       const [filter] = reportModel.exists.mock.calls[0] as [Record<string, unknown>];
-      expect(filter).toMatchObject({ createdAt: expect.objectContaining({ $gte: expect.any(Date) }) });
+      expect(filter).toMatchObject({
+        createdAt: expect.objectContaining({ $gte: expect.any(Date) }),
+      });
       expect(reportModel.create).not.toHaveBeenCalled();
     });
 
@@ -114,18 +112,18 @@ describe('ReportsService', () => {
 
   describe('resolveReport', () => {
     it('rejects a non-terminal target status', async () => {
-      await expect(
-        service.resolveReport('report-1', 'open'),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      await expect(
-        service.resolveReport('report-1', 'reviewing'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.resolveReport('report-1', 'open')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(service.resolveReport('report-1', 'reviewing')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('404s an invalid id without a DB write', async () => {
-      await expect(
-        service.resolveReport('not-an-id', 'resolved'),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.resolveReport('not-an-id', 'resolved')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
       expect(reportModel.findByIdAndUpdate).not.toHaveBeenCalled();
     });
 

@@ -105,16 +105,16 @@ export function FiltersModal() {
           {t('modals.filters.eyebrow')}
         </span>
         <DialogTitle>{t('modals.filters.title')}</DialogTitle>
-        <DialogDescription>
-          {t('modals.filters.description')}
-        </DialogDescription>
+        <DialogDescription>{t('modals.filters.description')}</DialogDescription>
       </DialogHeader>
 
       <div className="space-y-6">
         {/* Gender preference */}
         <fieldset>
           <div className="mb-2 flex items-center justify-between">
-            <legend className="text-sm font-medium text-foreground">{t('modals.filters.genderLegend')}</legend>
+            <legend className="text-sm font-medium text-foreground">
+              {t('modals.filters.genderLegend')}
+            </legend>
             {premiumLocked && (
               <Badge variant="warning" size="sm" className="gap-1">
                 <Crown className="h-3 w-3" /> {t('modals.filters.premiumBadge')}
@@ -231,9 +231,7 @@ export function FiltersModal() {
             id="filter-shared-interests"
             checked={!premiumLocked && draft.sharedInterestsOnly}
             disabled={premiumLocked}
-            onCheckedChange={(checked) =>
-              setDraft((d) => ({ ...d, sharedInterestsOnly: checked }))
-            }
+            onCheckedChange={(checked) => setDraft((d) => ({ ...d, sharedInterestsOnly: checked }))}
             aria-label={t('modals.filters.sharedInterestsAria')}
             className="mt-0.5 shrink-0"
           />

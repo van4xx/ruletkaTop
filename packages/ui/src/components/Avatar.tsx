@@ -45,7 +45,8 @@ const statusDotSize: Record<NonNullable<VariantProps<typeof avatarVariants>['siz
 };
 
 export interface AvatarProps
-  extends React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>,
+  extends
+    React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>,
     VariantProps<typeof avatarVariants> {
   /** Image URL. Falls back to initials/icon if missing or it errors. */
   src?: string | null;
@@ -138,7 +139,13 @@ export interface AvatarGroupProps extends React.HTMLAttributes<HTMLDivElement> {
   size?: VariantProps<typeof avatarVariants>['size'];
 }
 
-export function AvatarGroup({ className, children, max = 4, size = 'sm', ...props }: AvatarGroupProps) {
+export function AvatarGroup({
+  className,
+  children,
+  max = 4,
+  size = 'sm',
+  ...props
+}: AvatarGroupProps) {
   const items = React.Children.toArray(children);
   const visible = items.slice(0, max);
   const overflow = items.length - visible.length;

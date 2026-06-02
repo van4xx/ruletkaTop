@@ -4,10 +4,7 @@ import { ClientSession, Connection, Model, Types } from 'mongoose';
 
 import type { CoinTransaction as CoinTransactionContract, CoinTxType } from '@ruletka/shared-types';
 
-import {
-  CoinTransaction,
-  CoinTransactionDocument,
-} from './schemas/coin-transaction.schema';
+import { CoinTransaction, CoinTransactionDocument } from './schemas/coin-transaction.schema';
 import { Wallet, WalletDocument } from './schemas/wallet.schema';
 import { InsufficientFundsException } from './insufficient-funds.exception';
 
@@ -174,9 +171,7 @@ export class WalletService {
    * standalone Mongo. `InsufficientFundsException` thrown inside aborts the
    * transaction and propagates unchanged.
    */
-  private async runWalletWrite<T>(
-    work: (session?: ClientSession) => Promise<T>,
-  ): Promise<T> {
+  private async runWalletWrite<T>(work: (session?: ClientSession) => Promise<T>): Promise<T> {
     if (this.transactionsSupported === false) {
       return work(undefined);
     }

@@ -21,8 +21,7 @@ const spinnerVariants = cva('inline-block animate-spin-slow rounded-full border-
 });
 
 export interface SpinnerProps
-  extends React.HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof spinnerVariants> {
+  extends React.HTMLAttributes<HTMLSpanElement>, VariantProps<typeof spinnerVariants> {
   /** Accessible label announced to screen readers. Defaults to "Loading". */
   label?: string;
 }

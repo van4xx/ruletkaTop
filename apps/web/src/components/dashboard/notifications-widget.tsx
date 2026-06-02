@@ -36,7 +36,13 @@ export function NotificationsWidget() {
   return (
     <DashboardCard label={t('dashboard.notificationsLabel')}>
       <WidgetHeader
-        icon={unread > 0 ? <BellRing className="h-4 w-4" aria-hidden="true" /> : <Bell className="h-4 w-4" aria-hidden="true" />}
+        icon={
+          unread > 0 ? (
+            <BellRing className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Bell className="h-4 w-4" aria-hidden="true" />
+          )
+        }
         accent="var(--warning)"
         title={t('dashboard.notificationsTitle')}
         count={unread > 0 ? unread : null}

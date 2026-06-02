@@ -7,11 +7,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { PremiumModule } from '../premium/premium.module';
 import { PremiumService } from '../premium/premium.service';
 import { CloudPaymentsSignatureGuard } from './cloudpayments-signature.guard';
-import {
-  COIN_PACKAGES_SERVICE,
-  PREMIUM_SERVICE,
-  WALLET_SERVICE,
-} from './payments.contracts';
+import { COIN_PACKAGES_SERVICE, PREMIUM_SERVICE, WALLET_SERVICE } from './payments.contracts';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { Payment, PaymentSchema } from './schemas/payment.schema';

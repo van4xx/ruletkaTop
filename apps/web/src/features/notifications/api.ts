@@ -22,7 +22,8 @@ export const notificationKeys = {
   all: ['notifications'] as const,
   /** The infinite history list on the /notifications center (a page may be
    *  filtered to unread-only). Owned exclusively by the infinite-list query. */
-  list: (unreadOnly?: boolean) => [...notificationKeys.all, 'list', { unreadOnly: !!unreadOnly }] as const,
+  list: (unreadOnly?: boolean) =>
+    [...notificationKeys.all, 'list', { unreadOnly: !!unreadOnly }] as const,
   /** The short, newest slice shown in the header bell + dashboard preview.
    *  Kept under a distinct key so it never collides with the infinite list. */
   preview: () => [...notificationKeys.all, 'preview'] as const,

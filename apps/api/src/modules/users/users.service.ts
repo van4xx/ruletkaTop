@@ -77,10 +77,7 @@ export class UsersService {
    * Used exclusively by the auth login flow to verify credentials.
    */
   async findByEmailWithSecret(email: string): Promise<UserDocument | null> {
-    return this.userModel
-      .findOne({ email: email.toLowerCase() })
-      .select('+passwordHash')
-      .exec();
+    return this.userModel.findOne({ email: email.toLowerCase() }).select('+passwordHash').exec();
   }
 
   /**
@@ -88,10 +85,7 @@ export class UsersService {
    * Pass an optional Mongoose `session` to enlist the insert in a transaction
    * (e.g. registration creating user + profile atomically).
    */
-  async createUser(
-    input: CreateUserInput,
-    session?: ClientSession,
-  ): Promise<UserDocument> {
+  async createUser(input: CreateUserInput, session?: ClientSession): Promise<UserDocument> {
     const docs: UserDocument[] = await this.userModel.create(
       [
         {
@@ -144,10 +138,7 @@ export class UsersService {
       return false;
     }
     const res = await this.userModel
-      .updateOne(
-        { _id: new Types.ObjectId(userId), deletedAt: null },
-        { $set: { passwordHash } },
-      )
+      .updateOne({ _id: new Types.ObjectId(userId), deletedAt: null }, { $set: { passwordHash } })
       .exec();
     return (res.modifiedCount ?? 0) > 0;
   }
@@ -237,9 +228,7 @@ export class UsersService {
     // 4) Hard-delete refresh sessions (revoke + remove every device).
     let sessionsDeleted = 0;
     try {
-      const res = await this.connection
-        .collection('sessions')
-        .deleteMany({ userId: objectId });
+      const res = await this.connection.collection('sessions').deleteMany({ userId: objectId });
       sessionsDeleted = res.deletedCount ?? 0;
     } catch (err) {
       this.warnScrub('sessions', err);
@@ -249,10 +238,9 @@ export class UsersService {
     //    intact, but strip the personal content).
     let messagesRedacted = 0;
     try {
-      const res = await this.connection.collection('messages').updateMany(
-        { senderId: objectId },
-        { $set: { content: '[deleted]', type: 'text' } },
-      );
+      const res = await this.connection
+        .collection('messages')
+        .updateMany({ senderId: objectId }, { $set: { content: '[deleted]', type: 'text' } });
       messagesRedacted = res.modifiedCount ?? 0;
     } catch (err) {
       this.warnScrub('messages', err);
@@ -266,8 +254,6 @@ export class UsersService {
 
   /** Log a non-fatal scrub failure during {@link eraseAccount}. */
   private warnScrub(collection: string, err: unknown): void {
-    this.logger.warn(
-      `eraseAccount: failed to scrub ${collection}: ${(err as Error).message}`,
-    );
+    this.logger.warn(`eraseAccount: failed to scrub ${collection}: ${(err as Error).message}`);
   }
 }

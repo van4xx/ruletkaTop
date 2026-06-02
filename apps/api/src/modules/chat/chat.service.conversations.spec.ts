@@ -17,10 +17,9 @@ function conversationDoc(over: {
 }): ConversationDocument {
   return {
     _id: new Types.ObjectId(over.id),
-    participants: (over.participants ?? [
-      '507f1f77bcf86cd799439011',
-      '507f1f77bcf86cd799439012',
-    ]).map((p) => new Types.ObjectId(p)),
+    participants: (
+      over.participants ?? ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012']
+    ).map((p) => new Types.ObjectId(p)),
     lastMessageAt: over.lastMessageAt,
     lastMessagePreview: over.preview ?? 'hi',
   } as unknown as ConversationDocument;

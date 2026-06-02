@@ -8,12 +8,7 @@
  *    optimistic removal of the resolved item from every cached queue list and a
  *    rollback on failure.
  */
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type { ReportStatus, ReviewItem } from '@ruletka/shared-types';
 import { ApiClientError } from '@/lib/api';
 import { moderationApi, moderationKeys, type ReviewResolution } from './api';

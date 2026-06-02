@@ -98,7 +98,9 @@ export function RegisterForm() {
     const payload = captchaToken ? { ...values, captchaToken } : values;
     registerMutation.mutate(payload, {
       onSuccess: () => {
-        toast.success(t('register.successToast'), { description: t('register.successToastDescription') });
+        toast.success(t('register.successToast'), {
+          description: t('register.successToastDescription'),
+        });
         track('signup');
         // Hard navigation so the just-set auth cookies ride the next request.
         window.location.assign('/dashboard');

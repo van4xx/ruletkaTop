@@ -2,14 +2,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { CoinPackagesService } from './coin-packages.service';
-import {
-  CoinPackage,
-  CoinPackageSchema,
-} from './schemas/coin-package.schema';
-import {
-  CoinTransaction,
-  CoinTransactionSchema,
-} from './schemas/coin-transaction.schema';
+import { CoinPackage, CoinPackageSchema } from './schemas/coin-package.schema';
+import { CoinTransaction, CoinTransactionSchema } from './schemas/coin-transaction.schema';
 import { Wallet, WalletSchema } from './schemas/wallet.schema';
 import { CoinPackagesController, WalletController } from './wallet.controller';
 import { WalletService } from './wallet.service';

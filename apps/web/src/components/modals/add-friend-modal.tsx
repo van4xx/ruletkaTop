@@ -78,9 +78,7 @@ export function AddFriendModal() {
       <DialogHeader>
         <DialogTitle>{t('modals.addFriend.title')}</DialogTitle>
         <DialogDescription>
-          {hasPreset
-            ? t('modals.addFriend.descPreset')
-            : t('modals.addFriend.descManual')}
+          {hasPreset ? t('modals.addFriend.descPreset') : t('modals.addFriend.descManual')}
         </DialogDescription>
       </DialogHeader>
 
@@ -129,7 +127,12 @@ export function AddFriendModal() {
           <FieldError id="add-friend-id-error">{error}</FieldError>
 
           <DialogFooter>
-            <Button type="button" variant="link" className="mr-auto" onClick={() => open('search-users')}>
+            <Button
+              type="button"
+              variant="link"
+              className="mr-auto"
+              onClick={() => open('search-users')}
+            >
               {t('modals.addFriend.findByNickname')}
             </Button>
             <Button type="button" variant="ghost" onClick={close}>

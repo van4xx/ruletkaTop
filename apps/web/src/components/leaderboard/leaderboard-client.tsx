@@ -145,7 +145,8 @@ export function LeaderboardClient() {
         }
         title={
           <>
-            {t('leaderboard.titlePrefix')} <span className="text-gradient-neon">{t('leaderboard.titleAccent')}</span>
+            {t('leaderboard.titlePrefix')}{' '}
+            <span className="text-gradient-neon">{t('leaderboard.titleAccent')}</span>
           </>
         }
         lede={t('leaderboard.lede')}

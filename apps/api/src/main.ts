@@ -32,11 +32,17 @@ import { RedisIoAdapter } from './realtime/redis-io.adapter';
  */
 const PUBLIC_CACHEABLE_GETS: ReadonlyArray<{ path: string; cacheControl: string }> = [
   // Coin packages change rarely; allow a short shared cache + SWR window.
-  { path: 'coin-packages', cacheControl: 'public, max-age=60, s-maxage=300, stale-while-revalidate=600' },
+  {
+    path: 'coin-packages',
+    cacheControl: 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+  },
   // Gift catalogue is effectively static within a deploy.
   { path: 'gifts', cacheControl: 'public, max-age=60, s-maxage=300, stale-while-revalidate=600' },
   // Premium plans (pricing) — same cadence as the rest of the storefront.
-  { path: 'premium/plans', cacheControl: 'public, max-age=60, s-maxage=300, stale-while-revalidate=600' },
+  {
+    path: 'premium/plans',
+    cacheControl: 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+  },
   // The public top feed is paid + time-boxed: keep it fresh, but a brief shared
   // cache absorbs bursts (it is fetched on the landing + dashboard).
   { path: 'top', cacheControl: 'public, max-age=15, s-maxage=30, stale-while-revalidate=60' },
@@ -247,10 +253,7 @@ async function bootstrap(): Promise<void> {
       .setTitle('ruletka.top API')
       .setDescription('Video/voice roulette platform — REST + realtime backend')
       .setVersion('1.0')
-      .addBearerAuth(
-        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-        'access-token',
-      )
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'access-token')
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup(`${globalPrefix}/docs`, app, document, {

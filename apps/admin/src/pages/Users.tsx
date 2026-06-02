@@ -11,7 +11,11 @@ const ROLES: { value: Role; label: string }[] = [
   { value: 'moderator', label: 'Модератор' },
   { value: 'admin', label: 'Админ' },
 ];
-const ROLE_LABEL: Record<Role, string> = { user: 'Пользователь', moderator: 'Модератор', admin: 'Админ' };
+const ROLE_LABEL: Record<Role, string> = {
+  user: 'Пользователь',
+  moderator: 'Модератор',
+  admin: 'Админ',
+};
 
 type BannedFilter = 'all' | 'banned' | 'active';
 
@@ -45,7 +49,10 @@ export function Users({ role: viewerRole }: { role: Role }) {
 
   const bannedParam = banned === 'all' ? undefined : banned === 'banned';
 
-  const queryKey = useMemo(() => ['users', { q, role: roleFilter, banned }] as const, [q, roleFilter, banned]);
+  const queryKey = useMemo(
+    () => ['users', { q, role: roleFilter, banned }] as const,
+    [q, roleFilter, banned],
+  );
 
   const list = useInfiniteQuery({
     queryKey,
@@ -58,7 +65,7 @@ export function Users({ role: viewerRole }: { role: Role }) {
         cursor: pageParam,
         limit: PAGE,
       }),
-    getNextPageParam: (last) => (last.hasMore ? last.nextCursor ?? undefined : undefined),
+    getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
   });
 
   const rows = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
@@ -85,7 +92,10 @@ export function Users({ role: viewerRole }: { role: Role }) {
       setError(null);
     },
     onSuccess: (_d, u) => patchRow(u.id, { isBanned: true }),
-    onError: (e) => setError(e instanceof AdminApiError ? `Не удалось забанить: ${e.message}` : 'Не удалось забанить'),
+    onError: (e) =>
+      setError(
+        e instanceof AdminApiError ? `Не удалось забанить: ${e.message}` : 'Не удалось забанить',
+      ),
     onSettled: () => {
       setActingId(null);
       qc.invalidateQueries({ queryKey: ['users'] });
@@ -99,7 +109,10 @@ export function Users({ role: viewerRole }: { role: Role }) {
       setError(null);
     },
     onSuccess: (_d, u) => patchRow(u.id, { isBanned: false }),
-    onError: (e) => setError(e instanceof AdminApiError ? `Не удалось разбанить: ${e.message}` : 'Не удалось разбанить'),
+    onError: (e) =>
+      setError(
+        e instanceof AdminApiError ? `Не удалось разбанить: ${e.message}` : 'Не удалось разбанить',
+      ),
     onSettled: () => {
       setActingId(null);
       qc.invalidateQueries({ queryKey: ['users'] });
@@ -113,7 +126,12 @@ export function Users({ role: viewerRole }: { role: Role }) {
       setError(null);
     },
     onSuccess: (updated) => patchRow(updated.id, { role: updated.role }),
-    onError: (e) => setError(e instanceof AdminApiError ? `Не удалось сменить роль: ${e.message}` : 'Не удалось сменить роль'),
+    onError: (e) =>
+      setError(
+        e instanceof AdminApiError
+          ? `Не удалось сменить роль: ${e.message}`
+          : 'Не удалось сменить роль',
+      ),
     onSettled: () => {
       setActingId(null);
       qc.invalidateQueries({ queryKey: ['users'] });
@@ -130,9 +148,17 @@ export function Users({ role: viewerRole }: { role: Role }) {
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="min-w-56 flex-1">
-          <Input placeholder="Поиск по email или нику…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input
+            placeholder="Поиск по email или нику…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-        <select className={selectCls} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as '' | Role)}>
+        <select
+          className={selectCls}
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as '' | Role)}
+        >
           <option value="">Все роли</option>
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>
@@ -140,7 +166,11 @@ export function Users({ role: viewerRole }: { role: Role }) {
             </option>
           ))}
         </select>
-        <select className={selectCls} value={banned} onChange={(e) => setBanned(e.target.value as BannedFilter)}>
+        <select
+          className={selectCls}
+          value={banned}
+          onChange={(e) => setBanned(e.target.value as BannedFilter)}
+        >
           <option value="all">Все статусы</option>
           <option value="active">Активные</option>
           <option value="banned">Забаненные</option>
@@ -148,7 +178,9 @@ export function Users({ role: viewerRole }: { role: Role }) {
       </div>
 
       {error && (
-        <p className="mb-4 rounded-xl glass-strong p-3 text-sm text-danger ring-1 ring-danger/30">{error}</p>
+        <p className="mb-4 rounded-xl glass-strong p-3 text-sm text-danger ring-1 ring-danger/30">
+          {error}
+        </p>
       )}
 
       {/* Table */}
@@ -158,7 +190,9 @@ export function Users({ role: viewerRole }: { role: Role }) {
             <Spinner />
           </div>
         ) : list.isError ? (
-          <p className="p-8 text-center text-sm text-danger">Не удалось загрузить список пользователей.</p>
+          <p className="p-8 text-center text-sm text-danger">
+            Не удалось загрузить список пользователей.
+          </p>
         ) : rows.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">Никого не найдено.</p>
         ) : (
@@ -183,7 +217,9 @@ export function Users({ role: viewerRole }: { role: Role }) {
                           <Avatar size="sm" alt={u.nickname} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="truncate font-medium text-foreground">{u.nickname}</span>
+                              <span className="truncate font-medium text-foreground">
+                                {u.nickname}
+                              </span>
                               {u.country && <span title={u.country}>{codeToFlag(u.country)}</span>}
                             </div>
                             <p className="truncate text-xs text-muted-foreground">{u.email}</p>
@@ -210,7 +246,16 @@ export function Users({ role: viewerRole }: { role: Role }) {
                             ))}
                           </select>
                         ) : (
-                          <Badge variant={u.role === 'admin' ? 'aurora' : u.role === 'moderator' ? 'accent' : 'neutral'} size="sm">
+                          <Badge
+                            variant={
+                              u.role === 'admin'
+                                ? 'aurora'
+                                : u.role === 'moderator'
+                                  ? 'accent'
+                                  : 'neutral'
+                            }
+                            size="sm"
+                          >
                             {ROLE_LABEL[u.role]}
                           </Badge>
                         )}
@@ -245,11 +290,23 @@ export function Users({ role: viewerRole }: { role: Role }) {
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
                           {u.isBanned ? (
-                            <Button size="sm" variant="secondary" loading={busy && unban.isPending} disabled={busy} onClick={() => unban.mutate(u)}>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              loading={busy && unban.isPending}
+                              disabled={busy}
+                              onClick={() => unban.mutate(u)}
+                            >
                               Разбанить
                             </Button>
                           ) : (
-                            <Button size="sm" variant="danger" loading={busy && ban.isPending} disabled={busy} onClick={() => ban.mutate(u)}>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              loading={busy && ban.isPending}
+                              disabled={busy}
+                              onClick={() => ban.mutate(u)}
+                            >
                               Забанить
                             </Button>
                           )}
@@ -267,7 +324,11 @@ export function Users({ role: viewerRole }: { role: Role }) {
       {/* Pagination */}
       {list.hasNextPage && (
         <div className="mt-4 flex justify-center">
-          <Button variant="ghost" loading={list.isFetchingNextPage} onClick={() => list.fetchNextPage()}>
+          <Button
+            variant="ghost"
+            loading={list.isFetchingNextPage}
+            onClick={() => list.fetchNextPage()}
+          >
             Показать ещё
           </Button>
         </div>

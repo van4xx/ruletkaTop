@@ -17,10 +17,30 @@ import { useUpdateSettings } from '@/features/settings/use-settings';
 import { SettingRow, SettingsSection } from '../primitives';
 import { cn } from '@/lib/cn';
 
-const THEME_CHOICES: ReadonlyArray<{ value: Theme; labelKey: string; icon: typeof Sun; preview: string }> = [
-  { value: 'light', labelKey: 'appearance.themeLight', icon: Sun, preview: 'from-zinc-100 to-white' },
-  { value: 'dark', labelKey: 'appearance.themeDark', icon: Moon, preview: 'from-[#0a0a0f] to-[#171622]' },
-  { value: 'system', labelKey: 'appearance.themeSystem', icon: Monitor, preview: 'from-zinc-100 via-[#171622] to-[#0a0a0f]' },
+const THEME_CHOICES: ReadonlyArray<{
+  value: Theme;
+  labelKey: string;
+  icon: typeof Sun;
+  preview: string;
+}> = [
+  {
+    value: 'light',
+    labelKey: 'appearance.themeLight',
+    icon: Sun,
+    preview: 'from-zinc-100 to-white',
+  },
+  {
+    value: 'dark',
+    labelKey: 'appearance.themeDark',
+    icon: Moon,
+    preview: 'from-[#0a0a0f] to-[#171622]',
+  },
+  {
+    value: 'system',
+    labelKey: 'appearance.themeSystem',
+    icon: Monitor,
+    preview: 'from-zinc-100 via-[#171622] to-[#0a0a0f]',
+  },
 ];
 
 export function AppearanceTab({ settings }: { settings: Settings }) {
@@ -63,7 +83,9 @@ export function AppearanceTab({ settings }: { settings: Settings }) {
     >
       <div className="space-y-7">
         <fieldset>
-          <legend className="mb-3 text-sm font-medium text-foreground">{t('appearance.themeHeading')}</legend>
+          <legend className="mb-3 text-sm font-medium text-foreground">
+            {t('appearance.themeHeading')}
+          </legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {THEME_CHOICES.map(({ value, labelKey, icon: Icon, preview }) => {
               const selected = mounted && current === value;
@@ -93,7 +115,10 @@ export function AppearanceTab({ settings }: { settings: Settings }) {
                       {t(labelKey)}
                     </span>
                     {selected && (
-                      <Check className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
+                      <Check
+                        className="h-4 w-4 text-[var(--color-neon-violet)]"
+                        aria-hidden="true"
+                      />
                     )}
                   </span>
                 </button>

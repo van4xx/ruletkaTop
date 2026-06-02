@@ -81,9 +81,7 @@ function patchReadInFeed(prev: FeedCache | undefined, id: string | 'ALL'): FeedC
     ...prev,
     pages: prev.pages.map((page) => ({
       ...page,
-      items: page.items.map((it) =>
-        id === 'ALL' || it.id === id ? { ...it, read: true } : it,
-      ),
+      items: page.items.map((it) => (id === 'ALL' || it.id === id ? { ...it, read: true } : it)),
     })),
   };
 }

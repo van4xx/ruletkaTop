@@ -55,8 +55,7 @@ export class VerificationToken {
 
 export type VerificationTokenDocument = HydratedDocument<VerificationToken>;
 
-export const VerificationTokenSchema =
-  SchemaFactory.createForClass(VerificationToken);
+export const VerificationTokenSchema = SchemaFactory.createForClass(VerificationToken);
 
 // ── Indexes ───────────────────────────────────────────────────────────────
 // Fast, unique lookup by token hash (consume on verify / reset).

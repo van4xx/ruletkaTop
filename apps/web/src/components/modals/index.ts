@@ -42,8 +42,4 @@ export {
 } from '@/lib/stores/modal-store';
 
 // Filters store (the FiltersModal persists here; the roulette reads it).
-export {
-  useFiltersStore,
-  useMatchFilters,
-  DEFAULT_FILTERS,
-} from '@/lib/stores/filters-store';
+export { useFiltersStore, useMatchFilters, DEFAULT_FILTERS } from '@/lib/stores/filters-store';

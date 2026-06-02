@@ -52,7 +52,9 @@ export function ResetPasswordForm() {
       { token, password: values.password },
       {
         onSuccess: () => {
-          toast.success(t('resetPassword.successToast'), { description: t('resetPassword.successToastDescription') });
+          toast.success(t('resetPassword.successToast'), {
+            description: t('resetPassword.successToastDescription'),
+          });
           // Hard navigation so /login boots cleanly (and re-runs its auth check).
           window.location.assign('/login');
         },
@@ -67,10 +69,10 @@ export function ResetPasswordForm() {
         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-warning/40 bg-warning/10">
           <TriangleAlert className="h-6 w-6 text-warning" aria-hidden="true" />
         </span>
-        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">{t('resetPassword.missingToken.title')}</h1>
-        <p className="mt-3 text-muted-foreground">
-          {t('resetPassword.missingToken.body')}
-        </p>
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">
+          {t('resetPassword.missingToken.title')}
+        </h1>
+        <p className="mt-3 text-muted-foreground">{t('resetPassword.missingToken.body')}</p>
         <div className="mt-8">
           <Button asChild variant="primary" size="lg" block>
             <Link href="/forgot-password">{t('resetPassword.missingToken.requestNew')}</Link>
@@ -88,10 +90,10 @@ export function ResetPasswordForm() {
         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-warning/40 bg-warning/10">
           <TriangleAlert className="h-6 w-6 text-warning" aria-hidden="true" />
         </span>
-        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">{t('resetPassword.expired.title')}</h1>
-        <p className="mt-3 text-muted-foreground">
-          {t('resetPassword.expired.body')}
-        </p>
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">
+          {t('resetPassword.expired.title')}
+        </h1>
+        <p className="mt-3 text-muted-foreground">{t('resetPassword.expired.body')}</p>
         <div className="mt-8">
           <Button asChild variant="primary" size="lg" block>
             <Link href="/forgot-password">{t('resetPassword.expired.requestNew')}</Link>
@@ -106,10 +108,10 @@ export function ResetPasswordForm() {
   return (
     <div>
       <header className="mb-8">
-        <h1 className="font-display text-3xl font-bold tracking-tight">{t('resetPassword.title')}</h1>
-        <p className="mt-2 text-muted-foreground">
-          {t('resetPassword.subtitle')}
-        </p>
+        <h1 className="font-display text-3xl font-bold tracking-tight">
+          {t('resetPassword.title')}
+        </h1>
+        <p className="mt-2 text-muted-foreground">{t('resetPassword.subtitle')}</p>
       </header>
 
       <AnimatePresence>
@@ -128,7 +130,12 @@ export function ResetPasswordForm() {
       </AnimatePresence>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <FormField label={t('resetPassword.newPassword')} required error={errors.password?.message} hint={t('resetPassword.passwordHint')}>
+        <FormField
+          label={t('resetPassword.newPassword')}
+          required
+          error={errors.password?.message}
+          hint={t('resetPassword.passwordHint')}
+        >
           {(field) => (
             <PasswordField
               {...field}

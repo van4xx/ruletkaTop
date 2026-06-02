@@ -62,9 +62,15 @@ export function useDevices(): UseDevicesResult {
       let micIdx = 0;
       for (const d of devices) {
         if (d.kind === 'videoinput') {
-          cams.push({ deviceId: d.deviceId, label: labelFor(d, camIdx++, t('devices.cameraFallback')) });
+          cams.push({
+            deviceId: d.deviceId,
+            label: labelFor(d, camIdx++, t('devices.cameraFallback')),
+          });
         } else if (d.kind === 'audioinput') {
-          mics.push({ deviceId: d.deviceId, label: labelFor(d, micIdx++, t('devices.micFallback')) });
+          mics.push({
+            deviceId: d.deviceId,
+            label: labelFor(d, micIdx++, t('devices.micFallback')),
+          });
         }
       }
       setCameras(cams);

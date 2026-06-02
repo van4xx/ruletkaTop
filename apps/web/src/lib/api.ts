@@ -434,8 +434,7 @@ export const api = {
     verifyEmail: (dto: VerifyEmailDto) =>
       request<void>('/auth/verify-email', { method: 'POST', json: dto, skipAuth: true }),
     /** Re-send the verification email to the signed-in user (requires a session). */
-    resendVerification: () =>
-      request<void>('/auth/resend-verification', { method: 'POST' }),
+    resendVerification: () => request<void>('/auth/resend-verification', { method: 'POST' }),
   },
 
   profile: {
@@ -485,7 +484,10 @@ export const api = {
    * the API can fan out delivery beyond the in-app feed.
    */
   notifications: {
-    list: (params?: { cursor?: string; limit?: number; unreadOnly?: boolean }, signal?: AbortSignal) =>
+    list: (
+      params?: { cursor?: string; limit?: number; unreadOnly?: boolean },
+      signal?: AbortSignal,
+    ) =>
       request<NotificationFeedPage>('/notifications', {
         query: {
           cursor: params?.cursor,
@@ -496,8 +498,7 @@ export const api = {
       }),
     unreadCount: (signal?: AbortSignal) =>
       request<UnreadCount>('/notifications/unread-count', { signal }),
-    markRead: (id: string) =>
-      request<void>(`/notifications/${id}/read`, { method: 'POST' }),
+    markRead: (id: string) => request<void>(`/notifications/${id}/read`, { method: 'POST' }),
     markAllRead: () => request<void>('/notifications/read-all', { method: 'POST' }),
     /** Register a browser Web Push subscription (idempotent server-side). */
     subscribePush: (sub: PushSubscriptionDto) =>

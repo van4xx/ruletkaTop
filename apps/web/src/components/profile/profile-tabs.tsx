@@ -57,9 +57,7 @@ export function ProfileTabs({
   const reduce = useReducedMotion();
   const [tab, setTab] = useState<TabKey>('gifts');
 
-  const transition = reduce
-    ? { duration: 0.12 }
-    : { duration: 0.28, ease: EASE_OUT };
+  const transition = reduce ? { duration: 0.12 } : { duration: 0.28, ease: EASE_OUT };
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
@@ -90,7 +88,11 @@ export function ProfileTabs({
             // Region is labelled by the active tab for screen readers.
             role="region"
             aria-label={
-              tab === 'gifts' ? t('tabs.gifts') : tab === 'about' ? t('tabs.about') : t('tabs.activity')
+              tab === 'gifts'
+                ? t('tabs.gifts')
+                : tab === 'about'
+                  ? t('tabs.about')
+                  : t('tabs.activity')
             }
           >
             {tab === 'gifts' &&
@@ -101,15 +103,24 @@ export function ProfileTabs({
                   gifts={gifts}
                   isLoading={giftsLoading}
                   totalValueCoins={giftsValueCoins}
-                  emptyTitle={isOwnProfile ? t('tabs.giftsEmptyTitleOwn') : t('tabs.giftsEmptyTitleOther')}
-                  emptyHint={isOwnProfile ? t('tabs.giftsEmptyHintOwn') : t('tabs.giftsEmptyHintOther')}
+                  emptyTitle={
+                    isOwnProfile ? t('tabs.giftsEmptyTitleOwn') : t('tabs.giftsEmptyTitleOther')
+                  }
+                  emptyHint={
+                    isOwnProfile ? t('tabs.giftsEmptyHintOwn') : t('tabs.giftsEmptyHintOther')
+                  }
                 />
               ))}
 
             {tab === 'about' && <AboutPanel profile={profile} />}
 
             {tab === 'activity' && (
-              <ActivityPanel profile={profile} status={status} gifts={gifts} isLoading={giftsLoading} />
+              <ActivityPanel
+                profile={profile}
+                status={status}
+                gifts={gifts}
+                isLoading={giftsLoading}
+              />
             )}
           </motion.div>
         </AnimatePresence>
@@ -164,7 +175,9 @@ function AboutPanel({ profile }: { profile: PublicProfile }) {
   return (
     <div className="space-y-5">
       {profile.status ? (
-        <p className="text-pretty text-[0.9375rem] leading-relaxed text-foreground/90">{profile.status}</p>
+        <p className="text-pretty text-[0.9375rem] leading-relaxed text-foreground/90">
+          {profile.status}
+        </p>
       ) : (
         <p className="text-pretty text-sm italic text-muted-foreground">{t('tabs.aboutNoBio')}</p>
       )}
@@ -187,7 +200,9 @@ function AboutPanel({ profile }: { profile: PublicProfile }) {
           >
             <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="min-w-0">
-              <dt className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">{label}</dt>
+              <dt className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+                {label}
+              </dt>
               <dd className="truncate text-sm font-medium text-foreground/90">{value}</dd>
             </div>
           </div>
@@ -240,7 +255,9 @@ function ActivityPanel({
             key={g.id}
             tone="text-[var(--color-neon-magenta)]"
             dot="bg-[var(--color-neon-magenta)]"
-            title={t('tabs.activityGiftReceived', { title: g.gift?.title ?? t('giftFallbackTitle') })}
+            title={t('tabs.activityGiftReceived', {
+              title: g.gift?.title ?? t('giftFallbackTitle'),
+            })}
             meta={relativeDate(g.createdAt, t, format)}
           />
         ))
@@ -250,7 +267,11 @@ function ActivityPanel({
         tone="text-[var(--color-neon-cyan)]"
         dot="bg-[var(--color-neon-cyan)]"
         title={t('tabs.activityJoined')}
-        meta={format.dateTime(new Date(profile.createdAt), { day: 'numeric', month: 'long', year: 'numeric' })}
+        meta={format.dateTime(new Date(profile.createdAt), {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })}
       />
     </ol>
   );
@@ -269,7 +290,11 @@ function TimelineRow({
 }) {
   return (
     <li className="relative flex items-start gap-4">
-      <span className={cn('relative z-10 mt-1 inline-flex h-[1.375rem] w-[1.375rem] shrink-0 items-center justify-center rounded-full bg-card ring-1 ring-border/70')}>
+      <span
+        className={cn(
+          'relative z-10 mt-1 inline-flex h-[1.375rem] w-[1.375rem] shrink-0 items-center justify-center rounded-full bg-card ring-1 ring-border/70',
+        )}
+      >
         <span className={cn('h-2 w-2 rounded-full', dot)} aria-hidden="true" />
       </span>
       <div className="min-w-0 pt-0.5">

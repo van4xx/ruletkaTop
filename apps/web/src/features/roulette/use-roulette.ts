@@ -95,7 +95,11 @@ const initialState: RouletteState = {
 function reducer(state: RouletteState, action: Action): RouletteState {
   switch (action.type) {
     case 'RESET':
-      return { ...initialState, localStream: state.localStream, socketConnected: state.socketConnected };
+      return {
+        ...initialState,
+        localStream: state.localStream,
+        socketConnected: state.socketConnected,
+      };
     case 'REQUESTING':
       return { ...state, status: 'requesting', error: null };
     case 'LOCAL_STREAM':
@@ -731,7 +735,10 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     } catch (err) {
       startedRef.current = false;
       if (err instanceof MediaError) {
-        dispatch({ type: 'ERROR', error: { kind: err.kind, message: t(`mediaError.${err.kind}`) } });
+        dispatch({
+          type: 'ERROR',
+          error: { kind: err.kind, message: t(`mediaError.${err.kind}`) },
+        });
       } else {
         dispatch({
           type: 'ERROR',

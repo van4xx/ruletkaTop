@@ -27,7 +27,14 @@ export interface EconomyShellProps {
   className?: string;
 }
 
-export function EconomyShell({ eyebrow, title, lede, actions, children, className }: EconomyShellProps) {
+export function EconomyShell({
+  eyebrow,
+  title,
+  lede,
+  actions,
+  children,
+  className,
+}: EconomyShellProps) {
   return (
     <div className="grain relative overflow-hidden">
       {/* Atmospheric background — layered aurora glows + a faint grid. */}
@@ -38,7 +45,9 @@ export function EconomyShell({ eyebrow, title, lede, actions, children, classNam
         <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:64px_64px] opacity-[0.12] [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
       </div>
 
-      <section className={cn('mx-auto max-w-7xl px-4 pb-20 pt-12 sm:px-6 sm:pt-16 lg:px-8', className)}>
+      <section
+        className={cn('mx-auto max-w-7xl px-4 pb-20 pt-12 sm:px-6 sm:pt-16 lg:px-8', className)}
+      >
         <motion.header
           variants={rise}
           initial="hidden"
@@ -54,7 +63,9 @@ export function EconomyShell({ eyebrow, title, lede, actions, children, classNam
             <h1 className="font-display text-3xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">
               {title}
             </h1>
-            {lede && <p className="mt-4 text-balance text-base text-muted-foreground sm:text-lg">{lede}</p>}
+            {lede && (
+              <p className="mt-4 text-balance text-base text-muted-foreground sm:text-lg">{lede}</p>
+            )}
           </div>
           {actions && <div className="shrink-0">{actions}</div>}
         </motion.header>

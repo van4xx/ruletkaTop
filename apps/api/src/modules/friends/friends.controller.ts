@@ -51,9 +51,15 @@ export class FriendsController {
 
   @Get()
   @ApiOperation({ summary: "List the caller's accepted friends with online status" })
-  @ApiQuery({ name: 'cursor', required: false, description: 'Opaque cursor from the previous page' })
+  @ApiQuery({
+    name: 'cursor',
+    required: false,
+    description: 'Opaque cursor from the previous page',
+  })
   @ApiQuery({ name: 'limit', required: false, description: 'Page size (1–100, default 20)' })
-  @ApiOkResponse({ description: 'A page of friend summaries (minimal profile + presence) + next cursor' })
+  @ApiOkResponse({
+    description: 'A page of friend summaries (minimal profile + presence) + next cursor',
+  })
   async listFriends(
     @CurrentUser() user: JwtPayload,
     @Query(createZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
@@ -99,10 +105,7 @@ export class FriendsController {
   @ApiOperation({ summary: 'Remove a friendship or decline a request' })
   @ApiParam({ name: 'id', description: 'Friendship id (Mongo ObjectId)' })
   @ApiNoContentResponse({ description: 'Friendship removed' })
-  async removeFriendship(
-    @CurrentUser() user: JwtPayload,
-    @Param('id') id: string,
-  ): Promise<void> {
+  async removeFriendship(@CurrentUser() user: JwtPayload, @Param('id') id: string): Promise<void> {
     await this.friendsService.removeFriendship(id, user.sub);
   }
 }

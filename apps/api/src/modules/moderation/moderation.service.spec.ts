@@ -154,10 +154,7 @@ describe('ModerationService — escalation policy', () => {
     // Client said low-confidence 'other'; server is highly confident it is sexual.
     frameScorer.score.mockResolvedValue({ label: 'sexual', score: 0.97 });
 
-    const action = await service.handleViolation(
-      USER,
-      violation({ label: 'other', score: 0.2 }),
-    );
+    const action = await service.handleViolation(USER, violation({ label: 'other', score: 0.2 }));
 
     // Upgraded to a high-score ban via the server signal.
     expect(action.action).toBe('ban');

@@ -34,7 +34,8 @@ const inputWrapperVariants = cva(
 );
 
 export interface InputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>,
+  extends
+    Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>,
     Pick<VariantProps<typeof inputWrapperVariants>, 'size'> {
   /** Marks the field as invalid (red border + ring). Sets `aria-invalid`. */
   invalid?: boolean;
@@ -53,7 +54,16 @@ export interface InputProps
  * `invalid` switches to the danger palette and sets `aria-invalid`.
  */
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, wrapperClassName, invalid = false, size, disabled, leadingIcon, trailingIcon, ...props },
+  {
+    className,
+    wrapperClassName,
+    invalid = false,
+    size,
+    disabled,
+    leadingIcon,
+    trailingIcon,
+    ...props
+  },
   ref,
 ) {
   return (

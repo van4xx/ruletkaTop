@@ -17,7 +17,11 @@
  *    neutral "if that email exists…" success regardless of the outcome.
  */
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
-import type { RequestPasswordResetDto, ResetPasswordDto, VerifyEmailDto } from '@ruletka/shared-types';
+import type {
+  RequestPasswordResetDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from '@ruletka/shared-types';
 import { api, ApiClientError } from '@/lib/api';
 import { CURRENT_USER_KEY } from './use-auth';
 

@@ -3,11 +3,7 @@ import type { ConfigService } from '@nestjs/config';
 
 import type { AppNotification } from '@ruletka/shared-types';
 
-import type {
-  PushSendResult,
-  WebPushProvider,
-  WebPushTarget,
-} from './push.types';
+import type { PushSendResult, WebPushProvider, WebPushTarget } from './push.types';
 
 /**
  * `web-push` is OPTIONAL: it is only required (lazily, at construction of the
@@ -57,10 +53,7 @@ export class WebPushLibProvider implements WebPushProvider {
 
   constructor(private readonly webpush: WebPushModule) {}
 
-  async send(
-    target: WebPushTarget,
-    notification: AppNotification,
-  ): Promise<PushSendResult> {
+  async send(target: WebPushTarget, notification: AppNotification): Promise<PushSendResult> {
     try {
       await this.webpush.sendNotification(
         {

@@ -53,28 +53,28 @@ richness, and tuned for **WCAG AA** against their intended surfaces.
 
 ### Dark (default)
 
-| Token                  | Role                                  | Value (approx)        |
-| ---------------------- | ------------------------------------- | --------------------- |
-| `--background`         | App canvas                            | very dark ink-blue    |
-| `--background-base`    | Deepest layer (behind canvas)         | near-black ink        |
-| `--background-elevated`| Raised solid panels                   | dark slate-blue       |
-| `--background-overlay` | Floating menus / popovers             | lighter slate-blue    |
-| `--glass`              | Frosted surface fill (translucent)    | slate-blue @ 55%      |
-| `--glass-border`       | Hairline on glass                     | white @ 8%            |
-| `--foreground`         | Primary text                          | near-white            |
-| `--muted-foreground`   | Secondary text                        | cool grey-blue        |
-| `--subtle-foreground`  | Tertiary text / placeholders          | dim grey-blue         |
-| **`--accent`**         | **Signature violet anchor**           | **electric violet**   |
-| `--accent-from/via/to` | Aurora gradient stops (violet→cyan)   | violet · blue · cyan  |
-| `--primary`            | Default CTA (maps to accent)          | electric violet       |
-| `--secondary`          | Low-emphasis surface                  | muted slate           |
-| `--success`            | Positive                              | mint green            |
-| `--warning`            | Caution                               | amber                 |
-| `--danger`             | Destructive / errors                  | warm red              |
-| `--info`               | Informational                         | sky blue              |
-| `--coin`               | Coin economy                          | warm gold             |
-| `--rarity-*`           | Gift tiers (common→legendary)         | grey · blue · violet · gold |
-| `--ring`               | Focus ring                            | bright violet         |
+| Token                   | Role                                | Value (approx)              |
+| ----------------------- | ----------------------------------- | --------------------------- |
+| `--background`          | App canvas                          | very dark ink-blue          |
+| `--background-base`     | Deepest layer (behind canvas)       | near-black ink              |
+| `--background-elevated` | Raised solid panels                 | dark slate-blue             |
+| `--background-overlay`  | Floating menus / popovers           | lighter slate-blue          |
+| `--glass`               | Frosted surface fill (translucent)  | slate-blue @ 55%            |
+| `--glass-border`        | Hairline on glass                   | white @ 8%                  |
+| `--foreground`          | Primary text                        | near-white                  |
+| `--muted-foreground`    | Secondary text                      | cool grey-blue              |
+| `--subtle-foreground`   | Tertiary text / placeholders        | dim grey-blue               |
+| **`--accent`**          | **Signature violet anchor**         | **electric violet**         |
+| `--accent-from/via/to`  | Aurora gradient stops (violet→cyan) | violet · blue · cyan        |
+| `--primary`             | Default CTA (maps to accent)        | electric violet             |
+| `--secondary`           | Low-emphasis surface                | muted slate                 |
+| `--success`             | Positive                            | mint green                  |
+| `--warning`             | Caution                             | amber                       |
+| `--danger`              | Destructive / errors                | warm red                    |
+| `--info`                | Informational                       | sky blue                    |
+| `--coin`                | Coin economy                        | warm gold                   |
+| `--rarity-*`            | Gift tiers (common→legendary)       | grey · blue · violet · gold |
+| `--ring`                | Focus ring                          | bright violet               |
 
 A `.light` theme provides the same token set re-tuned for light backgrounds.
 
@@ -111,15 +111,15 @@ and so on — every token namespace listed above.
 
 ### Signature `@utility` classes ([`utilities.css`](./src/styles/utilities.css))
 
-| Class               | Effect                                                        |
-| ------------------- | ------------------------------------------------------------- |
-| `glass` / `glass-strong` | Frosted translucent surface + blur + hairline + shadow   |
-| `bg-aurora`         | The violet→cyan gradient as a background                      |
-| `text-aurora`       | The gradient clipped to text (wordmark, headlines)            |
-| `border-aurora`     | A 1px gradient border via mask compositing                    |
-| `bg-aurora-radial`  | Full-bleed atmospheric aurora glow for page backgrounds       |
-| `grain`             | Subtle noise overlay to kill gradient banding                 |
-| `mask-fade-x`       | Fade left/right edges (used by `Marquee`)                     |
+| Class                    | Effect                                                  |
+| ------------------------ | ------------------------------------------------------- |
+| `glass` / `glass-strong` | Frosted translucent surface + blur + hairline + shadow  |
+| `bg-aurora`              | The violet→cyan gradient as a background                |
+| `text-aurora`            | The gradient clipped to text (wordmark, headlines)      |
+| `border-aurora`          | A 1px gradient border via mask compositing              |
+| `bg-aurora-radial`       | Full-bleed atmospheric aurora glow for page backgrounds |
+| `grain`                  | Subtle noise overlay to kill gradient banding           |
+| `mask-fade-x`            | Fade left/right edges (used by `Marquee`)               |
 
 ---
 
@@ -129,7 +129,9 @@ Dark is the **default** (`:root` is dark), so SSR and first paint are dark with
 **no flash**. Opt into light by adding `.light` to a parent (usually `<html>`):
 
 ```html
-<html class="light">…</html>
+<html class="light">
+  …
+</html>
 ```
 
 Dark mode uses the **class strategy** (not `prefers-color-scheme`). The `dark:`
@@ -223,24 +225,24 @@ to opt other elements in.
 All components are typed, forward refs where sensible, accept `className`
 (merged via `cn`), and theme from the tokens.
 
-| Component        | Notes                                                                 |
-| ---------------- | --------------------------------------------------------------------- |
-| `Button`         | CVA variants `primary` (aurora) / `secondary` / `outline` / `ghost` / `glass` / `danger` / `link`; `loading`, `asChild`, icon slots. |
-| `IconButton`     | Square/circular icon-only button; **requires `aria-label`**.          |
-| `Card` / `GlassCard` | `glass` / `solid` / `outline` / `aurora` variants + `interactive`; with `CardHeader/Title/Description/Content/Footer`. |
-| `Input`          | Wrapper-based field with leading/trailing icon slots and `invalid`.   |
-| `Textarea`       | Matches `Input`; vertical resize.                                     |
-| `Label`          | `required` asterisk with accessible hint.                             |
-| `Badge`          | Semantic + `accent`/`aurora`/`coin` + four `rarity` tiers; `dot`.     |
-| `Skeleton`       | Brand-tinted shimmer; `line`/`block`/`circle`.                        |
-| `Spinner`        | CSS-only; reduced-motion aware.                                       |
-| `Dialog` (`Modal`) | Radix dialog; focus trap, scroll lock, `Esc`; spring-in motion.     |
-| `DropdownMenu`   | Radix menu; full keyboard nav; checkbox/radio/sub-menu items.         |
-| `Tabs`           | Radix tabs; `pill` (aurora) or `underline` looks.                     |
-| `Switch`         | Radix switch; aurora ON state with a spring thumb.                    |
-| `Slider`         | Radix slider; **two-thumb range capable** (age filter), value bubbles.|
-| `Tooltip`        | Radix tooltip; glass surface + arrow.                                 |
-| `Avatar` / `AvatarGroup` | Radix avatar; image fallback to initials, presence dot, accent/aurora ring. |
+| Component                | Notes                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `Button`                 | CVA variants `primary` (aurora) / `secondary` / `outline` / `ghost` / `glass` / `danger` / `link`; `loading`, `asChild`, icon slots. |
+| `IconButton`             | Square/circular icon-only button; **requires `aria-label`**.                                                                         |
+| `Card` / `GlassCard`     | `glass` / `solid` / `outline` / `aurora` variants + `interactive`; with `CardHeader/Title/Description/Content/Footer`.               |
+| `Input`                  | Wrapper-based field with leading/trailing icon slots and `invalid`.                                                                  |
+| `Textarea`               | Matches `Input`; vertical resize.                                                                                                    |
+| `Label`                  | `required` asterisk with accessible hint.                                                                                            |
+| `Badge`                  | Semantic + `accent`/`aurora`/`coin` + four `rarity` tiers; `dot`.                                                                    |
+| `Skeleton`               | Brand-tinted shimmer; `line`/`block`/`circle`.                                                                                       |
+| `Spinner`                | CSS-only; reduced-motion aware.                                                                                                      |
+| `Dialog` (`Modal`)       | Radix dialog; focus trap, scroll lock, `Esc`; spring-in motion.                                                                      |
+| `DropdownMenu`           | Radix menu; full keyboard nav; checkbox/radio/sub-menu items.                                                                        |
+| `Tabs`                   | Radix tabs; `pill` (aurora) or `underline` looks.                                                                                    |
+| `Switch`                 | Radix switch; aurora ON state with a spring thumb.                                                                                   |
+| `Slider`                 | Radix slider; **two-thumb range capable** (age filter), value bubbles.                                                               |
+| `Tooltip`                | Radix tooltip; glass surface + arrow.                                                                                                |
+| `Avatar` / `AvatarGroup` | Radix avatar; image fallback to initials, presence dot, accent/aurora ring.                                                          |
 
 ---
 

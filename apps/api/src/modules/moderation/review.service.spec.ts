@@ -23,7 +23,10 @@ function findChain(rows: unknown[]): Record<string, jest.Mock> {
 const USER = '507f1f77bcf86cd799439011';
 
 /** Minimal hydrated moderation-event stub the service maps via `toContract`. */
-function eventDoc(id: string, over: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+function eventDoc(
+  id: string,
+  over: Partial<Record<string, unknown>> = {},
+): Record<string, unknown> {
   return {
     _id: { toString: () => id },
     userId: { toString: () => USER },
@@ -109,15 +112,13 @@ describe('ReviewService — admin review queue', () => {
   it('resolve: 404s an unknown id', async () => {
     eventModel.findByIdAndUpdate.mockReturnValue(queryReturning(null));
 
-    await expect(
-      service.resolve('507f1f77bcf86cd799439012', 'dismissed'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.resolve('507f1f77bcf86cd799439012', 'dismissed')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('resolve: 404s an invalid (non-ObjectId) id without hitting the DB', async () => {
-    await expect(service.resolve('nope', 'resolved')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(service.resolve('nope', 'resolved')).rejects.toBeInstanceOf(NotFoundException);
     expect(eventModel.findByIdAndUpdate).not.toHaveBeenCalled();
   });
 });

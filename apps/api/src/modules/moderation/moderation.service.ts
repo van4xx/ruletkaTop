@@ -22,10 +22,7 @@ import {
   type ModerationActionMessage,
   ZERO_TOLERANCE_LABELS,
 } from './moderation.constants';
-import {
-  ModerationEvent,
-  ModerationEventDocument,
-} from './schemas/moderation-event.schema';
+import { ModerationEvent, ModerationEventDocument } from './schemas/moderation-event.schema';
 
 /**
  * The escalation outcome of a single violation: the persisted event id, the
@@ -91,10 +88,7 @@ export class ModerationService {
     //    signals: a 'safe'/low server score never downgrades a client report,
     //    but a confident server label/score can upgrade it.
     const server = await this.safeScore(dto.evidence);
-    const { label, score } = mergeSignals(
-      { label: dto.label, score: dto.score },
-      server,
-    );
+    const { label, score } = mergeSignals({ label: dto.label, score: dto.score }, server);
 
     // 2) Decide the action FIRST (count prior events), so the row we persist
     //    records the action actually taken.
@@ -112,9 +106,7 @@ export class ModerationService {
       try {
         await this.adminService.banUser(userId);
       } catch (err) {
-        this.logger.error(
-          `Failed to ban user ${userId} after violation: ${asMessage(err)}`,
-        );
+        this.logger.error(`Failed to ban user ${userId} after violation: ${asMessage(err)}`);
       }
     }
 
@@ -219,9 +211,7 @@ export class ModerationService {
     await this.eventModel.create({
       userId: new Types.ObjectId(userId),
       matchId:
-        dto.matchId && Types.ObjectId.isValid(dto.matchId)
-          ? new Types.ObjectId(dto.matchId)
-          : null,
+        dto.matchId && Types.ObjectId.isValid(dto.matchId) ? new Types.ObjectId(dto.matchId) : null,
       label,
       score,
       evidenceUrl: dto.evidence ?? null,
@@ -238,17 +228,12 @@ export class ModerationService {
    * effective via {@link AdminService.banUser}; this only delivers the reason +
    * tears down the live call faster.
    */
-  private async publishAction(
-    userId: string,
-    payload: ModerationActionPayload,
-  ): Promise<void> {
+  private async publishAction(userId: string, payload: ModerationActionPayload): Promise<void> {
     const message: ModerationActionMessage = { userId, payload };
     try {
       await this.redis.publish(MODERATION_ACTION_CHANNEL, JSON.stringify(message));
     } catch (err) {
-      this.logger.warn(
-        `Failed to publish moderation action for ${userId}: ${asMessage(err)}`,
-      );
+      this.logger.warn(`Failed to publish moderation action for ${userId}: ${asMessage(err)}`);
     }
   }
 

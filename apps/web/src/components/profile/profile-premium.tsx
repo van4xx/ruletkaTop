@@ -24,13 +24,7 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 /* ── Кто смотрел профиль ──────────────────────────────────────────────── */
 
-export function ProfileViewsPanel({
-  isPremium,
-  views,
-}: {
-  isPremium: boolean;
-  views: number;
-}) {
+export function ProfileViewsPanel({ isPremium, views }: { isPremium: boolean; views: number }) {
   const t = useTranslations('profile');
   const { open } = useModal();
 
@@ -47,7 +41,9 @@ export function ProfileViewsPanel({
             <Eye className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
-            <h2 className="font-display text-base font-bold tracking-tight">{t('premium.viewsTitle')}</h2>
+            <h2 className="font-display text-base font-bold tracking-tight">
+              {t('premium.viewsTitle')}
+            </h2>
             <p className="text-sm text-muted-foreground">{t('premium.viewsPremiumActive')}</p>
           </div>
         </div>
@@ -85,7 +81,9 @@ export function ProfileViewsPanel({
             <Lock className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h2 className="font-display text-base font-bold tracking-tight">{t('premium.viewsTitle')}</h2>
+            <h2 className="font-display text-base font-bold tracking-tight">
+              {t('premium.viewsTitle')}
+            </h2>
             <p className="truncate text-sm text-muted-foreground">
               {t('premium.viewsLockedCaption', { count: formatNumber(views) })}
             </p>

@@ -189,18 +189,14 @@ export class AuthService {
     // Ban-evasion gate: block re-registration from a device/IP whose
     // fingerprint is tied to an active ban (fails OPEN on storage errors).
     if (await this.fingerprintService.isBanned(ctx)) {
-      throw new ForbiddenException(
-        'Registration is not allowed from this device or network',
-      );
+      throw new ForbiddenException('Registration is not allowed from this device or network');
     }
 
     // Consent gate (152-ФЗ / GDPR): the user must accept the Terms of Service
     // and Privacy Policy. The contract field is optional+additive, so enforce
     // it here; we record the acceptance instant on the User.
     if (dto.acceptedTerms !== true) {
-      throw new BadRequestException(
-        'You must accept the Terms of Service and Privacy Policy',
-      );
+      throw new BadRequestException('You must accept the Terms of Service and Privacy Policy');
     }
 
     const birthDate = this.parseBirthDate(dto.birthDate);
@@ -234,11 +230,7 @@ export class AuthService {
       // A brand-new account is always unverified until the emailed link is used.
       emailVerified: false,
     };
-    const tokens = await this.issueSession(
-      { sub: userId, role, isPremium },
-      randomUUID(),
-      ctx,
-    );
+    const tokens = await this.issueSession({ sub: userId, role, isPremium }, randomUUID(), ctx);
 
     // Fire the verification email — BEST-EFFORT: a mail outage (or no SMTP in
     // dev) must NEVER fail registration. Mint a token + send, swallowing errors.
@@ -259,8 +251,7 @@ export class AuthService {
     birthDate: Date,
     acceptedAt: Date,
   ): Promise<{ userId: string; role: AuthUser['role']; isPremium: boolean }> {
-    const session =
-      this.transactionsSupported === false ? null : await this.startSessionOrNull();
+    const session = this.transactionsSupported === false ? null : await this.startSessionOrNull();
     if (session) {
       try {
         let result!: { userId: string; role: AuthUser['role']; isPremium: boolean };
@@ -696,9 +687,7 @@ export class AuthService {
       await this.mailerService.sendPasswordResetEmail(user.email, token);
     } catch (err) {
       this.logger.warn(
-        `Failed to issue password-reset email: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `Failed to issue password-reset email: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -812,10 +801,9 @@ export class AuthService {
     // narrow ms.StringValue | number. A valid ms string ('30d', '900s') is
     // correct at runtime, so assert it to the library's expected type (mirrors
     // the cast in CommonModule's access-token JwtModule config).
-    const refreshTtl = this.configService.get<string>(
-      'JWT_REFRESH_TTL',
-      '30d',
-    ) as NonNullable<JwtSignOptions['expiresIn']>;
+    const refreshTtl = this.configService.get<string>('JWT_REFRESH_TTL', '30d') as NonNullable<
+      JwtSignOptions['expiresIn']
+    >;
     const refreshToken = await this.jwtService.signAsync(refreshPayload, {
       secret: refreshSecret,
       expiresIn: refreshTtl,
@@ -855,10 +843,7 @@ export class AuthService {
   /** Revoke (soft) every live row in a rotation family. */
   private async revokeFamily(family: string): Promise<void> {
     await this.sessionModel
-      .updateMany(
-        { family, revokedAt: null },
-        { $set: { revokedAt: new Date() } },
-      )
+      .updateMany({ family, revokedAt: null }, { $set: { revokedAt: new Date() } })
       .exec();
   }
 
@@ -935,9 +920,7 @@ export class AuthService {
    */
   private assertPasswordAcceptable(password: string): void {
     if (TOP_COMMON_PASSWORDS.has(password.toLowerCase())) {
-      throw new BadRequestException(
-        'This password is too common. Please choose a stronger one.',
-      );
+      throw new BadRequestException('This password is too common. Please choose a stronger one.');
     }
   }
 
@@ -954,10 +937,7 @@ export class AuthService {
   private computeAge(birthDate: Date, now: Date = new Date()): number {
     let age = now.getUTCFullYear() - birthDate.getUTCFullYear();
     const monthDelta = now.getUTCMonth() - birthDate.getUTCMonth();
-    if (
-      monthDelta < 0 ||
-      (monthDelta === 0 && now.getUTCDate() < birthDate.getUTCDate())
-    ) {
+    if (monthDelta < 0 || (monthDelta === 0 && now.getUTCDate() < birthDate.getUTCDate())) {
       age -= 1;
     }
     return age;

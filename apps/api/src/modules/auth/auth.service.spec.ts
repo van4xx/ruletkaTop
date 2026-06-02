@@ -138,9 +138,7 @@ interface Mocks {
  *  - 'unsupported' → throws a "does not support retryable writes" error so the
  *                    service falls back to the sequential create path
  */
-function buildMocks(
-  transactionMode: 'commit' | 'unsupported' = 'commit',
-): Mocks {
+function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks {
   const usersService = {
     findByEmail: jest.fn().mockResolvedValue(null),
     findByEmailWithSecret: jest.fn().mockResolvedValue(null),
@@ -223,9 +221,12 @@ function buildMocks(
   const session = {
     withTransaction: jest.fn().mockImplementation(async (cb: () => Promise<void>) => {
       if (transactionMode === 'unsupported') {
-        throw Object.assign(new Error('This MongoDB deployment does not support retryable writes'), {
-          codeName: 'IllegalOperation',
-        });
+        throw Object.assign(
+          new Error('This MongoDB deployment does not support retryable writes'),
+          {
+            codeName: 'IllegalOperation',
+          },
+        );
       }
       return cb();
     }),
@@ -301,9 +302,7 @@ describe('AuthService.register', () => {
 
     // Profile created for the new user with the supplied display fields.
     expect(m.profileModel.create).toHaveBeenCalledTimes(1);
-    const [[profileDoc]] = m.profileModel.create.mock.calls[0] as [
-      Array<Record<string, unknown>>,
-    ];
+    const [[profileDoc]] = m.profileModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
     expect(profileDoc).toMatchObject({
       nickname: 'newuser',
       gender: 'male',
@@ -322,9 +321,7 @@ describe('AuthService.register', () => {
     expect(m.sessionModel.create).toHaveBeenCalledTimes(1);
 
     // The persisted session stores only the HASH of the refresh token + context.
-    const [sessionRow] = m.sessionModel.create.mock.calls[0] as [
-      Record<string, unknown>,
-    ];
+    const [sessionRow] = m.sessionModel.create.mock.calls[0] as [Record<string, unknown>];
     expect(sessionRow.tokenHash).toBe(sha256(res.tokens.refreshToken));
     expect(sessionRow.tokenHash).not.toBe(res.tokens.refreshToken);
     expect(sessionRow).toMatchObject({
@@ -381,9 +378,7 @@ describe('AuthService.register', () => {
     m.usersService.findByEmail.mockResolvedValue(fakeUser() as never);
     const service = makeService(m);
 
-    await expect(service.register(makeRegisterDto())).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(service.register(makeRegisterDto())).rejects.toBeInstanceOf(ConflictException);
     expect(m.usersService.createUser).not.toHaveBeenCalled();
   });
 
@@ -439,9 +434,7 @@ describe('AuthService.register', () => {
     );
     const service = makeService(m);
 
-    const err = await service
-      .register(makeRegisterDto())
-      .catch((e: unknown) => e);
+    const err = await service.register(makeRegisterDto()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ConflictException);
     expect((err as ConflictException).message).toBe('Email already registered');
   });
@@ -456,9 +449,7 @@ describe('AuthService.register', () => {
     );
     const service = makeService(m);
 
-    const err = await service
-      .register(makeRegisterDto())
-      .catch((e: unknown) => e);
+    const err = await service.register(makeRegisterDto()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ConflictException);
     expect((err as ConflictException).message).toBe('Nickname already taken');
   });
@@ -560,9 +551,7 @@ describe('AuthService.register — transaction fallback (standalone Mongo)', () 
     // The orphaned credential row must be rolled back so the email is reusable.
     expect(m.connection.collection).toHaveBeenCalledWith('users');
     expect(m.usersCollectionDeleteOne).toHaveBeenCalledTimes(1);
-    const [deleteFilter] = m.usersCollectionDeleteOne.mock.calls[0] as [
-      Record<string, unknown>,
-    ];
+    const [deleteFilter] = m.usersCollectionDeleteOne.mock.calls[0] as [Record<string, unknown>];
     expect(deleteFilter).toHaveProperty('_id');
 
     // No session should have been persisted for a failed registration.
@@ -600,9 +589,7 @@ describe('AuthService.login', () => {
 
   it('issues a token pair for valid credentials and clears nothing-but-success state', async () => {
     const m = buildMocks('commit');
-    m.usersService.findByEmailWithSecret.mockResolvedValue(
-      (await userWithRealHash()) as never,
-    );
+    m.usersService.findByEmailWithSecret.mockResolvedValue((await userWithRealHash()) as never);
     const service = makeService(m);
 
     const res = await service.login(loginDto, { ip: '9.9.9.9' });
@@ -610,18 +597,14 @@ describe('AuthService.login', () => {
     expect(res.tokens.accessToken).toBeTruthy();
     expect(res.tokens.refreshToken).toBeTruthy();
     // Lookup uses the normalised (lower-cased) email.
-    expect(m.usersService.findByEmailWithSecret).toHaveBeenCalledWith(
-      'new.user@example.com',
-    );
+    expect(m.usersService.findByEmailWithSecret).toHaveBeenCalledWith('new.user@example.com');
     expect(m.sessionModel.create).toHaveBeenCalledTimes(1);
     expect(res.user.id).toBe(USER_ID);
   });
 
   it('rejects a wrong password with UnauthorizedException and issues no tokens', async () => {
     const m = buildMocks('commit');
-    m.usersService.findByEmailWithSecret.mockResolvedValue(
-      (await userWithRealHash()) as never,
-    );
+    m.usersService.findByEmailWithSecret.mockResolvedValue((await userWithRealHash()) as never);
     const service = makeService(m);
 
     await expect(
@@ -670,9 +653,7 @@ describe('AuthService.login', () => {
 
   it('locks the email out after MAX_LOGIN_ATTEMPTS (10) consecutive failures', async () => {
     const m = buildMocks('commit');
-    m.usersService.findByEmailWithSecret.mockResolvedValue(
-      (await userWithRealHash()) as never,
-    );
+    m.usersService.findByEmailWithSecret.mockResolvedValue((await userWithRealHash()) as never);
     const service = makeService(m);
     const bad = { ...loginDto, password: 'incorrect-password' };
 
@@ -693,9 +674,7 @@ describe('AuthService.login', () => {
 
   it('clearing failed attempts on success: a good login between failures resets the counter', async () => {
     const m = buildMocks('commit');
-    m.usersService.findByEmailWithSecret.mockResolvedValue(
-      (await userWithRealHash()) as never,
-    );
+    m.usersService.findByEmailWithSecret.mockResolvedValue((await userWithRealHash()) as never);
     const service = makeService(m);
     const bad = { ...loginDto, password: 'incorrect-password' };
 
@@ -786,9 +765,7 @@ describe('AuthService.refresh', () => {
 
     // The ENTIRE family is burned and NO new token is issued.
     expect(m.sessionModel.updateMany).toHaveBeenCalledTimes(1);
-    const [familyFilter] = m.sessionModel.updateMany.mock.calls[0] as [
-      Record<string, unknown>,
-    ];
+    const [familyFilter] = m.sessionModel.updateMany.mock.calls[0] as [Record<string, unknown>];
     expect(familyFilter).toMatchObject({ family: FAMILY, revokedAt: null });
     expect(m.sessionModel.create).not.toHaveBeenCalled();
   });
@@ -1008,10 +985,7 @@ describe('AuthService.register — verification email (best-effort)', () => {
     expect(tokenRow.tokenHash).toMatch(/^[0-9a-f]{64}$/);
 
     expect(m.mailerService.sendVerificationEmail).toHaveBeenCalledTimes(1);
-    const [to, sentToken] = m.mailerService.sendVerificationEmail.mock.calls[0] as [
-      string,
-      string,
-    ];
+    const [to, sentToken] = m.mailerService.sendVerificationEmail.mock.calls[0] as [string, string];
     expect(to).toBe('new.user@example.com');
     // The emailed (raw) token hashes to exactly the stored hash.
     expect(sha256(sentToken)).toBe(tokenRow.tokenHash);
@@ -1041,17 +1015,17 @@ describe('AuthService.verifyEmail', () => {
 
   it('consumes a valid token and marks the account verified', async () => {
     const m = buildMocks('commit');
-    m.verificationTokenModel.findOneAndUpdate.mockReturnValue(
-      findOneReturning(tokenRow()),
-    );
+    m.verificationTokenModel.findOneAndUpdate.mockReturnValue(findOneReturning(tokenRow()));
     const service = makeService(m);
 
     await service.verifyEmail(RAW);
 
     // The atomic consume targets the hash + purpose + live (unconsumed/unexpired).
     expect(m.verificationTokenModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
-    const [filter, update] = m.verificationTokenModel.findOneAndUpdate.mock
-      .calls[0] as [Record<string, unknown>, { $set: { consumedAt: Date } }];
+    const [filter, update] = m.verificationTokenModel.findOneAndUpdate.mock.calls[0] as [
+      Record<string, unknown>,
+      { $set: { consumedAt: Date } },
+    ];
     expect(filter).toMatchObject({
       tokenHash: sha256(RAW),
       purpose: 'email_verify',
@@ -1083,9 +1057,7 @@ describe('AuthService.verifyEmail', () => {
     const service = makeService(m);
 
     await service.verifyEmail(RAW); // first use OK
-    await expect(service.verifyEmail(RAW)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(service.verifyEmail(RAW)).rejects.toBeInstanceOf(BadRequestException);
     expect(m.usersService.markEmailVerified).toHaveBeenCalledTimes(1);
   });
 });
@@ -1095,9 +1067,7 @@ describe('AuthService.verifyEmail', () => {
 describe('AuthService.resendVerification', () => {
   it('re-sends the verify email for an unverified, existing account', async () => {
     const m = buildMocks('commit');
-    m.usersService.findById.mockResolvedValue(
-      fakeUser({ emailVerified: false }) as never,
-    );
+    m.usersService.findById.mockResolvedValue(fakeUser({ emailVerified: false }) as never);
     const service = makeService(m);
 
     await service.resendVerification(USER_ID);
@@ -1108,9 +1078,7 @@ describe('AuthService.resendVerification', () => {
 
   it('is a no-op when the account is already verified (no token, no email)', async () => {
     const m = buildMocks('commit');
-    m.usersService.findById.mockResolvedValue(
-      fakeUser({ emailVerified: true }) as never,
-    );
+    m.usersService.findById.mockResolvedValue(fakeUser({ emailVerified: true }) as never);
     const service = makeService(m);
 
     await service.resendVerification(USER_ID);
@@ -1143,9 +1111,7 @@ describe('AuthService.requestPasswordReset', () => {
     // Lookup uses the normalised (lower-cased) email.
     expect(m.usersService.findByEmail).toHaveBeenCalledWith('new.user@example.com');
 
-    const [tokenRow] = m.verificationTokenModel.create.mock.calls[0] as [
-      { purpose: string },
-    ];
+    const [tokenRow] = m.verificationTokenModel.create.mock.calls[0] as [{ purpose: string }];
     expect(tokenRow.purpose).toBe('password_reset');
     expect(m.mailerService.sendPasswordResetEmail).toHaveBeenCalledTimes(1);
   });
@@ -1156,18 +1122,14 @@ describe('AuthService.requestPasswordReset', () => {
     const service = makeService(m);
 
     // Must resolve (the controller returns 204 regardless) and do no work.
-    await expect(
-      service.requestPasswordReset('nobody@example.com'),
-    ).resolves.toBeUndefined();
+    await expect(service.requestPasswordReset('nobody@example.com')).resolves.toBeUndefined();
     expect(m.verificationTokenModel.create).not.toHaveBeenCalled();
     expect(m.mailerService.sendPasswordResetEmail).not.toHaveBeenCalled();
   });
 
   it('treats an already-erased (tombstoned) account as non-existent', async () => {
     const m = buildMocks('commit');
-    m.usersService.findByEmail.mockResolvedValue(
-      fakeUser({ deletedAt: new Date() }) as never,
-    );
+    m.usersService.findByEmail.mockResolvedValue(fakeUser({ deletedAt: new Date() }) as never);
     const service = makeService(m);
 
     await service.requestPasswordReset('deleted@example.com');
@@ -1181,9 +1143,7 @@ describe('AuthService.requestPasswordReset', () => {
     m.mailerService.sendPasswordResetEmail.mockRejectedValue(new Error('smtp down'));
     const service = makeService(m);
 
-    await expect(
-      service.requestPasswordReset('new.user@example.com'),
-    ).resolves.toBeUndefined();
+    await expect(service.requestPasswordReset('new.user@example.com')).resolves.toBeUndefined();
   });
 });
 
@@ -1203,9 +1163,7 @@ describe('AuthService.resetPassword', () => {
 
   it('consumes the token, stores a NEW argon2 hash, and revokes ALL sessions', async () => {
     const m = buildMocks('commit');
-    m.verificationTokenModel.findOneAndUpdate.mockReturnValue(
-      findOneReturning(resetRow()),
-    );
+    m.verificationTokenModel.findOneAndUpdate.mockReturnValue(findOneReturning(resetRow()));
     const service = makeService(m);
 
     await service.resetPassword(RAW, NEW_PASSWORD);
@@ -1222,10 +1180,7 @@ describe('AuthService.resetPassword', () => {
 
     // A fresh argon2 hash (not the plaintext) is persisted and verifies.
     expect(m.usersService.updatePasswordHash).toHaveBeenCalledTimes(1);
-    const [uid, newHash] = m.usersService.updatePasswordHash.mock.calls[0] as [
-      string,
-      string,
-    ];
+    const [uid, newHash] = m.usersService.updatePasswordHash.mock.calls[0] as [string, string];
     expect(uid).toBe(USER_ID);
     expect(newHash).not.toBe(NEW_PASSWORD);
     expect(newHash.startsWith('$argon2id$')).toBe(true);
@@ -1268,9 +1223,7 @@ describe('AuthService.resetPassword', () => {
 
   it('rejects with BadRequestException when the token is valid but the account is gone', async () => {
     const m = buildMocks('commit');
-    m.verificationTokenModel.findOneAndUpdate.mockReturnValue(
-      findOneReturning(resetRow()),
-    );
+    m.verificationTokenModel.findOneAndUpdate.mockReturnValue(findOneReturning(resetRow()));
     // The update found no matching (non-deleted) account.
     m.usersService.updatePasswordHash.mockResolvedValue(false);
     const service = makeService(m);

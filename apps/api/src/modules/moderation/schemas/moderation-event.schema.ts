@@ -14,24 +14,13 @@ const MODERATION_LABELS: readonly ModerationLabel[] = [
 ];
 
 /** Auto-actions persisted on an event (mirrors `moderationActionSchema`). */
-const MODERATION_ACTIONS: readonly ModerationAction[] = [
-  'none',
-  'blur',
-  'warn',
-  'kick',
-  'ban',
-];
+const MODERATION_ACTIONS: readonly ModerationAction[] = ['none', 'blur', 'warn', 'kick', 'ban'];
 
 /**
  * Review statuses reuse the shared `reportStatusSchema` enum so the admin queue
  * is consistent with the abuse-report triage surface.
  */
-const REVIEW_STATUSES: readonly ReportStatus[] = [
-  'open',
-  'reviewing',
-  'resolved',
-  'dismissed',
-];
+const REVIEW_STATUSES: readonly ReportStatus[] = ['open', 'reviewing', 'resolved', 'dismissed'];
 
 /**
  * A single AI-moderation event: one frame flagged by on-device (or server-side)

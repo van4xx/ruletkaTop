@@ -13,12 +13,7 @@
  * {@link useConversationRealtime}).
  */
 import { useCallback, useMemo } from 'react';
-import {
-  useQuery,
-  useQueries,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type { Conversation, Message, PublicProfile } from '@ruletka/shared-types';
 
 import { api } from '@/lib/api';
@@ -37,9 +32,11 @@ export function useConversations(): UseQueryResult<Conversation[]> {
     // Backend paginates: { items, nextCursor, hasMore } — unwrap to the array.
     queryFn: () =>
       api
-        .request<{ items: Conversation[]; nextCursor: string | null; hasMore: boolean }>(
-          '/conversations',
-        )
+        .request<{
+          items: Conversation[];
+          nextCursor: string | null;
+          hasMore: boolean;
+        }>('/conversations')
         .then((r) => r.items),
     staleTime: 15_000,
   });

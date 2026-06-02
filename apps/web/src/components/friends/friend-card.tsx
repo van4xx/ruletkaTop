@@ -73,7 +73,11 @@ export function FriendCard({ friend, status, onRemove, onBlock, busy }: FriendCa
         busy && 'pointer-events-none opacity-60',
       )}
     >
-      <Link href={profileHref} className="relative shrink-0 rounded-full" aria-label={t('profileOf', { name: profile.nickname })}>
+      <Link
+        href={profileHref}
+        className="relative shrink-0 rounded-full"
+        aria-label={t('profileOf', { name: profile.nickname })}
+      >
         <Avatar
           src={profile.avatarUrl}
           alt={profile.nickname}
@@ -93,14 +97,22 @@ export function FriendCard({ friend, status, onRemove, onBlock, busy }: FriendCa
           </Link>
           <ProfileBadges badges={profile.badges} size="sm" iconOnly />
         </div>
-        <p className={cn('mt-0.5 text-sm font-medium', STATUS_TONE[status])}>{t(STATUS_LABEL_KEY[status])}</p>
+        <p className={cn('mt-0.5 text-sm font-medium', STATUS_TONE[status])}>
+          {t(STATUS_LABEL_KEY[status])}
+        </p>
       </div>
 
       {/* Quick actions */}
       <div className="flex items-center gap-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button asChild variant="glass" size="sm" className="px-3" aria-label={t('sendMessage')}>
+            <Button
+              asChild
+              variant="glass"
+              size="sm"
+              className="px-3"
+              aria-label={t('sendMessage')}
+            >
               <Link href={chatHref}>
                 <MessageCircle aria-hidden="true" />
                 <span className="hidden sm:inline">{t('chat')}</span>

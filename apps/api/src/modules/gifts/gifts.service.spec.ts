@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { Model } from 'mongoose';
 
 import type { Connection } from 'mongoose';
@@ -76,7 +72,8 @@ describe('GiftsService.sendGift', () => {
           giftId: { toString: () => 'gift-id-1' },
           priceCoins: 10,
           context: 'chat',
-          get: (key: string) => (key === 'createdAt' ? new Date('2026-01-01T00:00:00.000Z') : undefined),
+          get: (key: string) =>
+            key === 'createdAt' ? new Date('2026-01-01T00:00:00.000Z') : undefined,
         },
       ]),
     };
@@ -173,12 +170,12 @@ describe('GiftsService.sendGift', () => {
   });
 
   it('rejects a premium-only gift for a NON-premium sender (403) without charging', async () => {
-    giftModel.findById.mockReturnValue(queryReturning(giftDoc({ isPremiumOnly: true, priceCoins: 2000 })));
+    giftModel.findById.mockReturnValue(
+      queryReturning(giftDoc({ isPremiumOnly: true, priceCoins: 2000 })),
+    );
     premium.isPremium.mockResolvedValue(false);
 
-    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(premium.isPremium).toHaveBeenCalledWith(fromUserId);
     // Critically: gating happens before any money moves or any record is written.
@@ -187,7 +184,9 @@ describe('GiftsService.sendGift', () => {
   });
 
   it('allows a premium-only gift for a PREMIUM sender (charges + records)', async () => {
-    giftModel.findById.mockReturnValue(queryReturning(giftDoc({ isPremiumOnly: true, priceCoins: 2000 })));
+    giftModel.findById.mockReturnValue(
+      queryReturning(giftDoc({ isPremiumOnly: true, priceCoins: 2000 })),
+    );
     premium.isPremium.mockResolvedValue(true);
     giftTxModel.create.mockResolvedValue([
       {
@@ -204,12 +203,7 @@ describe('GiftsService.sendGift', () => {
     const result = await service.sendGift(fromUserId, baseDto);
 
     expect(premium.isPremium).toHaveBeenCalledWith(fromUserId);
-    expect(wallet.debit).toHaveBeenCalledWith(
-      fromUserId,
-      2000,
-      'gift_out',
-      expect.any(String),
-    );
+    expect(wallet.debit).toHaveBeenCalledWith(fromUserId, 2000, 'gift_out', expect.any(String));
     expect(result.priceCoins).toBe(2000);
   });
 
@@ -233,9 +227,7 @@ describe('GiftsService.sendGift', () => {
   it('rejects a gift to a NON-EXISTENT recipient (404) without charging', async () => {
     usersFindOne.mockResolvedValue(null);
 
-    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(NotFoundException);
 
     // The catalogue is never even consulted, and no money moves.
     expect(giftModel.findById).not.toHaveBeenCalled();
@@ -245,9 +237,7 @@ describe('GiftsService.sendGift', () => {
   it('rejects a gift to a BANNED recipient (403) without charging', async () => {
     usersFindOne.mockResolvedValue({ _id: toUserId, isBanned: true });
 
-    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(wallet.debit).not.toHaveBeenCalled();
     expect(giftTxModel.create).not.toHaveBeenCalled();
@@ -256,9 +246,7 @@ describe('GiftsService.sendGift', () => {
   it('rejects a gift when a block exists between the two users (403), in either direction', async () => {
     blocks.isBlocked.mockResolvedValue(true);
 
-    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(ForbiddenException);
 
     // isBlocked is consulted with the sender→recipient pair; the service treats
     // a block as bidirectional (BlocksService.isBlocked already checks both).
@@ -279,9 +267,7 @@ describe('GiftsService.sendGift', () => {
     usersFindOne.mockResolvedValue({ _id: toUserId, isBanned: true });
     giftModel.findById.mockReturnValue(queryReturning(giftDoc({ isPremiumOnly: true })));
 
-    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(premium.isPremium).not.toHaveBeenCalled();
   });
@@ -289,9 +275,7 @@ describe('GiftsService.sendGift', () => {
   it('throws 404 for an unknown gift and never charges', async () => {
     giftModel.findById.mockReturnValue(queryReturning(null));
 
-    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(service.sendGift(fromUserId, baseDto)).rejects.toBeInstanceOf(NotFoundException);
 
     expect(wallet.debit).not.toHaveBeenCalled();
     expect(giftTxModel.create).not.toHaveBeenCalled();

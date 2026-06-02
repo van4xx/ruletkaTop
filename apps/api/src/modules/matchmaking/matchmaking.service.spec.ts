@@ -18,7 +18,11 @@ import {
   poolKey,
   waiterKey,
 } from './matchmaking.constants';
-import { areMutuallyCompatible, MatchmakingService, sharedInterestCount } from './matchmaking.service';
+import {
+  areMutuallyCompatible,
+  MatchmakingService,
+  sharedInterestCount,
+} from './matchmaking.service';
 import type { WaiterEntry } from './matchmaking.types';
 
 /**
@@ -88,7 +92,7 @@ describe('areMutuallyCompatible — mutual filter satisfaction', () => {
     expect(areMutuallyCompatible(a2, b2)).toBe(false);
   });
 
-  it('does NOT match when one party falls outside the other\'s age range', () => {
+  it("does NOT match when one party falls outside the other's age range", () => {
     // A only wants 18..29; B is 40 → out of A's window.
     const a = waiter({ userId: 'a', age: 25, filters: filters({ ageMin: 18, ageMax: 29 }) });
     const b = waiter({ userId: 'b', age: 40, filters: filters({ ageMin: 18, ageMax: 120 }) });
@@ -121,7 +125,7 @@ describe('areMutuallyCompatible — mutual filter satisfaction', () => {
     expect(areMutuallyCompatible(a, b)).toBe(false);
   });
 
-  it('matches when each non-empty country filter contains the other\'s country', () => {
+  it("matches when each non-empty country filter contains the other's country", () => {
     const a = waiter({ userId: 'a', country: 'RU', filters: filters({ countries: ['US', 'CA'] }) });
     const b = waiter({ userId: 'b', country: 'US', filters: filters({ countries: ['RU'] }) });
     expect(areMutuallyCompatible(a, b)).toBe(true);
@@ -471,8 +475,8 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
 
     await service.tryMatch(joiner, alwaysConnected);
 
-    const queriedIds = settingsFindOne.mock.calls.map(
-      (c) => (c[0] as { userId: { toString(): string } }).userId.toString(),
+    const queriedIds = settingsFindOne.mock.calls.map((c) =>
+      (c[0] as { userId: { toString(): string } }).userId.toString(),
     );
     const joinerReads = queriedIds.filter((id) => id === JOINER_OID).length;
     expect(joinerReads).toBeLessThanOrEqual(1);
@@ -509,7 +513,9 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
     // Only the live peer's socket is connected.
     const verifier = jest
       .fn()
-      .mockImplementation((sockId: string) => Promise.resolve(sockId === 'sock-live' || sockId === 'sock-joiner'));
+      .mockImplementation((sockId: string) =>
+        Promise.resolve(sockId === 'sock-live' || sockId === 'sock-joiner'),
+      );
 
     const result = await service.tryMatch(joiner, verifier);
 
@@ -698,9 +704,7 @@ describe('MatchmakingService.enqueue — premium priority scoring', () => {
     };
     const redis = { multi: jest.fn().mockReturnValue(pipeline) };
     const profiles = {
-      getAgeAndGender: jest
-        .fn()
-        .mockResolvedValue({ age: 28, gender: 'female', interests: [] }),
+      getAgeAndGender: jest.fn().mockResolvedValue({ age: 28, gender: 'female', interests: [] }),
       getPublicProfile: jest.fn().mockResolvedValue({
         id: 'u',
         nickname: 'n',
@@ -715,9 +719,7 @@ describe('MatchmakingService.enqueue — premium priority scoring', () => {
     const blocks = { isBlocked: jest.fn().mockResolvedValue(false) };
     const friends = { areFriends: jest.fn().mockResolvedValue(false) };
     const connection = {
-      collection: jest
-        .fn()
-        .mockReturnValue({ findOne: jest.fn().mockResolvedValue(null) }),
+      collection: jest.fn().mockReturnValue({ findOne: jest.fn().mockResolvedValue(null) }),
     };
     return new MatchmakingService(
       redis as never,
@@ -747,25 +749,35 @@ describe('MatchmakingService.enqueue — premium priority scoring', () => {
     // Non-premium enqueue.
     premium = { isPremium: jest.fn().mockResolvedValue(false) };
     let svc = buildService();
-    await svc.enqueue('u-reg', 'video' as MatchType, {
-      gender: 'any',
-      ageMin: 18,
-      ageMax: 120,
-      countries: [],
-      sharedInterestsOnly: false,
-    }, 'sock-reg');
+    await svc.enqueue(
+      'u-reg',
+      'video' as MatchType,
+      {
+        gender: 'any',
+        ageMin: 18,
+        ageMax: 120,
+        countries: [],
+        sharedInterestsOnly: false,
+      },
+      'sock-reg',
+    );
     const regularScore = soleZaddScore();
 
     // Premium enqueue at the SAME instant.
     premium = { isPremium: jest.fn().mockResolvedValue(true) };
     svc = buildService();
-    await svc.enqueue('u-prem', 'video' as MatchType, {
-      gender: 'any',
-      ageMin: 18,
-      ageMax: 120,
-      countries: [],
-      sharedInterestsOnly: false,
-    }, 'sock-prem');
+    await svc.enqueue(
+      'u-prem',
+      'video' as MatchType,
+      {
+        gender: 'any',
+        ageMin: 18,
+        ageMax: 120,
+        countries: [],
+        sharedInterestsOnly: false,
+      },
+      'sock-prem',
+    );
     const premiumScore = soleZaddScore();
 
     // Lower score = served first → premium must sort strictly ahead.
@@ -780,16 +792,22 @@ describe('MatchmakingService.enqueue — premium priority scoring', () => {
     premium = { isPremium: jest.fn().mockResolvedValue(false) };
     const svc = buildService();
     // Force getAgeAndGender to reject (no profile).
-    (svc as unknown as { profiles: { getAgeAndGender: jest.Mock } }).profiles.getAgeAndGender =
-      jest.fn().mockRejectedValue(new Error('not found'));
+    (svc as unknown as { profiles: { getAgeAndGender: jest.Mock } }).profiles.getAgeAndGender = jest
+      .fn()
+      .mockRejectedValue(new Error('not found'));
 
-    const entry = await svc.enqueue('ghost', 'video' as MatchType, {
-      gender: 'any',
-      ageMin: 18,
-      ageMax: 120,
-      countries: [],
-      sharedInterestsOnly: false,
-    }, 'sock');
+    const entry = await svc.enqueue(
+      'ghost',
+      'video' as MatchType,
+      {
+        gender: 'any',
+        ageMin: 18,
+        ageMax: 120,
+        countries: [],
+        sharedInterestsOnly: false,
+      },
+      'sock',
+    );
 
     expect(entry).toBeNull();
     expect(zaddCalls).toHaveLength(0);

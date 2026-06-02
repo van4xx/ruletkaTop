@@ -282,7 +282,9 @@ export function CountrySelect({
                       {codeToFlag(country.code)}
                     </span>
                     <span className="flex-1 truncate">{country.name}</span>
-                    <span className="text-xs tabular-nums text-subtle-foreground">{country.code}</span>
+                    <span className="text-xs tabular-nums text-subtle-foreground">
+                      {country.code}
+                    </span>
                     <Check
                       className={cn(
                         'size-4 shrink-0 text-accent transition-opacity',

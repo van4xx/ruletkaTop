@@ -168,12 +168,7 @@ export function CallControls(props: CallControlsProps) {
             {t('controls.start')}
           </Button>
         ) : (
-          <Button
-            variant="primary"
-            size="lg"
-            onClick={onNext}
-            className="gap-2 rounded-full px-7"
-          >
+          <Button variant="primary" size="lg" onClick={onNext} className="gap-2 rounded-full px-7">
             <SkipForward className="h-5 w-5" />
             {t('controls.next')}
           </Button>
@@ -186,7 +181,11 @@ export function CallControls(props: CallControlsProps) {
               <Gift />
             </ControlButton>
 
-            <ControlButton label={t('controls.addFriend')} onClick={onAddFriend} disabled={!hasPeer}>
+            <ControlButton
+              label={t('controls.addFriend')}
+              onClick={onAddFriend}
+              disabled={!hasPeer}
+            >
               <UserPlus />
             </ControlButton>
 

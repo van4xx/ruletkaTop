@@ -59,13 +59,9 @@ export class MailerService {
     this.webBaseUrl = this.normalizeBaseUrl(
       (this.configService.get<string>('WEB_BASE_URL') ?? '').trim() || DEFAULT_WEB_BASE_URL,
     );
-    this.from =
-      (this.configService.get<string>('MAIL_FROM') ?? '').trim() ||
-      this.defaultFrom();
+    this.from = (this.configService.get<string>('MAIL_FROM') ?? '').trim() || this.defaultFrom();
 
-    this.transporter = this.isEnabled()
-      ? this.buildSmtpTransport()
-      : this.buildNoopTransport();
+    this.transporter = this.isEnabled() ? this.buildSmtpTransport() : this.buildNoopTransport();
 
     if (!this.isEnabled()) {
       this.logger.log(

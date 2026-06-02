@@ -62,19 +62,18 @@ export function ageFromBirthDate(birthDate: string): number {
  * `useTranslations('auth')` → `t(error.message)`. The `${MIN_AGE}` interpolation
  * lives in the catalogue value (`{minAge}`), passed in at render time by the form.
  */
-export const registerFormSchema = baseRegisterSchema
-  .extend({
-    gender: genderSchema,
-    // Required in the form (a default is supplied via RHF `defaultValues`), so
-    // the resolved input/output types stay aligned for react-hook-form.
-    locale: localeSchema,
-    birthDate: z
-      .string()
-      .min(1, 'validation.birthRequired')
-      .refine((v) => !Number.isNaN(new Date(v).getTime()), 'validation.birthInvalid')
-      .refine((v) => new Date(v).getTime() <= Date.now(), 'validation.birthFuture')
-      .refine((v) => ageFromBirthDate(v) >= MIN_AGE, 'validation.birthTooYoung'),
-  });
+export const registerFormSchema = baseRegisterSchema.extend({
+  gender: genderSchema,
+  // Required in the form (a default is supplied via RHF `defaultValues`), so
+  // the resolved input/output types stay aligned for react-hook-form.
+  locale: localeSchema,
+  birthDate: z
+    .string()
+    .min(1, 'validation.birthRequired')
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), 'validation.birthInvalid')
+    .refine((v) => new Date(v).getTime() <= Date.now(), 'validation.birthFuture')
+    .refine((v) => ageFromBirthDate(v) >= MIN_AGE, 'validation.birthTooYoung'),
+});
 export type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
 /**

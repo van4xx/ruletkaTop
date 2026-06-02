@@ -45,9 +45,7 @@ export function StatePanel({
       )}
       <div className="space-y-1.5">
         <h2 className="font-display text-lg font-bold tracking-tight">{title}</h2>
-        {description && (
-          <p className="text-pretty text-sm text-muted-foreground">{description}</p>
-        )}
+        {description && <p className="text-pretty text-sm text-muted-foreground">{description}</p>}
       </div>
       {action}
     </motion.div>
@@ -72,7 +70,12 @@ export function ErrorState({
       description={description ?? t('loadDataError')}
       action={
         onRetry && (
-          <Button variant="outline" size="sm" leadingIcon={<RefreshCw className="h-4 w-4" />} onClick={onRetry}>
+          <Button
+            variant="outline"
+            size="sm"
+            leadingIcon={<RefreshCw className="h-4 w-4" />}
+            onClick={onRetry}
+          >
             {t('retry')}
           </Button>
         )
@@ -82,11 +85,7 @@ export function ErrorState({
 }
 
 /** Shown when an authenticated session is required but absent. */
-export function SignInRequired({
-  description,
-}: {
-  description?: string;
-}) {
+export function SignInRequired({ description }: { description?: string }) {
   const t = useTranslations('social');
   return (
     <StatePanel

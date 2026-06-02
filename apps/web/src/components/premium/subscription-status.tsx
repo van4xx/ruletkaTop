@@ -35,7 +35,11 @@ export interface SubscriptionStatusProps {
   authenticated: boolean;
 }
 
-export function SubscriptionStatus({ subscription, isLoading, authenticated }: SubscriptionStatusProps) {
+export function SubscriptionStatus({
+  subscription,
+  isLoading,
+  authenticated,
+}: SubscriptionStatusProps) {
   const t = useTranslations('economy');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const cancel = useCancelPremium();
@@ -83,13 +87,20 @@ export function SubscriptionStatus({ subscription, isLoading, authenticated }: S
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: EASE_OUT }}
-      className={cn('flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between', tone)}
+      className={cn(
+        'flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between',
+        tone,
+      )}
     >
       <div className="flex items-start gap-3">
         <span
           className={cn(
             'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
-            isPastDue ? 'bg-destructive/20 text-destructive' : isCanceled ? 'bg-warning/20 text-warning' : 'bg-success/20 text-success',
+            isPastDue
+              ? 'bg-destructive/20 text-destructive'
+              : isCanceled
+                ? 'bg-warning/20 text-warning'
+                : 'bg-success/20 text-success',
           )}
         >
           {isPastDue ? (
@@ -105,10 +116,7 @@ export function SubscriptionStatus({ subscription, isLoading, authenticated }: S
             <p className="font-display text-base font-bold">
               {t('subscriptionStatus.planLabel', { plan: subscription.plan })}
             </p>
-            <Badge
-              variant={isPastDue ? 'danger' : isCanceled ? 'warning' : 'success'}
-              size="sm"
-            >
+            <Badge variant={isPastDue ? 'danger' : isCanceled ? 'warning' : 'success'} size="sm">
               {isPastDue
                 ? t('subscriptionStatus.statusPastDue')
                 : isCanceled
@@ -119,7 +127,9 @@ export function SubscriptionStatus({ subscription, isLoading, authenticated }: S
           {currentPeriodEnd && (
             <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-              {isCanceled ? t('subscriptionStatus.accessUntil') : t('subscriptionStatus.renewal')}{' '}
+              {isCanceled
+                ? t('subscriptionStatus.accessUntil')
+                : t('subscriptionStatus.renewal')}{' '}
               {formatDateTime(currentPeriodEnd)}
             </p>
           )}

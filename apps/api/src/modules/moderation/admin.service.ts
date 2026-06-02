@@ -73,11 +73,7 @@ export class AdminService {
       throw new NotFoundException('User not found');
     }
     const updated = await this.userModel
-      .findByIdAndUpdate(
-        new Types.ObjectId(userId),
-        { $set: { isBanned } },
-        { new: true },
-      )
+      .findByIdAndUpdate(new Types.ObjectId(userId), { $set: { isBanned } }, { new: true })
       .exec();
     if (!updated) {
       throw new NotFoundException('User not found');

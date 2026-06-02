@@ -74,7 +74,9 @@ export function CoinPackageCard({
           <span className="font-display text-3xl font-extrabold tabular-nums text-foreground">
             {formatNumber(pkg.coins)}
           </span>
-          <span className="text-sm font-medium text-muted-foreground">{t('package.coinsSuffix')}</span>
+          <span className="text-sm font-medium text-muted-foreground">
+            {t('package.coinsSuffix')}
+          </span>
         </div>
         {pkg.bonusCoins > 0 && (
           <p className="mt-1.5 inline-flex items-center gap-1 text-sm font-semibold text-[var(--color-neon-cyan)]">
@@ -89,7 +91,9 @@ export function CoinPackageCard({
       </div>
 
       <div className="mt-6 flex items-center justify-between gap-3 pt-2">
-        <span className="font-display text-xl font-bold text-foreground">{formatRub(pkg.priceRub)}</span>
+        <span className="font-display text-xl font-bold text-foreground">
+          {formatRub(pkg.priceRub)}
+        </span>
       </div>
 
       <Button

@@ -176,23 +176,17 @@ export function NotificationList({
     <div className="glass-panel overflow-hidden rounded-2xl p-1.5 sm:p-2">
       <ul>
         <AnimatePresence initial={false}>
-          {today.length > 0 && <GroupHeading key="today-h">{t('notifications.groupToday')}</GroupHeading>}
+          {today.length > 0 && (
+            <GroupHeading key="today-h">{t('notifications.groupToday')}</GroupHeading>
+          )}
           {today.map((n) => (
-            <NotificationRow
-              key={n.id}
-              notification={n}
-              onRead={onRead}
-              onRemove={onRemove}
-            />
+            <NotificationRow key={n.id} notification={n} onRead={onRead} onRemove={onRemove} />
           ))}
-          {earlier.length > 0 && <GroupHeading key="earlier-h">{t('notifications.groupEarlier')}</GroupHeading>}
+          {earlier.length > 0 && (
+            <GroupHeading key="earlier-h">{t('notifications.groupEarlier')}</GroupHeading>
+          )}
           {earlier.map((n) => (
-            <NotificationRow
-              key={n.id}
-              notification={n}
-              onRead={onRead}
-              onRemove={onRemove}
-            />
+            <NotificationRow key={n.id} notification={n} onRead={onRead} onRemove={onRemove} />
           ))}
         </AnimatePresence>
       </ul>

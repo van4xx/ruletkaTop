@@ -85,10 +85,7 @@ function MarqueeSegment({
   'aria-hidden'?: boolean;
 }) {
   return (
-    <div
-      className="flex shrink-0 items-stretch gap-[var(--marquee-gap)]"
-      aria-hidden={ariaHidden}
-    >
+    <div className="flex shrink-0 items-stretch gap-[var(--marquee-gap)]" aria-hidden={ariaHidden}>
       {children}
     </div>
   );

@@ -53,8 +53,20 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
       profilesInClause = filter.userId.$in;
       return {
         toArray: jest.fn().mockResolvedValue([
-          { userId: new Types.ObjectId(friendA), nickname: 'A', avatarUrl: null, isPremium: false, badges: [] },
-          { userId: new Types.ObjectId(friendB), nickname: 'B', avatarUrl: null, isPremium: true, badges: ['premium'] },
+          {
+            userId: new Types.ObjectId(friendA),
+            nickname: 'A',
+            avatarUrl: null,
+            isPremium: false,
+            badges: [],
+          },
+          {
+            userId: new Types.ObjectId(friendB),
+            nickname: 'B',
+            avatarUrl: null,
+            isPremium: true,
+            badges: ['premium'],
+          },
         ]),
       };
     });
@@ -89,10 +101,20 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
     expect(friendshipModel.find).not.toHaveBeenCalled();
   });
 
-  it('loads ALL friends\' profiles in a single $in query (no per-friend N+1)', async () => {
+  it("loads ALL friends' profiles in a single $in query (no per-friend N+1)", async () => {
     primeFind([
-      friendshipDoc({ id: '507f1f77bcf86cd799439301', requesterId: userId, recipientId: friendA, createdAt: new Date(3000) }),
-      friendshipDoc({ id: '507f1f77bcf86cd799439302', requesterId: friendB, recipientId: userId, createdAt: new Date(2000) }),
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439301',
+        requesterId: userId,
+        recipientId: friendA,
+        createdAt: new Date(3000),
+      }),
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439302',
+        requesterId: friendB,
+        recipientId: userId,
+        createdAt: new Date(2000),
+      }),
     ]);
 
     const page = await service.listFriends(userId, pagination());
@@ -109,7 +131,12 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
 
   it('defaults presence to offline when a friend has no live status', async () => {
     primeFind([
-      friendshipDoc({ id: '507f1f77bcf86cd799439301', requesterId: userId, recipientId: friendA, createdAt: new Date(3000) }),
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439301',
+        requesterId: userId,
+        recipientId: friendA,
+        createdAt: new Date(3000),
+      }),
     ]);
     presence.getStatuses.mockResolvedValue({}); // no status for friendA
 
@@ -120,7 +147,12 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
 
   it('skips a friend whose profile no longer resolves', async () => {
     primeFind([
-      friendshipDoc({ id: '507f1f77bcf86cd799439301', requesterId: userId, recipientId: friendA, createdAt: new Date(3000) }),
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439301',
+        requesterId: userId,
+        recipientId: friendA,
+        createdAt: new Date(3000),
+      }),
     ]);
     // profiles read returns nothing → friend is skipped, not crashed on.
     profilesFind.mockReturnValue({ toArray: jest.fn().mockResolvedValue([]) });
@@ -132,8 +164,18 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
 
   it('signals hasMore and emits a keyset cursor when a full page+1 is returned', async () => {
     primeFind([
-      friendshipDoc({ id: '507f1f77bcf86cd799439301', requesterId: userId, recipientId: friendA, createdAt: new Date(3000) }),
-      friendshipDoc({ id: '507f1f77bcf86cd799439302', requesterId: friendB, recipientId: userId, createdAt: new Date(2000) }),
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439301',
+        requesterId: userId,
+        recipientId: friendA,
+        createdAt: new Date(3000),
+      }),
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439302',
+        requesterId: friendB,
+        recipientId: userId,
+        createdAt: new Date(2000),
+      }),
     ]);
 
     const page = await service.listFriends(userId, pagination({ limit: 1 }));

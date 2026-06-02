@@ -83,7 +83,11 @@ export function ProfileHeader({
       <div aria-hidden="true" className="relative h-32 overflow-hidden sm:h-44">
         {coverUrl && (
           // eslint-disable-next-line @next/next/no-img-element -- remote, dynamic cover asset
-          <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+          <img
+            src={coverUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-60"
+          />
         )}
         {/* Aurora base wash — richer so the cover reads vivid, not washed-out. */}
         <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-neon-violet)]/65 via-[var(--color-neon-magenta)]/40 to-[var(--color-neon-cyan)]/55" />
@@ -150,12 +154,19 @@ export function ProfileHeader({
               {/* Presence + badges line. */}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {presence && status && (
-                  <span className={cn('inline-flex items-center gap-1.5 text-sm font-medium', presence.text)}>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1.5 text-sm font-medium',
+                      presence.text,
+                    )}
+                  >
                     <span className="relative flex h-2 w-2">
                       {status === 'online' && (
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                       )}
-                      <span className={cn('relative inline-flex h-2 w-2 rounded-full', presence.dot)} />
+                      <span
+                        className={cn('relative inline-flex h-2 w-2 rounded-full', presence.dot)}
+                      />
                     </span>
                     {t(`presence.${status}`)}
                   </span>
@@ -174,7 +185,10 @@ export function ProfileHeader({
 
         {/* Status / bio line. */}
         {profile.status && (
-          <motion.p variants={rise} className="mt-4 max-w-prose text-pretty text-sm text-foreground/85">
+          <motion.p
+            variants={rise}
+            className="mt-4 max-w-prose text-pretty text-sm text-foreground/85"
+          >
             {profile.status}
           </motion.p>
         )}

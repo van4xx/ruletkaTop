@@ -17,16 +17,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Check,
-  Clock,
-  Inbox,
-  Send,
-  UserPlus,
-  X,
-} from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Check, Clock, Inbox, Send, UserPlus, X } from 'lucide-react';
 import type { FriendRequestItem } from '@ruletka/shared-types';
 import {
   Avatar,
@@ -136,7 +127,8 @@ export default function FriendRequestsPage() {
       }
       title={
         <>
-          {t('requestsTitlePrefix')} <span className="text-gradient-neon">{t('requestsTitleAccent')}</span>
+          {t('requestsTitlePrefix')}{' '}
+          <span className="text-gradient-neon">{t('requestsTitleAccent')}</span>
         </>
       }
       lede={t('requestsLede')}

@@ -7,14 +7,14 @@ and in-app economy. Monorepo managed with **pnpm workspaces** + **Turborepo**.
 
 ## Stack
 
-| Layer        | Tech                                                                 |
-| ------------ | -------------------------------------------------------------------- |
-| Web          | Next.js 16 (App Router, RSC), React 19, TypeScript 6, Tailwind v4    |
-| API          | NestJS 11, Mongoose 9 (MongoDB), Socket.io, Redis (ioredis), BullMQ  |
-| Realtime     | WebRTC (P2P), coturn (STUN/TURN), Socket.io signaling                |
-| Mobile       | Flutter (flutter_webrtc) — _planned_                                 |
-| Payments     | CloudPayments (widget + webhooks + recurrent)                        |
-| Shared       | `@ruletka/shared-types` — zod schemas + inferred TS types (the contract) |
+| Layer    | Tech                                                                     |
+| -------- | ------------------------------------------------------------------------ |
+| Web      | Next.js 16 (App Router, RSC), React 19, TypeScript 6, Tailwind v4        |
+| API      | NestJS 11, Mongoose 9 (MongoDB), Socket.io, Redis (ioredis), BullMQ      |
+| Realtime | WebRTC (P2P), coturn (STUN/TURN), Socket.io signaling                    |
+| Mobile   | Flutter (flutter*webrtc) — \_planned*                                    |
+| Payments | CloudPayments (widget + webhooks + recurrent)                            |
+| Shared   | `@ruletka/shared-types` — zod schemas + inferred TS types (the contract) |
 
 ## Layout
 

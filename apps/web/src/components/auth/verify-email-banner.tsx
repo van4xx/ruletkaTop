@@ -117,7 +117,9 @@ export function VerifyEmailBanner() {
               <span className="hidden sm:inline">
                 {resend.isPending ? t('banner.sending') : t('banner.resendLong')}
               </span>
-              <span className="sm:hidden">{resend.isPending ? t('banner.sendingShort') : t('banner.resendShort')}</span>
+              <span className="sm:hidden">
+                {resend.isPending ? t('banner.sendingShort') : t('banner.resendShort')}
+              </span>
             </button>
 
             <button

@@ -151,32 +151,30 @@ export function RouletteStage({ type }: { type: MatchType }) {
     <StageFrame isVideo={isVideo}>
       {/* ── Media layer ─────────────────────────────────────────── */}
       <div className="absolute inset-0">
-        {isVideo ? (
-          // Only mount the remote tile during a match; idle/searching show the
-          // ambient backdrop + a status screen instead (no double placeholder).
-          showStage && (
-            <VideoTile
-              stream={r.remoteStream}
-              muted={false}
-              placeholderName={peer?.nickname}
-              placeholderAvatar={peer?.avatarUrl}
-              fit="cover"
-            />
-          )
-        ) : (
-          showStage &&
-          peer && (
-            <div className="grid h-full place-items-center px-6">
-              <VoiceVisualizer
+        {isVideo
+          ? // Only mount the remote tile during a match; idle/searching show the
+            // ambient backdrop + a status screen instead (no double placeholder).
+            showStage && (
+              <VideoTile
                 stream={r.remoteStream}
-                name={peer.nickname}
-                avatarUrl={peer.avatarUrl}
-                subtitle={peerSubtitle}
-                tone="peer"
+                muted={false}
+                placeholderName={peer?.nickname}
+                placeholderAvatar={peer?.avatarUrl}
+                fit="cover"
               />
-            </div>
-          )
-        )}
+            )
+          : showStage &&
+            peer && (
+              <div className="grid h-full place-items-center px-6">
+                <VoiceVisualizer
+                  stream={r.remoteStream}
+                  name={peer.nickname}
+                  avatarUrl={peer.avatarUrl}
+                  subtitle={peerSubtitle}
+                  tone="peer"
+                />
+              </div>
+            )}
       </div>
 
       {/* ── Reconnecting scrim (kept over the live stage) ───────── */}
@@ -234,7 +232,7 @@ export function RouletteStage({ type }: { type: MatchType }) {
       )}
 
       {/* ── Local PiP (video only) ──────────────────────────────── */}
-      {isVideo && r.localStream && (r.status !== 'idle' && r.status !== 'error') && (
+      {isVideo && r.localStream && r.status !== 'idle' && r.status !== 'error' && (
         <motion.div
           drag
           dragMomentum={false}

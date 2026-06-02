@@ -17,10 +17,7 @@ import { TopCard } from './top-card';
 
 function SkeletonRow({ reverse }: { reverse?: boolean }) {
   return (
-    <div
-      className={cn('flex gap-4 py-1', reverse && 'flex-row-reverse')}
-      aria-hidden="true"
-    >
+    <div className={cn('flex gap-4 py-1', reverse && 'flex-row-reverse')} aria-hidden="true">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="glass-panel flex w-64 shrink-0 items-center gap-3 rounded-2xl p-3">
           <Skeleton className="h-7 w-7 rounded-full" />

@@ -21,10 +21,7 @@ import { cn } from '@/lib/cn';
 import { formatDateTime, formatNumber } from '@/features/economy/format';
 import { EmptyState, ErrorState } from '@/components/economy/states';
 
-const TX_META: Record<
-  CoinTxType,
-  { icon: typeof Gift; tone: 'in' | 'out' }
-> = {
+const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: 'in' | 'out' }> = {
   purchase: { icon: ShoppingCart, tone: 'in' },
   bonus: { icon: Sparkles, tone: 'in' },
   gift_in: { icon: Gift, tone: 'in' },
@@ -149,7 +146,11 @@ export function TransactionList({
             onClick={onLoadMore}
             disabled={isFetchingNextPage}
           >
-            {isFetchingNextPage ? <Spinner size="sm" tone="current" /> : t('transactionList.loadMore')}
+            {isFetchingNextPage ? (
+              <Spinner size="sm" tone="current" />
+            ) : (
+              t('transactionList.loadMore')
+            )}
           </Button>
         </div>
       )}

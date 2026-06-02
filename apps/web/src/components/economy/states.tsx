@@ -85,7 +85,12 @@ export function ErrorState({
         </p>
       </div>
       {onRetry && (
-        <Button variant="outline" size="sm" leadingIcon={<RefreshCw className="h-4 w-4" />} onClick={onRetry}>
+        <Button
+          variant="outline"
+          size="sm"
+          leadingIcon={<RefreshCw className="h-4 w-4" />}
+          onClick={onRetry}
+        >
           {tc('retry')}
         </Button>
       )}

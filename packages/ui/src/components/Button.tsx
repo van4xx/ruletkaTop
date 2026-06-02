@@ -45,10 +45,7 @@ export const buttonVariants = cva(
           'hover:bg-glass hover:border-accent-muted',
         ],
         ghost: ['bg-transparent text-muted-foreground', 'hover:bg-glass hover:text-foreground'],
-        glass: [
-          'glass text-foreground',
-          'hover:bg-glass-strong hover:border-accent-muted',
-        ],
+        glass: ['glass text-foreground', 'hover:bg-glass-strong hover:border-accent-muted'],
         danger: [
           'bg-danger text-danger-foreground shadow-sm',
           'hover:brightness-110 focus-visible:ring-danger',
@@ -80,8 +77,7 @@ export const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   /**
    * Render as the single child element (Radix `Slot`) instead of a `<button>`,
    * so the button styles can be applied to a link or another control.

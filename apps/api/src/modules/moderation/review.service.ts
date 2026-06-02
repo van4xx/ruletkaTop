@@ -2,16 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, type QueryFilter, Types } from 'mongoose';
 
-import type {
-  PaginationQuery,
-  ReportStatus,
-  ReviewItem,
-} from '@ruletka/shared-types';
+import type { PaginationQuery, ReportStatus, ReviewItem } from '@ruletka/shared-types';
 
-import {
-  ModerationEvent,
-  ModerationEventDocument,
-} from './schemas/moderation-event.schema';
+import { ModerationEvent, ModerationEventDocument } from './schemas/moderation-event.schema';
 
 /** A page of review items (newest-first) with an opaque cursor for the next page. */
 export interface ReviewPage {

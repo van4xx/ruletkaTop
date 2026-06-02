@@ -33,7 +33,9 @@ export function RecentChatsWidget() {
   // Keep the cached inbox live while the dashboard is open.
   useConversationRealtime(null);
 
-  const peerIds = conversations.map((c) => peerIdOf(c, user?.id ?? null)).filter(Boolean) as string[];
+  const peerIds = conversations
+    .map((c) => peerIdOf(c, user?.id ?? null))
+    .filter(Boolean) as string[];
   const { byId } = usePeerProfiles(peerIds);
 
   return (
@@ -71,7 +73,16 @@ export function RecentChatsWidget() {
           {conversations.map((c, i) => {
             const peerId = peerIdOf(c, user?.id ?? null);
             const peer = peerId ? byId.get(peerId) : undefined;
-            return <ChatRow key={c.id} conversation={c} peerName={peer?.nickname} peerAvatar={peer?.avatarUrl} peerPremium={peer?.isPremium} index={i} />;
+            return (
+              <ChatRow
+                key={c.id}
+                conversation={c}
+                peerName={peer?.nickname}
+                peerAvatar={peer?.avatarUrl}
+                peerPremium={peer?.isPremium}
+                index={i}
+              />
+            );
           })}
         </ul>
       )}
@@ -110,7 +121,13 @@ function ChatRow({
         {peerName === undefined ? (
           <Skeleton className="h-11 w-11 shrink-0 rounded-full" />
         ) : (
-          <Avatar src={peerAvatar ?? undefined} alt={name} size="lg" ring={peerPremium ? 'aurora' : 'none'} className="shrink-0" />
+          <Avatar
+            src={peerAvatar ?? undefined}
+            alt={name}
+            size="lg"
+            ring={peerPremium ? 'aurora' : 'none'}
+            className="shrink-0"
+          />
         )}
 
         <div className="min-w-0 flex-1">
@@ -125,7 +142,12 @@ function ChatRow({
             )}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <p className={cn('truncate text-xs', hasUnread ? 'text-foreground/80' : 'text-muted-foreground')}>
+            <p
+              className={cn(
+                'truncate text-xs',
+                hasUnread ? 'text-foreground/80' : 'text-muted-foreground',
+              )}
+            >
               {preview}
             </p>
             {hasUnread && (

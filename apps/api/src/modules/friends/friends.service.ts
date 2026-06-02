@@ -19,11 +19,7 @@ import type {
 
 import { NotificationsService } from '../notifications/notifications.service';
 import { PresenceService } from '../presence/presence.service';
-import {
-  buildPairKey,
-  Friendship,
-  FriendshipDocument,
-} from './schemas/friendship.schema';
+import { buildPairKey, Friendship, FriendshipDocument } from './schemas/friendship.schema';
 
 /** A page of friend summaries (newest friendships first) plus an opaque cursor. */
 export interface FriendPage {
@@ -87,10 +83,7 @@ export class FriendsService {
    * surfaced as a `409` conflict (whether pending, accepted or blocked) so the
    * caller can't create duplicates or silently re-request.
    */
-  async sendRequest(
-    requesterId: string,
-    recipientId: string,
-  ): Promise<FriendshipContract> {
+  async sendRequest(requesterId: string, recipientId: string): Promise<FriendshipContract> {
     if (requesterId === recipientId) {
       throw new BadRequestException('Cannot friend yourself');
     }
@@ -272,9 +265,7 @@ export class FriendsService {
     for (const row of rows) {
       // `incoming` when the caller RECEIVED the request; `outgoing` when sent.
       const isIncoming = row.recipientId.toString() === userId;
-      const otherId = isIncoming
-        ? row.requesterId.toString()
-        : row.recipientId.toString();
+      const otherId = isIncoming ? row.requesterId.toString() : row.recipientId.toString();
       const profile = profiles.get(otherId);
       if (!profile) {
         // Skip requests whose counterpart profile no longer resolves.
@@ -374,9 +365,7 @@ export class FriendsService {
         link: '/friends/requests',
       });
     } catch (err) {
-      this.logger.debug(
-        `friend-request notification failed (${friendshipId}): ${asMessage(err)}`,
-      );
+      this.logger.debug(`friend-request notification failed (${friendshipId}): ${asMessage(err)}`);
     }
   }
 
@@ -384,10 +373,7 @@ export class FriendsService {
    * Raise a `friend_request` notification for the original requester when their
    * request is accepted. Best-effort (see {@link notifyFriendRequest}).
    */
-  private async notifyRequestAccepted(
-    acceptorId: string,
-    requesterId: string,
-  ): Promise<void> {
+  private async notifyRequestAccepted(acceptorId: string, requesterId: string): Promise<void> {
     try {
       const nickname = await this.nicknameOf(acceptorId);
       await this.notificationsService.create({
@@ -414,10 +400,7 @@ export class FriendsService {
     }
     const doc = await this.connection
       .collection('profiles')
-      .findOne(
-        { userId: new Types.ObjectId(userId) },
-        { projection: { nickname: 1 } },
-      );
+      .findOne({ userId: new Types.ObjectId(userId) }, { projection: { nickname: 1 } });
     const nickname = (doc as { nickname?: string } | null)?.nickname;
     return nickname && nickname.length > 0 ? nickname : 'Someone';
   }

@@ -58,9 +58,7 @@ export function useTransactions(limit = 20) {
 }
 
 /** Flattens an infinite-ledger query result into a single transaction array. */
-export function flattenTransactions(
-  pages: CoinTransactionPage[] | undefined,
-): CoinTransaction[] {
+export function flattenTransactions(pages: CoinTransactionPage[] | undefined): CoinTransaction[] {
   if (!pages) return [];
   return pages.flatMap((p) => p.items);
 }

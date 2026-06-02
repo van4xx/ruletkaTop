@@ -29,7 +29,11 @@ interface Handlers {
 
 function connectionWith(h: Handlers): { connection: Connection; collection: jest.Mock } {
   const collection = jest.fn((name: keyof Handlers) => {
-    const c = (h[name] ?? {}) as { countDocuments?: jest.Mock; aggregate?: jest.Mock; find?: jest.Mock };
+    const c = (h[name] ?? {}) as {
+      countDocuments?: jest.Mock;
+      aggregate?: jest.Mock;
+      find?: jest.Mock;
+    };
     return {
       countDocuments: c.countDocuments ?? jest.fn().mockResolvedValue(0),
       aggregate: c.aggregate ?? jest.fn(() => cursor([])),
@@ -117,7 +121,8 @@ describe('AdminEconomyService.getOverview', () => {
 
     // Active-placement window is `startsAt <= now < expiresAt`.
     const placementFilter = (
-      (connection.collection('topplacements').countDocuments as jest.Mock).mock.calls[0]! as unknown[]
+      (connection.collection('topplacements').countDocuments as jest.Mock).mock
+        .calls[0]! as unknown[]
     )[0] as Record<string, { $lte?: Date; $gt?: Date }>;
     expect(placementFilter.startsAt?.$lte).toBeInstanceOf(Date);
     expect(placementFilter.expiresAt?.$gt).toBeInstanceOf(Date);

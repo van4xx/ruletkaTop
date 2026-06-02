@@ -104,7 +104,11 @@ export function SettingsView() {
   };
 
   return (
-    <Tabs value={active} onValueChange={onTabChange} className="lg:grid lg:grid-cols-[15rem_1fr] lg:gap-8">
+    <Tabs
+      value={active}
+      onValueChange={onTabChange}
+      className="lg:grid lg:grid-cols-[15rem_1fr] lg:gap-8"
+    >
       {/* Tab navigation. On lg+, a sticky vertical rail; on mobile, a scroll strip. */}
       <div className="lg:sticky lg:top-20 lg:self-start">
         <TabsList
@@ -123,7 +127,8 @@ export function SettingsView() {
                 'data-[state=active]:bg-gradient-to-r data-[state=active]:from-[var(--color-neon-violet)]/90 data-[state=active]:to-[var(--color-neon-magenta)]/90',
                 'data-[state=active]:text-primary-foreground data-[state=active]:shadow-[0_6px_20px_-10px_var(--color-neon-violet)]',
                 'lg:w-full',
-                value === 'danger' && 'data-[state=active]:from-destructive data-[state=active]:to-destructive/80',
+                value === 'danger' &&
+                  'data-[state=active]:from-destructive data-[state=active]:to-destructive/80',
               )}
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />

@@ -15,7 +15,15 @@
  */
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Flag, Gift as GiftIcon, MessageCircle, MoreHorizontal, UserPlus, UserX, Video } from 'lucide-react';
+import {
+  Flag,
+  Gift as GiftIcon,
+  MessageCircle,
+  MoreHorizontal,
+  UserPlus,
+  UserX,
+  Video,
+} from 'lucide-react';
 import {
   Button,
   DropdownMenu,
@@ -57,7 +65,12 @@ export function ProfileActions({
 
   return (
     <>
-      <Button asChild variant="secondary" size="sm" leadingIcon={<MessageCircle className="h-4 w-4" />}>
+      <Button
+        asChild
+        variant="secondary"
+        size="sm"
+        leadingIcon={<MessageCircle className="h-4 w-4" />}
+      >
         <Link href={`${ROUTES.chats}?to=${profileId}`}>{t('actions.message')}</Link>
       </Button>
 
@@ -75,7 +88,12 @@ export function ProfileActions({
         leadingIcon={<GiftIcon className="h-4 w-4" />}
         onClick={() =>
           requireAuth(
-            () => open('gift-picker', { toUserId: profileId, toNickname: nickname, context: 'profile' }),
+            () =>
+              open('gift-picker', {
+                toUserId: profileId,
+                toNickname: nickname,
+                context: 'profile',
+              }),
             t('actions.authGift'),
           )
         }
@@ -104,7 +122,10 @@ export function ProfileActions({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() =>
-              requireAuth(() => open('report-user', { userId: profileId, nickname }), t('actions.authReport'))
+              requireAuth(
+                () => open('report-user', { userId: profileId, nickname }),
+                t('actions.authReport'),
+              )
             }
           >
             <Flag aria-hidden="true" />

@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  type OnApplicationShutdown,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 
@@ -51,10 +46,7 @@ export class PresenceService implements OnApplicationShutdown {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     config: ConfigService,
   ) {
-    this.ttlSeconds = config.get<number>(
-      'PRESENCE_TTL_SECONDS',
-      DEFAULT_PRESENCE_TTL_SECONDS,
-    );
+    this.ttlSeconds = config.get<number>('PRESENCE_TTL_SECONDS', DEFAULT_PRESENCE_TTL_SECONDS);
   }
 
   /**
@@ -154,9 +146,7 @@ export class PresenceService implements OnApplicationShutdown {
     // A subscriber connection cannot run normal commands, so duplicate.
     const sub = this.redis.duplicate();
     this.subscriber = sub;
-    sub.on('error', (err: Error) =>
-      this.logger.error(`Presence subscriber error: ${err.message}`),
-    );
+    sub.on('error', (err: Error) => this.logger.error(`Presence subscriber error: ${err.message}`));
     sub.on('message', (channel: string, message: string) => {
       if (channel !== PRESENCE_CHANNEL) {
         return;

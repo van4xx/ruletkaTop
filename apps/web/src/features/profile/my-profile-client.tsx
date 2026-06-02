@@ -79,7 +79,12 @@ export function MyProfileClient() {
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <IconButton variant="glass" size="sm" aria-label={t('myProfile.changeAvatarAria')} onClick={() => open('avatar-upload', { currentUrl: profile.avatarUrl })}>
+          <IconButton
+            variant="glass"
+            size="sm"
+            aria-label={t('myProfile.changeAvatarAria')}
+            onClick={() => open('avatar-upload', { currentUrl: profile.avatarUrl })}
+          >
             <Camera aria-hidden="true" />
           </IconButton>
         </TooltipTrigger>
@@ -88,8 +93,17 @@ export function MyProfileClient() {
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <IconButton variant="glass" size="sm" aria-label={t('myProfile.copyIdAria')} onClick={copyId}>
-            {copied ? <Check className="text-success" aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          <IconButton
+            variant="glass"
+            size="sm"
+            aria-label={t('myProfile.copyIdAria')}
+            onClick={copyId}
+          >
+            {copied ? (
+              <Check className="text-success" aria-hidden="true" />
+            ) : (
+              <Copy aria-hidden="true" />
+            )}
           </IconButton>
         </TooltipTrigger>
         <TooltipContent>{t('myProfile.copyIdTooltip')}</TooltipContent>

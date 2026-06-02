@@ -38,8 +38,7 @@ export class BannedFingerprint {
 
 export type BannedFingerprintDocument = HydratedDocument<BannedFingerprint>;
 
-export const BannedFingerprintSchema =
-  SchemaFactory.createForClass(BannedFingerprint);
+export const BannedFingerprintSchema = SchemaFactory.createForClass(BannedFingerprint);
 
 // ── Indexes ─────────────────────────────────────────────────────────────────
 // Unique, fast lookup by fingerprint hash (the register/login gate).

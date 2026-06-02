@@ -97,7 +97,9 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new account (18+) and start a session' })
-  @ApiCreatedResponse({ description: 'The new user plus an access token (refresh set as httpOnly cookie)' })
+  @ApiCreatedResponse({
+    description: 'The new user plus an access token (refresh set as httpOnly cookie)',
+  })
   async register(
     @Body(createZodValidationPipe(registerSchema)) dto: RegisterDto,
     @Req() req: Request,
@@ -331,7 +333,6 @@ function parseTtlSeconds(ttl: string): number | null {
   }
   const value = Number(match[1]);
   const unit = match[2].toLowerCase();
-  const multiplier =
-    unit === 's' ? 1 : unit === 'm' ? 60 : unit === 'h' ? 3600 : 86400;
+  const multiplier = unit === 's' ? 1 : unit === 'm' ? 60 : unit === 'h' ? 3600 : 86400;
   return value * multiplier;
 }

@@ -43,8 +43,7 @@ export const iconButtonVariants = cva(
 );
 
 export interface IconButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof iconButtonVariants> {
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof iconButtonVariants> {
   asChild?: boolean;
   loading?: boolean;
   /**
@@ -60,7 +59,18 @@ export interface IconButtonProps
  * UIs where a text label would be redundant.
  */
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { className, variant, size, shape, asChild = false, loading = false, disabled, children, type, ...props },
+  {
+    className,
+    variant,
+    size,
+    shape,
+    asChild = false,
+    loading = false,
+    disabled,
+    children,
+    type,
+    ...props
+  },
   ref,
 ) {
   const Comp = asChild ? Slot : 'button';

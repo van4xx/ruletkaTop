@@ -16,13 +16,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { Mic, PhoneIncoming, PhoneOff, Video } from 'lucide-react';
-import {
-  Avatar,
-  Button,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@ruletka/ui';
+import { Avatar, Button, DialogDescription, DialogHeader, DialogTitle } from '@ruletka/ui';
 import { api, ApiClientError } from '@/lib/api';
 import { useModal, useModalProps } from '@/lib/stores/modal-store';
 import { emitSocket } from '@/features/chat/lib/use-socket';

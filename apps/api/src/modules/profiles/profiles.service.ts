@@ -232,10 +232,7 @@ export class ProfilesService {
    * leaking existence, a denied view throws the SAME `404 Not Found` as a
    * missing profile rather than a `403`.
    */
-  async getPublicProfileFor(
-    viewerId: string | null,
-    targetId: string,
-  ): Promise<PublicProfile> {
+  async getPublicProfileFor(viewerId: string | null, targetId: string): Promise<PublicProfile> {
     const doc = await this.findByUserId(targetId);
     if (!doc) {
       throw new NotFoundException('Profile not found');
@@ -271,10 +268,7 @@ export class ProfilesService {
    * cursor-paginated by `_id`. Always EXCLUDES the caller and anyone in a block
    * relationship with them (either direction). Returns the public projections.
    */
-  async searchProfiles(
-    viewerId: string,
-    query: ProfileSearchQuery,
-  ): Promise<ProfileSearchResult> {
+  async searchProfiles(viewerId: string, query: ProfileSearchQuery): Promise<ProfileSearchResult> {
     if (!Types.ObjectId.isValid(viewerId)) {
       return { items: [], nextCursor: null, hasMore: false };
     }
@@ -400,10 +394,7 @@ export class ProfilesService {
    * index (translated by the caller/global filter). Returns the updated public
    * profile.
    */
-  async updateOwnProfile(
-    userId: string,
-    patch: UpdateProfileDto,
-  ): Promise<PublicProfile> {
+  async updateOwnProfile(userId: string, patch: UpdateProfileDto): Promise<PublicProfile> {
     const update: ProfileMutableFields = {};
     if (patch.nickname !== undefined) update.nickname = patch.nickname;
     if (patch.status !== undefined) update.status = patch.status;
@@ -428,10 +419,14 @@ export class ProfilesService {
     let doc: ProfileDocument | null;
     try {
       doc = await this.profileModel
-        .findOneAndUpdate({ userId: new Types.ObjectId(userId) }, { $set: update }, {
-          new: true,
-          runValidators: true,
-        })
+        .findOneAndUpdate(
+          { userId: new Types.ObjectId(userId) },
+          { $set: update },
+          {
+            new: true,
+            runValidators: true,
+          },
+        )
         .exec();
     } catch (err) {
       if (isDuplicateKeyError(err)) {
@@ -495,8 +490,7 @@ export class ProfilesService {
       giftId: String(row.giftId),
       priceCoins: Number(row.priceCoins ?? 0),
       context: (row.context as GiftTransaction['context']) ?? 'profile',
-      createdAt:
-        createdAt instanceof Date ? createdAt.toISOString() : String(createdAt ?? ''),
+      createdAt: createdAt instanceof Date ? createdAt.toISOString() : String(createdAt ?? ''),
     };
   }
 }

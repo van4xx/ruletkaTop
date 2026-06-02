@@ -105,9 +105,7 @@ export class AdminEconomyService {
     collection: ReturnType<Connection['collection']>,
     field: string,
   ): Promise<number> {
-    const pipeline: AggregationPipeline = [
-      { $group: { _id: null, total: { $sum: `$${field}` } } },
-    ];
+    const pipeline: AggregationPipeline = [{ $group: { _id: null, total: { $sum: `$${field}` } } }];
     const rows = await collection.aggregate<{ total: number }>(pipeline).toArray();
     return rows[0]?.total ?? 0;
   }

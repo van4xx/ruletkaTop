@@ -12,12 +12,7 @@ export {
   type ClassificationResult,
   type NsfwClassName,
 } from './classifier';
-export {
-  THRESHOLDS,
-  SAMPLE_INTERVAL_MS,
-  VIOLATION_COOLDOWN_MS,
-  evaluate,
-} from './policy';
+export { THRESHOLDS, SAMPLE_INTERVAL_MS, VIOLATION_COOLDOWN_MS, evaluate } from './policy';
 export { drawDownscaledFrame, canvasToEvidence } from './capture';
 export { moderationApi, moderationKeys, type ReviewResolution } from './api';
 export {
@@ -25,12 +20,5 @@ export {
   type LocalScreeningOptions,
   type LocalScreeningResult,
 } from './use-local-screening';
-export {
-  useModerationAction,
-  type UseModerationActionOptions,
-} from './use-moderation-action';
-export {
-  useReviewQueue,
-  useResolveReview,
-  type ResolveVars,
-} from './use-review-queue';
+export { useModerationAction, type UseModerationActionOptions } from './use-moderation-action';
+export { useReviewQueue, useResolveReview, type ResolveVars } from './use-review-queue';

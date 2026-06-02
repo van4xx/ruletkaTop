@@ -81,7 +81,10 @@ export default function CoinsPage() {
 
           {/* Packages */}
           <section aria-labelledby="packages-heading">
-            <h2 id="packages-heading" className="mb-5 font-display text-xl font-bold tracking-tight">
+            <h2
+              id="packages-heading"
+              className="mb-5 font-display text-xl font-bold tracking-tight"
+            >
               {t('coins.packagesHeading')}
             </h2>
             {packages.isLoading ? (

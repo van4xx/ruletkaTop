@@ -73,11 +73,11 @@ export function ModerationQueue() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<ShieldCheck className="h-6 w-6" />}
-          title={status === 'open' ? t('moderation.emptyOpenTitle') : t('moderation.emptyOtherTitle')}
+          title={
+            status === 'open' ? t('moderation.emptyOpenTitle') : t('moderation.emptyOtherTitle')
+          }
           description={
-            status === 'open'
-              ? t('moderation.emptyOpenDesc')
-              : t('moderation.emptyOtherDesc')
+            status === 'open' ? t('moderation.emptyOpenDesc') : t('moderation.emptyOtherDesc')
           }
         />
       ) : (

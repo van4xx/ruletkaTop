@@ -15,11 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * /profile/[id] — a public profile. `params` is async (App Router); the client
  * body loads the profile, presence and gifts, and exposes the action bar.
  */
-export default async function PublicProfilePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function PublicProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
     <ProfilePageShell>

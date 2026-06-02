@@ -41,7 +41,9 @@ export function GiftCard({ gift, isPremium, onSend, index = 0 }: GiftCardProps) 
           'glass-panel relative flex flex-col overflow-hidden rounded-2xl p-3',
           'transition-[transform,box-shadow] duration-300 hover:-translate-y-1',
         )}
-        style={{ boxShadow: `inset 0 0 0 1px color-mix(in oklch, ${style.color} 28%, transparent)` }}
+        style={{
+          boxShadow: `inset 0 0 0 1px color-mix(in oklch, ${style.color} 28%, transparent)`,
+        }}
       >
         <div className="relative">
           <GiftMedia url={gift.animationUrl} title={gift.title} rarity={gift.rarity} />

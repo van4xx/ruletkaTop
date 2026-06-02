@@ -83,7 +83,9 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
                 'absolute inset-0 grid place-items-center text-white/90',
                 'transition-colors hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               )}
-              aria-label={revealed ? t('moderation.hideEvidenceAria') : t('moderation.showEvidenceAria')}
+              aria-label={
+                revealed ? t('moderation.hideEvidenceAria') : t('moderation.showEvidenceAria')
+              }
             >
               {!revealed && (
                 <span className="inline-flex flex-col items-center gap-1.5 rounded-xl bg-black/50 px-4 py-3 text-xs font-medium backdrop-blur-sm">

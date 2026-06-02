@@ -7,11 +7,7 @@ import type { ExecutionContext } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
 
 import { CloudPaymentsSignatureGuard } from './cloudpayments-signature.guard';
-import {
-  COIN_PACKAGES_SERVICE,
-  PREMIUM_SERVICE,
-  WALLET_SERVICE,
-} from './payments.contracts';
+import { COIN_PACKAGES_SERVICE, PREMIUM_SERVICE, WALLET_SERVICE } from './payments.contracts';
 import { PaymentsService } from './payments.service';
 import { Payment } from './schemas/payment.schema';
 
@@ -232,9 +228,7 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     // The pending→completed claim was attempted once (only the first delivery
     // saw a pending payment); the second short-circuited on the completed status.
     expect(paymentModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
-    const [claimFilter] = paymentModel.findOneAndUpdate.mock.calls[0] as [
-      Record<string, unknown>,
-    ];
+    const [claimFilter] = paymentModel.findOneAndUpdate.mock.calls[0] as [Record<string, unknown>];
     expect(claimFilter).toMatchObject({ status: 'pending' });
   });
 

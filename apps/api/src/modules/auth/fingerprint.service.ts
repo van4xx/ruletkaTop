@@ -4,10 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
-import {
-  BannedFingerprint,
-  BannedFingerprintDocument,
-} from './schemas/banned-fingerprint.schema';
+import { BannedFingerprint, BannedFingerprintDocument } from './schemas/banned-fingerprint.schema';
 import { Session, SessionDocument } from './schemas/session.schema';
 
 /** Best-effort client context a fingerprint is computed from. */
@@ -119,11 +116,7 @@ export class FingerprintService {
       await Promise.all(
         [...fingerprints].map((fingerprint) =>
           this.bannedFingerprintModel
-            .updateOne(
-              { fingerprint },
-              { $set: { userId: objectId, expiresAt } },
-              { upsert: true },
-            )
+            .updateOne({ fingerprint }, { $set: { userId: objectId, expiresAt } }, { upsert: true })
             .exec(),
         ),
       );

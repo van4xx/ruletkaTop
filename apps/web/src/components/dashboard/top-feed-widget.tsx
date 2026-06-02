@@ -64,13 +64,16 @@ export function TopFeedWidget() {
               aria-hidden="true"
               className="absolute inset-0 -z-10 bg-gradient-to-br from-[color-mix(in_oklch,var(--warning)_16%,transparent)] via-transparent to-[var(--color-neon-violet)]/18"
             />
-            <div className="absolute inset-0 -z-10 rounded-2xl ring-1 ring-border/60" aria-hidden="true" />
+            <div
+              className="absolute inset-0 -z-10 rounded-2xl ring-1 ring-border/60"
+              aria-hidden="true"
+            />
             <div className="min-w-0">
-              <h3 className="font-display text-base font-bold tracking-tight">{t('dashboard.topFeedCtaTitle')}</h3>
+              <h3 className="font-display text-base font-bold tracking-tight">
+                {t('dashboard.topFeedCtaTitle')}
+              </h3>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {total > 0
-                  ? t('dashboard.topFeedCtaWithEntries')
-                  : t('dashboard.topFeedCtaEmpty')}
+                {total > 0 ? t('dashboard.topFeedCtaWithEntries') : t('dashboard.topFeedCtaEmpty')}
               </p>
             </div>
             <Button

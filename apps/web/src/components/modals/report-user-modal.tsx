@@ -111,20 +111,24 @@ export function ReportUserModal() {
         <DialogTitle>
           {name ? t('modals.reportUser.titleOnUser', { name }) : t('modals.reportUser.titlePlain')}
         </DialogTitle>
-        <DialogDescription>
-          {t('modals.reportUser.description')}
-        </DialogDescription>
+        <DialogDescription>{t('modals.reportUser.description')}</DialogDescription>
       </DialogHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Reason picker */}
         <fieldset className="space-y-2">
-          <legend className="mb-1.5 text-sm font-medium text-foreground">{t('modals.reportUser.reasonLegend')}</legend>
+          <legend className="mb-1.5 text-sm font-medium text-foreground">
+            {t('modals.reportUser.reasonLegend')}
+          </legend>
           <Controller
             control={control}
             name="reason"
             render={({ field }) => (
-              <div role="radiogroup" aria-label={t('modals.reportUser.reasonGroupAria')} className="grid grid-cols-2 gap-2">
+              <div
+                role="radiogroup"
+                aria-label={t('modals.reportUser.reasonGroupAria')}
+                className="grid grid-cols-2 gap-2"
+              >
                 {REASONS.map((r) => {
                   const selected = field.value === r.value;
                   return (

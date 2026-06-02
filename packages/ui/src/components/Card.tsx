@@ -35,8 +35,7 @@ export const cardVariants = cva('relative overflow-hidden rounded-2xl text-foreg
 });
 
 export interface CardProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof cardVariants> {}
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> {}
 
 /**
  * A surface container. Defaults to the frosted `glass` look; switch to `solid`
@@ -70,17 +69,18 @@ export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<
   },
 );
 
-export const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  function CardTitle({ className, ...props }, ref) {
-    return (
-      <h3
-        ref={ref}
-        className={cn('font-display text-lg font-semibold tracking-tight', className)}
-        {...props}
-      />
-    );
-  },
-);
+export const CardTitle = React.forwardRef<
+  HTMLHeadingElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(function CardTitle({ className, ...props }, ref) {
+  return (
+    <h3
+      ref={ref}
+      className={cn('font-display text-lg font-semibold tracking-tight', className)}
+      {...props}
+    />
+  );
+});
 
 export const CardDescription = React.forwardRef<
   HTMLParagraphElement,

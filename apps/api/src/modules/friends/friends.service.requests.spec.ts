@@ -44,29 +44,27 @@ describe('FriendsService.listRequests — incoming vs outgoing split', () => {
     presence = { getStatuses: jest.fn().mockResolvedValue({}) };
 
     // Batched `profiles` read: capture the $in and return both counterparts.
-    profilesFind = jest
-      .fn()
-      .mockImplementation((filter: { userId: { $in: Types.ObjectId[] } }) => {
-        profilesInClause = filter.userId.$in;
-        return {
-          toArray: jest.fn().mockResolvedValue([
-            {
-              userId: new Types.ObjectId(inboundFrom),
-              nickname: 'Inbound',
-              avatarUrl: null,
-              isPremium: false,
-              badges: [],
-            },
-            {
-              userId: new Types.ObjectId(outboundTo),
-              nickname: 'Outbound',
-              avatarUrl: 'https://x/y.png',
-              isPremium: true,
-              badges: ['premium'],
-            },
-          ]),
-        };
-      });
+    profilesFind = jest.fn().mockImplementation((filter: { userId: { $in: Types.ObjectId[] } }) => {
+      profilesInClause = filter.userId.$in;
+      return {
+        toArray: jest.fn().mockResolvedValue([
+          {
+            userId: new Types.ObjectId(inboundFrom),
+            nickname: 'Inbound',
+            avatarUrl: null,
+            isPremium: false,
+            badges: [],
+          },
+          {
+            userId: new Types.ObjectId(outboundTo),
+            nickname: 'Outbound',
+            avatarUrl: 'https://x/y.png',
+            isPremium: true,
+            badges: ['premium'],
+          },
+        ]),
+      };
+    });
     connection = { collection: jest.fn().mockReturnValue({ find: profilesFind }) };
 
     const notifications = { create: jest.fn().mockResolvedValue(null) };

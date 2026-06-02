@@ -10,12 +10,7 @@
  * catalogue (reused from the economy/gifts feature) to render glyphs + rarity.
  */
 import { useEffect, useMemo } from 'react';
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
   Gift,
   GiftTransaction,
@@ -54,7 +49,11 @@ interface ListEnvelope<T> {
 }
 
 function isListEnvelope<T>(value: unknown): value is ListEnvelope<T> {
-  return typeof value === 'object' && value !== null && Array.isArray((value as { items?: unknown }).items);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as { items?: unknown }).items)
+  );
 }
 
 /**

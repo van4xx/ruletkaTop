@@ -175,7 +175,10 @@ export class MatchmakingService {
    * `tryMatch` can find THEM). If no peer is found the joiner simply stays
    * queued and `null` is returned.
    */
-  async tryMatch(joiner: WaiterEntry, isConnected: ConnectionVerifier): Promise<MatchResult | null> {
+  async tryMatch(
+    joiner: WaiterEntry,
+    isConnected: ConnectionVerifier,
+  ): Promise<MatchResult | null> {
     const pool = poolKey(joiner.type);
     // Lowest scores first = highest priority / earliest.
     const candidateIds = await this.redis.zrange(pool, 0, MATCH_CANDIDATE_BATCH - 1);
@@ -239,7 +242,7 @@ export class MatchmakingService {
     // then FIFO). A stable sort on a priority-ordered batch keeps FIFO within an
     // equal-overlap group. With `sharedInterestsOnly` off and no overlap anywhere
     // this collapses to the original priority order (overlap all 0).
-    eligible.sort((a, b) => (b.shared - a.shared) || (a.priority - b.priority));
+    eligible.sort((a, b) => b.shared - a.shared || a.priority - b.priority);
 
     for (const { candidate } of eligible) {
       // Atomically CLAIM both: only the caller that removes BOTH owns the pair.
@@ -478,10 +481,7 @@ export class MatchmakingService {
     }
     const doc = await this.connection
       .collection('settings')
-      .findOne(
-        { userId: new Types.ObjectId(userId) },
-        { projection: { 'privacy.whoCanCall': 1 } },
-      );
+      .findOne({ userId: new Types.ObjectId(userId) }, { projection: { 'privacy.whoCanCall': 1 } });
     const value = (doc?.privacy as { whoCanCall?: Visibility } | undefined)?.whoCanCall;
     return value ?? 'friends';
   }
@@ -624,7 +624,10 @@ export function sharedInterestCount(
 }
 
 /** Whether `other`'s demographics satisfy `filters`. */
-function satisfies(filters: MatchFilters, other: Pick<WaiterEntry, 'age' | 'gender' | 'country'>): boolean {
+function satisfies(
+  filters: MatchFilters,
+  other: Pick<WaiterEntry, 'age' | 'gender' | 'country'>,
+): boolean {
   if (filters.gender !== 'any' && filters.gender !== other.gender) {
     return false;
   }

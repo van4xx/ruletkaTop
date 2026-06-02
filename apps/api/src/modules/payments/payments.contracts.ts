@@ -42,12 +42,7 @@ export interface PremiumServiceContract {
    * @param token optional CloudPayments recurring-charge token to persist for
    *        subscription renewals.
    */
-  activate(
-    userId: string,
-    plan: string,
-    currentPeriodEnd: Date,
-    token?: string,
-  ): Promise<void>;
+  activate(userId: string, plan: string, currentPeriodEnd: Date, token?: string): Promise<void>;
   /** Cancel premium (e.g. on a Recurrent `Cancelled` notification or refund). */
   cancel(userId: string): Promise<void>;
 }

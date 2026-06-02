@@ -13,9 +13,9 @@ import { CaptchaService } from './captcha.service';
 /** Build a CaptchaService whose `TURNSTILE_SECRET` resolves to `secret`. */
 function makeService(secret: string | undefined): CaptchaService {
   const configService = {
-    get: jest.fn().mockImplementation((key: string) =>
-      key === 'TURNSTILE_SECRET' ? secret : undefined,
-    ),
+    get: jest
+      .fn()
+      .mockImplementation((key: string) => (key === 'TURNSTILE_SECRET' ? secret : undefined)),
   } as unknown as ConfigService;
   return new CaptchaService(configService);
 }
@@ -113,8 +113,7 @@ describe('CaptchaService — enabled (secret configured)', () => {
 
   it('fails CLOSED when fetch throws (network/abort)', async () => {
     const fetchMock = jest.fn().mockRejectedValue(new Error('network down'));
-    (globalThis as unknown as { fetch: typeof fetch }).fetch =
-      fetchMock as unknown as typeof fetch;
+    (globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
     const service = makeService('sk_test_secret');
     await expect(service.verify('token')).resolves.toBe(false);
   });

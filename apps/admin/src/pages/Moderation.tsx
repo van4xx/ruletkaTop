@@ -45,27 +45,51 @@ export function Moderation() {
       ) : q.isError ? (
         <p className="text-sm text-danger">Не удалось загрузить очередь.</p>
       ) : !q.data || q.data.items.length === 0 ? (
-        <p className="rounded-2xl glass-strong p-8 text-center text-sm text-muted-foreground">Очередь пуста.</p>
+        <p className="rounded-2xl glass-strong p-8 text-center text-sm text-muted-foreground">
+          Очередь пуста.
+        </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {q.data.items.map((item) => (
-            <div key={item.id} className="flex flex-col gap-3 glass-strong rounded-2xl p-4 ring-1 ring-border/50">
+            <div
+              key={item.id}
+              className="flex flex-col gap-3 glass-strong rounded-2xl p-4 ring-1 ring-border/50"
+            >
               <div className="flex items-center justify-between">
                 <Badge variant={item.label === 'minor' ? 'danger' : 'warning'}>{item.label}</Badge>
-                <span className="text-xs tabular-nums text-muted-foreground">score {(item.score * 100).toFixed(0)}%</span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  score {(item.score * 100).toFixed(0)}%
+                </span>
               </div>
               {item.evidenceUrl ? (
-                <img src={item.evidenceUrl} alt="" className="aspect-video w-full rounded-lg object-cover opacity-90 blur-md transition hover:blur-0" />
+                <img
+                  src={item.evidenceUrl}
+                  alt=""
+                  className="aspect-video w-full rounded-lg object-cover opacity-90 blur-md transition hover:blur-0"
+                />
               ) : (
-                <div className="grid aspect-video w-full place-items-center rounded-lg bg-glass text-xs text-muted-foreground">нет кадра</div>
+                <div className="grid aspect-video w-full place-items-center rounded-lg bg-glass text-xs text-muted-foreground">
+                  нет кадра
+                </div>
               )}
               <p className="truncate text-xs text-muted-foreground">user {item.userId}</p>
               {status === 'open' || status === 'reviewing' ? (
                 <div className="flex gap-2">
-                  <Button size="sm" variant="danger" block loading={resolve.isPending} onClick={() => resolve.mutate({ id: item.id, decision: 'resolved' })}>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    block
+                    loading={resolve.isPending}
+                    onClick={() => resolve.mutate({ id: item.id, decision: 'resolved' })}
+                  >
                     Подтвердить
                   </Button>
-                  <Button size="sm" variant="ghost" block onClick={() => resolve.mutate({ id: item.id, decision: 'dismissed' })}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    block
+                    onClick={() => resolve.mutate({ id: item.id, decision: 'dismissed' })}
+                  >
                     Отклонить
                   </Button>
                 </div>

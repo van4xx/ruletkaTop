@@ -162,9 +162,9 @@ describe('WalletService — debit atomicity & insufficient funds', () => {
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     expect((fulfilled[0] as PromiseFulfilledResult<number>).value).toBe(30);
-    expect(
-      (rejected[0] as PromiseRejectedResult).reason,
-    ).toBeInstanceOf(InsufficientFundsException);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      InsufficientFundsException,
+    );
 
     // Both attempts hit the atomic guard, but only the winner wrote a ledger row.
     expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(2);
@@ -230,10 +230,7 @@ describe('WalletService — transactional (replica-set) write path', () => {
     expect(options.session).toBe(session);
 
     // The ledger insert also carries the session so it commits/rolls back atomically.
-    const [, txOptions] = coinTxModel.create.mock.calls[0] as [
-      unknown,
-      Record<string, unknown>,
-    ];
+    const [, txOptions] = coinTxModel.create.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(txOptions.session).toBe(session);
   });
 

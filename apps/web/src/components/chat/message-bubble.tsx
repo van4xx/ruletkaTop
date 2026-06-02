@@ -15,13 +15,20 @@ import type { ChatMessage } from '@/features/chat/use-thread';
 function Ticks({ message }: { message: ChatMessage }) {
   const t = useTranslations('social');
   if (message.failed) {
-    return <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-label={t('messageNotSent')} />;
+    return (
+      <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-label={t('messageNotSent')} />
+    );
   }
   if (message.pending) {
     return <Clock className="h-3.5 w-3.5 opacity-70" aria-label={t('messageSending')} />;
   }
   if (message.readAt) {
-    return <CheckCheck className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]" aria-label={t('messageRead')} />;
+    return (
+      <CheckCheck
+        className="h-3.5 w-3.5 text-[var(--color-neon-cyan)]"
+        aria-label={t('messageRead')}
+      />
+    );
   }
   return <Check className="h-3.5 w-3.5 opacity-80" aria-label={t('messageSent')} />;
 }
@@ -57,10 +64,7 @@ export function MessageBubble({
                 showTail ? 'rounded-br-md' : 'rounded-br-2xl',
                 message.failed && 'opacity-80 ring-1 ring-destructive/60',
               )
-            : cn(
-                'glass-panel text-foreground',
-                showTail ? 'rounded-bl-md' : 'rounded-bl-2xl',
-              ),
+            : cn('glass-panel text-foreground', showTail ? 'rounded-bl-md' : 'rounded-bl-2xl'),
         )}
       >
         <p className="whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere]">

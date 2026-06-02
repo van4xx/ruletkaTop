@@ -17,10 +17,7 @@ import { ModerationService } from './moderation.service';
 import { ReportsService } from './reports.service';
 import { ReviewService } from './review.service';
 import { Block, BlockSchema } from './schemas/block.schema';
-import {
-  ModerationEvent,
-  ModerationEventSchema,
-} from './schemas/moderation-event.schema';
+import { ModerationEvent, ModerationEventSchema } from './schemas/moderation-event.schema';
 import { Report, ReportSchema } from './schemas/report.schema';
 
 /**

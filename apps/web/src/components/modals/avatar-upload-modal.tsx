@@ -111,7 +111,12 @@ export function AvatarUploadModal() {
       <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
         {/* Live preview */}
         <div className="flex shrink-0 flex-col items-center gap-2">
-          <Avatar size="xl" src={preview || undefined} alt={t('modals.avatarUpload.previewAlt')} ring="aurora" />
+          <Avatar
+            size="xl"
+            src={preview || undefined}
+            alt={t('modals.avatarUpload.previewAlt')}
+            ring="aurora"
+          />
           <span className="text-xs text-muted-foreground">{t('modals.avatarUpload.preview')}</span>
         </div>
 
@@ -160,7 +165,9 @@ export function AvatarUploadModal() {
                 leadingIcon={<ImagePlus className="h-4 w-4" />}
                 onClick={() => fileRef.current?.click()}
               >
-                {localPreview ? t('modals.avatarUpload.pickAnother') : t('modals.avatarUpload.pickPhoto')}
+                {localPreview
+                  ? t('modals.avatarUpload.pickAnother')
+                  : t('modals.avatarUpload.pickPhoto')}
               </Button>
               <p className="rounded-lg border border-border/60 bg-card/40 p-2.5 text-xs text-muted-foreground">
                 {t('modals.avatarUpload.fileNotice')}
@@ -179,7 +186,12 @@ export function AvatarUploadModal() {
             {t('modals.avatarUpload.save')}
           </Button>
         ) : (
-          <Button type="button" variant="primary" disabled title={t('modals.avatarUpload.saveDisabledTitle')}>
+          <Button
+            type="button"
+            variant="primary"
+            disabled
+            title={t('modals.avatarUpload.saveDisabledTitle')}
+          >
             {t('modals.avatarUpload.save')}
           </Button>
         )}

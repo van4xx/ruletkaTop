@@ -6,7 +6,15 @@
 import type { ReactNode } from 'react';
 
 /** Page heading + optional subtitle. Mirrors the original App.tsx header. */
-export function PageTitle({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+export function PageTitle({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+}) {
   return (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -42,7 +50,11 @@ export function StatCard({
       {loading ? (
         <div className="mt-3 h-7 w-20 animate-pulse rounded-md bg-glass" />
       ) : (
-        <p className={`mt-1.5 font-display text-2xl font-bold tabular-nums ${accent ? 'text-accent' : ''}`}>{value}</p>
+        <p
+          className={`mt-1.5 font-display text-2xl font-bold tabular-nums ${accent ? 'text-accent' : ''}`}
+        >
+          {value}
+        </p>
       )}
       {hint && !loading && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>

@@ -71,7 +71,9 @@ export class CoinPackagesService implements OnModuleInit {
   }
 
   /** Project a (lean) package document to the shared contract shape. */
-  private toContract(doc: Pick<CoinPackage, 'code' | 'coins' | 'priceRub' | 'bonusCoins'>): CoinPackageContract {
+  private toContract(
+    doc: Pick<CoinPackage, 'code' | 'coins' | 'priceRub' | 'bonusCoins'>,
+  ): CoinPackageContract {
     return {
       code: doc.code,
       coins: doc.coins,

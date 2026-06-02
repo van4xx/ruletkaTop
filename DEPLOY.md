@@ -2,12 +2,12 @@
 
 Production topology (DNS already points all of these at `186.246.9.90`, A + AAAA):
 
-| Host | Serves | Container |
-|---|---|---|
-| `ruletka.top`, `www.ruletka.top` | Web (Next.js) | `web` |
-| `api.ruletka.top` | REST `/api` + Socket.io | `api` (×2 replicas) |
-| `admin.ruletka.top` | Admin SPA (static) | served by `nginx` from `/srv/admin` |
-| `turn.ruletka.top` | TURN relay (3478/5349) | `coturn` |
+| Host                             | Serves                  | Container                           |
+| -------------------------------- | ----------------------- | ----------------------------------- |
+| `ruletka.top`, `www.ruletka.top` | Web (Next.js)           | `web`                               |
+| `api.ruletka.top`                | REST `/api` + Socket.io | `api` (×2 replicas)                 |
+| `admin.ruletka.top`              | Admin SPA (static)      | served by `nginx` from `/srv/admin` |
+| `turn.ruletka.top`               | TURN relay (3478/5349)  | `coturn`                            |
 
 **Mail is external (Timeweb MX `mx1/mx2.timeweb.ru`)** — nothing mail-related runs on
 this box, so there's no Postfix/Dovecot to preserve and ports 25/465/587/993 are
@@ -42,6 +42,7 @@ for when you want to do it by hand or debug a step.
 ---
 
 ## 1. One-time server prep
+
 ```sh
 # Docker + compose plugin (Debian/Ubuntu)
 curl -fsSL https://get.docker.com | sh
@@ -54,6 +55,7 @@ git clone <your-repo-url> /opt/ruletka && cd /opt/ruletka
 ```
 
 ## 2. Secrets — generate strong ones (never commit `.env`)
+
 ```sh
 echo "JWT_ACCESS_SECRET=$(openssl rand -hex 48)"
 echo "JWT_REFRESH_SECRET=$(openssl rand -hex 48)"
@@ -63,6 +65,7 @@ npx web-push generate-vapid-keys        # → VAPID_PUBLIC_KEY / VAPID_PRIVATE_K
 ```
 
 ### Production `.env` values (the ones that differ from dev)
+
 ```ini
 NODE_ENV=production
 # Real-transaction multi-node RS (the prod compose runs mongo1/2/3):
@@ -92,6 +95,7 @@ MAIL_FROM="Рулетка <no-reply@ruletka.top>"
 ```
 
 ## 3. Build the admin SPA (nginx serves its static `dist/`)
+
 ```sh
 corepack enable && pnpm install --frozen-lockfile
 pnpm --filter @ruletka/shared-types build
@@ -99,8 +103,10 @@ VITE_API_URL=https://api.ruletka.top/api pnpm --filter @ruletka/admin build   # 
 ```
 
 ## 4. Issue TLS certs (one cert, all subdomains incl. turn)
+
 nginx's :443 blocks need the cert before they start, so issue **standalone** first
 (needs :80 free for ~30s):
+
 ```sh
 docker run --rm -p 80:80 \
   -v ruletka-letsencrypt:/etc/letsencrypt \
@@ -109,17 +115,22 @@ docker run --rm -p 80:80 \
   -m admin@ruletka.top \
   -d ruletka.top -d www.ruletka.top -d api.ruletka.top -d admin.ruletka.top -d turn.ruletka.top
 ```
+
 (After this, the `certbot` service in the compose auto-renews every 12h.)
 
 ### coturn TLS (turns:5349)
+
 Point coturn at the same cert — add to `infra/coturn/turnserver.conf`:
+
 ```
 cert=/etc/letsencrypt/live/ruletka.top/fullchain.pem
 pkey=/etc/letsencrypt/live/ruletka.top/privkey.pem
 ```
+
 and mount `letsencrypt:/etc/letsencrypt:ro` on the `coturn` service.
 
 ## 5. Bring up the stack
+
 ```sh
 docker compose -f infra/docker/docker-compose.prod.yml up -d --build
 docker compose -f infra/docker/docker-compose.prod.yml ps      # all healthy?
@@ -127,14 +138,17 @@ docker compose -f infra/docker/docker-compose.prod.yml logs -f mongo-init   # rs
 ```
 
 ## 6. Seed an admin/moderator account
+
 The admin panel (`admin.ruletka.top`) only lets `admin`/`moderator` roles in.
 Register the email through the normal sign-up first, then promote it once:
+
 ```sh
 docker compose -f infra/docker/docker-compose.prod.yml exec mongo1 \
   mongosh ruletka --eval 'db.users.updateOne({email:"you@ruletka.top"},{$set:{role:"admin"}})'
 ```
 
 ## 7. Verify
+
 ```sh
 curl -I https://ruletka.top                       # 200, web
 curl -s https://api.ruletka.top/api/health        # {"status":"ok",...}
@@ -144,6 +158,7 @@ curl -I https://admin.ruletka.top                 # 200, admin SPA
 ```
 
 ## Updates / rollback
+
 ```sh
 git pull
 pnpm --filter @ruletka/shared-types build && pnpm --filter @ruletka/admin build

@@ -17,9 +17,7 @@ test.describe('Landing page', () => {
     await expect(page).toHaveTitle(/ruletka/i);
 
     // The hero headline is present.
-    await expect(
-      page.getByRole('heading', { level: 1, name: /Встреться с миром/i }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Встреться с миром/i })).toBeVisible();
   });
 
   test('the «Начать» CTA is visible and links to /video', async ({ page }) => {

@@ -32,7 +32,9 @@ const BuyCoinsModal = lazy(() =>
   import('./buy-coins-modal').then((m) => ({ default: m.BuyCoinsModal })),
 );
 const BuyTopModal = lazy(() => import('./buy-top-modal').then((m) => ({ default: m.BuyTopModal })));
-const PremiumModal = lazy(() => import('./premium-modal').then((m) => ({ default: m.PremiumModal })));
+const PremiumModal = lazy(() =>
+  import('./premium-modal').then((m) => ({ default: m.PremiumModal })),
+);
 const ReportUserModal = lazy(() =>
   import('./report-user-modal').then((m) => ({ default: m.ReportUserModal })),
 );
@@ -54,7 +56,9 @@ const CallInviteModal = lazy(() =>
 const DeviceSettingsModal = lazy(() =>
   import('./device-settings-modal').then((m) => ({ default: m.DeviceSettingsModal })),
 );
-const ConfirmModal = lazy(() => import('./confirm-modal').then((m) => ({ default: m.ConfirmModal })));
+const ConfirmModal = lazy(() =>
+  import('./confirm-modal').then((m) => ({ default: m.ConfirmModal })),
+);
 
 /** Registry: modal type → its lazy body component. */
 const REGISTRY: Record<ModalType, ComponentType> = {

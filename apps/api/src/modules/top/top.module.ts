@@ -2,10 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { WalletModule } from '../wallet/wallet.module';
-import {
-  TopPlacement,
-  TopPlacementSchema,
-} from './schemas/top-placement.schema';
+import { TopPlacement, TopPlacementSchema } from './schemas/top-placement.schema';
 import { TopController } from './top.controller';
 import { TopService } from './top.service';
 
@@ -18,9 +15,7 @@ import { TopService } from './top.service';
  */
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: TopPlacement.name, schema: TopPlacementSchema },
-    ]),
+    MongooseModule.forFeature([{ name: TopPlacement.name, schema: TopPlacementSchema }]),
     WalletModule,
   ],
   controllers: [TopController],

@@ -44,8 +44,7 @@ export function DashboardWelcome() {
           {t(greetingKey())}
           {name ? (
             <>
-              ,<br className="sm:hidden" />{' '}
-              <span className="text-gradient-neon">{name}</span>
+              ,<br className="sm:hidden" /> <span className="text-gradient-neon">{name}</span>
             </>
           ) : null}
         </h1>

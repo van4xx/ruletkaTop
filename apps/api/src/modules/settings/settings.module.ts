@@ -14,9 +14,7 @@ import { SettingsService } from './settings.service';
  * no dependency cycle.
  */
 @Module({
-  imports: [
-    MongooseModule.forFeature([{ name: Settings.name, schema: SettingsSchema }]),
-  ],
+  imports: [MongooseModule.forFeature([{ name: Settings.name, schema: SettingsSchema }])],
   controllers: [SettingsController],
   providers: [SettingsService],
   exports: [SettingsService],

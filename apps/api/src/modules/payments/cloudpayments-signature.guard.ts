@@ -149,8 +149,7 @@ export class CloudPaymentsSignatureGuard implements CanActivate {
 
   /** Read the HMAC header (case-insensitive; supports both header spellings). */
   private extractHeader(request: Request): string | null {
-    const header =
-      request.headers['content-hmac'] ?? request.headers['x-content-hmac'];
+    const header = request.headers['content-hmac'] ?? request.headers['x-content-hmac'];
     if (Array.isArray(header)) {
       return header[0] ?? null;
     }

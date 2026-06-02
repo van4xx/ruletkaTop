@@ -145,9 +145,7 @@ export class ProviderFrameScorer implements FrameScorer {
     const rawMin = config.get<string>('SIGHTENGINE_MIN_PROB', '').trim();
     const parsedMin = rawMin === '' ? Number.NaN : Number(rawMin);
     this.minProb =
-      Number.isFinite(parsedMin) && parsedMin >= 0 && parsedMin <= 1
-        ? parsedMin
-        : DEFAULT_MIN_PROB;
+      Number.isFinite(parsedMin) && parsedMin >= 0 && parsedMin <= 1 ? parsedMin : DEFAULT_MIN_PROB;
   }
 
   /** True only when BOTH Sightengine credentials are configured. */
@@ -191,10 +189,7 @@ export class ProviderFrameScorer implements FrameScorer {
   }
 
   /** POST the frame bytes to Sightengine as multipart `media`; parse the body. */
-  private async callSightengine(
-    bytes: Uint8Array,
-    mime: string,
-  ): Promise<SightengineResponse> {
+  private async callSightengine(bytes: Uint8Array, mime: string): Promise<SightengineResponse> {
     const form = new FormData();
     // `Blob`/`FormData` are global in Node 18+ (typed via @types/node web-globals);
     // the Node `Blob` ctor accepts a `Uint8Array` source. The file part is `media`.
@@ -264,9 +259,7 @@ function safe(): FrameScore {
  * Decode a `data:` URL into raw bytes + mime. Returns `null` for anything that
  * is not a base64 image data-URL. Defensive: never throws.
  */
-export function decodeDataUrl(
-  dataUrl: string,
-): { bytes: Uint8Array; mime: string } | null {
+export function decodeDataUrl(dataUrl: string): { bytes: Uint8Array; mime: string } | null {
   const match = /^data:([\w/+.-]+);base64,([\s\S]+)$/i.exec(dataUrl.trim());
   // `noUncheckedIndexedAccess` types the groups as possibly-undefined; guard.
   const payload = match?.[2];
@@ -298,10 +291,7 @@ export function decodeDataUrl(
  * `mildly_suggestive`/`none` are intentionally ignored (too benign to act on).
  * Exported for unit tests.
  */
-export function mapSightengineToFrameScore(
-  res: SightengineResponse,
-  minProb: number,
-): FrameScore {
+export function mapSightengineToFrameScore(res: SightengineResponse, minProb: number): FrameScore {
   const n = res.nudity ?? {};
   const candidates: LabelCandidate[] = [
     { label: 'sexual', score: maxProb(n.sexual_activity, n.sexual_display) },

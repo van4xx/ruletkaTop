@@ -71,9 +71,7 @@ export function PremiumModal() {
   const selected = plans.data?.find((p) => p.code === selectedCode) ?? null;
 
   // Union of perks across plans for the feature list (deduped, order-preserving).
-  const allPerks = Array.from(
-    new Set((plans.data ?? []).flatMap((p) => p.perks)),
-  ).slice(0, 8);
+  const allPerks = Array.from(new Set((plans.data ?? []).flatMap((p) => p.perks))).slice(0, 8);
 
   // ── Pending / error panels ──
   if (subscribe.phase === 'pending') {
@@ -83,7 +81,14 @@ export function PremiumModal() {
         title={t('modals.premium.pendingTitle')}
         description={t('modals.premium.pendingDescription')}
       >
-        <Button type="button" variant="primary" onClick={() => { subscribe.reset(); close(); }}>
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => {
+            subscribe.reset();
+            close();
+          }}
+        >
           {t('modals.premium.gotIt')}
         </Button>
       </StatusPanel>
@@ -96,7 +101,14 @@ export function PremiumModal() {
         title={t('modals.premium.activeTitle')}
         description={t('modals.premium.activeDescription')}
       >
-        <Button type="button" variant="primary" onClick={() => { subscribe.reset(); close(); }}>
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => {
+            subscribe.reset();
+            close();
+          }}
+        >
           {t('modals.premium.thanks')}
         </Button>
       </StatusPanel>
@@ -113,7 +125,11 @@ export function PremiumModal() {
           {t('modals.premium.back')}
         </Button>
         {subscribe.activePlan && (
-          <Button type="button" variant="primary" onClick={() => subscribe.subscribe(subscribe.activePlan!)}>
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => subscribe.subscribe(subscribe.activePlan!)}
+          >
             {t('modals.premium.retry')}
           </Button>
         )}
@@ -132,9 +148,7 @@ export function PremiumModal() {
           {t('modals.premium.titlePrefix')}{' '}
           <span className="text-gradient-neon">{t('modals.premium.titleHighlight')}</span>
         </DialogTitle>
-        <DialogDescription>
-          {reason ?? t('modals.premium.descDefault')}
-        </DialogDescription>
+        <DialogDescription>{reason ?? t('modals.premium.descDefault')}</DialogDescription>
       </DialogHeader>
 
       <div className="space-y-5">
@@ -161,7 +175,9 @@ export function PremiumModal() {
         {/* Plans */}
         <div className="space-y-2">
           {plans.isLoading &&
-            Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+            Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-xl" />
+            ))}
 
           {plans.isError && (
             <div className="rounded-xl border border-border/60 bg-card/40 p-6 text-center text-sm text-muted-foreground">
@@ -253,7 +269,9 @@ function PlanRow({
         <span className="font-display text-base font-bold tabular-nums text-foreground">
           {formatRub(plan.priceRub)}
         </span>
-        <span className="text-xs text-muted-foreground">{intervalSuffix(plan.intervalDays, t)}</span>
+        <span className="text-xs text-muted-foreground">
+          {intervalSuffix(plan.intervalDays, t)}
+        </span>
       </span>
     </button>
   );

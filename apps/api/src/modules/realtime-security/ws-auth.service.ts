@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  type OnApplicationShutdown,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { JwtService } from '@nestjs/jwt';
 import { Connection, Types } from 'mongoose';

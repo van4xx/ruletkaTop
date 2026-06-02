@@ -387,12 +387,7 @@ export class MatchmakingGateway
     socketId: string,
     payload: MmJoinPayload,
   ): Promise<void> {
-    const waiter = await this.matchmaking.enqueue(
-      userId,
-      payload.type,
-      payload.filters,
-      socketId,
-    );
+    const waiter = await this.matchmaking.enqueue(userId, payload.type, payload.filters, socketId);
     if (!waiter) {
       // No profile / cannot match — signal waiting rather than erroring out.
       this.server.to(userRoom(userId)).emit('mm:waiting', {});
@@ -535,9 +530,7 @@ export class MatchmakingGateway
     // A subscriber connection cannot issue normal commands, so duplicate.
     const sub = this.redis.duplicate();
     this.notifSub = sub;
-    sub.on('error', (err: Error) =>
-      this.logger.error(`notif subscriber error: ${err.message}`),
-    );
+    sub.on('error', (err: Error) => this.logger.error(`notif subscriber error: ${err.message}`));
     sub.on('message', (channel: string, message: string) => {
       if (channel !== NOTIFICATION_NEW_CHANNEL) {
         return;
@@ -569,10 +562,7 @@ export class MatchmakingGateway
    * Idempotent and best-effort: a no-op (no live socket / no active room) is fine
    * since the ban flag + session revocation already make a ban effective.
    */
-  async applyModerationAction(
-    userId: string,
-    payload: ModerationActionPayload,
-  ): Promise<void> {
+  async applyModerationAction(userId: string, payload: ModerationActionPayload): Promise<void> {
     try {
       this.server.to(userRoom(userId)).emit('mod:action', payload);
       if (payload.action === 'kick' || payload.action === 'ban') {
@@ -664,9 +654,7 @@ function parseModerationActionMessage(
   if (typeof userId !== 'string' || userId.length === 0) {
     return null;
   }
-  const payload = moderationActionPayloadSchema.safeParse(
-    (json as { payload?: unknown }).payload,
-  );
+  const payload = moderationActionPayloadSchema.safeParse((json as { payload?: unknown }).payload);
   if (!payload.success) {
     return null;
   }

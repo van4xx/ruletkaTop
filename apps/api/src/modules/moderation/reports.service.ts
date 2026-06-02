@@ -104,10 +104,7 @@ export class ReportsService {
    * (fetch older reports with `_id < cursor`). Moderator-only (gated in the
    * controller).
    */
-  async listReports(
-    pagination: PaginationQuery,
-    status?: ReportStatus,
-  ): Promise<ReportPage> {
+  async listReports(pagination: PaginationQuery, status?: ReportStatus): Promise<ReportPage> {
     const filter: QueryFilter<ReportDocument> = {};
     if (status) {
       filter.status = status;
@@ -150,11 +147,7 @@ export class ReportsService {
       throw new NotFoundException('Report not found');
     }
     const updated = await this.reportModel
-      .findByIdAndUpdate(
-        new Types.ObjectId(reportId),
-        { $set: { status } },
-        { new: true },
-      )
+      .findByIdAndUpdate(new Types.ObjectId(reportId), { $set: { status } }, { new: true })
       .exec();
     if (!updated) {
       throw new NotFoundException('Report not found');

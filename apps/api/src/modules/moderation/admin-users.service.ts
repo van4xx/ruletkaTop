@@ -155,11 +155,7 @@ export class AdminUsersService {
     }
 
     const updated = await this.userModel
-      .findByIdAndUpdate(
-        new Types.ObjectId(targetUserId),
-        { $set: { role } },
-        { new: true },
-      )
+      .findByIdAndUpdate(new Types.ObjectId(targetUserId), { $set: { role } }, { new: true })
       .select({ email: 1, role: 1, isBanned: 1, emailVerified: 1, createdAt: 1 })
       .lean()
       .exec();

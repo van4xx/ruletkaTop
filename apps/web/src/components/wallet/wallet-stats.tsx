@@ -75,7 +75,9 @@ export function WalletStats({ transactions, isLoading, className }: WalletStatsP
     >
       {items.map(({ key, label, value, icon: Icon, tone, ring }) => (
         <div key={key} className="flex items-center gap-3.5 px-5 py-4">
-          <span className={cn('inline-flex h-10 w-10 items-center justify-center rounded-xl', ring)}>
+          <span
+            className={cn('inline-flex h-10 w-10 items-center justify-center rounded-xl', ring)}
+          >
             <Icon className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="min-w-0">

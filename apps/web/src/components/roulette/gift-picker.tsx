@@ -54,13 +54,7 @@ const rarityLabelKey: Record<Rarity, string> = {
   legendary: 'gift.rarityLegendary',
 };
 
-export function GiftPicker({
-  open,
-  onOpenChange,
-  toUserId,
-  peerName,
-  isPremium,
-}: GiftPickerProps) {
+export function GiftPicker({ open, onOpenChange, toUserId, peerName, isPremium }: GiftPickerProps) {
   const t = useTranslations('roulette');
   const giftsQuery = useGifts(open);
   const sendGift = useSendGift();
@@ -226,7 +220,11 @@ export function GiftPicker({
             onClick={handleSend}
             className="gap-2"
           >
-            {sendGift.isPending ? <Spinner size="sm" tone="current" /> : <GiftIcon className="h-4 w-4" />}
+            {sendGift.isPending ? (
+              <Spinner size="sm" tone="current" />
+            ) : (
+              <GiftIcon className="h-4 w-4" />
+            )}
             {t('gift.send')}
           </Button>
         </DialogFooter>

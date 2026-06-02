@@ -1,10 +1,5 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import {
-  collectDefaultMetrics,
-  Counter,
-  Gauge,
-  Registry,
-} from 'prom-client';
+import { collectDefaultMetrics, Counter, Gauge, Registry } from 'prom-client';
 import type { Redis } from 'ioredis';
 
 import { REDIS_CLIENT } from '../redis/redis.constants';

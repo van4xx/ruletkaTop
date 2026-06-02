@@ -79,9 +79,7 @@ export function BuyCoinsDialog({ open, onOpenChange }: BuyCoinsDialogProps) {
               <ShoppingBag className="h-5 w-5 text-[var(--coin)]" aria-hidden="true" />
               {t('buyCoins.title')}
             </DialogTitle>
-            <DialogDescription>
-              {t('buyCoins.description')}
-            </DialogDescription>
+            <DialogDescription>{t('buyCoins.description')}</DialogDescription>
           </DialogHeader>
 
           {packages.isLoading ? (

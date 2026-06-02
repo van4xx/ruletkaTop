@@ -7,14 +7,8 @@ import type {
   Subscription as SubscriptionContract,
 } from '@ruletka/shared-types';
 
-import {
-  PremiumPlan,
-  PremiumPlanDocument,
-} from './schemas/premium-plan.schema';
-import {
-  Subscription,
-  SubscriptionDocument,
-} from './schemas/subscription.schema';
+import { PremiumPlan, PremiumPlanDocument } from './schemas/premium-plan.schema';
+import { Subscription, SubscriptionDocument } from './schemas/subscription.schema';
 
 /**
  * Default premium plans seeded on boot (idempotent upsert by `code`).
@@ -38,11 +32,7 @@ const SEED_PLANS: readonly PremiumPlanContract[] = [
     title: 'Premium Yearly',
     priceRub: 3499,
     intervalDays: 365,
-    perks: [
-      'Everything in Monthly',
-      '2 months free vs monthly',
-      'Priority matchmaking',
-    ],
+    perks: ['Everything in Monthly', '2 months free vs monthly', 'Priority matchmaking'],
   },
 ];
 
@@ -159,10 +149,7 @@ export class PremiumService implements OnModuleInit {
 
     // Ensure `startedAt` exists even when re-activating an old (null) record.
     await this.subscriptionModel
-      .updateOne(
-        { userId: _id, startedAt: null },
-        { $set: { startedAt: new Date() } },
-      )
+      .updateOne({ userId: _id, startedAt: null }, { $set: { startedAt: new Date() } })
       .exec();
 
     await this.syncProfilePremium(_id, true, currentPeriodEnd);
@@ -218,14 +205,9 @@ export class PremiumService implements OnModuleInit {
   // ── internals ─────────────────────────────────────────────────────────────
 
   /** Entitlement predicate: `active` and not yet expired. */
-  private entitled(
-    status: string | undefined,
-    currentPeriodEnd: Date | null,
-  ): boolean {
+  private entitled(status: string | undefined, currentPeriodEnd: Date | null): boolean {
     return (
-      status === 'active' &&
-      currentPeriodEnd !== null &&
-      currentPeriodEnd.getTime() > Date.now()
+      status === 'active' && currentPeriodEnd !== null && currentPeriodEnd.getTime() > Date.now()
     );
   }
 
@@ -249,15 +231,11 @@ export class PremiumService implements OnModuleInit {
       } else {
         update.$pull = { badges: 'premium' };
       }
-      await this.connection
-        .collection('profiles')
-        .updateOne({ userId }, update);
+      await this.connection.collection('profiles').updateOne({ userId }, update);
     } catch (err) {
       // Never let a denormalisation hiccup fail the authoritative write.
       this.logger.error(
-        `Failed to sync premium flag onto profile ${userId.toString()}: ${
-          (err as Error).message
-        }`,
+        `Failed to sync premium flag onto profile ${userId.toString()}: ${(err as Error).message}`,
       );
     }
   }

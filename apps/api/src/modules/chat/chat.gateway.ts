@@ -226,7 +226,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       this.logger.debug(`chat:read dropped for ${userId}: ${asMessage(err)}`);
     }
   }
-
 }
 
 /**

@@ -15,9 +15,7 @@ import { MailerService } from './mailer.service';
 /** Build a MailerService whose env comes from `env` (missing keys → undefined). */
 function makeService(env: Record<string, string | undefined>): MailerService {
   const configService = {
-    get: jest
-      .fn()
-      .mockImplementation((key: string, fallback?: string) => env[key] ?? fallback),
+    get: jest.fn().mockImplementation((key: string, fallback?: string) => env[key] ?? fallback),
   } as unknown as ConfigService;
   return new MailerService(configService);
 }

@@ -13,12 +13,7 @@
 
 // ── Utilities ──
 export { cn } from './lib/cn';
-export {
-  COUNTRIES,
-  COUNTRY_BY_CODE,
-  codeToFlag,
-  type Country,
-} from './lib/countries';
+export { COUNTRIES, COUNTRY_BY_CODE, codeToFlag, type Country } from './lib/countries';
 
 // ── Primitives ──
 export { Button, buttonVariants, type ButtonProps } from './components/Button';
@@ -74,28 +69,15 @@ export {
   DropdownMenuRadioGroup,
 } from './components/DropdownMenu';
 export { Tabs, TabsList, TabsTrigger, TabsContent, type TabsListProps } from './components/Tabs';
-export {
-  Tooltip,
-  TooltipProvider,
-  TooltipTrigger,
-  TooltipContent,
-} from './components/Tooltip';
+export { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './components/Tooltip';
 
 // ── Inputs ──
 export { Switch, type SwitchProps } from './components/Switch';
 export { Slider, type SliderProps } from './components/Slider';
-export {
-  CountrySelect,
-  type CountrySelectProps,
-} from './components/CountrySelect';
+export { CountrySelect, type CountrySelectProps } from './components/CountrySelect';
 
 // ── Identity & feedback ──
-export {
-  Avatar,
-  AvatarGroup,
-  type AvatarProps,
-  type AvatarGroupProps,
-} from './components/Avatar';
+export { Avatar, AvatarGroup, type AvatarProps, type AvatarGroupProps } from './components/Avatar';
 export {
   Toaster,
   toast,

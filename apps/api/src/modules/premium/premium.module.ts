@@ -3,14 +3,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { PremiumController } from './premium.controller';
 import { PremiumService } from './premium.service';
-import {
-  PremiumPlan,
-  PremiumPlanSchema,
-} from './schemas/premium-plan.schema';
-import {
-  Subscription,
-  SubscriptionSchema,
-} from './schemas/subscription.schema';
+import { PremiumPlan, PremiumPlanSchema } from './schemas/premium-plan.schema';
+import { Subscription, SubscriptionSchema } from './schemas/subscription.schema';
 
 /**
  * Owns the `premiumplans` catalogue and the `subscriptions` collection, plus

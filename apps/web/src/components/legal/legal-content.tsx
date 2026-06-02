@@ -150,7 +150,10 @@ export function DefinitionList({ items }: { items: { term: ReactNode; desc: Reac
   return (
     <dl className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/60">
       {items.map((it, i) => (
-        <div key={i} className="grid gap-1 bg-card/30 p-4 sm:grid-cols-[minmax(0,14rem)_1fr] sm:gap-4">
+        <div
+          key={i}
+          className="grid gap-1 bg-card/30 p-4 sm:grid-cols-[minmax(0,14rem)_1fr] sm:gap-4"
+        >
           <dt className="font-medium text-foreground">{it.term}</dt>
           <dd className="text-sm leading-6 text-muted-foreground">{it.desc}</dd>
         </div>

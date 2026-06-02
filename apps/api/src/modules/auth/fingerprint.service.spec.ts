@@ -93,14 +93,10 @@ describe('FingerprintService.isBanned', () => {
     Object.assign(m.bannedFingerprintModel, findOneLeanReturning({ _id: 'row' }));
     const service = makeService(m);
 
-    await expect(
-      service.isBanned({ ip: '5.5.5.5', userAgent: 'evader' }),
-    ).resolves.toBe(true);
+    await expect(service.isBanned({ ip: '5.5.5.5', userAgent: 'evader' })).resolves.toBe(true);
 
     // Looked up by the computed hash, filtering to active (permanent or unexpired).
-    const [query] = m.bannedFingerprintModel.findOne.mock.calls[0] as [
-      Record<string, unknown>,
-    ];
+    const [query] = m.bannedFingerprintModel.findOne.mock.calls[0] as [Record<string, unknown>];
     expect(query.fingerprint).toBe(expectedFingerprint('5.5.5.5', 'evader'));
     expect(query.$or).toBeDefined();
   });
@@ -109,9 +105,7 @@ describe('FingerprintService.isBanned', () => {
     const m = buildMocks();
     Object.assign(m.bannedFingerprintModel, findOneLeanReturning(null));
     const service = makeService(m);
-    await expect(
-      service.isBanned({ ip: '1.2.3.4', userAgent: 'clean' }),
-    ).resolves.toBe(false);
+    await expect(service.isBanned({ ip: '1.2.3.4', userAgent: 'clean' })).resolves.toBe(false);
   });
 
   it('returns false (skips the gate) when the context cannot be fingerprinted', async () => {
@@ -129,9 +123,7 @@ describe('FingerprintService.isBanned', () => {
       }),
     });
     const service = makeService(m);
-    await expect(
-      service.isBanned({ ip: '5.5.5.5', userAgent: 'evader' }),
-    ).resolves.toBe(false);
+    await expect(service.isBanned({ ip: '5.5.5.5', userAgent: 'evader' })).resolves.toBe(false);
   });
 });
 
@@ -160,10 +152,7 @@ describe('FingerprintService.recordForUser', () => {
     >;
     const fingerprints = calls.map((c) => c[0].fingerprint);
     expect(new Set(fingerprints)).toEqual(
-      new Set([
-        expectedFingerprint('1.1.1.1', 'UA-A'),
-        expectedFingerprint('2.2.2.2', 'UA-B'),
-      ]),
+      new Set([expectedFingerprint('1.1.1.1', 'UA-A'), expectedFingerprint('2.2.2.2', 'UA-B')]),
     );
     // Each is an upsert tying the row to the banned user.
     for (const [, update, options] of calls) {

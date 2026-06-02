@@ -134,13 +134,7 @@ export function ReconnectingScreen({ attempt }: { attempt: number }) {
 }
 
 /** Recoverable error (permission / device / network). */
-export function ErrorScreen({
-  error,
-  onRetry,
-}: {
-  error: RouletteError;
-  onRetry: () => void;
-}) {
+export function ErrorScreen({ error, onRetry }: { error: RouletteError; onRetry: () => void }) {
   const t = useTranslations('roulette');
   const tc = useTranslations('common');
   const ICONS = {

@@ -133,22 +133,26 @@ describe('TopService.purchase', () => {
     await service.purchase(userId, { lane: 'left', durationHours: 1, coins: 50 });
     const [shortDocs] = placementModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
     const shortRow = shortDocs[0]!;
-    expect(
-      (shortRow.expiresAt as Date).getTime() - (shortRow.startsAt as Date).getTime(),
-    ).toBe(60 * 60 * 1000);
+    expect((shortRow.expiresAt as Date).getTime() - (shortRow.startsAt as Date).getTime()).toBe(
+      60 * 60 * 1000,
+    );
 
     placementModel.create.mockClear();
     await service.purchase(userId, { lane: 'left', durationHours: 720, coins: 50 });
     const [longDocs] = placementModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
     const longRow = longDocs[0]!;
-    expect(
-      (longRow.expiresAt as Date).getTime() - (longRow.startsAt as Date).getTime(),
-    ).toBe(720 * 60 * 60 * 1000);
+    expect((longRow.expiresAt as Date).getTime() - (longRow.startsAt as Date).getTime()).toBe(
+      720 * 60 * 60 * 1000,
+    );
   });
 
   it(`rejects a placement below the ${MIN_TOP_PLACEMENT_COINS}-coin floor (400) without charging`, async () => {
     await expect(
-      service.purchase(userId, { lane: 'left', durationHours: 24, coins: MIN_TOP_PLACEMENT_COINS - 1 }),
+      service.purchase(userId, {
+        lane: 'left',
+        durationHours: 24,
+        coins: MIN_TOP_PLACEMENT_COINS - 1,
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     // The floor is enforced before any money moves or any row is written.
@@ -240,9 +244,7 @@ describe('TopService.getActiveFeed', () => {
     expect(placementModel.find).toHaveBeenCalledTimes(2);
 
     // Each query filters by lane + the active window (startsAt <= now < expiresAt).
-    const laneFilters = placementModel.find.mock.calls.map(
-      (c) => c[0] as Record<string, any>,
-    );
+    const laneFilters = placementModel.find.mock.calls.map((c) => c[0] as Record<string, any>);
     const lanes = laneFilters.map((f) => f.lane).sort();
     expect(lanes).toEqual(['left', 'right']);
     for (const filter of laneFilters) {
@@ -257,9 +259,7 @@ describe('TopService.getActiveFeed', () => {
 
   it('orders each lane by priority descending, then newest first', async () => {
     const leftQuery = findSortReturning([placementDoc()]);
-    placementModel.find
-      .mockReturnValueOnce(leftQuery)
-      .mockReturnValueOnce(findSortReturning([]));
+    placementModel.find.mockReturnValueOnce(leftQuery).mockReturnValueOnce(findSortReturning([]));
 
     await service.getActiveFeed();
 

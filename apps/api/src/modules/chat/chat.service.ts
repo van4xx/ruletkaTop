@@ -1,9 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, type QueryFilter, Types } from 'mongoose';
 
@@ -108,10 +103,7 @@ export class ChatService {
    * WHOLE page are computed in a SINGLE `$group` aggregation rather than one
    * `countDocuments` per row (kills the previous N+1).
    */
-  async listConversations(
-    userId: string,
-    pagination: PaginationQuery,
-  ): Promise<ConversationPage> {
+  async listConversations(userId: string, pagination: PaginationQuery): Promise<ConversationPage> {
     if (!Types.ObjectId.isValid(userId)) {
       return { items: [], nextCursor: null, hasMore: false };
     }
@@ -257,12 +249,7 @@ export class ChatService {
       .exec();
 
     // Best-effort: notify the recipient if they're not currently in this thread.
-    await this.notifyRecipientIfAway(
-      senderId,
-      recipientId,
-      conversation._id.toString(),
-      preview,
-    );
+    await this.notifyRecipientIfAway(senderId, recipientId, conversation._id.toString(), preview);
 
     return {
       message: this.toMessageContract(created),
@@ -420,10 +407,7 @@ export class ChatService {
   }
 
   /** Find an existing pair conversation or create it (idempotent on the pair). */
-  private async getOrCreateConversation(
-    a: string,
-    b: string,
-  ): Promise<ConversationDocument> {
+  private async getOrCreateConversation(a: string, b: string): Promise<ConversationDocument> {
     const pairKey = buildConversationPairKey(a, b);
     // Upsert on the unique pairKey: concurrent first-messages converge on one row.
     return this.conversationModel
@@ -451,8 +435,7 @@ export class ChatService {
         { userId: new Types.ObjectId(userId) },
         { projection: { 'privacy.whoCanMessage': 1 } },
       );
-    const value = (doc?.privacy as { whoCanMessage?: Visibility } | undefined)
-      ?.whoCanMessage;
+    const value = (doc?.privacy as { whoCanMessage?: Visibility } | undefined)?.whoCanMessage;
     return value ?? 'everyone';
   }
 
@@ -469,9 +452,7 @@ export class ChatService {
   }
 
   /** Load a conversation by id or throw `404`. */
-  private async findConversationOr404(
-    conversationId: string,
-  ): Promise<ConversationDocument> {
+  private async findConversationOr404(conversationId: string): Promise<ConversationDocument> {
     if (!Types.ObjectId.isValid(conversationId)) {
       throw new NotFoundException('Conversation not found');
     }

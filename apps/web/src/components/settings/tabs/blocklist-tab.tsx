@@ -84,8 +84,12 @@ export function BlocklistTab() {
             <li key={block.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
               <Avatar size="md" alt={block.blockedUserId} fallback={<Ban className="h-4 w-4" />} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-sm text-foreground">{shortId(block.blockedUserId)}</p>
-                <p className="text-xs text-muted-foreground">{t('blocklist.blockedOn', { date: formatDate(block.createdAt) })}</p>
+                <p className="truncate font-mono text-sm text-foreground">
+                  {shortId(block.blockedUserId)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('blocklist.blockedOn', { date: formatDate(block.createdAt) })}
+                </p>
               </div>
               <Button
                 variant="outline"

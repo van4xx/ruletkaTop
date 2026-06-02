@@ -104,9 +104,7 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('password.title')}</DialogTitle>
-          <DialogDescription>
-            {t('password.description')}
-          </DialogDescription>
+          <DialogDescription>{t('password.description')}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
@@ -120,9 +118,17 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
             </div>
           )}
 
-          <FormField label={t('password.currentLabel')} required error={errors.currentPassword?.message}>
+          <FormField
+            label={t('password.currentLabel')}
+            required
+            error={errors.currentPassword?.message}
+          >
             {(field) => (
-              <PasswordField {...field} autoComplete="current-password" {...register('currentPassword')} />
+              <PasswordField
+                {...field}
+                autoComplete="current-password"
+                {...register('currentPassword')}
+              />
             )}
           </FormField>
 
@@ -138,9 +144,17 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
             )}
           </FormField>
 
-          <FormField label={t('password.confirmLabel')} required error={errors.confirmPassword?.message}>
+          <FormField
+            label={t('password.confirmLabel')}
+            required
+            error={errors.confirmPassword?.message}
+          >
             {(field) => (
-              <PasswordField {...field} autoComplete="new-password" {...register('confirmPassword')} />
+              <PasswordField
+                {...field}
+                autoComplete="new-password"
+                {...register('confirmPassword')}
+              />
             )}
           </FormField>
 

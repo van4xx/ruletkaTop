@@ -85,9 +85,7 @@ export function AddFriendDialog({ trigger }: { trigger?: React.ReactNode }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('addFriendTitle')}</DialogTitle>
-          <DialogDescription>
-            {t('addFriendDescription')}
-          </DialogDescription>
+          <DialogDescription>{t('addFriendDescription')}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-2">
