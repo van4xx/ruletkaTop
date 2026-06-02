@@ -31,48 +31,42 @@ const unbounded = Unbounded({
 
 const SITE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') ?? 'https://ruletka.top';
 
-export const metadata: Metadata = {
-  metadataBase: new URL('https://ruletka.top'),
-  title: {
-    default: 'ruletka.top — видео и голосовая рулетка',
-    template: '%s · ruletka.top',
-  },
-  description:
-    'Видео- и голосовая рулетка нового поколения. Случайные видеозвонки, голосовое общение, подарки и друзья со всего мира.',
-  applicationName: 'ruletka.top',
-  keywords: [
-    'видеочат',
-    'рулетка',
-    'видеорулетка',
-    'голосовой чат',
-    'случайный собеседник',
-    'знакомства',
-    'общение онлайн',
-  ],
-  authors: [{ name: 'ruletka.top' }],
-  creator: 'ruletka.top',
-  openGraph: {
-    type: 'website',
-    locale: 'ru_RU',
-    url: SITE_URL,
-    siteName: 'ruletka.top',
-    title: 'ruletka.top — видео и голосовая рулетка',
-    description:
-      'Случайные видеозвонки и голосовое общение с людьми со всего мира. Дари подарки, добавляй друзей, попади в Топ.',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'ruletka.top — видео и голосовая рулетка',
-    description: 'Случайные видеозвонки и голосовое общение со всего мира.',
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-  icons: {
-    icon: '/favicon.svg',
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  const t = await getTranslations('metadata');
+  return {
+    metadataBase: new URL('https://ruletka.top'),
+    title: {
+      default: t('titleDefault'),
+      template: t('titleTemplate'),
+    },
+    description: t('description'),
+    applicationName: 'ruletka.top',
+    keywords: t.raw('keywords') as string[],
+    authors: [{ name: 'ruletka.top' }],
+    creator: 'ruletka.top',
+    openGraph: {
+      type: 'website',
+      locale: locale === 'en' ? 'en_US' : 'ru_RU',
+      url: SITE_URL,
+      siteName: 'ruletka.top',
+      title: t('ogTitle'),
+      description: t('ogDescription'),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: t('twitterTitle'),
+      description: t('twitterDescription'),
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+    icons: {
+      icon: '/favicon.svg',
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: [

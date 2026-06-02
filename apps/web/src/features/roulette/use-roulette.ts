@@ -729,7 +729,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     } catch (err) {
       startedRef.current = false;
       if (err instanceof MediaError) {
-        dispatch({ type: 'ERROR', error: { kind: err.kind, message: err.message } });
+        dispatch({ type: 'ERROR', error: { kind: err.kind, message: t(`mediaError.${err.kind}`) } });
       } else {
         dispatch({
           type: 'ERROR',

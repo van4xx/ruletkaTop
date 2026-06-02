@@ -87,10 +87,7 @@ function classifyMediaError(err: unknown): MediaErrorKind {
  */
 export async function getLocalStream(video: boolean): Promise<MediaStream> {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-    throw new MediaError(
-      'insecure',
-      'Камера и микрофон недоступны. Откройте сайт по HTTPS или в современном браузере.',
-    );
+    throw new MediaError('insecure', 'Camera and microphone are unavailable.');
   }
 
   const constraints: MediaStreamConstraints = {
@@ -113,18 +110,16 @@ export async function getLocalStream(video: boolean): Promise<MediaStream> {
     return await navigator.mediaDevices.getUserMedia(constraints);
   } catch (err) {
     const kind = classifyMediaError(err);
+    // The UI maps `kind` → a localized message (roulette.mediaError.*); this
+    // string is only a dev/non-UI fallback, so it stays in plain English.
     const message =
       kind === 'denied'
-        ? video
-          ? 'Доступ к камере и микрофону запрещён. Разрешите доступ в настройках браузера.'
-          : 'Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.'
+        ? 'Access to camera/microphone was denied.'
         : kind === 'notfound'
-          ? video
-            ? 'Камера или микрофон не найдены.'
-            : 'Микрофон не найден.'
+          ? 'Camera or microphone not found.'
           : kind === 'inuse'
-            ? 'Устройство занято другим приложением. Закройте его и попробуйте снова.'
-            : 'Не удалось получить доступ к устройствам.';
+            ? 'A media device is in use by another application.'
+            : 'Could not access media devices.';
     throw new MediaError(kind, message);
   }
 }

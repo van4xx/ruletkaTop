@@ -1,4 +1,11 @@
 {
+  "mediaError": {
+    "insecure": "Camera and microphone are unavailable. Open the site over HTTPS or in a modern browser.",
+    "denied": "Access to camera and microphone was denied. Allow access in your browser settings.",
+    "notfound": "Camera or microphone not found.",
+    "inuse": "A device is in use by another application. Close it and try again.",
+    "unknown": "Couldn't access your devices."
+  },
   "video": {
     "metaTitle": "Video Roulette",
     "metaDescription": "Random video calls with people from all over the world. Turn on your camera, filter by interests, and meet someone in one click."
