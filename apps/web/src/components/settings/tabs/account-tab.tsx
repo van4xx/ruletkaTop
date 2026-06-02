@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslations } from 'next-intl';
 import { AtSign, ImageIcon, KeyRound, Quote, UserRound } from 'lucide-react';
 import {
   updateProfileSchema,
@@ -50,6 +51,8 @@ function AccountSkeleton() {
 }
 
 export function AccountTab() {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const { user } = useAuth();
   const { data: profile, isLoading, isError, error, refetch } = useProfileMe();
   const update = useUpdateProfile();
@@ -93,16 +96,16 @@ export function AccountTab() {
       avatarUrl: values.avatarUrl ? values.avatarUrl : undefined,
     };
     update.mutate(payload, {
-      onSuccess: () => toast.success('Профиль обновлён'),
-      onError: (e) => toast.error('Не удалось сохранить', { description: e.message }),
+      onSuccess: () => toast.success(t('account.profile.saved')),
+      onError: (e) => toast.error(t('account.profile.saveError'), { description: e.message }),
     });
   });
 
   return (
     <div className="space-y-6">
       <SettingsSection
-        title="Профиль"
-        description="Так тебя видят другие пользователи."
+        title={t('account.profile.title')}
+        description={t('account.profile.description')}
         icon={<UserRound />}
         footer={
           profile && (
@@ -113,7 +116,7 @@ export function AccountTab() {
               disabled={!isDirty}
               loading={update.isPending}
             >
-              Сохранить
+              {tc('save')}
             </Button>
           )
         }
@@ -121,7 +124,12 @@ export function AccountTab() {
         {isLoading ? (
           <AccountSkeleton />
         ) : isError ? (
-          <ErrorState message={error?.message} onRetry={() => refetch()} />
+          <ErrorState
+            message={error?.message}
+            fallback={t('account.profile.loadError')}
+            retryLabel={tc('retry')}
+            onRetry={() => refetch()}
+          />
         ) : profile ? (
           <form id="account-form" onSubmit={onSubmit} noValidate className="space-y-5">
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
@@ -133,16 +141,16 @@ export function AccountTab() {
               />
               <div className="w-full flex-1">
                 <FormField
-                  label="Ссылка на аватар"
+                  label={t('account.profile.avatarLabel')}
                   error={errors.avatarUrl?.message}
-                  hint="Прямая ссылка на изображение (https://…)"
+                  hint={t('account.profile.avatarHint')}
                 >
                   {(field) => (
                     <Input
                       {...field}
                       type="url"
                       inputMode="url"
-                      placeholder="https://…/avatar.jpg"
+                      placeholder={t('account.profile.avatarPlaceholder')}
                       leadingIcon={<ImageIcon />}
                       {...register('avatarUrl')}
                     />
@@ -151,17 +159,17 @@ export function AccountTab() {
               </div>
             </div>
 
-            <FormField label="Никнейм" required error={errors.nickname?.message}>
+            <FormField label={t('account.profile.nicknameLabel')} required error={errors.nickname?.message}>
               {(field) => (
                 <Input {...field} leadingIcon={<UserRound />} {...register('nickname')} />
               )}
             </FormField>
 
-            <FormField label="Статус" error={errors.status?.message} hint="До 140 символов">
+            <FormField label={t('account.profile.statusLabel')} error={errors.status?.message} hint={t('account.profile.statusHint')}>
               {(field) => (
                 <Input
                   {...field}
-                  placeholder="Расскажи о себе одной строкой"
+                  placeholder={t('account.profile.statusPlaceholder')}
                   maxLength={140}
                   leadingIcon={<Quote />}
                   {...register('status')}
@@ -172,11 +180,11 @@ export function AccountTab() {
         ) : null}
       </SettingsSection>
 
-      <SettingsSection title="Учётная запись" description="Данные для входа." icon={<AtSign />}>
+      <SettingsSection title={t('account.credentials.title')} description={t('account.credentials.description')} icon={<AtSign />}>
         <div className="divide-y divide-border/50">
           <SettingRow
-            label="Email"
-            description="Используется для входа. Обратись в поддержку, чтобы изменить."
+            label={t('account.credentials.emailLabel')}
+            description={t('account.credentials.emailDescription')}
             control={
               user ? (
                 <span className="text-sm text-muted-foreground">{user.email}</span>
@@ -186,13 +194,13 @@ export function AccountTab() {
             }
           />
           <SettingRow
-            label="Пароль"
-            description="Рекомендуем менять пароль время от времени."
+            label={t('account.credentials.passwordLabel')}
+            description={t('account.credentials.passwordDescription')}
             control={
               <ChangePasswordDialog
                 trigger={
                   <Button variant="secondary" size="sm" leadingIcon={<KeyRound className="h-4 w-4" />}>
-                    Сменить пароль
+                    {t('account.credentials.changePassword')}
                   </Button>
                 }
               />
@@ -204,12 +212,22 @@ export function AccountTab() {
   );
 }
 
-function ErrorState({ message, onRetry }: { message?: string; onRetry: () => void }) {
+function ErrorState({
+  message,
+  fallback,
+  retryLabel,
+  onRetry,
+}: {
+  message?: string;
+  fallback: string;
+  retryLabel: string;
+  onRetry: () => void;
+}) {
   return (
     <div className="flex flex-col items-center gap-3 py-8 text-center">
-      <p className="text-sm text-muted-foreground">{message ?? 'Не удалось загрузить профиль.'}</p>
+      <p className="text-sm text-muted-foreground">{message ?? fallback}</p>
       <Button variant="secondary" size="sm" onClick={onRetry}>
-        Повторить
+        {retryLabel}
       </Button>
     </div>
   );

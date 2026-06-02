@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { UserX } from 'lucide-react';
 import { Button } from '@ruletka/ui';
 import type { OnlineStatus } from '@ruletka/shared-types';
@@ -30,6 +31,7 @@ import { ProfileSkeleton } from '@/components/profile/profile-skeleton';
 import { useProfile, useProfileGifts, useTopPlacement } from './use-profile';
 
 export function PublicProfileClient({ profileId }: { profileId: string }) {
+  const t = useTranslations('profile');
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const viewerIsPremium = useIsPremium();
@@ -55,11 +57,11 @@ export function PublicProfileClient({ profileId }: { profileId: string }) {
       profileQuery.error instanceof ApiClientError && profileQuery.error.status === 404;
     return notFound ? (
       <StatePanel
-        title="Профиль не найден"
-        description="Возможно, пользователь удалил аккаунт или ссылка неверна."
+        title={t('publicProfile.notFoundTitle')}
+        description={t('publicProfile.notFoundDescription')}
         action={
           <Button asChild variant="primary" size="sm">
-            <Link href={ROUTES.home}>На главную</Link>
+            <Link href={ROUTES.home}>{t('publicProfile.notFoundAction')}</Link>
           </Button>
         }
       />
@@ -74,11 +76,11 @@ export function PublicProfileClient({ profileId }: { profileId: string }) {
     return (
       <StatePanel
         icon={<UserX className="h-7 w-7" />}
-        title={`${profile.nickname} заблокирован`}
-        description="Вы больше не будете получать сообщения и звонки от этого пользователя."
+        title={t('publicProfile.blockedTitle', { name: profile.nickname })}
+        description={t('publicProfile.blockedDescription')}
         action={
           <Button asChild variant="outline" size="sm">
-            <Link href={ROUTES.friends}>К друзьям</Link>
+            <Link href={ROUTES.friends}>{t('publicProfile.blockedAction')}</Link>
           </Button>
         }
       />

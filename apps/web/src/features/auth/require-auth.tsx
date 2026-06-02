@@ -14,10 +14,12 @@
  */
 import { useEffect, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Spinner } from '@ruletka/ui';
 import { useAuth } from './use-auth';
 
 export function RequireAuth({ children }: { children: ReactNode }) {
+  const tc = useTranslations('common');
   const { isAuthenticated, isReady } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -34,7 +36,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (!isReady || !isAuthenticated) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center" aria-busy="true">
-        <Spinner size="lg" label="Загрузка" />
+        <Spinner size="lg" label={tc('loading')} />
       </div>
     );
   }

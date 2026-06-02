@@ -13,6 +13,7 @@
  * (dark neon, rounded pills), so it slots in seamlessly.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Plus, X } from 'lucide-react';
 import { Input, Label } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -25,6 +26,11 @@ import {
   SUGGESTED_INTERESTS,
 } from './interests';
 
+/** Map a normalized stored value back to its suggestion key, when curated. */
+const KEY_BY_NORMALIZED_VALUE = new Map(
+  SUGGESTED_INTERESTS.map((s) => [normalizeInterest(s.value), s.key]),
+);
+
 export function InterestsEditor({
   value,
   onChange,
@@ -32,10 +38,18 @@ export function InterestsEditor({
   value: string[];
   onChange: (next: string[]) => void;
 }) {
+  const t = useTranslations('profile');
   const [draft, setDraft] = useState('');
   const selected = value ?? [];
   const full = selected.length >= MAX_INTERESTS;
   const selectedKeys = new Set(selected.map(normalizeInterest));
+
+  /** Localized label for a stored tag — curated tags get a catalogue label,
+   *  free-form tags fall back to the raw (user-typed) value. */
+  function labelFor(tag: string): string {
+    const key = KEY_BY_NORMALIZED_VALUE.get(normalizeInterest(tag));
+    return key ? t(`interests.${key}`) : tag;
+  }
 
   function commitDraft() {
     const next = addInterest(selected, draft);
@@ -53,18 +67,20 @@ export function InterestsEditor({
   }
 
   // Suggestions not already chosen — the quick-add palette.
-  const suggestions = SUGGESTED_INTERESTS.filter((s) => !selectedKeys.has(normalizeInterest(s)));
+  const suggestions = SUGGESTED_INTERESTS.filter(
+    (s) => !selectedKeys.has(normalizeInterest(s.value)),
+  );
 
   return (
     <div>
       <div className="flex items-center justify-between">
-        <Label>Интересы</Label>
+        <Label>{t('interestsEditor.label')}</Label>
         <span className="text-xs tabular-nums text-muted-foreground">
           {selected.length}/{MAX_INTERESTS}
         </span>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Добавьте до {MAX_INTERESTS} интересов — так проще найти близких по духу собеседников.
+        {t('interestsEditor.hint', { max: MAX_INTERESTS })}
       </p>
 
       {/* Selected tags */}
@@ -75,11 +91,11 @@ export function InterestsEditor({
               key={tag}
               className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-neon-violet)]/15 py-1 pl-3 pr-1.5 text-sm font-medium text-foreground ring-1 ring-[var(--color-neon-violet)]/40"
             >
-              {tag}
+              {labelFor(tag)}
               <button
                 type="button"
                 onClick={() => onChange(removeInterest(selected, tag))}
-                aria-label={`Удалить интерес ${tag}`}
+                aria-label={t('interestsEditor.removeAria', { tag: labelFor(tag) })}
                 className="inline-flex h-5 w-5 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-[var(--color-neon-violet)]/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -103,17 +119,19 @@ export function InterestsEditor({
               onChange(selected.slice(0, -1));
             }
           }}
-          placeholder={full ? 'Достигнут лимит интересов' : 'Свой интерес и Enter…'}
+          placeholder={
+            full ? t('interestsEditor.inputPlaceholderFull') : t('interestsEditor.inputPlaceholder')
+          }
           disabled={full}
           maxLength={MAX_INTEREST_LEN}
-          aria-label="Добавить интерес"
+          aria-label={t('interestsEditor.addAria')}
           autoComplete="off"
         />
         <button
           type="button"
           onClick={commitDraft}
           disabled={full || draft.trim() === ''}
-          aria-label="Добавить интерес"
+          aria-label={t('interestsEditor.addAria')}
           className={cn(
             'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -130,18 +148,18 @@ export function InterestsEditor({
       {!full && suggestions.length > 0 && (
         <div className="mt-3">
           <p className="text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
-            Популярные
+            {t('interestsEditor.popularLabel')}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {suggestions.map((s) => (
               <button
-                key={s}
+                key={s.key}
                 type="button"
-                onClick={() => toggle(s)}
+                onClick={() => toggle(s.value)}
                 className="inline-flex items-center gap-1 rounded-full bg-card/50 px-3 py-1.5 text-sm font-medium text-foreground/85 ring-1 ring-border/60 transition-colors hover:bg-[var(--color-neon-violet)]/10 hover:text-foreground hover:ring-[var(--color-neon-violet)]/40"
               >
                 <Plus className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-                {s}
+                {t(`interests.${s.key}`)}
               </button>
             ))}
           </div>

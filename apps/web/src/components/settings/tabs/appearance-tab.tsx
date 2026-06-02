@@ -8,6 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
+import { useTranslations } from 'next-intl';
 import { Check, Monitor, Moon, Palette, Sun } from 'lucide-react';
 import type { Locale, Settings, Theme } from '@ruletka/shared-types';
 import { Button, toast } from '@ruletka/ui';
@@ -16,13 +17,15 @@ import { useUpdateSettings } from '@/features/settings/use-settings';
 import { SettingRow, SettingsSection } from '../primitives';
 import { cn } from '@/lib/cn';
 
-const THEME_CHOICES: ReadonlyArray<{ value: Theme; label: string; icon: typeof Sun; preview: string }> = [
-  { value: 'light', label: 'Светлая', icon: Sun, preview: 'from-zinc-100 to-white' },
-  { value: 'dark', label: 'Тёмная', icon: Moon, preview: 'from-[#0a0a0f] to-[#171622]' },
-  { value: 'system', label: 'Системная', icon: Monitor, preview: 'from-zinc-100 via-[#171622] to-[#0a0a0f]' },
+const THEME_CHOICES: ReadonlyArray<{ value: Theme; labelKey: string; icon: typeof Sun; preview: string }> = [
+  { value: 'light', labelKey: 'appearance.themeLight', icon: Sun, preview: 'from-zinc-100 to-white' },
+  { value: 'dark', labelKey: 'appearance.themeDark', icon: Moon, preview: 'from-[#0a0a0f] to-[#171622]' },
+  { value: 'system', labelKey: 'appearance.themeSystem', icon: Monitor, preview: 'from-zinc-100 via-[#171622] to-[#0a0a0f]' },
 ];
 
 export function AppearanceTab({ settings }: { settings: Settings }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const { theme, setTheme } = useTheme();
   const update = useUpdateSettings();
   const [mounted, setMounted] = useState(false);
@@ -37,7 +40,7 @@ export function AppearanceTab({ settings }: { settings: Settings }) {
     setTheme(next); // instant, via next-themes
     update.mutate(
       { theme: next },
-      { onError: (e) => toast.error('Не удалось сохранить тему', { description: e.message }) },
+      { onError: (e) => toast.error(t('appearance.themeSaveError'), { description: e.message }) },
     );
   };
 
@@ -46,23 +49,23 @@ export function AppearanceTab({ settings }: { settings: Settings }) {
     update.mutate(
       { locale },
       {
-        onSuccess: () => toast.success('Язык сохранён'),
-        onError: (e) => toast.error('Не удалось сохранить', { description: e.message }),
+        onSuccess: () => toast.success(t('appearance.localeSaved')),
+        onError: (e) => toast.error(t('appearance.localeSaveError'), { description: e.message }),
       },
     );
   };
 
   return (
     <SettingsSection
-      title="Оформление"
-      description="Тема и язык интерфейса. Тема применяется сразу."
+      title={t('appearance.title')}
+      description={t('appearance.description')}
       icon={<Palette />}
     >
       <div className="space-y-7">
         <fieldset>
-          <legend className="mb-3 text-sm font-medium text-foreground">Тема</legend>
+          <legend className="mb-3 text-sm font-medium text-foreground">{t('appearance.themeHeading')}</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {THEME_CHOICES.map(({ value, label, icon: Icon, preview }) => {
+            {THEME_CHOICES.map(({ value, labelKey, icon: Icon, preview }) => {
               const selected = mounted && current === value;
               return (
                 <button
@@ -87,7 +90,7 @@ export function AppearanceTab({ settings }: { settings: Settings }) {
                   <span className="flex items-center justify-between">
                     <span className="inline-flex items-center gap-2 text-sm font-medium">
                       <Icon className="h-4 w-4" aria-hidden="true" />
-                      {label}
+                      {t(labelKey)}
                     </span>
                     {selected && (
                       <Check className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
@@ -102,8 +105,8 @@ export function AppearanceTab({ settings }: { settings: Settings }) {
         <hr className="border-border/50" />
 
         <SettingRow
-          label="Язык интерфейса"
-          description="Применяется при следующей перезагрузке."
+          label={t('appearance.localeLabel')}
+          description={t('appearance.localeDescription')}
           control={
             <div className="flex items-center gap-2">
               <div className="glass-panel inline-flex gap-1 rounded-xl p-1">
@@ -126,7 +129,7 @@ export function AppearanceTab({ settings }: { settings: Settings }) {
               </div>
               {localeDirty && (
                 <Button size="sm" variant="primary" loading={update.isPending} onClick={saveLocale}>
-                  Сохранить
+                  {tc('save')}
                 </Button>
               )}
             </div>

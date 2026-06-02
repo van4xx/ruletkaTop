@@ -7,6 +7,7 @@
  */
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { ArrowLeft } from 'lucide-react';
 import { Button, Card, CardHeader, CardTitle } from '@ruletka/ui';
 import { ROUTES } from '@/config/nav';
@@ -17,12 +18,13 @@ import { useProfile } from './use-profile';
 import { ProfileEditForm } from './profile-edit-form';
 
 export function MyProfileEditClient() {
+  const t = useTranslations('profile');
   const router = useRouter();
   const { user, isAuthenticated, isReady } = useAuth();
   const profileQuery = useProfile(user?.id);
 
   if (isReady && !isAuthenticated) {
-    return <SignInRequired description="Войдите, чтобы редактировать профиль." />;
+    return <SignInRequired description={t('myProfileEdit.signInRequired')} />;
   }
   if (!user || profileQuery.isLoading) return <ProfileSkeleton />;
   if (profileQuery.isError) return <ErrorState onRetry={() => void profileQuery.refetch()} />;
@@ -31,12 +33,12 @@ export function MyProfileEditClient() {
     <div className="space-y-5">
       <div>
         <Button asChild variant="ghost" size="sm" leadingIcon={<ArrowLeft className="h-4 w-4" />}>
-          <Link href={ROUTES.me}>К профилю</Link>
+          <Link href={ROUTES.me}>{t('myProfileEdit.back')}</Link>
         </Button>
       </div>
       <Card variant="glass" padding="md">
         <CardHeader className="mb-4">
-          <CardTitle>Редактирование профиля</CardTitle>
+          <CardTitle>{t('myProfileEdit.editTitle')}</CardTitle>
         </CardHeader>
         <ProfileEditForm profile={profileQuery.data!} onDone={() => router.push(ROUTES.me)} />
       </Card>

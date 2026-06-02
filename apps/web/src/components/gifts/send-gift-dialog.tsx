@@ -147,7 +147,7 @@ export function SendGiftDialog({
                   <p className="truncate font-semibold text-foreground">{gift.title}</p>
                   {style && (
                     <Badge variant={style.badge} size="sm">
-                      {style.label}
+                      {t(style.labelKey)}
                     </Badge>
                   )}
                 </div>

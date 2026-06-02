@@ -49,6 +49,7 @@ export function GiftsShowcase({
   emptyHint?: string;
 }) {
   const t = useTranslations('profile');
+  const tEconomy = useTranslations('economy');
   const reduce = useReducedMotion();
   const giftFallbackTitle = t('giftFallbackTitle');
 
@@ -174,7 +175,7 @@ export function GiftsShowcase({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <span className="font-medium">{g.title}</span> · {style.label}
+                  <span className="font-medium">{g.title}</span> · {tEconomy(style.labelKey)}
                   {g.count > 1 && ` · ×${g.count}`}
                 </TooltipContent>
               </Tooltip>

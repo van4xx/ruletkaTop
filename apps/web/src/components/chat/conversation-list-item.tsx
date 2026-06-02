@@ -61,7 +61,7 @@ export function ConversationListItem({
                 unread ? 'font-semibold text-[var(--color-neon-cyan)]' : 'text-muted-foreground',
               )}
             >
-              {formatRelativeTime(conversation.lastMessageAt)}
+              {formatRelativeTime(conversation.lastMessageAt, t)}
             </time>
           )}
         </div>

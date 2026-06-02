@@ -3,6 +3,31 @@
     "errorTitle": "Что-то пошло не так",
     "errorDescription": "Не удалось загрузить данные. Попробуйте ещё раз."
   },
+  "rarity": {
+    "common": "Обычный",
+    "rare": "Редкий",
+    "epic": "Эпический",
+    "legendary": "Легендарный"
+  },
+  "coinsHook": {
+    "paymentFailed": "Платёж не прошёл",
+    "openFailed": "Не удалось открыть оплату",
+    "startFailed": "Не удалось начать оплату"
+  },
+  "timeLeft": {
+    "expired": "истекло",
+    "daysHours": "{days} дн {hours} ч",
+    "days": "{days} дн",
+    "hoursMinutes": "{hours} ч {mins} мин",
+    "minutes": "{mins} мин"
+  },
+  "premiumHook": {
+    "widgetNotConfigured": "Платёжный виджет не настроен (нет NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID).",
+    "widgetDescription": "Премиум · {plan}",
+    "paymentFailed": "Платёж не прошёл",
+    "openFailed": "Не удалось открыть оплату",
+    "subscribeFailed": "Не удалось оформить подписку"
+  },
   "balanceHero": {
     "label": "Ваш баланс",
     "coinsSuffix": "монет",

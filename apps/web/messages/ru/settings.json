@@ -1,0 +1,161 @@
+{
+  "shell": {
+    "badge": "Настройки",
+    "title": "Управление аккаунтом",
+    "subtitle": "Профиль, приватность, уведомления и устройства — всё в одном месте.",
+    "loadError": "Не удалось загрузить настройки.",
+    "unsavedChanges": "Есть несохранённые изменения",
+    "tabs": {
+      "account": "Аккаунт",
+      "privacy": "Приватность",
+      "notifications": "Уведомления",
+      "devices": "Устройства",
+      "appearance": "Оформление",
+      "blocklist": "Чёрный список",
+      "danger": "Опасная зона"
+    }
+  },
+  "options": {
+    "visibility": {
+      "everyone": "Все",
+      "friends": "Только друзья",
+      "nobody": "Никто"
+    }
+  },
+  "account": {
+    "profile": {
+      "title": "Профиль",
+      "description": "Так тебя видят другие пользователи.",
+      "avatarLabel": "Ссылка на аватар",
+      "avatarHint": "Прямая ссылка на изображение (https://…)",
+      "avatarPlaceholder": "https://…/avatar.jpg",
+      "nicknameLabel": "Никнейм",
+      "statusLabel": "Статус",
+      "statusHint": "До 140 символов",
+      "statusPlaceholder": "Расскажи о себе одной строкой",
+      "saved": "Профиль обновлён",
+      "saveError": "Не удалось сохранить",
+      "loadError": "Не удалось загрузить профиль."
+    },
+    "credentials": {
+      "title": "Учётная запись",
+      "description": "Данные для входа.",
+      "emailLabel": "Email",
+      "emailDescription": "Используется для входа. Обратись в поддержку, чтобы изменить.",
+      "passwordLabel": "Пароль",
+      "passwordDescription": "Рекомендуем менять пароль время от времени.",
+      "changePassword": "Сменить пароль"
+    }
+  },
+  "password": {
+    "title": "Смена пароля",
+    "description": "Введите текущий пароль и новый — не короче 8 символов.",
+    "currentLabel": "Текущий пароль",
+    "newLabel": "Новый пароль",
+    "confirmLabel": "Повторите новый пароль",
+    "submit": "Сменить пароль",
+    "saved": "Пароль изменён",
+    "errors": {
+      "currentRequired": "Введите текущий пароль",
+      "mismatch": "Пароли не совпадают",
+      "mustDiffer": "Новый пароль должен отличаться",
+      "currentInvalid": "Текущий пароль неверный"
+    }
+  },
+  "privacy": {
+    "title": "Приватность",
+    "description": "Контролируй, кто может с тобой связаться и видеть твой профиль.",
+    "saved": "Настройки приватности сохранены",
+    "saveError": "Не удалось сохранить",
+    "whoCanMessageLabel": "Кто может писать сообщения",
+    "whoCanMessageDescription": "Личные сообщения от пользователей вне списка будут скрыты.",
+    "whoCanCallLabel": "Кто может звонить",
+    "whoCanCallDescription": "Входящие звонки от остальных будут отклоняться.",
+    "whoCanViewProfileLabel": "Кто видит профиль",
+    "showOnlineLabel": "Показывать статус «в сети»",
+    "showOnlineDescription": "Другие будут видеть, когда ты онлайн."
+  },
+  "notifications": {
+    "title": "Уведомления",
+    "description": "Выбери каналы доставки и события, о которых хочешь знать.",
+    "saved": "Настройки уведомлений сохранены",
+    "saveError": "Не удалось сохранить",
+    "channelsHeading": "Каналы",
+    "eventsHeading": "События",
+    "thisDeviceHeading": "Это устройство",
+    "pushLabel": "Push-уведомления",
+    "pushDescription": "В браузере и мобильном приложении.",
+    "emailLabel": "Email-уведомления",
+    "emailDescription": "Сводки и важные события на почту.",
+    "pushBrowserLabel": "Push в этом браузере",
+    "pushBrowserDescriptionDefault": "Получайте уведомления, даже когда вкладка закрыта.",
+    "pushBrowserDescriptionDenied": "Разрешите уведомления в настройках браузера, чтобы включить.",
+    "friendRequestsLabel": "Заявки в друзья",
+    "messagesLabel": "Новые сообщения",
+    "giftsLabel": "Подарки",
+    "pushBlocked": "Уведомления заблокированы в браузере.",
+    "pushEnableError": "Не удалось включить push-уведомления.",
+    "pushDisableError": "Не удалось отключить push-уведомления."
+  },
+  "devices": {
+    "title": "Камера и микрофон",
+    "description": "Выбери устройства по умолчанию для видео- и голосовых звонков.",
+    "saved": "Устройства сохранены",
+    "saveError": "Не удалось сохранить",
+    "auto": "По умолчанию",
+    "unsupported": "Твой браузер не поддерживает выбор медиаустройств.",
+    "permissionTitle": "Разреши доступ к камере и микрофону",
+    "permissionDescription": "Это нужно, чтобы показать названия твоих устройств. Доступ освобождается сразу.",
+    "permissionCta": "Разрешить доступ",
+    "cameraLabel": "Камера",
+    "cameraSelectAria": "Камера по умолчанию",
+    "micLabel": "Микрофон",
+    "micSelectAria": "Микрофон по умолчанию",
+    "refreshing": "Обновление списка…",
+    "found": "Найдено: {count}",
+    "cameraFallback": "Камера",
+    "micFallback": "Микрофон",
+    "errors": {
+      "enumerate": "Не удалось получить список устройств",
+      "permissionDenied": "Доступ к камере и микрофону запрещён",
+      "accessFailed": "Не удалось получить доступ к устройствам"
+    }
+  },
+  "appearance": {
+    "title": "Оформление",
+    "description": "Тема и язык интерфейса. Тема применяется сразу.",
+    "themeHeading": "Тема",
+    "themeLight": "Светлая",
+    "themeDark": "Тёмная",
+    "themeSystem": "Системная",
+    "themeSaveError": "Не удалось сохранить тему",
+    "localeLabel": "Язык интерфейса",
+    "localeDescription": "Применяется при следующей перезагрузке.",
+    "localeSaved": "Язык сохранён",
+    "localeSaveError": "Не удалось сохранить"
+  },
+  "blocklist": {
+    "title": "Чёрный список",
+    "description": "Заблокированные не могут писать тебе, звонить или находить тебя в поиске.",
+    "loadError": "Не удалось загрузить чёрный список.",
+    "emptyTitle": "Список пуст",
+    "emptyDescription": "Ты ещё никого не блокировал. Заблокировать собеседника можно прямо во время звонка.",
+    "blockedOn": "Заблокирован {date}",
+    "unblock": "Разблокировать",
+    "unblocked": "Пользователь разблокирован",
+    "unblockError": "Не удалось разблокировать"
+  },
+  "danger": {
+    "title": "Опасная зона",
+    "description": "Необратимые действия с аккаунтом.",
+    "deleteHeading": "Удалить аккаунт",
+    "deleteDescription": "Профиль, друзья, переписки, монеты и история будут удалены безвозвратно. Это действие нельзя отменить.",
+    "deleteButton": "Удалить аккаунт",
+    "dialogTitle": "Удалить аккаунт навсегда?",
+    "dialogDescription": "Чтобы подтвердить, введите свой никнейм <strong>{nickname}</strong> ниже.",
+    "nicknameLabel": "Никнейм",
+    "confirmDelete": "Удалить навсегда",
+    "deleted": "Аккаунт удалён",
+    "deleteError": "Не удалось удалить аккаунт"
+  }
+}

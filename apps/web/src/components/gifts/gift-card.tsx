@@ -47,7 +47,7 @@ export function GiftCard({ gift, isPremium, onSend, index = 0 }: GiftCardProps) 
           <GiftMedia url={gift.animationUrl} title={gift.title} rarity={gift.rarity} />
           <span className="absolute left-2 top-2">
             <Badge variant={style.badge} size="sm">
-              {style.label}
+              {t(style.labelKey)}
             </Badge>
           </span>
           {gift.isPremiumOnly && (

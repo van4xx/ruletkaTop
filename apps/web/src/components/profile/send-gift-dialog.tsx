@@ -44,6 +44,7 @@ export function SendGiftDialog({
 }) {
   const t = useTranslations('profile');
   const tc = useTranslations('common');
+  const tEconomy = useTranslations('economy');
   const { isPremium } = useAuth();
   const giftsQuery = useGifts();
   const grouped = useGiftsByRarity(giftsQuery.data);
@@ -116,7 +117,7 @@ export function SendGiftDialog({
                 <div key={rarity}>
                   <div className="mb-2 flex items-center gap-2">
                     <Badge variant={style.badge} size="sm">
-                      {style.label}
+                      {tEconomy(style.labelKey)}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">

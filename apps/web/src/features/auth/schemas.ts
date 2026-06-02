@@ -56,6 +56,12 @@ export function ageFromBirthDate(birthDate: string): number {
  *  - a hard 18+ gate (mirrors the server rule),
  *  - `locale` defaulted to `ru` (the product is Russian-first).
  */
+/**
+ * Birth-date validation messages are STABLE i18n keys (under `auth.validation.*`),
+ * not display copy. The consuming form resolves them with
+ * `useTranslations('auth')` → `t(error.message)`. The `${MIN_AGE}` interpolation
+ * lives in the catalogue value (`{minAge}`), passed in at render time by the form.
+ */
 export const registerFormSchema = baseRegisterSchema
   .extend({
     gender: genderSchema,
@@ -64,22 +70,37 @@ export const registerFormSchema = baseRegisterSchema
     locale: localeSchema,
     birthDate: z
       .string()
-      .min(1, 'Укажите дату рождения')
-      .refine((v) => !Number.isNaN(new Date(v).getTime()), 'Некорректная дата')
-      .refine((v) => new Date(v).getTime() <= Date.now(), 'Дата не может быть в будущем')
-      .refine((v) => ageFromBirthDate(v) >= MIN_AGE, `Регистрация доступна с ${MIN_AGE} лет`),
+      .min(1, 'validation.birthRequired')
+      .refine((v) => !Number.isNaN(new Date(v).getTime()), 'validation.birthInvalid')
+      .refine((v) => new Date(v).getTime() <= Date.now(), 'validation.birthFuture')
+      .refine((v) => ageFromBirthDate(v) >= MIN_AGE, 'validation.birthTooYoung'),
   });
 export type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
-/** Gender options for the segmented control (Russian labels). */
+/**
+ * Gender options for the segmented control. `labelKey` resolves under
+ * `auth.genderOptions.*` via `useTranslations('auth')`; `label` is the Russian
+ * fallback kept for consumers that read a plain string directly.
+ */
 export const GENDER_OPTIONS = [
-  { value: 'female', label: 'Женский' },
-  { value: 'male', label: 'Мужской' },
-  { value: 'other', label: 'Другое' },
-] as const satisfies ReadonlyArray<{ value: z.infer<typeof genderSchema>; label: string }>;
+  { value: 'female', label: 'Женский', labelKey: 'genderOptions.female' },
+  { value: 'male', label: 'Мужской', labelKey: 'genderOptions.male' },
+  { value: 'other', label: 'Другое', labelKey: 'genderOptions.other' },
+] as const satisfies ReadonlyArray<{
+  value: z.infer<typeof genderSchema>;
+  label: string;
+  labelKey: string;
+}>;
 
-/** Locale options for register / settings. */
+/**
+ * Locale options for register / settings. `labelKey` resolves under
+ * `auth.localeOptions.*`; `label` is the native-name fallback.
+ */
 export const LOCALE_OPTIONS = [
-  { value: 'ru', label: 'Русский' },
-  { value: 'en', label: 'English' },
-] as const satisfies ReadonlyArray<{ value: z.infer<typeof localeSchema>; label: string }>;
+  { value: 'ru', label: 'Русский', labelKey: 'localeOptions.ru' },
+  { value: 'en', label: 'English', labelKey: 'localeOptions.en' },
+] as const satisfies ReadonlyArray<{
+  value: z.infer<typeof localeSchema>;
+  label: string;
+  labelKey: string;
+}>;

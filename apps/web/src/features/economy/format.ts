@@ -5,6 +5,9 @@
 
 const RU = 'ru-RU';
 
+/** Translator shape compatible with next-intl's `useTranslations('economy')`. */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
 /** Group a coin/number figure: 12500 → "12 500". */
 export function formatNumber(value: number, locale = RU): string {
   try {
@@ -43,17 +46,26 @@ export function formatDateTime(iso: string, locale = RU): string {
   }
 }
 
-/** Compact remaining time until an ISO instant: "5 ч 12 мин", "3 дн". */
-export function formatTimeLeft(iso: string): string {
+/**
+ * Compact remaining time until an ISO instant: "5 ч 12 мин", "3 дн".
+ *
+ * When an `economy` translator is provided the unit words come from the message
+ * catalogue (`economy.timeLeft.*`); without one it falls back to the original
+ * Russian copy (kept for callers outside the i18n migration).
+ */
+export function formatTimeLeft(iso: string, t?: Translate): string {
   const ms = new Date(iso).getTime() - Date.now();
-  if (Number.isNaN(ms) || ms <= 0) return 'истекло';
+  if (Number.isNaN(ms) || ms <= 0) return t ? t('timeLeft.expired') : 'истекло';
   const minutes = Math.floor(ms / 60000);
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
   const mins = minutes % 60;
-  if (days > 0) return hours > 0 ? `${days} дн ${hours} ч` : `${days} дн`;
-  if (hours > 0) return `${hours} ч ${mins} мин`;
-  return `${mins} мин`;
+  if (days > 0) {
+    if (hours > 0) return t ? t('timeLeft.daysHours', { days, hours }) : `${days} дн ${hours} ч`;
+    return t ? t('timeLeft.days', { days }) : `${days} дн`;
+  }
+  if (hours > 0) return t ? t('timeLeft.hoursMinutes', { hours, mins }) : `${hours} ч ${mins} мин`;
+  return t ? t('timeLeft.minutes', { mins }) : `${mins} мин`;
 }
 
 /** Price-per-coin, used to highlight the best-value package. */

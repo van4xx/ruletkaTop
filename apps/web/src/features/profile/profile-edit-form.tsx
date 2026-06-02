@@ -10,6 +10,7 @@
  */
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useTranslations } from 'next-intl';
 import { Camera } from 'lucide-react';
 import {
   updateProfileSchema,
@@ -34,12 +35,10 @@ import { useModal } from '@/lib/stores/modal-store';
 import { useUpdateProfile } from './use-profile';
 import { InterestsEditor } from './interests-editor';
 
-const GENDERS: { value: Gender; label: string }[] = [
-  { value: 'male', label: 'Мужской' },
-  { value: 'female', label: 'Женский' },
-  { value: 'other', label: 'Другое' },
-];
+const GENDERS: Gender[] = ['male', 'female', 'other'];
 
+// Language self-names are intentionally shown in their own language, so they
+// stay as literals rather than going through the message catalogue.
 const LOCALES: { value: Locale; label: string }[] = [
   { value: 'ru', label: 'Русский' },
   { value: 'en', label: 'English' },
@@ -54,6 +53,7 @@ export function ProfileEditForm({
   profile: PublicProfile;
   onDone?: () => void;
 }) {
+  const t = useTranslations('profile');
   const updateProfile = useUpdateProfile();
   const { open } = useModal();
 
@@ -92,14 +92,14 @@ export function ProfileEditForm({
       dto.interests = values.interests ?? [];
 
     if (Object.keys(dto).length === 0) {
-      toast.info('Нет изменений');
+      toast.info(t('editForm.noChanges'));
       onDone?.();
       return;
     }
 
     updateProfile.mutate(dto, {
       onSuccess: (updated) => {
-        toast.success('Профиль обновлён');
+        toast.success(t('editForm.saved'));
         reset({
           nickname: updated.nickname,
           status: updated.status ?? '',
@@ -113,10 +113,10 @@ export function ProfileEditForm({
       onError: (err) => {
         const msg =
           err instanceof ApiClientError && err.status === 409
-            ? 'Этот никнейм уже занят.'
+            ? t('editForm.nicknameTaken')
             : err instanceof ApiClientError && Array.isArray(err.body?.message)
               ? err.body!.message.join(', ')
-              : 'Не удалось сохранить изменения.';
+              : t('editForm.saveError');
         toast.error(msg);
       },
     });
@@ -129,7 +129,7 @@ export function ProfileEditForm({
         <button
           type="button"
           onClick={() => open('avatar-upload', { currentUrl: profile.avatarUrl })}
-          aria-label="Сменить аватар"
+          aria-label={t('editForm.changeAvatarAria')}
           className={cn(
             'group relative rounded-full',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
@@ -149,16 +149,14 @@ export function ProfileEditForm({
           </span>
         </button>
         <div>
-          <p className="font-display text-sm font-bold">Фото профиля</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Нажмите на аватар, чтобы загрузить новое фото или вставить ссылку.
-          </p>
+          <p className="font-display text-sm font-bold">{t('editForm.photoTitle')}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{t('editForm.photoHint')}</p>
         </div>
       </div>
 
       {/* Nickname */}
       <div>
-        <Label htmlFor="nickname">Никнейм</Label>
+        <Label htmlFor="nickname">{t('editForm.nicknameLabel')}</Label>
         <Input
           id="nickname"
           invalid={Boolean(errors.nickname)}
@@ -166,46 +164,50 @@ export function ProfileEditForm({
           autoComplete="off"
           {...register('nickname')}
         />
-        {errors.nickname && <FieldError>3–24 символа: буквы, цифры и подчёркивание.</FieldError>}
+        {errors.nickname && <FieldError>{t('editForm.nicknameError')}</FieldError>}
       </div>
 
       {/* Status */}
       <div>
-        <Label htmlFor="status">Статус</Label>
+        <Label htmlFor="status">{t('editForm.statusLabel')}</Label>
         <Textarea
           id="status"
           rows={2}
-          placeholder="Расскажите о себе"
+          placeholder={t('editForm.statusPlaceholder')}
           invalid={Boolean(errors.status)}
           className="mt-1.5"
           {...register('status')}
         />
-        {errors.status && <FieldError>Не длиннее 140 символов.</FieldError>}
+        {errors.status && <FieldError>{t('editForm.statusError')}</FieldError>}
       </div>
 
       {/* Gender */}
       <div>
-        <Label>Пол</Label>
+        <Label>{t('editForm.genderLabel')}</Label>
         <Controller
           control={control}
           name="gender"
           render={({ field }) => (
-            <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label="Пол">
+            <div
+              className="mt-1.5 flex flex-wrap gap-2"
+              role="radiogroup"
+              aria-label={t('editForm.genderLabel')}
+            >
               {GENDERS.map((g) => (
                 <button
-                  key={g.value}
+                  key={g}
                   type="button"
                   role="radio"
-                  aria-checked={field.value === g.value}
-                  onClick={() => field.onChange(g.value)}
+                  aria-checked={field.value === g}
+                  onClick={() => field.onChange(g)}
                   className={cn(
                     'rounded-full px-4 py-2 text-sm font-medium ring-1 transition-colors',
-                    field.value === g.value
+                    field.value === g
                       ? 'bg-[var(--color-neon-violet)]/15 text-foreground ring-[var(--color-neon-violet)]/50'
                       : 'bg-card/50 text-foreground/90 ring-border/60 hover:ring-border',
                   )}
                 >
-                  {g.label}
+                  {t(`gender.${g}`)}
                 </button>
               ))}
             </div>
@@ -215,7 +217,7 @@ export function ProfileEditForm({
 
       {/* Country */}
       <div>
-        <Label htmlFor="country">Страна</Label>
+        <Label htmlFor="country">{t('editForm.countryLabel')}</Label>
         <Controller
           control={control}
           name="country"
@@ -223,21 +225,21 @@ export function ProfileEditForm({
             <div className="mt-1.5">
               <CountrySelect
                 id="country"
-                aria-label="Страна"
+                aria-label={t('editForm.countryLabel')}
                 maxSelections={1}
-                placeholder="Выберите страну"
+                placeholder={t('editForm.countryPlaceholder')}
                 value={field.value ? [field.value] : []}
                 onChange={(codes: CountryCode[]) => field.onChange(codes[codes.length - 1])}
               />
             </div>
           )}
         />
-        {errors.country && <FieldError>Выберите страну.</FieldError>}
+        {errors.country && <FieldError>{t('editForm.countryError')}</FieldError>}
       </div>
 
       {/* Languages */}
       <div>
-        <Label>Языки</Label>
+        <Label>{t('editForm.languagesLabel')}</Label>
         <Controller
           control={control}
           name="languages"
@@ -269,7 +271,7 @@ export function ProfileEditForm({
             );
           }}
         />
-        {errors.languages && <FieldError>Не более 5 языков.</FieldError>}
+        {errors.languages && <FieldError>{t('editForm.languagesError')}</FieldError>}
       </div>
 
       {/* Interests */}
@@ -281,17 +283,17 @@ export function ProfileEditForm({
             <InterestsEditor value={field.value ?? []} onChange={field.onChange} />
           )}
         />
-        {errors.interests && <FieldError>Не более 10 интересов.</FieldError>}
+        {errors.interests && <FieldError>{t('editForm.interestsError')}</FieldError>}
       </div>
 
       <div className="flex items-center justify-end gap-3 border-t border-border/60 pt-4">
         {onDone && (
           <Button type="button" variant="ghost" onClick={onDone}>
-            Отмена
+            {t('editForm.cancel')}
           </Button>
         )}
         <Button type="submit" variant="primary" loading={updateProfile.isPending} disabled={!isDirty}>
-          Сохранить
+          {t('editForm.save')}
         </Button>
       </div>
     </form>

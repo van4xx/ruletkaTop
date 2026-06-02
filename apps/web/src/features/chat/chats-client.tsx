@@ -8,6 +8,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageSquarePlus, Search } from 'lucide-react';
 import type { Conversation, OnlineStatus } from '@ruletka/shared-types';
@@ -25,6 +26,7 @@ import {
 } from './use-conversations';
 
 export function ChatsClient() {
+  const t = useTranslations('social');
   const router = useRouter();
   const searchParams = useSearchParams();
   const toUserId = searchParams.get('to');
@@ -89,7 +91,7 @@ export function ChatsClient() {
     !conversations.some((c) => c.participants.includes(toUserId!));
 
   if (isReady && !isAuthenticated) {
-    return <SignInRequired description="Войдите, чтобы читать и отправлять сообщения." />;
+    return <SignInRequired description={t('chatsClient.signInDescription')} />;
   }
 
   return (
@@ -106,12 +108,14 @@ export function ChatsClient() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">
-              Новый чат{toPeer ? ` с ${toPeer.nickname}` : ''}
+              {toPeer
+                ? t('chatsClient.newChatWith', { name: toPeer.nickname })
+                : t('chatsClient.newChat')}
             </p>
-            <p className="text-xs text-muted-foreground">Отправьте первое сообщение, чтобы начать.</p>
+            <p className="text-xs text-muted-foreground">{t('chatsClient.sendFirstMessage')}</p>
           </div>
           <Button asChild variant="primary" size="sm">
-            <a href={`/profile/${toUserId}`}>Открыть профиль</a>
+            <a href={`/profile/${toUserId}`}>{t('openProfile')}</a>
           </Button>
         </motion.div>
       )}
@@ -120,9 +124,9 @@ export function ChatsClient() {
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Поиск по чатам"
+        placeholder={t('chatsClient.searchPlaceholder')}
         leadingIcon={<Search className="h-4 w-4" />}
-        aria-label="Поиск по чатам"
+        aria-label={t('chatsClient.searchPlaceholder')}
       />
 
       {conversationsQuery.isLoading ? (
@@ -132,19 +136,19 @@ export function ChatsClient() {
       ) : conversations.length === 0 ? (
         <StatePanel
           icon={<MessageSquarePlus className="h-7 w-7" />}
-          title="Сообщений пока нет"
-          description="Начните общаться с друзьями или собеседниками из рулетки — переписки появятся здесь."
+          title={t('chatsClient.emptyTitle')}
+          description={t('chatsClient.emptyDescription')}
           action={
             <Button asChild variant="primary" size="sm">
-              <a href="/friends">К друзьям</a>
+              <a href="/friends">{t('chatsClient.toFriends')}</a>
             </Button>
           }
         />
       ) : visible.length === 0 ? (
         <StatePanel
           icon={<Search className="h-7 w-7" />}
-          title="Ничего не найдено"
-          description="Попробуйте изменить запрос."
+          title={t('chatsClient.notFoundTitle')}
+          description={t('chatsClient.notFoundDescription')}
         />
       ) : (
         <motion.ul layout className="space-y-1">

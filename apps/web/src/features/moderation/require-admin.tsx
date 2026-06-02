@@ -14,6 +14,7 @@
  */
 import { useEffect, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ShieldAlert } from 'lucide-react';
 import { Spinner } from '@ruletka/ui';
 import { useAuth } from '@/features/auth';
@@ -23,6 +24,8 @@ import { StatePanel } from '@/components/social/state-views';
 const PRIVILEGED_ROLES = new Set(['admin', 'moderator']);
 
 export function RequireAdmin({ children }: { children: ReactNode }) {
+  const t = useTranslations('misc');
+  const tc = useTranslations('common');
   const { user, isAuthenticated, isReady } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -41,7 +44,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   if (!isReady || !isAuthenticated) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center" aria-busy="true">
-        <Spinner size="lg" label="Загрузка" />
+        <Spinner size="lg" label={tc('loading')} />
       </div>
     );
   }
@@ -52,8 +55,8 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
       <div className="flex min-h-[60vh] items-center justify-center px-4">
         <StatePanel
           icon={<ShieldAlert className="h-7 w-7 text-[var(--color-neon-magenta)]" />}
-          title="Доступ запрещён"
-          description="Этот раздел доступен только модераторам и администраторам."
+          title={t('moderation.accessDeniedTitle')}
+          description={t('moderation.accessDeniedDesc')}
         />
       </div>
     );

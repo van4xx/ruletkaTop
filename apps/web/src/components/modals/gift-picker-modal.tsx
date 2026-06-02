@@ -51,6 +51,7 @@ import { BalancePill, FieldError, InsufficientCoins, ROUTES, FullPageLink } from
 export function GiftPickerModal() {
   const { close } = useModal();
   const t = useTranslations('chrome');
+  const tEconomy = useTranslations('economy');
   const { toUserId, toNickname, context = 'profile' } = useModalProps<'gift-picker'>();
 
   const gifts = useGifts();
@@ -168,7 +169,7 @@ export function GiftPickerModal() {
               <section key={rarity}>
                 <div className="mb-2 flex items-center gap-2">
                   <Badge variant={style.badge} size="sm">
-                    {style.label}
+                    {tEconomy(style.labelKey)}
                   </Badge>
                   <span className="h-px flex-1 bg-border/60" aria-hidden="true" />
                 </div>
@@ -230,7 +231,7 @@ export function GiftPickerModal() {
               <div className="flex flex-wrap items-center gap-2">
                 <p className="truncate font-semibold text-foreground">{selected.title}</p>
                 <Badge variant={RARITY_STYLES[selected.rarity].badge} size="sm">
-                  {RARITY_STYLES[selected.rarity].label}
+                  {tEconomy(RARITY_STYLES[selected.rarity].labelKey)}
                 </Badge>
               </div>
               <div className="mt-1 inline-flex items-center gap-1.5">

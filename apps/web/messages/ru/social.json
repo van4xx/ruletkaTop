@@ -106,5 +106,67 @@
   "retry": "Повторить",
   "signInRequiredDescription": "Войдите в аккаунт, чтобы продолжить.",
   "signInRequiredTitle": "Нужен вход",
-  "goHome": "На главную"
+  "goHome": "На главную",
+
+  "relativeTime": {
+    "yesterday": "вчера",
+    "today": "Сегодня",
+    "yesterdayCap": "Вчера",
+    "daysShort": "{count} дн"
+  },
+
+  "chatsClient": {
+    "signInDescription": "Войдите, чтобы читать и отправлять сообщения.",
+    "newChat": "Новый чат",
+    "newChatWith": "Новый чат с {name}",
+    "sendFirstMessage": "Отправьте первое сообщение, чтобы начать.",
+    "searchPlaceholder": "Поиск по чатам",
+    "emptyTitle": "Сообщений пока нет",
+    "emptyDescription": "Начните общаться с друзьями или собеседниками из рулетки — переписки появятся здесь.",
+    "toFriends": "К друзьям",
+    "notFoundTitle": "Ничего не найдено",
+    "notFoundDescription": "Попробуйте изменить запрос."
+  },
+
+  "chatThread": {
+    "signInDescription": "Войдите, чтобы открыть переписку.",
+    "backToChats": "Назад к чатам",
+    "unavailableForCall": "Недоступен для звонка",
+    "typingInline": "печатает…",
+    "loadMessagesError": "Не удалось загрузить сообщения.",
+    "loadingHistory": "Загрузка истории",
+    "startConversation": "Начните разговор",
+    "conversationStart": "Это начало вашей переписки. Поздоровайтесь!",
+    "conversationStartWith": "Это начало вашей переписки с {name}. Поздоровайтесь!",
+    "jumpToLatest": "К последним сообщениям",
+    "statusOnlineLower": "в сети",
+    "statusOfflineLower": "не в сети",
+    "statusInCallLower": "в звонке",
+    "statusAwayLower": "отошёл"
+  },
+
+  "friendsClient": {
+    "removedToast": "{name} удалён из друзей",
+    "removeFailed": "Не удалось удалить из друзей",
+    "blockedToast": "{name} заблокирован",
+    "blockFailed": "Не удалось заблокировать пользователя",
+    "signInDescription": "Войдите, чтобы видеть список друзей и заявки.",
+    "tabAll": "Все",
+    "tabOnline": "В сети",
+    "searchPlaceholder": "Поиск по нику",
+    "searchAria": "Поиск друзей",
+    "emptyTitle": "Пока нет друзей",
+    "emptyDescription": "Знакомьтесь в рулетке и добавляйте понравившихся собеседников — они появятся здесь.",
+    "toVideoRoulette": "В видеорулетку",
+    "addById": "Добавить по ID",
+    "notFoundTitle": "Никого не нашлось",
+    "notFoundDescription": "Попробуйте изменить запрос.",
+    "noOnlineDescription": "Сейчас никто из друзей не в сети.",
+    "blockDialogTitle": "Заблокировать пользователя?",
+    "removeDialogTitle": "Удалить из друзей?",
+    "blockDialogDescription": "<name></name> больше не сможет писать вам и звонить. Дружба будет разорвана.",
+    "removeDialogDescription": "Вы уверены, что хотите удалить <name></name> из друзей?",
+    "blockConfirm": "Заблокировать",
+    "removeConfirm": "Удалить"
+  }
 }

@@ -6,6 +6,7 @@
  * `useUpdateSettings`. The save button is enabled only when the draft differs.
  */
 import { useEffect, useId, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { ShieldCheck } from 'lucide-react';
 import type { PrivacySettings, Settings } from '@ruletka/shared-types';
 import { Button, Switch, toast } from '@ruletka/ui';
@@ -23,6 +24,8 @@ function samePrivacy(a: PrivacySettings, b: PrivacySettings): boolean {
 }
 
 export function PrivacyTab({ settings }: { settings: Settings }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const update = useUpdateSettings();
   const [draft, setDraft] = useState<PrivacySettings>(settings.privacy);
   const onlineId = useId();
@@ -34,43 +37,46 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
 
   const dirty = !samePrivacy(draft, settings.privacy);
 
+  // Resolve the enum option keys into localized labels for the native select.
+  const visibilityOptions = VISIBILITY_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }));
+
   const save = () => {
     update.mutate(
       { privacy: draft },
       {
-        onSuccess: () => toast.success('Настройки приватности сохранены'),
-        onError: (e) => toast.error('Не удалось сохранить', { description: e.message }),
+        onSuccess: () => toast.success(t('privacy.saved')),
+        onError: (e) => toast.error(t('privacy.saveError'), { description: e.message }),
       },
     );
   };
 
   return (
     <SettingsSection
-      title="Приватность"
-      description="Контролируй, кто может с тобой связаться и видеть твой профиль."
+      title={t('privacy.title')}
+      description={t('privacy.description')}
       icon={<ShieldCheck />}
       footer={
         <>
-          {dirty && <span className="mr-auto text-xs text-muted-foreground">Есть несохранённые изменения</span>}
+          {dirty && <span className="mr-auto text-xs text-muted-foreground">{t('shell.unsavedChanges')}</span>}
           <Button
             variant="primary"
             disabled={!dirty}
             loading={update.isPending}
             onClick={save}
           >
-            Сохранить
+            {tc('save')}
           </Button>
         </>
       }
     >
       <div className="divide-y divide-border/50">
         <SettingRow
-          label="Кто может писать сообщения"
-          description="Личные сообщения от пользователей вне списка будут скрыты."
+          label={t('privacy.whoCanMessageLabel')}
+          description={t('privacy.whoCanMessageDescription')}
           control={
             <Select
-              aria-label="Кто может писать сообщения"
-              options={VISIBILITY_OPTIONS}
+              aria-label={t('privacy.whoCanMessageLabel')}
+              options={visibilityOptions}
               value={draft.whoCanMessage}
               onChange={(e) =>
                 setDraft((d) => ({ ...d, whoCanMessage: e.target.value as PrivacySettings['whoCanMessage'] }))
@@ -79,12 +85,12 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
           }
         />
         <SettingRow
-          label="Кто может звонить"
-          description="Входящие звонки от остальных будут отклоняться."
+          label={t('privacy.whoCanCallLabel')}
+          description={t('privacy.whoCanCallDescription')}
           control={
             <Select
-              aria-label="Кто может звонить"
-              options={VISIBILITY_OPTIONS}
+              aria-label={t('privacy.whoCanCallLabel')}
+              options={visibilityOptions}
               value={draft.whoCanCall}
               onChange={(e) =>
                 setDraft((d) => ({ ...d, whoCanCall: e.target.value as PrivacySettings['whoCanCall'] }))
@@ -93,11 +99,11 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
           }
         />
         <SettingRow
-          label="Кто видит профиль"
+          label={t('privacy.whoCanViewProfileLabel')}
           control={
             <Select
-              aria-label="Кто видит профиль"
-              options={VISIBILITY_OPTIONS}
+              aria-label={t('privacy.whoCanViewProfileLabel')}
+              options={visibilityOptions}
               value={draft.whoCanViewProfile}
               onChange={(e) =>
                 setDraft((d) => ({
@@ -109,9 +115,9 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
           }
         />
         <SettingRow
-          label="Показывать статус «в сети»"
+          label={t('privacy.showOnlineLabel')}
           htmlFor={onlineId}
-          description="Другие будут видеть, когда ты онлайн."
+          description={t('privacy.showOnlineDescription')}
           control={
             <Switch
               id={onlineId}

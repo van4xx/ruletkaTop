@@ -12,6 +12,7 @@
  *      balance until it updates.
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { CoinPackage } from '@ruletka/shared-types';
 
@@ -48,6 +49,7 @@ export interface UseBuyCoinsResult {
  * machine the page renders against.
  */
 export function useBuyCoins(): UseBuyCoinsResult {
+  const t = useTranslations('economy');
   const [phase, setPhase] = useState<CheckoutPhase>('idle');
   const [activePackage, setActivePackage] = useState<CoinPackage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,18 +95,18 @@ export function useBuyCoins(): UseBuyCoinsResult {
                   void pollBalance(balanceBefore).then(() => setPhase('credited'));
                 },
                 onFail: (reason) => {
-                  setError(reason || 'Платёж не прошёл');
+                  setError(reason || t('coinsHook.paymentFailed'));
                   setPhase('error');
                 },
               },
             );
           } catch (e) {
-            setError(e instanceof Error ? e.message : 'Не удалось открыть оплату');
+            setError(e instanceof Error ? e.message : t('coinsHook.openFailed'));
             setPhase('error');
           }
         },
         onError: (e) => {
-          setError(e instanceof Error ? e.message : 'Не удалось начать оплату');
+          setError(e instanceof Error ? e.message : t('coinsHook.startFailed'));
           setPhase('error');
         },
       },

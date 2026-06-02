@@ -43,6 +43,11 @@ export function RegisterForm() {
   const t = useTranslations('auth');
   const registerMutation = useRegister();
 
+  // Localized option labels for the segmented controls (the option arrays carry
+  // stable `labelKey`s; resolve them here against the `auth` namespace).
+  const genderOptions = GENDER_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }));
+  const localeOptions = LOCALE_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }));
+
   // CAPTCHA token (Cloudflare Turnstile). Held outside RHF since it's not a
   // user-typed field — it's injected into the submit payload. When no site key
   // is configured the widget renders nothing and this stays null (dev no-op).
@@ -70,6 +75,21 @@ export function RegisterForm() {
   });
 
   const passwordValue = watch('password');
+
+  // The birthDate validators emit stable `validation.*` keys; resolve the active
+  // one (interpolating {minAge}). Unknown/empty → undefined (no error shown).
+  const VALIDATION_KEYS = new Set([
+    'validation.birthRequired',
+    'validation.birthInvalid',
+    'validation.birthFuture',
+    'validation.birthTooYoung',
+  ]);
+  const birthErrorRaw = errors.birthDate?.message;
+  const birthError = birthErrorRaw
+    ? VALIDATION_KEYS.has(birthErrorRaw)
+      ? t(birthErrorRaw, { minAge: MIN_AGE })
+      : birthErrorRaw
+    : undefined;
 
   const onSubmit = handleSubmit((values) => {
     // Attach the Turnstile token when present; omit the key entirely otherwise
@@ -176,7 +196,7 @@ export function RegisterForm() {
                 <SegmentedControl
                   id={field.id}
                   aria-label={t('register.gender')}
-                  options={GENDER_OPTIONS}
+                  options={genderOptions}
                   value={value}
                   onChange={onChange}
                 />
@@ -186,7 +206,7 @@ export function RegisterForm() {
         </FormField>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <FormField label={t('register.birthDate')} required error={errors.birthDate?.message}>
+          <FormField label={t('register.birthDate')} required error={birthError}>
             {(field) => (
               <Input
                 {...field}
@@ -207,7 +227,7 @@ export function RegisterForm() {
                   <SegmentedControl
                     id={field.id}
                     aria-label={t('register.locale')}
-                    options={LOCALE_OPTIONS}
+                    options={localeOptions}
                     value={value ?? 'ru'}
                     onChange={onChange}
                   />

@@ -3,6 +3,31 @@
     "errorTitle": "Something went wrong",
     "errorDescription": "We couldn't load the data. Please try again."
   },
+  "rarity": {
+    "common": "Common",
+    "rare": "Rare",
+    "epic": "Epic",
+    "legendary": "Legendary"
+  },
+  "coinsHook": {
+    "paymentFailed": "Payment didn't go through",
+    "openFailed": "Couldn't open the payment window",
+    "startFailed": "Couldn't start the payment"
+  },
+  "timeLeft": {
+    "expired": "expired",
+    "daysHours": "{days}d {hours}h",
+    "days": "{days}d",
+    "hoursMinutes": "{hours}h {mins}m",
+    "minutes": "{mins}m"
+  },
+  "premiumHook": {
+    "widgetNotConfigured": "The payment widget isn't configured (NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID is missing).",
+    "widgetDescription": "Premium · {plan}",
+    "paymentFailed": "Payment didn't go through",
+    "openFailed": "Couldn't open the payment window",
+    "subscribeFailed": "Couldn't set up the subscription"
+  },
   "balanceHero": {
     "label": "Your balance",
     "coinsSuffix": "coins",

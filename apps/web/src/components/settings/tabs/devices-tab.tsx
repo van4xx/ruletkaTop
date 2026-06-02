@@ -10,6 +10,7 @@
  * granted (labels hidden), and no devices found.
  */
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Camera, Mic, MonitorSmartphone, ShieldAlert, Video } from 'lucide-react';
 import type { DeviceSettings, Settings } from '@ruletka/shared-types';
 import { Button, toast } from '@ruletka/ui';
@@ -17,9 +18,9 @@ import { useDevices } from '@/features/settings/use-devices';
 import { useUpdateSettings } from '@/features/settings/use-settings';
 import { SettingRow, SettingsSection, Select, type SelectOption } from '../primitives';
 
-const AUTO: SelectOption = { value: '', label: 'По умолчанию' };
-
 export function DevicesTab({ settings }: { settings: Settings }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const { cameras, microphones, permission, supported, loading, error, requestPermission } =
     useDevices();
   const update = useUpdateSettings();
@@ -37,28 +38,29 @@ export function DevicesTab({ settings }: { settings: Settings }) {
     update.mutate(
       { devices: draft },
       {
-        onSuccess: () => toast.success('Устройства сохранены'),
-        onError: (e) => toast.error('Не удалось сохранить', { description: e.message }),
+        onSuccess: () => toast.success(t('devices.saved')),
+        onError: (e) => toast.error(t('devices.saveError'), { description: e.message }),
       },
     );
   };
 
-  const cameraOptions: SelectOption[] = [AUTO, ...cameras.map((c) => ({ value: c.deviceId, label: c.label }))];
-  const micOptions: SelectOption[] = [AUTO, ...microphones.map((m) => ({ value: m.deviceId, label: m.label }))];
+  const auto: SelectOption = { value: '', label: t('devices.auto') };
+  const cameraOptions: SelectOption[] = [auto, ...cameras.map((c) => ({ value: c.deviceId, label: c.label }))];
+  const micOptions: SelectOption[] = [auto, ...microphones.map((m) => ({ value: m.deviceId, label: m.label }))];
 
   return (
     <SettingsSection
-      title="Камера и микрофон"
-      description="Выбери устройства по умолчанию для видео- и голосовых звонков."
+      title={t('devices.title')}
+      description={t('devices.description')}
       icon={<MonitorSmartphone />}
       footer={
         supported && !labelsHidden ? (
           <>
             {dirty && (
-              <span className="mr-auto text-xs text-muted-foreground">Есть несохранённые изменения</span>
+              <span className="mr-auto text-xs text-muted-foreground">{t('shell.unsavedChanges')}</span>
             )}
             <Button variant="primary" disabled={!dirty} loading={update.isPending} onClick={save}>
-              Сохранить
+              {tc('save')}
             </Button>
           </>
         ) : undefined
@@ -68,7 +70,7 @@ export function DevicesTab({ settings }: { settings: Settings }) {
         <div className="flex flex-col items-center gap-2 py-8 text-center">
           <ShieldAlert className="h-8 w-8 text-warning" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
-            Твой браузер не поддерживает выбор медиаустройств.
+            {t('devices.unsupported')}
           </p>
         </div>
       ) : labelsHidden ? (
@@ -77,13 +79,13 @@ export function DevicesTab({ settings }: { settings: Settings }) {
             <Video className="h-6 w-6 text-[var(--color-neon-violet)]" aria-hidden="true" />
           </span>
           <div className="max-w-xs space-y-1">
-            <p className="text-sm font-medium text-foreground">Разреши доступ к камере и микрофону</p>
+            <p className="text-sm font-medium text-foreground">{t('devices.permissionTitle')}</p>
             <p className="text-xs text-muted-foreground">
-              Это нужно, чтобы показать названия твоих устройств. Доступ освобождается сразу.
+              {t('devices.permissionDescription')}
             </p>
           </div>
           <Button variant="secondary" onClick={requestPermission}>
-            Разрешить доступ
+            {t('devices.permissionCta')}
           </Button>
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
@@ -93,13 +95,13 @@ export function DevicesTab({ settings }: { settings: Settings }) {
             label={
               <span className="inline-flex items-center gap-2">
                 <Camera className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
-                Камера
+                {t('devices.cameraLabel')}
               </span>
             }
-            description={loading ? 'Обновление списка…' : `Найдено: ${cameras.length}`}
+            description={loading ? t('devices.refreshing') : t('devices.found', { count: cameras.length })}
             control={
               <Select
-                aria-label="Камера по умолчанию"
+                aria-label={t('devices.cameraSelectAria')}
                 options={cameraOptions}
                 value={draft.preferredCameraId ?? ''}
                 onChange={(e) =>
@@ -112,13 +114,13 @@ export function DevicesTab({ settings }: { settings: Settings }) {
             label={
               <span className="inline-flex items-center gap-2">
                 <Mic className="h-4 w-4 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-                Микрофон
+                {t('devices.micLabel')}
               </span>
             }
-            description={loading ? 'Обновление списка…' : `Найдено: ${microphones.length}`}
+            description={loading ? t('devices.refreshing') : t('devices.found', { count: microphones.length })}
             control={
               <Select
-                aria-label="Микрофон по умолчанию"
+                aria-label={t('devices.micSelectAria')}
                 options={micOptions}
                 value={draft.preferredMicId ?? ''}
                 onChange={(e) => setDraft((d) => ({ ...d, preferredMicId: e.target.value || null }))}

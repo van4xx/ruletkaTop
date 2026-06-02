@@ -16,6 +16,7 @@
  */
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { toast } from '@ruletka/ui';
 import type { ModerationActionPayload, ModerationLabel } from '@ruletka/shared-types';
 
@@ -23,31 +24,34 @@ import { useSocketEvent } from '@/features/chat/lib/use-socket';
 import { useAuth } from '@/features/auth';
 import { useModal } from '@/lib/stores/modal-store';
 
-/** Russian copy for each moderation label, for human-readable toasts/modals. */
-const LABEL_RU: Record<ModerationLabel, string> = {
-  nudity: 'обнажение',
-  sexual: 'сексуальный контент',
-  violence: 'насилие',
-  minor: 'несовершеннолетний в кадре',
-  safe: 'нарушение',
-  other: 'нарушение правил',
+/** Translator shape compatible with next-intl's `useTranslations('misc')`. */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+/** `misc.moderation.*` key for each moderation label's inline human-readable copy. */
+const LABEL_KEYS: Record<ModerationLabel, string> = {
+  nudity: 'moderation.labelNudityInline',
+  sexual: 'moderation.labelSexualInline',
+  violence: 'moderation.labelViolenceInline',
+  minor: 'moderation.labelMinorInline',
+  safe: 'moderation.labelViolationInline',
+  other: 'moderation.labelRulesInline',
 };
 
-function reasonText(p: ModerationActionPayload): string {
+function reasonText(p: ModerationActionPayload, t: Translate): string {
   if (p.reason && p.reason.trim()) return p.reason.trim();
-  if (p.label) return `Обнаружено: ${LABEL_RU[p.label]}.`;
-  return 'Нарушение правил сообщества.';
+  if (p.label) return t('moderation.reasonDetected', { label: t(LABEL_KEYS[p.label]) });
+  return t('moderation.reasonGeneric');
 }
 
-/** Format a ban expiry (unix seconds) into a short Russian hint, if temporary. */
-function banExpiryText(banExpiresAt?: number): string {
-  if (!banExpiresAt) return 'Аккаунт заблокирован.';
+/** Format a ban expiry (unix seconds) into a short localized hint, if temporary. */
+function banExpiryText(t: Translate, banExpiresAt?: number): string {
+  if (!banExpiresAt) return t('moderation.banPermanent');
   const ms = banExpiresAt * 1000 - Date.now();
-  if (ms <= 0) return 'Аккаунт заблокирован.';
+  if (ms <= 0) return t('moderation.banPermanent');
   const hours = Math.ceil(ms / 3_600_000);
-  if (hours < 48) return `Доступ ограничен на ~${hours} ч.`;
+  if (hours < 48) return t('moderation.banHours', { hours });
   const days = Math.ceil(hours / 24);
-  return `Доступ ограничен на ~${days} дн.`;
+  return t('moderation.banDays', { days });
 }
 
 export interface UseModerationActionOptions {
@@ -59,25 +63,26 @@ export interface UseModerationActionOptions {
 }
 
 export function useModerationAction({ onKick }: UseModerationActionOptions = {}): void {
+  const t = useTranslations('misc');
   const router = useRouter();
   const { logout } = useAuth();
   const { open } = useModal();
 
   const handle = useCallback(
     (payload: ModerationActionPayload) => {
-      const reason = reasonText(payload);
+      const reason = reasonText(payload, t);
 
       switch (payload.action) {
         case 'warn': {
-          toast.warning('Предупреждение модерации', {
-            description: `${reason} Продолжение нарушений приведёт к блокировке.`,
+          toast.warning(t('moderation.actionToastWarnTitle'), {
+            description: t('moderation.actionToastWarnDescription', { reason }),
             duration: 8000,
           });
           break;
         }
 
         case 'kick': {
-          toast.error('Звонок завершён модерацией', { description: reason, duration: 8000 });
+          toast.error(t('moderation.actionToastKickTitle'), { description: reason, duration: 8000 });
           onKick?.();
           break;
         }
@@ -87,10 +92,10 @@ export function useModerationAction({ onKick }: UseModerationActionOptions = {})
           // that signs the user out (their token is now invalid server-side).
           onKick?.();
           open('confirm', {
-            title: 'Аккаунт заблокирован',
-            body: `${reason} ${banExpiryText(payload.banExpiresAt)}`,
-            confirmLabel: 'Понятно',
-            cancelLabel: 'Закрыть',
+            title: t('moderation.banModalTitle'),
+            body: `${reason} ${banExpiryText(t, payload.banExpiresAt)}`,
+            confirmLabel: t('moderation.banModalConfirm'),
+            cancelLabel: t('moderation.banModalCancel'),
             danger: true,
             onConfirm: async () => {
               await logout();
@@ -114,7 +119,7 @@ export function useModerationAction({ onKick }: UseModerationActionOptions = {})
         }
       }
     },
-    [onKick, open, logout, router],
+    [onKick, open, logout, router, t],
   );
 
   useSocketEvent('mod:action', handle);

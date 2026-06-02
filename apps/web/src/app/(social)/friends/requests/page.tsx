@@ -63,6 +63,7 @@ type Tab = 'incoming' | 'outgoing';
 
 export default function FriendRequestsPage() {
   const t = useTranslations('social');
+  const tMisc = useTranslations('misc');
   const { isAuthenticated, isReady } = useAuth();
   const [tab, setTab] = useState<Tab>('incoming');
   const qc = useQueryClient();
@@ -195,6 +196,7 @@ export default function FriendRequestsPage() {
                         key={item.friendshipId}
                         item={item}
                         busy={busyId === item.friendshipId}
+                        tMisc={tMisc}
                         actions={
                           <>
                             <Button
@@ -267,6 +269,7 @@ export default function FriendRequestsPage() {
                         key={item.friendshipId}
                         item={item}
                         busy={busyId === item.friendshipId}
+                        tMisc={tMisc}
                         actions={
                           <>
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -303,10 +306,13 @@ function RequestRow({
   item,
   busy,
   actions,
+  tMisc,
 }: {
   item: FriendRequestItem;
   busy: boolean;
   actions: React.ReactNode;
+  /** `misc` translator so the relative timestamp is localized. */
+  tMisc: (key: string, values?: Record<string, string | number>) => string;
 }) {
   const { profile } = item;
   return (
@@ -332,7 +338,7 @@ function RequestRow({
           <ProfileBadges badges={profile.badges} iconOnly />
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground/80">
-          {formatRelativeTime(item.createdAt)}
+          {formatRelativeTime(item.createdAt, tMisc)}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">{actions}</div>

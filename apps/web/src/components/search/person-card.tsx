@@ -29,7 +29,6 @@ import { ApiClientError } from '@/lib/api';
 import { useSendFriendRequest } from '@/features/friends/use-friends';
 import { ProfileBadges } from '@/components/social/profile-badges';
 import { SendGiftDialog } from '@/components/profile/send-gift-dialog';
-import { GENDER_LABEL, ageLabel } from '@/components/profile/profile-meta';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -43,6 +42,7 @@ function MetaChip({ children }: { children: React.ReactNode }) {
 
 export function PersonCard({ profile, index = 0 }: { profile: PublicProfile; index?: number }) {
   const t = useTranslations('misc');
+  const tp = useTranslations('profile');
   const country = COUNTRY_BY_CODE.get(profile.country);
   const sendRequest = useSendFriendRequest();
   const [sent, setSent] = useState(false);
@@ -106,8 +106,8 @@ export function PersonCard({ profile, index = 0 }: { profile: PublicProfile; ind
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <MetaChip>{GENDER_LABEL[profile.gender]}</MetaChip>
-          <MetaChip>{ageLabel(profile.age)}</MetaChip>
+          <MetaChip>{tp(`gender.${profile.gender}`)}</MetaChip>
+          <MetaChip>{tp('age', { age: profile.age })}</MetaChip>
           <MetaChip>
             <span aria-hidden="true">{codeToFlag(profile.country)}</span>
             <span className="truncate">{country?.name ?? profile.country}</span>

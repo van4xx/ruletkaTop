@@ -11,7 +11,12 @@
 import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { normalizeInterest } from '@/features/profile/interests';
+import { normalizeInterest, SUGGESTED_INTERESTS } from '@/features/profile/interests';
+
+/** Map a normalized stored value back to its suggestion key, when curated. */
+const KEY_BY_NORMALIZED_VALUE = new Map(
+  SUGGESTED_INTERESTS.map((s) => [normalizeInterest(s.value), s.key]),
+);
 
 export function InterestChips({
   interests,
@@ -36,6 +41,13 @@ export function InterestChips({
   const overflow = interests.length - shown.length;
   const highlightKeys = new Set((highlight ?? []).map(normalizeInterest));
 
+  /** Localized label for a stored tag — curated tags get a catalogue label,
+   *  free-form tags fall back to the raw (user-typed) value. */
+  const labelFor = (tag: string): string => {
+    const key = KEY_BY_NORMALIZED_VALUE.get(normalizeInterest(tag));
+    return key ? t(`interests.${key}`) : tag;
+  };
+
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
       {withLabel && (
@@ -56,7 +68,7 @@ export function InterestChips({
                 : 'bg-[var(--color-neon-violet)]/10 text-foreground/90 ring-[var(--color-neon-violet)]/25',
             )}
           >
-            {tag}
+            {labelFor(tag)}
           </span>
         );
       })}

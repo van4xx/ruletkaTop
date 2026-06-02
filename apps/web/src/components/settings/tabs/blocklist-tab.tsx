@@ -8,6 +8,7 @@
  * The blocks endpoint returns ids + timestamps only (no profile), so each row
  * shows a neutral avatar, a shortened id and the date it was blocked.
  */
+import { useTranslations } from 'next-intl';
 import { Ban, UserRoundX } from 'lucide-react';
 import type { Block } from '@ruletka/shared-types';
 import { Avatar, Button, Skeleton, toast } from '@ruletka/ui';
@@ -25,20 +26,22 @@ function shortId(id: string): string {
 }
 
 export function BlocklistTab() {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const { data: blocks, isLoading, isError, error, refetch } = useBlocks();
   const unblock = useUnblock();
 
   const handleUnblock = (block: Block) => {
     unblock.mutate(block.blockedUserId, {
-      onSuccess: () => toast.success('Пользователь разблокирован'),
-      onError: (e) => toast.error('Не удалось разблокировать', { description: e.message }),
+      onSuccess: () => toast.success(t('blocklist.unblocked')),
+      onError: (e) => toast.error(t('blocklist.unblockError'), { description: e.message }),
     });
   };
 
   return (
     <SettingsSection
-      title="Чёрный список"
-      description="Заблокированные не могут писать тебе, звонить или находить тебя в поиске."
+      title={t('blocklist.title')}
+      description={t('blocklist.description')}
       icon={<Ban />}
     >
       {isLoading ? (
@@ -57,10 +60,10 @@ export function BlocklistTab() {
       ) : isError ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
           <p className="text-sm text-muted-foreground">
-            {error?.message ?? 'Не удалось загрузить чёрный список.'}
+            {error?.message ?? t('blocklist.loadError')}
           </p>
           <Button variant="secondary" size="sm" onClick={() => refetch()}>
-            Повторить
+            {tc('retry')}
           </Button>
         </div>
       ) : !blocks || blocks.length === 0 ? (
@@ -69,9 +72,9 @@ export function BlocklistTab() {
             <UserRoundX className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
           </span>
           <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Список пуст</p>
+            <p className="text-sm font-medium text-foreground">{t('blocklist.emptyTitle')}</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Ты ещё никого не блокировал. Заблокировать собеседника можно прямо во время звонка.
+              {t('blocklist.emptyDescription')}
             </p>
           </div>
         </div>
@@ -82,7 +85,7 @@ export function BlocklistTab() {
               <Avatar size="md" alt={block.blockedUserId} fallback={<Ban className="h-4 w-4" />} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-sm text-foreground">{shortId(block.blockedUserId)}</p>
-                <p className="text-xs text-muted-foreground">Заблокирован {formatDate(block.createdAt)}</p>
+                <p className="text-xs text-muted-foreground">{t('blocklist.blockedOn', { date: formatDate(block.createdAt) })}</p>
               </div>
               <Button
                 variant="outline"
@@ -90,7 +93,7 @@ export function BlocklistTab() {
                 onClick={() => handleUnblock(block)}
                 loading={unblock.isPending && unblock.variables === block.blockedUserId}
               >
-                Разблокировать
+                {t('blocklist.unblock')}
               </Button>
             </li>
           ))}

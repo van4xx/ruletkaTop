@@ -8,10 +8,11 @@
  * NOTE: targets `POST /auth/change-password` — see the integrator notes if the
  * backend hasn't shipped this endpoint yet.
  */
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslations } from 'next-intl';
 import { CircleAlert } from 'lucide-react';
 import { passwordSchema } from '@ruletka/shared-types';
 import {
@@ -29,25 +30,37 @@ import { useChangePassword } from '@/features/settings/use-settings';
 import { FormField } from '@/components/auth/form-field';
 import { PasswordField } from '@/components/auth/password-field';
 
-const schema = z
-  .object({
-    currentPassword: z.string().min(1, 'Введите текущий пароль'),
-    newPassword: passwordSchema,
-    confirmPassword: z.string(),
-  })
-  .refine((v) => v.newPassword === v.confirmPassword, {
-    message: 'Пароли не совпадают',
-    path: ['confirmPassword'],
-  })
-  .refine((v) => v.newPassword !== v.currentPassword, {
-    message: 'Новый пароль должен отличаться',
-    path: ['newPassword'],
-  });
-type FormValues = z.infer<typeof schema>;
+interface FormValues {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
 
 export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const [open, setOpen] = useState(false);
   const changePassword = useChangePassword();
+
+  // Built inside the component so validation messages can be localized.
+  const schema = useMemo(
+    () =>
+      z
+        .object({
+          currentPassword: z.string().min(1, t('password.errors.currentRequired')),
+          newPassword: passwordSchema,
+          confirmPassword: z.string(),
+        })
+        .refine((v) => v.newPassword === v.confirmPassword, {
+          message: t('password.errors.mismatch'),
+          path: ['confirmPassword'],
+        })
+        .refine((v) => v.newPassword !== v.currentPassword, {
+          message: t('password.errors.mustDiffer'),
+          path: ['newPassword'],
+        }),
+    [t],
+  );
 
   const {
     register,
@@ -73,7 +86,7 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
       { currentPassword: values.currentPassword, newPassword: values.newPassword },
       {
         onSuccess: () => {
-          toast.success('Пароль изменён');
+          toast.success(t('password.saved'));
           onOpenChange(false);
         },
       },
@@ -82,7 +95,7 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
 
   const apiMessage =
     changePassword.error?.status === 401 || changePassword.error?.status === 400
-      ? 'Текущий пароль неверный'
+      ? t('password.errors.currentInvalid')
       : changePassword.error?.message;
 
   return (
@@ -90,9 +103,9 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Смена пароля</DialogTitle>
+          <DialogTitle>{t('password.title')}</DialogTitle>
           <DialogDescription>
-            Введите текущий пароль и новый — не короче 8 символов.
+            {t('password.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -107,13 +120,13 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
             </div>
           )}
 
-          <FormField label="Текущий пароль" required error={errors.currentPassword?.message}>
+          <FormField label={t('password.currentLabel')} required error={errors.currentPassword?.message}>
             {(field) => (
               <PasswordField {...field} autoComplete="current-password" {...register('currentPassword')} />
             )}
           </FormField>
 
-          <FormField label="Новый пароль" required error={errors.newPassword?.message}>
+          <FormField label={t('password.newLabel')} required error={errors.newPassword?.message}>
             {(field) => (
               <PasswordField
                 {...field}
@@ -125,7 +138,7 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
             )}
           </FormField>
 
-          <FormField label="Повторите новый пароль" required error={errors.confirmPassword?.message}>
+          <FormField label={t('password.confirmLabel')} required error={errors.confirmPassword?.message}>
             {(field) => (
               <PasswordField {...field} autoComplete="new-password" {...register('confirmPassword')} />
             )}
@@ -133,10 +146,10 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Отмена
+              {tc('cancel')}
             </Button>
             <Button type="submit" variant="primary" loading={changePassword.isPending}>
-              Сменить пароль
+              {t('password.submit')}
             </Button>
           </DialogFooter>
         </form>

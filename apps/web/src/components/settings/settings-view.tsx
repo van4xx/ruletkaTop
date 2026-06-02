@@ -13,6 +13,7 @@
  */
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import {
   Ban,
   Bell,
@@ -34,13 +35,13 @@ import { BlocklistTab } from './tabs/blocklist-tab';
 import { DangerTab } from './tabs/danger-tab';
 
 const TABS = [
-  { value: 'account', label: 'Аккаунт', icon: UserRound },
-  { value: 'privacy', label: 'Приватность', icon: ShieldCheck },
-  { value: 'notifications', label: 'Уведомления', icon: Bell },
-  { value: 'devices', label: 'Устройства', icon: MonitorSmartphone },
-  { value: 'appearance', label: 'Оформление', icon: Palette },
-  { value: 'blocklist', label: 'Чёрный список', icon: Ban },
-  { value: 'danger', label: 'Опасная зона', icon: TriangleAlert },
+  { value: 'account', icon: UserRound },
+  { value: 'privacy', icon: ShieldCheck },
+  { value: 'notifications', icon: Bell },
+  { value: 'devices', icon: MonitorSmartphone },
+  { value: 'appearance', icon: Palette },
+  { value: 'blocklist', icon: Ban },
+  { value: 'danger', icon: TriangleAlert },
 ] as const;
 
 type TabValue = (typeof TABS)[number]['value'];
@@ -64,6 +65,8 @@ function SettingsSkeleton() {
 }
 
 export function SettingsView() {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const settingsQuery = useSettings();
   const [active, setActive] = useState<TabValue>('account');
 
@@ -89,10 +92,10 @@ export function SettingsView() {
       return (
         <div className="glass-panel flex flex-col items-center gap-3 rounded-2xl py-12 text-center">
           <p className="text-sm text-muted-foreground">
-            {settingsQuery.error?.message ?? 'Не удалось загрузить настройки.'}
+            {settingsQuery.error?.message ?? t('shell.loadError')}
           </p>
           <Button variant="secondary" size="sm" onClick={() => settingsQuery.refetch()}>
-            Повторить
+            {tc('retry')}
           </Button>
         </div>
       );
@@ -111,7 +114,7 @@ export function SettingsView() {
             '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
           )}
         >
-          {TABS.map(({ value, label, icon: Icon }) => (
+          {TABS.map(({ value, icon: Icon }) => (
             <TabsTrigger
               key={value}
               value={value}
@@ -124,7 +127,7 @@ export function SettingsView() {
               )}
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {label}
+              {t(`shell.tabs.${value}`)}
             </TabsTrigger>
           ))}
         </TabsList>

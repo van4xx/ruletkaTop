@@ -30,6 +30,7 @@ export async function loadMessages(locale: Locale): Promise<Messages> {
       roulette: (await import('../../messages/en/roulette.json')).default,
       chrome: (await import('../../messages/en/chrome.json')).default,
       misc: (await import('../../messages/en/misc.json')).default,
+      settings: (await import('../../messages/en/settings.json')).default,
     };
   }
   // ru — the default locale and the fallback for any missing message.
@@ -46,5 +47,6 @@ export async function loadMessages(locale: Locale): Promise<Messages> {
     roulette: (await import('../../messages/ru/roulette.json')).default,
     chrome: (await import('../../messages/ru/chrome.json')).default,
     misc: (await import('../../messages/ru/misc.json')).default,
+    settings: (await import('../../messages/ru/settings.json')).default,
   };
 }

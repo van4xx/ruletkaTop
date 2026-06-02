@@ -106,5 +106,67 @@
   "retry": "Try again",
   "signInRequiredDescription": "Sign in to your account to continue.",
   "signInRequiredTitle": "Sign-in required",
-  "goHome": "Go home"
+  "goHome": "Go home",
+
+  "relativeTime": {
+    "yesterday": "yesterday",
+    "today": "Today",
+    "yesterdayCap": "Yesterday",
+    "daysShort": "{count}d"
+  },
+
+  "chatsClient": {
+    "signInDescription": "Sign in to read and send messages.",
+    "newChat": "New chat",
+    "newChatWith": "New chat with {name}",
+    "sendFirstMessage": "Send the first message to get started.",
+    "searchPlaceholder": "Search chats",
+    "emptyTitle": "No messages yet",
+    "emptyDescription": "Start chatting with friends or people you meet in the roulette — your conversations will show up here.",
+    "toFriends": "Go to friends",
+    "notFoundTitle": "Nothing found",
+    "notFoundDescription": "Try a different search."
+  },
+
+  "chatThread": {
+    "signInDescription": "Sign in to open this conversation.",
+    "backToChats": "Back to chats",
+    "unavailableForCall": "Unavailable for a call",
+    "typingInline": "typing…",
+    "loadMessagesError": "Couldn't load messages.",
+    "loadingHistory": "Loading history",
+    "startConversation": "Start the conversation",
+    "conversationStart": "This is the beginning of your conversation. Say hi!",
+    "conversationStartWith": "This is the beginning of your conversation with {name}. Say hi!",
+    "jumpToLatest": "Jump to latest messages",
+    "statusOnlineLower": "online",
+    "statusOfflineLower": "offline",
+    "statusInCallLower": "in a call",
+    "statusAwayLower": "away"
+  },
+
+  "friendsClient": {
+    "removedToast": "{name} removed from friends",
+    "removeFailed": "Couldn't remove from friends",
+    "blockedToast": "{name} blocked",
+    "blockFailed": "Couldn't block the user",
+    "signInDescription": "Sign in to see your friends list and requests.",
+    "tabAll": "All",
+    "tabOnline": "Online",
+    "searchPlaceholder": "Search by nickname",
+    "searchAria": "Search friends",
+    "emptyTitle": "No friends yet",
+    "emptyDescription": "Meet people in the roulette and add the ones you like — they'll show up here.",
+    "toVideoRoulette": "Open video roulette",
+    "addById": "Add by ID",
+    "notFoundTitle": "Nobody found",
+    "notFoundDescription": "Try a different search.",
+    "noOnlineDescription": "None of your friends are online right now.",
+    "blockDialogTitle": "Block this user?",
+    "removeDialogTitle": "Remove from friends?",
+    "blockDialogDescription": "<name></name> will no longer be able to message or call you. The friendship will be ended.",
+    "removeDialogDescription": "Are you sure you want to remove <name></name> from your friends?",
+    "blockConfirm": "Block",
+    "removeConfirm": "Remove"
+  }
 }

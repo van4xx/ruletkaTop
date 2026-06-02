@@ -21,6 +21,7 @@
  * Uint8Array from a base64url VAPID public key) follow the MDN spec.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { PushSubscriptionDto } from '@ruletka/shared-types';
 import { notificationsApi } from './api';
 
@@ -82,6 +83,7 @@ function toDto(sub: PushSubscription): PushSubscriptionDto {
 }
 
 export function useWebPush(): UseWebPushResult {
+  const t = useTranslations('settings');
   // `supported` requires BOTH a configured VAPID key and browser capability.
   const configured = Boolean(VAPID_PUBLIC_KEY);
   const [supported, setSupported] = useState(false);
@@ -134,7 +136,7 @@ export function useWebPush(): UseWebPushResult {
       const perm = await Notification.requestPermission();
       setPermission(perm as PushPermission);
       if (perm !== 'granted') {
-        setError(perm === 'denied' ? 'Уведомления заблокированы в браузере.' : null);
+        setError(perm === 'denied' ? t('notifications.pushBlocked') : null);
         return;
       }
       const reg = await getRegistration();
@@ -148,11 +150,11 @@ export function useWebPush(): UseWebPushResult {
       await notificationsApi.subscribePush(toDto(sub));
       setSubscribed(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось включить push-уведомления.');
+      setError(e instanceof Error ? e.message : t('notifications.pushEnableError'));
     } finally {
       setBusy(false);
     }
-  }, [supported, getRegistration]);
+  }, [supported, getRegistration, t]);
 
   const disable = useCallback(async () => {
     if (!supported) return;
@@ -173,11 +175,11 @@ export function useWebPush(): UseWebPushResult {
       }
       setSubscribed(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось отключить push-уведомления.');
+      setError(e instanceof Error ? e.message : t('notifications.pushDisableError'));
     } finally {
       setBusy(false);
     }
-  }, [supported, getRegistration]);
+  }, [supported, getRegistration, t]);
 
   return { supported, subscribed, permission, busy, error, enable, disable };
 }

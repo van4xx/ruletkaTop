@@ -6,6 +6,7 @@
  * the remove/block mutations (with confirmation + toasts).
  */
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Search, Users, UserX } from 'lucide-react';
 import type { FriendSummary, OnlineStatus } from '@ruletka/shared-types';
@@ -39,6 +40,8 @@ type Filter = 'all' | 'online';
 const ONLINE_RANK: Record<OnlineStatus, number> = { online: 0, in_call: 1, away: 2, offline: 3 };
 
 export function FriendsClient() {
+  const t = useTranslations('social');
+  const tc = useTranslations('common');
   const { isAuthenticated, isReady } = useAuth();
   const friendsQuery = useFriends();
   const removeFriendship = useRemoveFriendship();
@@ -87,8 +90,8 @@ export function FriendsClient() {
     const { friendshipId, name } = pending;
     setPending(null);
     removeFriendship.mutate(friendshipId, {
-      onSuccess: () => toast.success(`${name} удалён из друзей`),
-      onError: () => toast.error('Не удалось удалить из друзей'),
+      onSuccess: () => toast.success(t('friendsClient.removedToast', { name })),
+      onError: () => toast.error(t('friendsClient.removeFailed')),
     });
   }
 
@@ -100,15 +103,15 @@ export function FriendsClient() {
       onSuccess: () => {
         // Blocking also removes the friendship server-side; drop it locally too.
         removeFriendship.mutate(friendshipId);
-        toast.success(`${name} заблокирован`);
+        toast.success(t('friendsClient.blockedToast', { name }));
       },
-      onError: () => toast.error('Не удалось заблокировать пользователя'),
+      onError: () => toast.error(t('friendsClient.blockFailed')),
     });
   }
 
   // ── Auth gate ──
   if (isReady && !isAuthenticated) {
-    return <SignInRequired description="Войдите, чтобы видеть список друзей и заявки." />;
+    return <SignInRequired description={t('friendsClient.signInDescription')} />;
   }
 
   return (
@@ -124,9 +127,9 @@ export function FriendsClient() {
         <div className="flex items-center gap-3">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
             <TabsList>
-              <TabsTrigger value="all">Все</TabsTrigger>
+              <TabsTrigger value="all">{t('friendsClient.tabAll')}</TabsTrigger>
               <TabsTrigger value="online">
-                В сети
+                {t('friendsClient.tabOnline')}
                 {onlineCount > 0 && (
                   <span className="ml-1.5 rounded-full bg-success/20 px-1.5 text-[0.6875rem] font-semibold text-success">
                     {onlineCount}
@@ -141,10 +144,10 @@ export function FriendsClient() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск по нику"
+            placeholder={t('friendsClient.searchPlaceholder')}
             leadingIcon={<Search className="h-4 w-4" />}
             wrapperClassName="w-full sm:w-56"
-            aria-label="Поиск друзей"
+            aria-label={t('friendsClient.searchAria')}
           />
           <AddFriendDialog />
         </div>
@@ -158,17 +161,17 @@ export function FriendsClient() {
       ) : friends.length === 0 ? (
         <StatePanel
           icon={<Users className="h-7 w-7" />}
-          title="Пока нет друзей"
-          description="Знакомьтесь в рулетке и добавляйте понравившихся собеседников — они появятся здесь."
+          title={t('friendsClient.emptyTitle')}
+          description={t('friendsClient.emptyDescription')}
           action={
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button asChild variant="primary" size="sm">
-                <a href="/video">В видеорулетку</a>
+                <a href="/video">{t('friendsClient.toVideoRoulette')}</a>
               </Button>
               <AddFriendDialog
                 trigger={
                   <Button variant="outline" size="sm">
-                    Добавить по ID
+                    {t('friendsClient.addById')}
                   </Button>
                 }
               />
@@ -178,8 +181,12 @@ export function FriendsClient() {
       ) : visible.length === 0 ? (
         <StatePanel
           icon={<Search className="h-7 w-7" />}
-          title="Никого не нашлось"
-          description={filter === 'online' ? 'Сейчас никто из друзей не в сети.' : 'Попробуйте изменить запрос.'}
+          title={t('friendsClient.notFoundTitle')}
+          description={
+            filter === 'online'
+              ? t('friendsClient.noOnlineDescription')
+              : t('friendsClient.notFoundDescription')
+          }
         />
       ) : (
         <motion.ul layout className="space-y-3">
@@ -216,25 +223,27 @@ export function FriendsClient() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {pending?.kind === 'block' ? 'Заблокировать пользователя?' : 'Удалить из друзей?'}
+              {pending?.kind === 'block'
+                ? t('friendsClient.blockDialogTitle')
+                : t('friendsClient.removeDialogTitle')}
             </DialogTitle>
             <DialogDescription>
-              {pending?.kind === 'block' ? (
-                <>
-                  <span className="font-medium text-foreground">{pending?.name}</span> больше не сможет
-                  писать вам и звонить. Дружба будет разорвана.
-                </>
-              ) : (
-                <>
-                  Вы уверены, что хотите удалить{' '}
-                  <span className="font-medium text-foreground">{pending?.name}</span> из друзей?
-                </>
-              )}
+              {pending?.kind === 'block'
+                ? t.rich('friendsClient.blockDialogDescription', {
+                    name: () => (
+                      <span className="font-medium text-foreground">{pending?.name}</span>
+                    ),
+                  })
+                : t.rich('friendsClient.removeDialogDescription', {
+                    name: () => (
+                      <span className="font-medium text-foreground">{pending?.name}</span>
+                    ),
+                  })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setPending(null)}>
-              Отмена
+              {tc('cancel')}
             </Button>
             <Button
               variant="danger"
@@ -243,7 +252,9 @@ export function FriendsClient() {
               onClick={pending?.kind === 'block' ? confirmBlock : confirmRemove}
               className={cn(pending?.kind !== 'block' && 'bg-destructive')}
             >
-              {pending?.kind === 'block' ? 'Заблокировать' : 'Удалить'}
+              {pending?.kind === 'block'
+                ? t('friendsClient.blockConfirm')
+                : t('friendsClient.removeConfirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

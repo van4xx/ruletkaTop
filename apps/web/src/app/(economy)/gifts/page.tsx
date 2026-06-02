@@ -99,7 +99,7 @@ export default function GiftsPage() {
                       className="font-display text-lg font-bold tracking-tight"
                       style={{ color: style.color }}
                     >
-                      {style.label}
+                      {t(style.labelKey)}
                     </h2>
                     <Badge variant={style.badge} size="sm">
                       {list.length}

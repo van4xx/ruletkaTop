@@ -10,6 +10,7 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { CircleAlert, TriangleAlert } from 'lucide-react';
 import {
   Button,
@@ -31,6 +32,8 @@ import { disconnectSocket } from '@/lib/socket';
 import { SettingsSection } from '../primitives';
 
 export function DangerTab() {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const { user } = useAuth();
   const clear = useAuthStore((s) => s.clear);
   const router = useRouter();
@@ -54,43 +57,46 @@ export function DangerTab() {
     if (!canDelete) return;
     deleteAccount.mutate(undefined, {
       onSuccess: () => {
-        toast.success('Аккаунт удалён');
+        toast.success(t('danger.deleted'));
         clear();
         disconnectSocket();
         router.replace('/');
       },
-      onError: (e) => toast.error('Не удалось удалить аккаунт', { description: e.message }),
+      onError: (e) => toast.error(t('danger.deleteError'), { description: e.message }),
     });
   };
 
   return (
     <SettingsSection
-      title="Опасная зона"
-      description="Необратимые действия с аккаунтом."
+      title={t('danger.title')}
+      description={t('danger.description')}
       icon={<TriangleAlert />}
       className="border border-destructive/30"
     >
       <div className="flex flex-col gap-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">Удалить аккаунт</p>
+          <p className="text-sm font-semibold text-foreground">{t('danger.deleteHeading')}</p>
           <p className="max-w-md text-xs text-muted-foreground">
-            Профиль, друзья, переписки, монеты и история будут удалены безвозвратно. Это действие
-            нельзя отменить.
+            {t('danger.deleteDescription')}
           </p>
         </div>
 
         <Dialog open={open} onOpenChange={onOpenChange}>
           <DialogTrigger asChild>
             <Button variant="danger" className="shrink-0">
-              Удалить аккаунт
+              {t('danger.deleteButton')}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Удалить аккаунт навсегда?</DialogTitle>
+              <DialogTitle>{t('danger.dialogTitle')}</DialogTitle>
               <DialogDescription>
-                Чтобы подтвердить, введите свой никнейм{' '}
-                <span className="font-semibold text-foreground">{confirmTarget}</span> ниже.
+                {t.rich('danger.dialogDescription', {
+                  nickname: confirmTarget,
+                  strong: (chunks) => (
+                    <span className="font-semibold text-foreground">{chunks}</span>
+                  ),
+                })}
               </DialogDescription>
             </DialogHeader>
 
@@ -105,7 +111,7 @@ export function DangerTab() {
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="confirm-delete">Никнейм</Label>
+              <Label htmlFor="confirm-delete">{t('danger.nicknameLabel')}</Label>
               <Input
                 id="confirm-delete"
                 value={confirmText}
@@ -118,7 +124,7 @@ export function DangerTab() {
 
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Отмена
+                {tc('cancel')}
               </Button>
               <Button
                 type="button"
@@ -127,7 +133,7 @@ export function DangerTab() {
                 loading={deleteAccount.isPending}
                 onClick={handleDelete}
               >
-                Удалить навсегда
+                {t('danger.confirmDelete')}
               </Button>
             </DialogFooter>
           </DialogContent>

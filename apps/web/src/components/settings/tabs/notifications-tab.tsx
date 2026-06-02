@@ -6,6 +6,7 @@
  * Privacy tab. Category toggles dim when both delivery channels are off.
  */
 import { useEffect, useId, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Bell, Gift, Mail, MessageSquare, MonitorSmartphone, Smartphone, UserPlus } from 'lucide-react';
 import type { NotificationSettings, Settings } from '@ruletka/shared-types';
 import { Button, Switch, toast } from '@ruletka/ui';
@@ -20,6 +21,7 @@ import { SettingRow, SettingsSection } from '../primitives';
  * permission, the toggle is disabled with an explanatory hint.
  */
 function PushDeviceRow() {
+  const t = useTranslations('settings');
   const { supported, subscribed, permission, busy, error, enable, disable } = useWebPush();
   const id = useId();
 
@@ -28,22 +30,22 @@ function PushDeviceRow() {
 
   const denied = permission === 'denied';
   const description = denied
-    ? 'Разрешите уведомления в настройках браузера, чтобы включить.'
+    ? t('notifications.pushBrowserDescriptionDenied')
     : error
       ? error
-      : 'Получайте уведомления, даже когда вкладка закрыта.';
+      : t('notifications.pushBrowserDescriptionDefault');
 
   return (
     <div>
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Это устройство
+        {t('notifications.thisDeviceHeading')}
       </p>
       <div className="divide-y divide-border/50">
         <SettingRow
           label={
             <span className="inline-flex items-center gap-2">
               <MonitorSmartphone className="h-4 w-4 text-[var(--color-neon-magenta)]" aria-hidden="true" />
-              Push в этом браузере
+              {t('notifications.pushBrowserLabel')}
             </span>
           }
           htmlFor={id}
@@ -71,6 +73,8 @@ function sameNotif(a: NotificationSettings, b: NotificationSettings): boolean {
 }
 
 export function NotificationsTab({ settings }: { settings: Settings }) {
+  const t = useTranslations('settings');
+  const tc = useTranslations('common');
   const update = useUpdateSettings();
   const [draft, setDraft] = useState<NotificationSettings>(settings.notifications);
 
@@ -87,8 +91,8 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
     update.mutate(
       { notifications: draft },
       {
-        onSuccess: () => toast.success('Настройки уведомлений сохранены'),
-        onError: (e) => toast.error('Не удалось сохранить', { description: e.message }),
+        onSuccess: () => toast.success(t('notifications.saved')),
+        onError: (e) => toast.error(t('notifications.saveError'), { description: e.message }),
       },
     );
   };
@@ -101,14 +105,14 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
 
   return (
     <SettingsSection
-      title="Уведомления"
-      description="Выбери каналы доставки и события, о которых хочешь знать."
+      title={t('notifications.title')}
+      description={t('notifications.description')}
       icon={<Bell />}
       footer={
         <>
-          {dirty && <span className="mr-auto text-xs text-muted-foreground">Есть несохранённые изменения</span>}
+          {dirty && <span className="mr-auto text-xs text-muted-foreground">{t('shell.unsavedChanges')}</span>}
           <Button variant="primary" disabled={!dirty} loading={update.isPending} onClick={save}>
-            Сохранить
+            {tc('save')}
           </Button>
         </>
       }
@@ -116,18 +120,18 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
       <div className="space-y-6">
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Каналы
+            {t('notifications.channelsHeading')}
           </p>
           <div className="divide-y divide-border/50">
             <SettingRow
               label={
                 <span className="inline-flex items-center gap-2">
                   <Smartphone className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
-                  Push-уведомления
+                  {t('notifications.pushLabel')}
                 </span>
               }
               htmlFor={pushId}
-              description="В браузере и мобильном приложении."
+              description={t('notifications.pushDescription')}
               control={
                 <Switch
                   id={pushId}
@@ -140,11 +144,11 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
               label={
                 <span className="inline-flex items-center gap-2">
                   <Mail className="h-4 w-4 text-[var(--color-neon-cyan)]" aria-hidden="true" />
-                  Email-уведомления
+                  {t('notifications.emailLabel')}
                 </span>
               }
               htmlFor={emailId}
-              description="Сводки и важные события на почту."
+              description={t('notifications.emailDescription')}
               control={
                 <Switch
                   id={emailId}
@@ -160,14 +164,14 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
 
         <div className={channelsOff ? 'pointer-events-none opacity-50 transition-opacity' : 'transition-opacity'}>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            События
+            {t('notifications.eventsHeading')}
           </p>
           <div className="divide-y divide-border/50">
             <SettingRow
               label={
                 <span className="inline-flex items-center gap-2">
                   <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  Заявки в друзья
+                  {t('notifications.friendRequestsLabel')}
                 </span>
               }
               htmlFor={frId}
@@ -184,7 +188,7 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
               label={
                 <span className="inline-flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  Новые сообщения
+                  {t('notifications.messagesLabel')}
                 </span>
               }
               htmlFor={msgId}
@@ -201,7 +205,7 @@ export function NotificationsTab({ settings }: { settings: Settings }) {
               label={
                 <span className="inline-flex items-center gap-2">
                   <Gift className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  Подарки
+                  {t('notifications.giftsLabel')}
                 </span>
               }
               htmlFor={giftId}

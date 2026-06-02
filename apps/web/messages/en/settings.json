@@ -1,0 +1,161 @@
+{
+  "shell": {
+    "badge": "Settings",
+    "title": "Account management",
+    "subtitle": "Profile, privacy, notifications and devices — all in one place.",
+    "loadError": "Couldn't load settings.",
+    "unsavedChanges": "You have unsaved changes",
+    "tabs": {
+      "account": "Account",
+      "privacy": "Privacy",
+      "notifications": "Notifications",
+      "devices": "Devices",
+      "appearance": "Appearance",
+      "blocklist": "Blocklist",
+      "danger": "Danger zone"
+    }
+  },
+  "options": {
+    "visibility": {
+      "everyone": "Everyone",
+      "friends": "Friends only",
+      "nobody": "Nobody"
+    }
+  },
+  "account": {
+    "profile": {
+      "title": "Profile",
+      "description": "This is how other users see you.",
+      "avatarLabel": "Avatar URL",
+      "avatarHint": "Direct link to an image (https://…)",
+      "avatarPlaceholder": "https://…/avatar.jpg",
+      "nicknameLabel": "Nickname",
+      "statusLabel": "Status",
+      "statusHint": "Up to 140 characters",
+      "statusPlaceholder": "Tell others about yourself in one line",
+      "saved": "Profile updated",
+      "saveError": "Couldn't save",
+      "loadError": "Couldn't load profile."
+    },
+    "credentials": {
+      "title": "Account",
+      "description": "Sign-in details.",
+      "emailLabel": "Email",
+      "emailDescription": "Used to sign in. Contact support to change it.",
+      "passwordLabel": "Password",
+      "passwordDescription": "We recommend changing your password from time to time.",
+      "changePassword": "Change password"
+    }
+  },
+  "password": {
+    "title": "Change password",
+    "description": "Enter your current password and a new one — at least 8 characters.",
+    "currentLabel": "Current password",
+    "newLabel": "New password",
+    "confirmLabel": "Repeat new password",
+    "submit": "Change password",
+    "saved": "Password changed",
+    "errors": {
+      "currentRequired": "Enter your current password",
+      "mismatch": "Passwords don't match",
+      "mustDiffer": "The new password must be different",
+      "currentInvalid": "Current password is incorrect"
+    }
+  },
+  "privacy": {
+    "title": "Privacy",
+    "description": "Control who can reach you and see your profile.",
+    "saved": "Privacy settings saved",
+    "saveError": "Couldn't save",
+    "whoCanMessageLabel": "Who can message you",
+    "whoCanMessageDescription": "Direct messages from users outside the list will be hidden.",
+    "whoCanCallLabel": "Who can call you",
+    "whoCanCallDescription": "Incoming calls from everyone else will be declined.",
+    "whoCanViewProfileLabel": "Who can see your profile",
+    "showOnlineLabel": "Show online status",
+    "showOnlineDescription": "Others will see when you're online."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "description": "Choose delivery channels and the events you want to hear about.",
+    "saved": "Notification settings saved",
+    "saveError": "Couldn't save",
+    "channelsHeading": "Channels",
+    "eventsHeading": "Events",
+    "thisDeviceHeading": "This device",
+    "pushLabel": "Push notifications",
+    "pushDescription": "In the browser and the mobile app.",
+    "emailLabel": "Email notifications",
+    "emailDescription": "Digests and important events by email.",
+    "pushBrowserLabel": "Push in this browser",
+    "pushBrowserDescriptionDefault": "Get notifications even when the tab is closed.",
+    "pushBrowserDescriptionDenied": "Allow notifications in your browser settings to enable this.",
+    "friendRequestsLabel": "Friend requests",
+    "messagesLabel": "New messages",
+    "giftsLabel": "Gifts",
+    "pushBlocked": "Notifications are blocked in your browser.",
+    "pushEnableError": "Couldn't enable push notifications.",
+    "pushDisableError": "Couldn't disable push notifications."
+  },
+  "devices": {
+    "title": "Camera and microphone",
+    "description": "Choose default devices for video and voice calls.",
+    "saved": "Devices saved",
+    "saveError": "Couldn't save",
+    "auto": "Default",
+    "unsupported": "Your browser doesn't support selecting media devices.",
+    "permissionTitle": "Allow camera and microphone access",
+    "permissionDescription": "This is needed to show your device names. Access is released right away.",
+    "permissionCta": "Allow access",
+    "cameraLabel": "Camera",
+    "cameraSelectAria": "Default camera",
+    "micLabel": "Microphone",
+    "micSelectAria": "Default microphone",
+    "refreshing": "Refreshing list…",
+    "found": "Found: {count}",
+    "cameraFallback": "Camera",
+    "micFallback": "Microphone",
+    "errors": {
+      "enumerate": "Couldn't get the list of devices",
+      "permissionDenied": "Camera and microphone access denied",
+      "accessFailed": "Couldn't access the devices"
+    }
+  },
+  "appearance": {
+    "title": "Appearance",
+    "description": "Interface theme and language. The theme applies instantly.",
+    "themeHeading": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "themeSaveError": "Couldn't save theme",
+    "localeLabel": "Interface language",
+    "localeDescription": "Applies on the next reload.",
+    "localeSaved": "Language saved",
+    "localeSaveError": "Couldn't save"
+  },
+  "blocklist": {
+    "title": "Blocklist",
+    "description": "Blocked users can't message you, call you, or find you in search.",
+    "loadError": "Couldn't load the blocklist.",
+    "emptyTitle": "The list is empty",
+    "emptyDescription": "You haven't blocked anyone yet. You can block someone right during a call.",
+    "blockedOn": "Blocked {date}",
+    "unblock": "Unblock",
+    "unblocked": "User unblocked",
+    "unblockError": "Couldn't unblock"
+  },
+  "danger": {
+    "title": "Danger zone",
+    "description": "Irreversible account actions.",
+    "deleteHeading": "Delete account",
+    "deleteDescription": "Your profile, friends, conversations, coins and history will be permanently deleted. This action can't be undone.",
+    "deleteButton": "Delete account",
+    "dialogTitle": "Delete account permanently?",
+    "dialogDescription": "To confirm, type your nickname <strong>{nickname}</strong> below.",
+    "nicknameLabel": "Nickname",
+    "confirmDelete": "Delete permanently",
+    "deleted": "Account deleted",
+    "deleteError": "Couldn't delete account"
+  }
+}

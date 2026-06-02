@@ -15,31 +15,46 @@ export const MAX_INTERESTS = 10;
 export const MAX_INTEREST_LEN = 24;
 
 /**
- * Curated suggestion set offered as quick-add chips in the editor. Free-form
- * tags are still allowed — these are just a tasteful, on-brand starting palette
- * with Russian labels (the stored value is the Russian label itself).
+ * A curated interest suggestion: a stable {@link SuggestedInterest.key} used to
+ * resolve a localized label (`profile.interests.<key>`) and the canonical
+ * {@link SuggestedInterest.value} that is actually stored on the profile and
+ * sent to the API. The value stays the Russian word for backward compatibility
+ * with existing profiles and the matchmaking "shared interests" comparison.
  */
-export const SUGGESTED_INTERESTS: readonly string[] = [
-  'музыка',
-  'игры',
-  'путешествия',
-  'спорт',
-  'кино',
-  'искусство',
-  'книги',
-  'технологии',
-  'мода',
-  'еда',
-  'фотография',
-  'аниме',
-  'танцы',
-  'природа',
-  'наука',
-  'юмор',
-  'программирование',
-  'животные',
-  'фитнес',
-  'языки',
+export interface SuggestedInterest {
+  /** Stable identifier for the localized label (`profile.interests.<key>`). */
+  key: string;
+  /** Canonical stored value (sent to the API; never localized). */
+  value: string;
+}
+
+/**
+ * Curated suggestion set offered as quick-add chips in the editor. Free-form
+ * tags are still allowed — these are just a tasteful, on-brand starting palette.
+ * The stored `value` is the Russian word (kept stable for the API + matching);
+ * the `key` resolves a localized label via the message catalogue.
+ */
+export const SUGGESTED_INTERESTS: readonly SuggestedInterest[] = [
+  { key: 'music', value: 'музыка' },
+  { key: 'games', value: 'игры' },
+  { key: 'travel', value: 'путешествия' },
+  { key: 'sport', value: 'спорт' },
+  { key: 'movies', value: 'кино' },
+  { key: 'art', value: 'искусство' },
+  { key: 'books', value: 'книги' },
+  { key: 'tech', value: 'технологии' },
+  { key: 'fashion', value: 'мода' },
+  { key: 'food', value: 'еда' },
+  { key: 'photography', value: 'фотография' },
+  { key: 'anime', value: 'аниме' },
+  { key: 'dancing', value: 'танцы' },
+  { key: 'nature', value: 'природа' },
+  { key: 'science', value: 'наука' },
+  { key: 'humor', value: 'юмор' },
+  { key: 'programming', value: 'программирование' },
+  { key: 'animals', value: 'животные' },
+  { key: 'fitness', value: 'фитнес' },
+  { key: 'languages', value: 'языки' },
 ] as const;
 
 /** Normalise a tag for comparison/de-dup: trim, collapse spaces, lower-case. */

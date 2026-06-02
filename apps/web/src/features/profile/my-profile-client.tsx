@@ -11,6 +11,7 @@
  */
 import { useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Camera, Check, Copy, Pencil, Settings, X } from 'lucide-react';
 import {
   Button,
@@ -41,6 +42,7 @@ import {
 import { ProfileEditForm } from './profile-edit-form';
 
 export function MyProfileClient() {
+  const t = useTranslations('profile');
   const { user, isAuthenticated, isReady } = useAuth();
   const { open } = useModal();
   const [editing, setEditing] = useState(false);
@@ -54,7 +56,7 @@ export function MyProfileClient() {
   useSyncOwnProfileCache(user?.id);
 
   if (isReady && !isAuthenticated) {
-    return <SignInRequired description="Войдите, чтобы открыть свой профиль." />;
+    return <SignInRequired description={t('myProfile.signInRequired')} />;
   }
 
   if (!user || profileQuery.isLoading) return <ProfileSkeleton />;
@@ -66,10 +68,10 @@ export function MyProfileClient() {
     try {
       await navigator.clipboard.writeText(profile.id);
       setCopied(true);
-      toast.success('ID скопирован');
+      toast.success(t('myProfile.idCopied'));
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      toast.error('Не удалось скопировать');
+      toast.error(t('myProfile.copyFailed'));
     }
   }
 
@@ -77,23 +79,23 @@ export function MyProfileClient() {
     <>
       <Tooltip>
         <TooltipTrigger asChild>
-          <IconButton variant="glass" size="sm" aria-label="Сменить аватар" onClick={() => open('avatar-upload', { currentUrl: profile.avatarUrl })}>
+          <IconButton variant="glass" size="sm" aria-label={t('myProfile.changeAvatarAria')} onClick={() => open('avatar-upload', { currentUrl: profile.avatarUrl })}>
             <Camera aria-hidden="true" />
           </IconButton>
         </TooltipTrigger>
-        <TooltipContent>Сменить аватар</TooltipContent>
+        <TooltipContent>{t('myProfile.changeAvatarAria')}</TooltipContent>
       </Tooltip>
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <IconButton variant="glass" size="sm" aria-label="Скопировать мой ID" onClick={copyId}>
+          <IconButton variant="glass" size="sm" aria-label={t('myProfile.copyIdAria')} onClick={copyId}>
             {copied ? <Check className="text-success" aria-hidden="true" /> : <Copy aria-hidden="true" />}
           </IconButton>
         </TooltipTrigger>
-        <TooltipContent>Скопировать ID профиля</TooltipContent>
+        <TooltipContent>{t('myProfile.copyIdTooltip')}</TooltipContent>
       </Tooltip>
 
-      <IconButton asChild variant="glass" size="sm" aria-label="Настройки">
+      <IconButton asChild variant="glass" size="sm" aria-label={t('myProfile.settingsAria')}>
         <Link href="/settings">
           <Settings aria-hidden="true" />
         </Link>
@@ -105,7 +107,7 @@ export function MyProfileClient() {
         leadingIcon={editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
         onClick={() => setEditing((v) => !v)}
       >
-        {editing ? 'Закрыть' : 'Редактировать'}
+        {editing ? t('myProfile.close') : t('myProfile.edit')}
       </Button>
     </>
   );
@@ -132,7 +134,7 @@ export function MyProfileClient() {
       {editing ? (
         <Card variant="glass" padding="md">
           <CardHeader className="mb-4">
-            <CardTitle>Редактирование профиля</CardTitle>
+            <CardTitle>{t('myProfile.editTitle')}</CardTitle>
           </CardHeader>
           <ProfileEditForm profile={profile} onDone={() => setEditing(false)} />
         </Card>

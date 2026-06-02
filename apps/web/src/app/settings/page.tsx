@@ -10,10 +10,12 @@
  */
 import { Settings as SettingsIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { RequireAuth } from '@/features/auth/require-auth';
 import { SettingsView } from '@/components/settings/settings-view';
 
 export default function SettingsPage() {
+  const t = useTranslations('settings');
   return (
     <RequireAuth>
       <div className="grain relative min-h-[calc(100dvh-4rem)] overflow-hidden">
@@ -32,13 +34,13 @@ export default function SettingsPage() {
           >
             <span className="inline-flex items-center gap-2 rounded-full glass-panel px-3 py-1 text-xs font-medium text-muted-foreground">
               <SettingsIcon className="h-3.5 w-3.5" aria-hidden="true" />
-              Настройки
+              {t('shell.badge')}
             </span>
             <h1 className="mt-4 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              Управление аккаунтом
+              {t('shell.title')}
             </h1>
             <p className="mt-2 max-w-xl text-muted-foreground">
-              Профиль, приватность, уведомления и устройства — всё в одном месте.
+              {t('shell.subtitle')}
             </p>
           </motion.header>
 

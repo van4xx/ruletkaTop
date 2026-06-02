@@ -9,6 +9,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ChevronDown, Phone, Video } from 'lucide-react';
 import type { PublicProfile, OnlineStatus } from '@ruletka/shared-types';
@@ -27,28 +28,33 @@ import { useThread, type ChatMessage } from './use-thread';
 import { usePeerProfiles, useConversations, peerIdOf } from './use-conversations';
 import { dayKey, formatDayLabel } from './lib/format';
 
-const STATUS_LABEL: Record<OnlineStatus, string> = {
-  online: 'в сети',
-  offline: 'не в сети',
-  in_call: 'в звонке',
-  away: 'отошёл',
+/** Translator shape compatible with next-intl's `useTranslations('social')`. */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+/** Lower-case inline status label keys (under the `chatThread` group). */
+const STATUS_LABEL_KEY: Record<OnlineStatus, string> = {
+  online: 'chatThread.statusOnlineLower',
+  offline: 'chatThread.statusOfflineLower',
+  in_call: 'chatThread.statusInCallLower',
+  away: 'chatThread.statusAwayLower',
 };
 
 /** Group consecutive messages by local day for separators. */
-function useGrouped(messages: ChatMessage[]) {
+function useGrouped(messages: ChatMessage[], t: Translate) {
   return useMemo(() => {
     const groups: { key: number; label: string; items: ChatMessage[] }[] = [];
     for (const m of messages) {
       const k = dayKey(m.createdAt);
       const last = groups[groups.length - 1];
       if (last && last.key === k) last.items.push(m);
-      else groups.push({ key: k, label: formatDayLabel(m.createdAt), items: [m] });
+      else groups.push({ key: k, label: formatDayLabel(m.createdAt, t), items: [m] });
     }
     return groups;
-  }, [messages]);
+  }, [messages, t]);
 }
 
 export function ChatThread({ conversationId }: { conversationId: string }) {
+  const t = useTranslations('social');
   const { user, isAuthenticated, isReady } = useAuth();
   const selfId = user?.id ?? null;
 
@@ -63,7 +69,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
   const peerStatus: OnlineStatus = (peerId && presence[peerId]) || 'offline';
 
   const thread = useThread(conversationId, selfId);
-  const groups = useGrouped(thread.messages);
+  const groups = useGrouped(thread.messages, t);
 
   // ── Scroll management ──
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -138,7 +144,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
   if (isReady && !isAuthenticated) {
     return (
       <div className="py-12">
-        <SignInRequired description="Войдите, чтобы открыть переписку." />
+        <SignInRequired description={t('chatThread.signInDescription')} />
       </div>
     );
   }
@@ -150,7 +156,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
     <div className="flex h-[calc(100dvh-4rem)] flex-col">
       {/* Header */}
       <header className="glass-panel z-10 flex items-center gap-3 border-x-0 border-t-0 px-3 py-2.5 sm:px-4">
-        <IconButton asChild variant="ghost" size="sm" aria-label="Назад к чатам" className="lg:hidden">
+        <IconButton asChild variant="ghost" size="sm" aria-label={t('chatThread.backToChats')} className="lg:hidden">
           <Link href={ROUTES.chats}>
             <ArrowLeft aria-hidden="true" />
           </Link>
@@ -170,7 +176,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="truncate font-display text-base font-semibold tracking-tight">
-                {peer?.nickname ?? 'Собеседник'}
+                {peer?.nickname ?? t('interlocutor')}
               </span>
               {peer && <ProfileBadges badges={peer.badges} size="sm" iconOnly />}
             </div>
@@ -180,19 +186,19 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
                 peerStatus === 'online' ? 'text-success' : 'text-muted-foreground',
               )}
             >
-              {thread.peerTyping ? 'печатает…' : STATUS_LABEL[peerStatus]}
+              {thread.peerTyping ? t('chatThread.typingInline') : t(STATUS_LABEL_KEY[peerStatus])}
             </span>
           </div>
         </Link>
 
         {canCall ? (
-          <IconButton asChild variant="glass" size="sm" aria-label="Видеозвонок">
+          <IconButton asChild variant="glass" size="sm" aria-label={t('videoCall')}>
             <Link href={callHref}>
               <Video aria-hidden="true" />
             </Link>
           </IconButton>
         ) : (
-          <IconButton variant="glass" size="sm" aria-label="Недоступен для звонка" disabled>
+          <IconButton variant="glass" size="sm" aria-label={t('chatThread.unavailableForCall')} disabled>
             <Phone aria-hidden="true" />
           </IconButton>
         )}
@@ -209,7 +215,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
             <ThreadSkeleton />
           ) : thread.isError ? (
             <div className="py-12">
-              <ErrorState onRetry={thread.refetch} description="Не удалось загрузить сообщения." />
+              <ErrorState onRetry={thread.refetch} description={t('chatThread.loadMessagesError')} />
             </div>
           ) : (
             <div className="mx-auto flex max-w-2xl flex-col gap-1.5">
@@ -217,7 +223,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
 
               {thread.isLoadingOlder && (
                 <div className="flex justify-center py-2">
-                  <Spinner size="sm" tone="muted" label="Загрузка истории" />
+                  <Spinner size="sm" tone="muted" label={t('chatThread.loadingHistory')} />
                 </div>
               )}
 
@@ -226,9 +232,11 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
                   <span className="text-4xl" aria-hidden="true">
                     👋
                   </span>
-                  <p className="font-display text-base font-semibold">Начните разговор</p>
+                  <p className="font-display text-base font-semibold">{t('chatThread.startConversation')}</p>
                   <p className="max-w-xs text-sm text-muted-foreground">
-                    Это начало вашей переписки{peer ? ` с ${peer.nickname}` : ''}. Поздоровайтесь!
+                    {peer
+                      ? t('chatThread.conversationStartWith', { name: peer.nickname })
+                      : t('chatThread.conversationStart')}
                   </p>
                 </div>
               )}
@@ -274,7 +282,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
               size="sm"
               onClick={jumpToBottom}
               className="absolute bottom-4 right-4 rounded-full shadow-lg"
-              aria-label="К последним сообщениям"
+              aria-label={t('chatThread.jumpToLatest')}
             >
               <ChevronDown className="h-4 w-4" />
             </Button>

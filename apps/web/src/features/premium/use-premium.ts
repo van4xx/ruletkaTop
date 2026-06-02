@@ -15,6 +15,7 @@
  * server own the invoice + price (preferred for production).
  */
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PremiumPlan, Subscription } from '@ruletka/shared-types';
 
@@ -76,6 +77,7 @@ export type SubscribePhase = 'idle' | 'starting' | 'widget' | 'pending' | 'activ
 
 /** Orchestrates the subscribe flow + recurrent widget. */
 export function useSubscribe() {
+  const t = useTranslations('economy');
   const [phase, setPhase] = useState<SubscribePhase>('idle');
   const [activePlan, setActivePlan] = useState<PremiumPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export function useSubscribe() {
   const subscribe = (plan: PremiumPlan) => {
     if (!CP_PUBLIC_ID) {
       setActivePlan(plan);
-      setError('Платёжный виджет не настроен (нет NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID).');
+      setError(t('premiumHook.widgetNotConfigured'));
       setPhase('error');
       return;
     }
@@ -112,7 +114,7 @@ export function useSubscribe() {
             await openCloudPaymentsWidget(
               {
                 publicId: CP_PUBLIC_ID,
-                description: `Премиум · ${plan.title}`,
+                description: t('premiumHook.widgetDescription', { plan: plan.title }),
                 amount: plan.priceRub,
                 currency: 'RUB',
                 accountId, // REQUIRED for a subscription
@@ -127,18 +129,18 @@ export function useSubscribe() {
               {
                 onSuccess: () => setPhase('pending'),
                 onFail: (reason) => {
-                  setError(reason || 'Платёж не прошёл');
+                  setError(reason || t('premiumHook.paymentFailed'));
                   setPhase('error');
                 },
               },
             );
           } catch (e) {
-            setError(e instanceof Error ? e.message : 'Не удалось открыть оплату');
+            setError(e instanceof Error ? e.message : t('premiumHook.openFailed'));
             setPhase('error');
           }
         },
         onError: (e) => {
-          setError(e instanceof Error ? e.message : 'Не удалось оформить подписку');
+          setError(e instanceof Error ? e.message : t('premiumHook.subscribeFailed'));
           setPhase('error');
         },
       },
