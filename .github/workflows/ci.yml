@@ -76,3 +76,73 @@ jobs:
         run: flutter pub get
       - name: Analyze
         run: flutter analyze
+
+  # ── End-to-end: matchmaking signaling (gate) + real-media (informational) ──
+  e2e:
+    name: e2e · signaling + media
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: production
+      API_PORT: '4000'
+      API_HOST: 0.0.0.0
+      API_GLOBAL_PREFIX: api
+      CORS_ORIGINS: http://localhost:3000
+      # Standalone Mongo reached over the mapped port → directConnection (parity
+      # with local dev; transactions fall back gracefully). Real prod uses an RS.
+      MONGODB_URI: mongodb://localhost:27017/ruletka?directConnection=true&retryWrites=false
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      JWT_ACCESS_SECRET: ci-access-secret-ci-access-secret-0001
+      JWT_ACCESS_TTL: 900s
+      JWT_REFRESH_SECRET: ci-refresh-secret-ci-refresh-secret-0001
+      JWT_REFRESH_TTL: 30d
+      TURN_STATIC_AUTH_SECRET: ci-turn-secret-ci-turn-secret-0001
+      TURN_CRED_TTL_SECONDS: '1200'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Build shared-types contract
+        run: pnpm --filter @ruletka/shared-types build
+      - name: Build API
+        run: pnpm --filter @ruletka/api build
+      - name: Boot API + run E2E
+        run: |
+          node apps/api/dist/main.js > /tmp/api.log 2>&1 &
+          API_PID=$!
+          echo "Waiting for the API to become healthy…"
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:4000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://localhost:4000/api/health || { echo "::error::API failed to boot"; cat /tmp/api.log; exit 1; }
+          echo "── Signaling E2E (gate) ──"
+          node tools/e2e/signaling.cjs
+          echo "── Real-media E2E (informational; ICE in CI can be flaky) ──"
+          node tools/e2e/media.cjs || echo "::warning::real-media E2E did not pass (non-gating in CI)"
+          kill "$API_PID" 2>/dev/null || true

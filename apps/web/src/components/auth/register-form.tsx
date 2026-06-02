@@ -19,6 +19,7 @@ import { useTranslations } from 'next-intl';
 import { AtSign, CircleAlert, UserRound } from 'lucide-react';
 import type { CountryCode } from '@ruletka/shared-types';
 import { Button, CountrySelect, Input, toast } from '@ruletka/ui';
+import { track } from '@/lib/analytics';
 import {
   GENDER_OPTIONS,
   LOCALE_OPTIONS,
@@ -98,6 +99,7 @@ export function RegisterForm() {
     registerMutation.mutate(payload, {
       onSuccess: () => {
         toast.success(t('register.successToast'), { description: t('register.successToastDescription') });
+        track('signup');
         // Hard navigation so the just-set auth cookies ride the next request.
         window.location.assign('/dashboard');
       },

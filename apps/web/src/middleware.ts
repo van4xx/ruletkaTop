@@ -18,6 +18,7 @@
  *   - Authenticated   → /login or /register ⇒ redirect to / (or ?next)
  */
 import { NextResponse, type NextRequest } from 'next/server';
+import { buildCsp } from '@/lib/csp';
 
 /** Cookie written by the auth store; mirrors `AUTH_COOKIE` there. */
 const AUTH_COOKIE = 'ruletka_auth';
@@ -86,7 +87,21 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  // Serve the page. In PRODUCTION, attach a per-request CSP nonce so `script-src`
+  // can drop `'unsafe-inline'`: Next reads the nonce from the request's CSP header
+  // and stamps it onto its own bootstrap/flight scripts. Dev keeps no CSP (HMR
+  // needs inline + eval), so the dev experience is unchanged.
+  if (process.env.NODE_ENV !== 'production') {
+    return NextResponse.next();
+  }
+  const nonce = btoa(crypto.randomUUID());
+  const csp = buildCsp(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('Content-Security-Policy', csp);
+  return response;
 }
 
 /**

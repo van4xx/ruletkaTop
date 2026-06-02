@@ -5,8 +5,10 @@ import { Providers } from './providers';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { VerifyEmailBanner } from '@/components/auth/verify-email-banner';
+import { Analytics } from '@/components/analytics';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
+import { headers } from 'next/headers';
 
 /**
  * Typography:
@@ -84,6 +86,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const locale = await getLocale();
   const messages = await getMessages();
   const t = await getTranslations('common');
+  // Per-request CSP nonce (set by the middleware in prod) — passed to next-themes
+  // so its pre-paint inline theme script is trusted without script 'unsafe-inline'.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
     <html
@@ -92,8 +97,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       className={`${manrope.variable} ${unbounded.variable}`}
     >
       <body className="antialiased">
+        {/* Privacy-first analytics loader — renders nothing unless configured. */}
+        <Analytics />
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <Providers>
+          <Providers nonce={nonce}>
             {/* Skip link for keyboard / screen-reader users. */}
             <a
               href="#main"

@@ -43,6 +43,7 @@ import {
   type QualitySample,
   type TurnCredentials,
 } from '@/lib/webrtc';
+import { track } from '@/lib/analytics';
 
 import {
   DEFAULT_FILTERS,
@@ -568,6 +569,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       roomIdRef.current = p.roomId;
       isInitiatorRef.current = p.isInitiator;
       dispatch({ type: 'MATCHED', roomId: p.roomId, peer: p.peer });
+      track('match_started');
       void beginNegotiation(p);
     };
 
@@ -743,6 +745,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
 
   const next = useCallback(() => {
     if (!startedRef.current) return;
+    track('match_skipped');
     const socket = getSocket();
     clearRequeueTimeout();
     // Proactively hang up so the peer tears down instantly (the server also

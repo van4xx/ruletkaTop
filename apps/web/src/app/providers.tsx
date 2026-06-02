@@ -122,12 +122,18 @@ function PushResync() {
   return null;
 }
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children, nonce }: { children: ReactNode; nonce?: string }) {
   const [queryClient] = useState(makeQueryClient);
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+        nonce={nonce}
+      >
         {/* App-wide tooltip context so any `<Tooltip>` works regardless of the
             page that renders it (Radix requires a `TooltipProvider` ancestor).
             Per-page providers that already exist nest harmlessly under this. */}

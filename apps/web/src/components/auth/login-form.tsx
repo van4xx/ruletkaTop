@@ -18,6 +18,7 @@ import { AtSign, CircleAlert } from 'lucide-react';
 import { Button, Input, toast } from '@ruletka/ui';
 import { loginFormSchema, type LoginFormValues } from '@/features/auth/schemas';
 import { useLogin } from '@/features/auth/use-auth-mutations';
+import { track } from '@/lib/analytics';
 import { FormField } from './form-field';
 import { PasswordField } from './password-field';
 
@@ -47,6 +48,7 @@ export function LoginForm() {
     login.mutate(values, {
       onSuccess: () => {
         toast.success(t('login.successToast'));
+        track('login');
         // Hard navigation: guarantees the freshly-set presence + httpOnly refresh
         // cookies ride the next request. A client router.replace here races Next's
         // prefetch/router cache and bounced to /login; the dashboard re-acquires the
