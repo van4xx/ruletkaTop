@@ -17,27 +17,42 @@ irrelevant here. nginx owns **:80/:443**; coturn owns **3478/5349 (+49160-49200/
 
 ## 0. One-command deploy (recommended)
 
-The box is a fresh Timeweb VPS, so the whole bring-up is scripted. SSH in **from your
-own machine** (the server firewall only admits your IP), clone, and run one script:
+SSH into the server and run **one command**. `infra/deploy/bootstrap.sh` is
+non-interactive and self-contained — it clones the repo, installs Docker, builds
+the admin SPA **in a throwaway container** (no Node needed on the host), generates
+all secrets into a `chmod 600 .env`, issues the Let's Encrypt cert for all five
+names, brings up the full stack (Mongo RS · Redis · coturn **+TURNS TLS** · API×2 ·
+web · nginx · cert auto-renew), waits for health, and (optionally) promotes an
+admin. Idempotent — re-run to update.
 
 ```sh
 ssh root@186.246.9.90
-git clone <your-repo-url> /opt/ruletka && cd /opt/ruletka
-bash infra/deploy/bootstrap.sh
+
+# If the repo is PUBLIC — fully tokenless:
+SMTP_PASS='<the Timeweb mailbox password>' bash -c \
+  'git clone https://github.com/van4xx/ruletkaTop.git /opt/ruletka \
+   && cd /opt/ruletka && bash infra/deploy/bootstrap.sh'
+
+# If the repo is PRIVATE — clone with a read-only GitHub token:
+SMTP_PASS='<the Timeweb mailbox password>' \
+RULETKA_REPO='https://x-access-token:<GH_TOKEN>@github.com/van4xx/ruletkaTop.git' \
+  bash -c 'git clone "$RULETKA_REPO" /opt/ruletka && cd /opt/ruletka \
+           && bash infra/deploy/bootstrap.sh'
 ```
 
-`bootstrap.sh` is idempotent and does everything below: installs Docker, **prompts
-once for the SMTP password** (and optional Turnstile/Sentry keys), generates all
-other secrets into a `chmod 600 .env`, builds `@ruletka/shared-types` + the admin
-SPA, issues the Let's Encrypt cert for all five names, `docker compose up -d --build`,
-waits for API health, and offers to promote an admin user. Re-running it reuses the
-existing `.env` + cert and just rebuilds. The manual steps below are the reference
-for when you want to do it by hand or debug a step.
+Optional env (all default to a clean no-op): `ADMIN_EMAIL` (promote a registered
+user to admin), `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET` (CAPTCHA), `SENTRY_DSN` +
+`NEXT_PUBLIC_SENTRY_DSN`, `ANALYTICS_DOMAIN` (Plausible), `ACME_EMAIL`. The manual
+steps below are the by-hand reference / for debugging a single phase.
 
-> **Why a script and not "Claude does it"?** Your server's firewall drops connections
-> from anywhere but your IP (I confirmed `ssh root@186.246.9.90` times out at the TCP
-> layer from my sandbox while `ssh git@github.com` succeeds). So deployment runs from
-> **your** SSH session, not mine.
+> **Why run it yourself instead of me doing it?** Diagnosed: the SSH crypto
+> handshake from my sandbox to this host dies right after `KEXINIT` — a path-MTU
+> black hole (the server's large key-exchange packet is dropped on the return leg
+> and ICMP is blocked, so PMTUD can't recover). TCP + the banner are fine, my key
+> is fine (`ssh git@github.com` works), but the session is too unreliable for a
+> multi-minute deploy. Your own machine has a normal-MTU path, so it just works.
+> (If you ever want me to drive it: MSS-clamp on the box —
+> `iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1200`.)
 
 ---
 

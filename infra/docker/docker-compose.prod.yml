@@ -120,6 +120,9 @@ services:
       - '49160-49200:49160-49200/udp'
     volumes:
       - ../coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      # The Let's Encrypt cert (covers turn.ruletka.top) for the TURNS :5349
+      # TLS listener — turnserver.conf points cert=/pkey= at this path.
+      - letsencrypt:/etc/letsencrypt:ro
     networks: [ruletka-net]
 
   # ── API (2 replicas; no published ports — only nginx reaches it) ───────────
@@ -169,6 +172,8 @@ services:
         NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        NEXT_PUBLIC_ANALYTICS_DOMAIN: ${NEXT_PUBLIC_ANALYTICS_DOMAIN:-}
+        NEXT_PUBLIC_ANALYTICS_HOST: ${NEXT_PUBLIC_ANALYTICS_HOST:-}
     restart: unless-stopped
     env_file: [../../.env]
     networks: [ruletka-net]
