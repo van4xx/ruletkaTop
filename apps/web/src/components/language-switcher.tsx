@@ -9,39 +9,37 @@
  * in the new language. Fully keyboard-accessible; the `aria-label` announces the
  * language it will switch TO.
  */
-import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Languages } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { LOCALES, LOCALE_LABELS, type Locale } from '@/i18n/config';
-import { setLocale } from '@/i18n/locale-actions';
+import {
+  LOCALES,
+  LOCALE_LABELS,
+  LOCALE_COOKIE,
+  LOCALE_COOKIE_MAX_AGE,
+  type Locale,
+} from '@/i18n/config';
 
 export function LanguageSwitcher({ className }: { className?: string }) {
   const locale = useLocale() as Locale;
   const t = useTranslations('common');
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
   const currentIndex = LOCALES.indexOf(locale);
   const nextLocale = LOCALES[(currentIndex + 1) % LOCALES.length] ?? LOCALES[0];
 
   function switchTo(target: Locale) {
-    if (target === locale || pending) return;
-    startTransition(async () => {
-      // Persist the locale, then re-render every Server Component in the new
-      // language. Guard the whole sequence: an unhandled rejection escaping a
-      // transition bubbles to the root error boundary (the full-screen crash),
-      // so a flaky network/Server-Action call must never take the app down — at
-      // worst the language stays put and the user can retry.
-      try {
-        const ok = await setLocale(target);
-        if (ok) router.refresh();
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to switch locale', error);
-      }
-    });
+    if (target === locale || pending || !LOCALES.includes(target)) return;
+    setPending(true);
+    // The locale cookie is a PLAIN (non-httpOnly) cookie that `getRequestConfig`
+    // reads per request — so set it directly on the client and do a FULL page
+    // reload. The reload re-issues the request with the new cookie, so every
+    // Server Component + the intl provider re-render in the chosen language.
+    // (A soft `router.refresh()` did not reliably re-apply the cookie locale in
+    // Next 16; a full reload is bulletproof and can never crash the app.)
+    document.cookie = `${LOCALE_COOKIE}=${target}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
+    window.location.reload();
   }
 
   return (
