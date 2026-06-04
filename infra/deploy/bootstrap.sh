@@ -187,6 +187,19 @@ if [ -n "$NGINX_HASH" ] && [ "$NGINX_HASH" != "$(cat .nginx.conf.hash 2>/dev/nul
   say "nginx.conf changed → recreating nginx so the new config takes effect…"
   $COMPOSE up -d --no-deps --force-recreate nginx
   printf '%s\n' "$NGINX_HASH" > .nginx.conf.hash
+else
+  # Even when nginx.conf is unchanged, `up -d --build` above may have RECREATED the
+  # api/web containers (new code → new image → new container → NEW Docker network IP).
+  # Our upstreams (`server api:4000;` / `server web:3000;`) resolve the hostname ONCE
+  # at nginx startup and cache the IP — there is no `resolver` directive — so nginx
+  # keeps proxying to the DEAD old IP → intermittent 502 Bad Gateway until something
+  # reloads it. A graceful reload re-resolves the upstream hostnames with zero downtime,
+  # so every deploy self-heals the api/web upstream IPs. (Root cause of "site dies after
+  # a deploy": the old code only refreshed nginx on a config-hash change, never on a
+  # plain code deploy that moved the api container.)
+  say "Reloading nginx so it re-resolves api/web upstream IPs (containers may have moved)…"
+  docker exec ruletka-nginx nginx -s reload 2>/dev/null \
+    || $COMPOSE up -d --no-deps --force-recreate nginx
 fi
 
 say "Waiting for the API to become healthy…"
