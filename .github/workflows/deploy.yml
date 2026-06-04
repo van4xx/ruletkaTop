@@ -55,8 +55,26 @@ jobs:
 
           # Re-deploy: sync the server's checkout to origin/main, then re-run the
           # idempotent bootstrap. .env + the TLS cert volume persist across this.
+          #
+          # IMPORTANT: bootstrap's output goes to a server-side log file (nohup,
+          # detached from the SSH session), and only a short tail is streamed back.
+          # This server has a lossy OUTBOUND path to international hosts (the same
+          # issue that broke ACME http-01); streaming the full Docker build log to
+          # an Azure runner stalls and drops the SSH connection (exit 255). Keeping
+          # the channel idle during the build avoids that, and nohup means the build
+          # still finishes server-side even if SSH blips.
           ssh -i ~/.ssh/id_deploy \
               -o StrictHostKeyChecking=accept-new \
-              -o ServerAliveInterval=30 -o ServerAliveCountMax=60 \
-              "$DEPLOY_USER@$HOST" \
-              "set -e; cd /opt/ruletka && git fetch --depth 1 origin main && git reset --hard origin/main && bash infra/deploy/bootstrap.sh"
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=40 \
+              "$DEPLOY_USER@$HOST" '
+            set -u
+            cd /opt/ruletka || exit 1
+            git fetch --depth 1 origin main && git reset --hard origin/main || exit 1
+            : > deploy.log
+            nohup bash infra/deploy/bootstrap.sh >deploy.log 2>&1 </dev/null &
+            wait $!
+            rc=$?
+            echo "==== bootstrap exit=$rc — last 40 log lines ===="
+            tail -n 40 deploy.log
+            exit $rc
+          '
