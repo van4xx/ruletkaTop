@@ -4,11 +4,11 @@
  * Registration form — react-hook-form + zod (`registerFormSchema`, which adds
  * the client-side 18+ gate on top of the contract `registerSchema`). Fields:
  * email, password (+ strength meter), nickname, gender (segmented radiogroup),
- * birth date (native date input, 18+), country (single-select via the shared
- * CountrySelect, capped at 1) and interface locale.
+ * birth date (native date input, 18+) and interface locale. Country is no longer
+ * collected here — it's optional end-to-end and defaults to `null`.
  *
  * On success it persists the session and redirects home. Controlled fields
- * (gender / country / password meter / locale) use RHF `Controller`/`watch`.
+ * (gender / password meter / locale) use RHF `Controller`/`watch`.
  */
 import { useState } from 'react';
 import Link from 'next/link';
@@ -17,8 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { AtSign, CircleAlert, UserRound } from 'lucide-react';
-import type { CountryCode } from '@ruletka/shared-types';
-import { Button, CountrySelect, Input, toast } from '@ruletka/ui';
+import { Button, Input, toast } from '@ruletka/ui';
 import { track } from '@/lib/analytics';
 import {
   GENDER_OPTIONS,
@@ -73,7 +72,6 @@ export function RegisterForm() {
       nickname: '',
       gender: 'female',
       birthDate: '',
-      country: '' as CountryCode,
       locale: 'ru',
       acceptedTerms: false,
     },
@@ -239,26 +237,6 @@ export function RegisterForm() {
             )}
           </FormField>
         </div>
-
-        {/* Country — single-select wrapper around the multi-select picker. */}
-        <FormField label={t('register.country')} required error={fieldError(errors.country?.message)}>
-          {(field) => (
-            <Controller
-              control={control}
-              name="country"
-              render={({ field: { value, onChange } }) => (
-                <CountrySelect
-                  id={field.id}
-                  aria-label={t('register.country')}
-                  placeholder={t('register.countryPlaceholder')}
-                  maxSelections={1}
-                  value={value ? [value] : []}
-                  onChange={(codes) => onChange(codes[codes.length - 1] ?? ('' as CountryCode))}
-                />
-              )}
-            />
-          )}
-        </FormField>
 
         {/* Anti-abuse CAPTCHA. Renders nothing when no site key is configured. */}
         <TurnstileWidget onToken={setCaptchaToken} className="flex justify-center" />

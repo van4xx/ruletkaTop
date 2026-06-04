@@ -49,7 +49,13 @@ export const registerSchema = z.object({
   gender: genderSchema,
   /** ISO date, `yyyy-mm-dd`. Age (18+) is derived & enforced server-side. */
   birthDate: z.string(),
-  country: countryCodeSchema,
+  /**
+   * Country of residence (ISO 3166-1 alpha-2). OPTIONAL: registration no longer
+   * collects it (the picker was removed from the form), so the API stores it as
+   * `null` when absent. Loosened from required — purely additive, won't break
+   * other callers that still send a country (e.g. settings).
+   */
+  country: countryCodeSchema.optional(),
   locale: localeSchema.optional(),
   /**
    * Consent (152-ФЗ / GDPR): the user must accept the Terms of Service and

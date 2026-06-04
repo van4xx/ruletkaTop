@@ -378,7 +378,10 @@ export class AuthService {
           nickname: dto.nickname,
           gender: dto.gender,
           birthDate,
-          country: dto.country,
+          // Country is optional at registration (the picker was removed). Store
+          // `null` when the client omits it — the Profile schema treats it as
+          // "no region set" and matchmaking handles an absent country gracefully.
+          country: dto.country ?? null,
           languages: dto.locale ? [dto.locale] : [],
           badges: [],
           isPremium: false,

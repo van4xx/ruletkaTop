@@ -468,7 +468,10 @@ export class ProfilesService {
       status: doc.status,
       gender: doc.gender,
       age: computeAge(doc.birthDate),
-      country: doc.country,
+      // Country is optional on the profile now; surface "" (no region) when
+      // unset so the wire shape stays a plain string and clients keep rendering
+      // a neutral fallback (🌍) rather than choking on null.
+      country: doc.country ?? '',
       languages: doc.languages,
       // Existing profiles predating the field have no `interests` → default to []
       // so the response always satisfies `publicProfileSchema`.

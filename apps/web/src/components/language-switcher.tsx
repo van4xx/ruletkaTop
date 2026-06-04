@@ -29,8 +29,18 @@ export function LanguageSwitcher({ className }: { className?: string }) {
   function switchTo(target: Locale) {
     if (target === locale || pending) return;
     startTransition(async () => {
-      await setLocale(target);
-      router.refresh();
+      // Persist the locale, then re-render every Server Component in the new
+      // language. Guard the whole sequence: an unhandled rejection escaping a
+      // transition bubbles to the root error boundary (the full-screen crash),
+      // so a flaky network/Server-Action call must never take the app down — at
+      // worst the language stays put and the user can retry.
+      try {
+        const ok = await setLocale(target);
+        if (ok) router.refresh();
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to switch locale', error);
+      }
     });
   }
 

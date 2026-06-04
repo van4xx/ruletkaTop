@@ -43,9 +43,14 @@ export class Profile {
   @Prop({ required: true, type: Date })
   birthDate!: Date;
 
-  /** ISO 3166-1 alpha-2 country code (uppercase). */
-  @Prop({ required: true, type: String })
-  country!: CountryCode;
+  /**
+   * ISO 3166-1 alpha-2 country code (uppercase), or `null` when unset.
+   * OPTIONAL: registration no longer collects a country, so new profiles may
+   * have none. A null country means "no region set" — discovery/matchmaking
+   * treat it as no geographic preference.
+   */
+  @Prop({ required: false, default: null, type: String })
+  country!: CountryCode | null;
 
   /** Spoken languages (subset of supported locales). */
   @Prop({ required: true, type: [String], enum: LOCALES, default: [] })
