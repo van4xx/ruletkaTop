@@ -42,6 +42,8 @@ import { VoiceVisualizer } from '@/components/roulette/voice-visualizer';
 import { RouletteGrid } from '@/components/roulette/roulette-grid';
 import { VideoLayoutSwitcher } from '@/components/roulette/video-layout-switcher';
 import { FullscreenBar } from '@/components/roulette/fullscreen-bar';
+import { VoiceOrb } from '@/components/roulette/voice-orb';
+import { VoiceLayoutSwitcher } from '@/components/roulette/voice-layout-switcher';
 import {
   EndedScreen,
   ErrorScreen,
@@ -52,6 +54,7 @@ import {
 } from '@/components/roulette/status-screens';
 import { useLayoutMode, useLayoutHydrated } from '@/lib/stores/roulette-layout-store';
 import { COUNTRY_BY_CODE, codeToFlag } from '@ruletka/ui';
+import { useVoiceLayout } from '@/lib/stores/voice-layout-store';
 import { cn } from '@/lib/cn';
 
 /** Vendor-prefixed Fullscreen API surface (Safari) on top of the std types. */
@@ -68,6 +71,9 @@ const FULLSCREEN_IDLE_MS = 2500;
 export function RouletteStage({ type }: { type: MatchType }) {
   const t = useTranslations('roulette');
   const isVideo = type === 'video';
+  // Voice-only presentation preference (equalizer | orb). Read for both modes
+  // but only consulted in the voice branch; video ignores it entirely.
+  const voiceLayout = useVoiceLayout();
   const { token, ready, isPremium } = useAuthToken();
   const r = useRoulette({ type, token });
   const addFriend = useAddFriend();
@@ -293,6 +299,8 @@ export function RouletteStage({ type }: { type: MatchType }) {
         fullscreen={fullscreen}
         onToggleFullscreen={toggleFullscreen}
       />
+      {/* Voice-only: pick the visual layout (equalizer ↔ Aurora orb). */}
+      {!isVideo && <VoiceLayoutSwitcher />}
       {/* During an active call the overlay sits top-left, so nudge the cluster
           down a touch on small screens when a peer is present. */}
       <div className={cn(hasPeer && isVideo && 'mt-16 sm:mt-0')}>
@@ -386,15 +394,39 @@ export function RouletteStage({ type }: { type: MatchType }) {
             )
           : showStage &&
             peer && (
-              <div className="grid h-full place-items-center px-6">
-                <VoiceVisualizer
-                  stream={r.remoteStream}
-                  name={peer.nickname}
-                  avatarUrl={peer.avatarUrl}
-                  subtitle={peerSubtitle}
-                  tone="peer"
-                />
-              </div>
+              // Voice body: one of two interchangeable layouts, crossfaded when
+              // the user toggles the switcher. Streams come from useRoulette and
+              // are stable, so swapping layouts never restarts the audio graph
+              // or the WebRTC session — only the visualizer DOM changes.
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={voiceLayout}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute inset-0"
+                >
+                  {voiceLayout === 'orb' ? (
+                    <VoiceLayoutOrb
+                      remoteStream={r.remoteStream}
+                      localStream={r.localStream}
+                      name={peer.nickname}
+                      avatarUrl={peer.avatarUrl}
+                      subtitle={peerSubtitle}
+                      speakingLabel={t('voiceLayout.speaking')}
+                      selfLabel={t('self')}
+                    />
+                  ) : (
+                    <VoiceLayoutEqualizer
+                      stream={r.remoteStream}
+                      name={peer.nickname}
+                      avatarUrl={peer.avatarUrl}
+                      subtitle={peerSubtitle}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
             )}
       </div>
 
@@ -439,7 +471,9 @@ export function RouletteStage({ type }: { type: MatchType }) {
       </AnimatePresence>
 
       {/* ── Peer overlay (top) ──────────────────────────────────── */}
-      {hasPeer && peer && (
+      {/* The Aurora Orb layout moves peer identity below the orb, so the
+          corner overlay is suppressed there; every other case keeps it. */}
+      {hasPeer && peer && !(!isVideo && voiceLayout === 'orb') && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-start p-3 sm:p-4">
           <CallOverlay
             peer={peer}
@@ -480,8 +514,10 @@ export function RouletteStage({ type }: { type: MatchType }) {
         </motion.div>
       )}
 
-      {/* ── Local self mini-visualizer (voice only) ─────────────── */}
-      {!isVideo && r.localStream && showStage && (
+      {/* ── Local self mini-visualizer (equalizer layout only) ──── */}
+      {/* The Aurora Orb layout shows the local user as a tiny "moon" inside the
+          orb layout instead, so this corner tile is equalizer-only. */}
+      {!isVideo && voiceLayout === 'equalizer' && r.localStream && showStage && (
         <div className="pointer-events-none absolute bottom-28 right-3 z-20 sm:right-6">
           <div className="glass-panel rounded-2xl px-3 py-2">
             <VoiceVisualizer
@@ -540,6 +576,86 @@ export function RouletteStage({ type }: { type: MatchType }) {
       {/* ── Dialogs (self-contained) ────────────────────────────── */}
       {dialogs}
     </StageFrame>
+  );
+}
+
+/**
+ * Voice Layout A — "Equalizer" (the original look). The peer's avatar +
+ * mirrored neon equalizer, centred. The local self mini-visualizer is rendered
+ * as separate corner chrome by {@link RouletteStage} (so it keeps its exact
+ * placement/z-index), gated to this layout.
+ */
+function VoiceLayoutEqualizer({
+  stream,
+  name,
+  avatarUrl,
+  subtitle,
+}: {
+  stream: MediaStream | null;
+  name: string;
+  avatarUrl?: string | null;
+  subtitle: string;
+}) {
+  return (
+    <div className="grid h-full place-items-center px-6">
+      <VoiceVisualizer
+        stream={stream}
+        name={name}
+        avatarUrl={avatarUrl}
+        subtitle={subtitle}
+        tone="peer"
+      />
+    </div>
+  );
+}
+
+/**
+ * Voice Layout B — "Aurora Orb" (the immersive look). One dominant, audio-
+ * reactive peer orb dead-centre with the identity/subtitle stacked below it,
+ * and the local user reduced to a tiny "moon" companion just beneath. Both orbs
+ * tap the same {@link useVolumeMeter} engine the equalizer uses — no new audio
+ * plumbing.
+ */
+function VoiceLayoutOrb({
+  remoteStream,
+  localStream,
+  name,
+  avatarUrl,
+  subtitle,
+  speakingLabel,
+  selfLabel,
+}: {
+  remoteStream: MediaStream | null;
+  localStream: MediaStream | null;
+  name: string;
+  avatarUrl?: string | null;
+  subtitle: string;
+  speakingLabel: string;
+  selfLabel: string;
+}) {
+  return (
+    <div className="grid h-full place-items-center px-6">
+      <div className="flex flex-col items-center gap-5">
+        <VoiceOrb
+          stream={remoteStream}
+          name={name}
+          avatarUrl={avatarUrl}
+          tone="peer"
+          speakingLabel={speakingLabel}
+        />
+
+        {/* Centred identity, "now-playing" style. */}
+        <div className="text-center">
+          <p className="font-display text-2xl font-bold leading-tight">{name}</p>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+
+        {/* The local "moon" — a tiny companion orb pulsing from the local mic. */}
+        {localStream && (
+          <VoiceOrb stream={localStream} name={selfLabel} tone="local" compact />
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -17,8 +17,8 @@
  * Honors `prefers-reduced-motion`: no rAF loop, no rotation — a static ring +
  * dim corona, so it never looks broken when motion is off.
  */
-import { useEffect, useRef } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Avatar } from '@ruletka/ui';
 import { useVolumeMeter } from '@/hooks/roulette/use-volume-meter';
 import { cn } from '@/lib/cn';
@@ -55,6 +55,7 @@ export function VoiceOrb({
   avatarUrl,
   tone = 'peer',
   compact = false,
+  speakingLabel,
   className,
 }: VoiceOrbProps) {
   const bands = compact ? 18 : 32;
@@ -63,6 +64,18 @@ export function VoiceOrb({
   const orbRef = useRef<HTMLDivElement>(null);
   const bloomRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
+  // A throttled (≈5Hz) "is speaking" flag for the centred caption + sr-only
+  // status. We poll the refs rather than re-render per frame, so the 60fps
+  // visuals stay re-render-free while the accessible cue still updates.
+  const [speaking, setSpeaking] = useState(false);
+  const wantCaption = Boolean(speakingLabel) && !compact;
+  useEffect(() => {
+    if (!wantCaption) return;
+    const id = setInterval(() => {
+      setSpeaking(activeRef.current === true && levelRef.current > SPEAKING_THRESHOLD);
+    }, 200);
+    return () => clearInterval(id);
+  }, [wantCaption, activeRef, levelRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -186,16 +199,22 @@ export function VoiceOrb({
           style={{ opacity: 0.4 }}
         />
         <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 h-full w-full" />
+        {/* orbRef carries the breathing scale (inline transform); the inner
+            child owns the rotation so the two transforms don't collide. */}
         <div
           ref={orbRef}
           aria-hidden="true"
-          className={cn(
-            'relative h-9 w-9 overflow-hidden rounded-full will-change-transform',
-            !reduceMotion && 'motion-safe:animate-[orb-spin_28s_linear_infinite]',
-          )}
-          style={{ backgroundImage: auroraFill }}
+          className="relative h-9 w-9 will-change-transform"
         >
-          <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_32%_28%,rgba(255,255,255,0.6),transparent_55%)]" />
+          <div
+            className={cn(
+              'h-full w-full overflow-hidden rounded-full',
+              !reduceMotion && 'motion-safe:animate-[orb-spin_28s_linear_infinite]',
+            )}
+            style={{ backgroundImage: auroraFill }}
+          >
+            <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_32%_28%,rgba(255,255,255,0.6),transparent_55%)]" />
+          </div>
         </div>
       </div>
     );
@@ -231,21 +250,27 @@ export function VoiceOrb({
         className="pointer-events-none absolute inset-[-8%] h-[116%] w-[116%]"
       />
 
-      {/* The orb body: rotating aurora + glassy highlight, breathing scale. */}
+      {/* The orb body. orbRef carries the breathing scale + hue-rotate (inline
+          transform/filter); the inner child owns the slow rotation so the two
+          transforms never collide. */}
       <div
         ref={orbRef}
         aria-hidden="true"
-        className={cn(
-          'absolute inset-0 overflow-hidden rounded-full will-change-transform',
-          'shadow-[inset_0_0_60px_rgba(0,0,0,0.55)]',
-          !reduceMotion && 'motion-safe:animate-[orb-spin_24s_linear_infinite]',
-        )}
-        style={{ backgroundImage: auroraFill }}
+        className="absolute inset-0 rounded-full will-change-transform"
       >
-        {/* Inner radial highlight → planet-like sphericity. */}
-        <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_34%_28%,rgba(255,255,255,0.55),rgba(255,255,255,0.08)_40%,transparent_62%)]" />
-        {/* Darken the lower rim so it reads as a lit sphere. */}
-        <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_66%_78%,rgba(0,0,0,0.45),transparent_55%)]" />
+        <div
+          className={cn(
+            'h-full w-full overflow-hidden rounded-full',
+            'shadow-[inset_0_0_60px_rgba(0,0,0,0.55)]',
+            !reduceMotion && 'motion-safe:animate-[orb-spin_24s_linear_infinite]',
+          )}
+          style={{ backgroundImage: auroraFill }}
+        >
+          {/* Inner radial highlight → planet-like sphericity. */}
+          <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_34%_28%,rgba(255,255,255,0.55),rgba(255,255,255,0.08)_40%,transparent_62%)]" />
+          {/* Darken the lower rim so it reads as a lit sphere. */}
+          <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_66%_78%,rgba(0,0,0,0.45),transparent_55%)]" />
+        </div>
       </div>
 
       {/* Avatar inset at the orb's centre, slightly recessed. */}
@@ -259,9 +284,30 @@ export function VoiceOrb({
         />
       </div>
 
-      {/* SR-only live status so screen-reader users know audio is active. */}
+      {/* "Speaking" caption — fades in over the orb's lower rim while the peer
+          is audibly active. Visual only; the sr-only status below is the
+          accessible source of truth. */}
+      {wantCaption && (
+        <AnimatePresence>
+          {speaking && (
+            <motion.span
+              key="speaking"
+              aria-hidden="true"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="glass-panel pointer-events-none absolute bottom-[6%] rounded-full px-3 py-1 text-xs font-medium text-foreground"
+            >
+              {speakingLabel}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* SR-only live status so screen-reader users know who is speaking. */}
       <span className="sr-only" role="status">
-        {activeRef.current ? name : name}
+        {wantCaption && speaking ? `${name}: ${speakingLabel}` : name}
       </span>
     </motion.div>
   );

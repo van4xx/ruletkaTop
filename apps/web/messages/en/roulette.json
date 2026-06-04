@@ -197,5 +197,11 @@
   },
   "voiceVisualizer": {
     "audioActive": "{name}: audio active"
+  },
+  "voiceLayout": {
+    "switch": "Switch layout",
+    "equalizer": "Equalizer",
+    "orb": "Aurora orb",
+    "speaking": "speaking"
   }
 }

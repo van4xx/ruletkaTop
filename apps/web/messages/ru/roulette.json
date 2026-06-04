@@ -197,5 +197,11 @@
   },
   "voiceVisualizer": {
     "audioActive": "{name}: аудио активно"
+  },
+  "voiceLayout": {
+    "switch": "Сменить вид",
+    "equalizer": "Эквалайзер",
+    "orb": "Аура",
+    "speaking": "говорит"
   }
 }
