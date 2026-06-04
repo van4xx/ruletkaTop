@@ -1,0 +1,11 @@
+[Unit]
+Description=ruletka.top auto-deploy (pull origin/main + bootstrap)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root (needs docker + write to /opt/ruletka). Idempotent + self-locking.
+ExecStart=/usr/bin/env bash /opt/ruletka/infra/deploy/auto-deploy.sh
+# A full rebuild can take a few minutes — don't let systemd kill it early.
+TimeoutStartSec=1800

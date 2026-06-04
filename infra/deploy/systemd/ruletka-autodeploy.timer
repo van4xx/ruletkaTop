@@ -1,0 +1,13 @@
+[Unit]
+Description=Check GitHub for new commits + auto-deploy ruletka.top every minute
+
+[Timer]
+# First run 2 min after boot, then every minute. The script is a fast no-op when
+# already up to date, so a 1-minute cadence is cheap.
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
