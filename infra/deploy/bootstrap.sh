@@ -51,7 +51,7 @@ else
   ROOT_DIR="$INSTALL_DIR"
 fi
 cd "$ROOT_DIR"
-COMPOSE="docker compose -f infra/docker/docker-compose.prod.yml"
+COMPOSE="docker compose --env-file .env -f infra/docker/docker-compose.prod.yml"
 getenv() { grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2-; }
 
 # ── 1. Docker ────────────────────────────────────────────────────────────────
