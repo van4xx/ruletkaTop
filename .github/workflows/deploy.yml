@@ -1,0 +1,62 @@
+name: Deploy to production
+
+# Auto-deploy ruletka.top on every push to main (and on-demand from the Actions
+# tab). Public repos get unlimited Actions minutes, so this is free to run.
+#
+# How it works: the GitHub-hosted runner SSHes into the production server
+# (186.246.9.90), pulls the latest main, and re-runs the idempotent
+# infra/deploy/bootstrap.sh — which rebuilds only the changed Docker images
+# (layer cache), reuses the existing .env + TLS cert, and restarts the stack.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST     186.246.9.90
+#   DEPLOY_USER     root
+#   DEPLOY_SSH_KEY  the PRIVATE key (full PEM, incl. BEGIN/END lines) whose
+#                   PUBLIC half is in the server's ~/.ssh/authorized_keys
+#
+# The server keeps its own .env (with the SMTP secret) — it is gitignored and
+# untouched by `git reset`, so no secrets need to live in CI for a re-deploy.
+
+on:
+  push:
+    branches: [main]
+    # Skip deploys for docs-only changes (optional; tweak as needed).
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch: {}
+
+# Never run two deploys at once; queue a new push behind an in-flight deploy
+# instead of cancelling it mid-build.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_KEY"     || { echo "::error::DEPLOY_SSH_KEY secret is empty"; exit 1; }
+          test -n "$HOST"        || { echo "::error::DEPLOY_HOST secret is empty"; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "::error::DEPLOY_USER secret is empty"; exit 1; }
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # Re-deploy: sync the server's checkout to origin/main, then re-run the
+          # idempotent bootstrap. .env + the TLS cert volume persist across this.
+          ssh -i ~/.ssh/id_deploy \
+              -o StrictHostKeyChecking=accept-new \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=60 \
+              "$DEPLOY_USER@$HOST" \
+              "set -e; cd /opt/ruletka && git fetch --depth 1 origin main && git reset --hard origin/main && bash infra/deploy/bootstrap.sh"

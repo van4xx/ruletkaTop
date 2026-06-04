@@ -17,8 +17,12 @@
 FROM node:20-alpine AS base
 # libc6-compat helps native addons (argon2, etc.) load on alpine/musl.
 RUN apk add --no-cache libc6-compat
-# Enable the pinned pnpm from the root package.json "packageManager" field.
-RUN corepack enable
+# Enable pnpm via corepack, pinned EXPLICITLY to 9.15.9. The pruner stage runs
+# pnpm BEFORE the repo (whose package.json carries the "packageManager" pin) is
+# COPYed in — without an explicit pin here corepack fetches the LATEST pnpm (11.x),
+# which requires Node 22 and crashes on this Node 20 base (node:sqlite). Keep this
+# version in sync with the root package.json "packageManager" field.
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH

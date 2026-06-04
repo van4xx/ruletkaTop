@@ -20,7 +20,10 @@
 # ----------------------------- base ----------------------------------------
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat
-RUN corepack enable
+# Pin pnpm EXPLICITLY: the pruner stage runs pnpm before the repo's packageManager
+# pin is COPYed in, so without this corepack would fetch the latest pnpm (11.x,
+# needs Node 22) and crash on this Node 20 base. Keep in sync with root package.json.
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
