@@ -92,6 +92,19 @@ export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
 export const verifyEmailSchema = z.object({ token: z.string().min(16) });
 export type VerifyEmailDto = z.infer<typeof verifyEmailSchema>;
 
+/**
+ * Change the password of an ALREADY-authenticated account (the user knows their
+ * current password — distinct from the emailed-token reset flow above). The
+ * `newPassword` reuses {@link passwordSchema} so the same strength floor and
+ * `validation.*` i18n message keys apply; `currentPassword` is only checked for
+ * presence here (it is verified against the stored hash server-side).
+ */
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'validation.passwordRequired'),
+  newPassword: passwordSchema,
+});
+export type ChangePasswordDto = z.infer<typeof changePasswordSchema>;
+
 export const authTokensSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),

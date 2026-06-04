@@ -81,6 +81,18 @@ export class UsersService {
   }
 
   /**
+   * Resolve an account by id INCLUDING the normally-hidden `passwordHash`. Used
+   * by the auth change-password flow to verify the caller's CURRENT password
+   * before rotating it. Mirrors {@link findByEmailWithSecret}.
+   */
+  async findByIdWithSecret(id: string): Promise<UserDocument | null> {
+    if (!Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    return this.userModel.findById(id).select('+passwordHash').exec();
+  }
+
+  /**
    * Create a new account. The caller supplies the already-hashed password.
    * Pass an optional Mongoose `session` to enlist the insert in a transaction
    * (e.g. registration creating user + profile atomically).

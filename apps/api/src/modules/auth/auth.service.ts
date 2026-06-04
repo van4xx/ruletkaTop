@@ -17,6 +17,7 @@ import { ClientSession, Connection, Model, Types } from 'mongoose';
 import type {
   AuthResponse,
   AuthUser,
+  ChangePasswordDto,
   JwtPayload,
   LoginDto,
   RegisterDto,
@@ -719,6 +720,60 @@ export class AuthService {
     // outlive the change (defends a reset triggered by account takeover).
     await this.revokeAllSessions(userId);
     this.logger.log(`Password reset completed for ${userId}; all sessions revoked.`);
+  }
+
+  /**
+   * Change the password of an ALREADY-authenticated caller who supplies their
+   * CURRENT password (distinct from the emailed-token {@link resetPassword}
+   * flow). Verifies `currentPassword` against the stored argon2 hash, enforces
+   * the same breached-password floor as registration on `newPassword`, hashes +
+   * persists the new credential, then REVOKES ALL of the user's refresh sessions
+   * so every other device is logged out (the caller re-authenticates with the
+   * new password). Throws `401` if the current password is wrong, `400` if the
+   * new password is unacceptable or equals the current one.
+   */
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+    ctx: SessionContext = {},
+  ): Promise<void> {
+    // Load the credential row WITH the hash (same select-the-secret path login
+    // uses, by id) so we can verify the supplied current password.
+    const user = await this.usersService.findByIdWithSecret(userId);
+    if (!user) {
+      throw new UnauthorizedException('Account no longer exists');
+    }
+
+    const currentOk = await argon2
+      .verify(user.passwordHash, dto.currentPassword)
+      .catch(() => false);
+    if (!currentOk) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Reject a no-op change so a user isn't logged out of every device for
+    // nothing (and to nudge them toward an actually-different secret).
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException('New password must be different from the current password');
+    }
+
+    // Same breached-password floor as registration (length/strength is already
+    // enforced by the shared `passwordSchema` at the controller boundary).
+    this.assertPasswordAcceptable(dto.newPassword);
+
+    const passwordHash = await argon2.hash(dto.newPassword, ARGON2_OPTIONS);
+    const updated = await this.usersService.updatePasswordHash(userId, passwordHash);
+    if (!updated) {
+      // The account was erased between the read above and the write.
+      throw new UnauthorizedException('Account no longer exists');
+    }
+
+    // Log every other device out: a password change must not leave a stolen
+    // session alive (mirrors the reset flow's session-revoke hook).
+    await this.revokeAllSessions(userId);
+    this.logger.log(
+      `Password changed for ${userId}; all sessions revoked${ctx.ip ? ` (from ${ctx.ip})` : ''}.`,
+    );
   }
 
   // ── Verification-token helpers ─────────────────────────────────────────────

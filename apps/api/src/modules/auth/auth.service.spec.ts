@@ -93,6 +93,7 @@ interface Mocks {
       | 'findByEmail'
       | 'findByEmailWithSecret'
       | 'findById'
+      | 'findByIdWithSecret'
       | 'createUser'
       | 'markEmailVerified'
       | 'updatePasswordHash'
@@ -143,6 +144,7 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
     findByEmail: jest.fn().mockResolvedValue(null),
     findByEmailWithSecret: jest.fn().mockResolvedValue(null),
     findById: jest.fn().mockResolvedValue(null),
+    findByIdWithSecret: jest.fn().mockResolvedValue(null),
     createUser: jest.fn().mockResolvedValue(fakeUser()),
     markEmailVerified: jest.fn().mockResolvedValue(true),
     updatePasswordHash: jest.fn().mockResolvedValue(true),
@@ -1232,6 +1234,113 @@ describe('AuthService.resetPassword', () => {
       BadRequestException,
     );
     // No session revoke when the password change did not land.
+    expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// ── changePassword (authenticated, verify current) ────────────────────────────
+
+describe('AuthService.changePassword', () => {
+  const CURRENT_PASSWORD = PLAINTEXT_PASSWORD;
+  const NEW_PASSWORD = 'a-brand-new-strong-pw-9';
+
+  /** A user row carrying a REAL argon2 hash of `password` (+ the secret field). */
+  async function userWithRealHash(
+    password = CURRENT_PASSWORD,
+    overrides: Record<string, unknown> = {},
+  ) {
+    return fakeUser({ passwordHash: await argon2.hash(password), ...overrides });
+  }
+
+  it('verifies the current password, stores a NEW argon2 hash, and revokes ALL sessions', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByIdWithSecret.mockResolvedValue((await userWithRealHash()) as never);
+    const service = makeService(m);
+
+    await service.changePassword(USER_ID, {
+      currentPassword: CURRENT_PASSWORD,
+      newPassword: NEW_PASSWORD,
+    });
+
+    // The credential row was read by id WITH the hidden hash.
+    expect(m.usersService.findByIdWithSecret).toHaveBeenCalledWith(USER_ID);
+
+    // A fresh argon2 hash (not the plaintext) is persisted and verifies.
+    expect(m.usersService.updatePasswordHash).toHaveBeenCalledTimes(1);
+    const [uid, newHash] = m.usersService.updatePasswordHash.mock.calls[0] as [string, string];
+    expect(uid).toBe(USER_ID);
+    expect(newHash).not.toBe(NEW_PASSWORD);
+    expect(newHash.startsWith('$argon2id$')).toBe(true);
+    await expect(argon2.verify(newHash, NEW_PASSWORD)).resolves.toBe(true);
+
+    // EVERY live refresh session for the user is revoked (session-revoke hook).
+    expect(m.sessionModel.updateMany).toHaveBeenCalledTimes(1);
+    const [revokeFilter, revokeUpdate] = m.sessionModel.updateMany.mock.calls[0] as [
+      Record<string, unknown>,
+      { $set: { revokedAt: Date } },
+    ];
+    expect(revokeFilter).toMatchObject({ revokedAt: null });
+    expect(revokeFilter).toHaveProperty('userId');
+    expect(revokeUpdate.$set.revokedAt).toBeInstanceOf(Date);
+  });
+
+  it('rejects a wrong current password with UnauthorizedException and changes nothing', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByIdWithSecret.mockResolvedValue((await userWithRealHash()) as never);
+    const service = makeService(m);
+
+    const err = await service
+      .changePassword(USER_ID, { currentPassword: 'not-my-password', newPassword: NEW_PASSWORD })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(UnauthorizedException);
+    expect((err as UnauthorizedException).message).toBe('Current password is incorrect');
+    expect(m.usersService.updatePasswordHash).not.toHaveBeenCalled();
+    expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a new password equal to the current one with BadRequestException', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByIdWithSecret.mockResolvedValue((await userWithRealHash()) as never);
+    const service = makeService(m);
+
+    await expect(
+      service.changePassword(USER_ID, {
+        currentPassword: CURRENT_PASSWORD,
+        newPassword: CURRENT_PASSWORD,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(m.usersService.updatePasswordHash).not.toHaveBeenCalled();
+    expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a top-common new password with BadRequestException (breached-password floor)', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByIdWithSecret.mockResolvedValue((await userWithRealHash()) as never);
+    const service = makeService(m);
+
+    await expect(
+      service.changePassword(USER_ID, {
+        currentPassword: CURRENT_PASSWORD,
+        newPassword: 'password123',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(m.usersService.updatePasswordHash).not.toHaveBeenCalled();
+    expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects with UnauthorizedException when the account no longer exists', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByIdWithSecret.mockResolvedValue(null);
+    const service = makeService(m);
+
+    await expect(
+      service.changePassword(USER_ID, {
+        currentPassword: CURRENT_PASSWORD,
+        newPassword: NEW_PASSWORD,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(m.usersService.updatePasswordHash).not.toHaveBeenCalled();
     expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
   });
 });

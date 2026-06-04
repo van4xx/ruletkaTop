@@ -27,6 +27,8 @@ import type { CookieOptions, Request, Response } from 'express';
 import {
   type AuthResponse,
   type AuthUser,
+  type ChangePasswordDto,
+  changePasswordSchema,
   type JwtPayload,
   type LoginDto,
   loginSchema,
@@ -227,6 +229,26 @@ export class AuthController {
     @Body(createZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto,
   ): Promise<void> {
     await this.authService.resetPassword(dto.token, dto.password);
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Change the current password (verifying the existing one)' })
+  @ApiNoContentResponse({
+    description: 'Password changed (all sessions revoked); the caller must re-authenticate',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Missing/invalid access token or wrong current password',
+  })
+  @ApiBadRequestResponse({ description: 'Weak or unchanged new password' })
+  async changePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body(createZodValidationPipe(changePasswordSchema)) dto: ChangePasswordDto,
+    @Req() req: Request,
+  ): Promise<void> {
+    await this.authService.changePassword(user.sub, dto, this.contextFrom(req));
   }
 
   // ── Cookie helpers ─────────────────────────────────────────────────────────
