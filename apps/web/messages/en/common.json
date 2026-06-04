@@ -13,5 +13,10 @@
   "next": "Next",
   "signIn": "Sign in",
   "signUp": "Sign up",
-  "logout": "Log out"
+  "logout": "Log out",
+  "errors": {
+    "network": "We couldn't reach the server. Check your internet connection and try again.",
+    "server": "Something went wrong on our side. Please try again in a little while.",
+    "generic": "Something went wrong. Please try again."
+  }
 }

@@ -27,7 +27,9 @@ import {
   registerFormSchema,
   type RegisterFormValues,
 } from '@/features/auth/schemas';
+import { useFieldError } from '@/features/auth/use-field-error';
 import { useRegister } from '@/features/auth/use-auth-mutations';
+import { useErrorMessage } from '@/lib/error-message';
 import { FormField } from './form-field';
 import { PasswordField } from './password-field';
 import { SegmentedControl } from './segmented-control';
@@ -42,6 +44,8 @@ function maxBirthDate(): string {
 
 export function RegisterForm() {
   const t = useTranslations('auth');
+  const fieldError = useFieldError();
+  const errorMessage = useErrorMessage();
   const registerMutation = useRegister();
 
   // Localized option labels for the segmented controls (the option arrays carry
@@ -77,21 +81,6 @@ export function RegisterForm() {
 
   const passwordValue = watch('password');
 
-  // The birthDate validators emit stable `validation.*` keys; resolve the active
-  // one (interpolating {minAge}). Unknown/empty → undefined (no error shown).
-  const VALIDATION_KEYS = new Set([
-    'validation.birthRequired',
-    'validation.birthInvalid',
-    'validation.birthFuture',
-    'validation.birthTooYoung',
-  ]);
-  const birthErrorRaw = errors.birthDate?.message;
-  const birthError = birthErrorRaw
-    ? VALIDATION_KEYS.has(birthErrorRaw)
-      ? t(birthErrorRaw, { minAge: MIN_AGE })
-      : birthErrorRaw
-    : undefined;
-
   const onSubmit = handleSubmit((values) => {
     // Attach the Turnstile token when present; omit the key entirely otherwise
     // so the optional contract field stays absent (dev no-op).
@@ -108,10 +97,13 @@ export function RegisterForm() {
     });
   });
 
+  // 409 = email/nickname already taken (the expected rejection). Everything else
+  // (network outage, 5xx, unexpected 4xx) routes through the localized helper so
+  // we never surface a raw "Failed to fetch" or an untranslated server string.
   const apiMessage =
     registerMutation.error?.status === 409
       ? t('register.conflict')
-      : registerMutation.error?.message;
+      : errorMessage(registerMutation.error);
 
   const busy = isSubmitting || registerMutation.isPending;
   // Block submission until the CAPTCHA is solved — but only when it's actually
@@ -141,7 +133,7 @@ export function RegisterForm() {
       </AnimatePresence>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <FormField label={t('fields.email')} required error={errors.email?.message}>
+        <FormField label={t('fields.email')} required error={fieldError(errors.email?.message)}>
           {(field) => (
             <Input
               {...field}
@@ -158,7 +150,7 @@ export function RegisterForm() {
         <FormField
           label={t('register.nickname')}
           required
-          error={errors.nickname?.message}
+          error={fieldError(errors.nickname?.message)}
           hint={t('register.nicknameHint')}
         >
           {(field) => (
@@ -175,7 +167,7 @@ export function RegisterForm() {
         <FormField
           label={t('fields.password')}
           required
-          error={errors.password?.message}
+          error={fieldError(errors.password?.message)}
           hint={t('register.passwordHint')}
         >
           {(field) => (
@@ -191,7 +183,7 @@ export function RegisterForm() {
         </FormField>
 
         {/* Gender — accessible segmented radiogroup. */}
-        <FormField label={t('register.gender')} required error={errors.gender?.message}>
+        <FormField label={t('register.gender')} required error={fieldError(errors.gender?.message)}>
           {(field) => (
             <Controller
               control={control}
@@ -210,7 +202,11 @@ export function RegisterForm() {
         </FormField>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <FormField label={t('register.birthDate')} required error={birthError}>
+          <FormField
+            label={t('register.birthDate')}
+            required
+            error={fieldError(errors.birthDate?.message)}
+          >
             {(field) => (
               <Input
                 {...field}
@@ -222,7 +218,7 @@ export function RegisterForm() {
             )}
           </FormField>
 
-          <FormField label={t('register.locale')} error={errors.locale?.message}>
+          <FormField label={t('register.locale')} error={fieldError(errors.locale?.message)}>
             {(field) => (
               <Controller
                 control={control}
@@ -242,7 +238,7 @@ export function RegisterForm() {
         </div>
 
         {/* Country — single-select wrapper around the multi-select picker. */}
-        <FormField label={t('register.country')} required error={errors.country?.message}>
+        <FormField label={t('register.country')} required error={fieldError(errors.country?.message)}>
           {(field) => (
             <Controller
               control={control}

@@ -22,6 +22,8 @@ import {
 import { Avatar, Button, Input, Skeleton, toast } from '@ruletka/ui';
 import { useAuth } from '@/features/auth/use-auth';
 import { useProfileMe, useUpdateProfile } from '@/features/settings/use-settings';
+import { useFieldError } from '@/features/auth/use-field-error';
+import { useErrorMessage } from '@/lib/error-message';
 import { FormField } from '@/components/auth/form-field';
 import { SettingRow, SettingsSection } from '../primitives';
 import { ChangePasswordDialog } from '../change-password-dialog';
@@ -53,6 +55,8 @@ function AccountSkeleton() {
 export function AccountTab() {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
+  const fieldError = useFieldError();
+  const errorMessage = useErrorMessage();
   const { user } = useAuth();
   const { data: profile, isLoading, isError, error, refetch } = useProfileMe();
   const update = useUpdateProfile();
@@ -97,7 +101,8 @@ export function AccountTab() {
     };
     update.mutate(payload, {
       onSuccess: () => toast.success(t('account.profile.saved')),
-      onError: (e) => toast.error(t('account.profile.saveError'), { description: e.message }),
+      // Localized description (network/server) instead of the raw error string.
+      onError: (e) => toast.error(t('account.profile.saveError'), { description: errorMessage(e) }),
     });
   });
 
@@ -125,7 +130,10 @@ export function AccountTab() {
           <AccountSkeleton />
         ) : isError ? (
           <ErrorState
-            message={error?.message}
+            // Show the friendly network message when the request never reached
+            // the server; otherwise fall back to the load-specific copy. Never the
+            // raw "Failed to fetch"/server string.
+            message={error?.isNetworkError ? errorMessage(error) : undefined}
             fallback={t('account.profile.loadError')}
             retryLabel={tc('retry')}
             onRetry={() => refetch()}
@@ -162,7 +170,7 @@ export function AccountTab() {
             <FormField
               label={t('account.profile.nicknameLabel')}
               required
-              error={errors.nickname?.message}
+              error={fieldError(errors.nickname?.message)}
             >
               {(field) => (
                 <Input {...field} leadingIcon={<UserRound />} {...register('nickname')} />

@@ -108,12 +108,37 @@ export function getAccessToken(): string | null {
 }
 
 // ─────────────────────────────── Errors ───────────────────────────────
-/** Error thrown for any non-2xx API response, carrying the parsed body. */
+/**
+ * Stable, locale-agnostic failure codes carried by {@link ApiClientError}.
+ * The UI maps these to localized copy (see `lib/error-message.ts`); never show
+ * `error.message` raw to a user.
+ *
+ * - `network`  — the request never reached the server (offline / DNS / CORS /
+ *   connection reset); `fetch` threw a `TypeError`. `status` is `0`.
+ * - `http`     — the server answered with a non-2xx status (`status` is real).
+ */
+export type ApiErrorCode = 'network' | 'http';
+
+/**
+ * Error thrown for any failed API call, carrying a stable {@link ApiErrorCode}
+ * and (for HTTP failures) the parsed {@link ApiError} body.
+ *
+ * Network failures get `status: 0` + `code: 'network'` so the UI can show a
+ * friendly "couldn't reach the server" message instead of the raw, untranslated
+ * `TypeError: Failed to fetch`.
+ */
 export class ApiClientError extends Error {
   readonly status: number;
   readonly body: ApiError | undefined;
+  /** Stable failure category for UI mapping (never user-facing copy). */
+  readonly code: ApiErrorCode;
 
-  constructor(status: number, body: ApiError | undefined, fallbackMessage: string) {
+  constructor(
+    status: number,
+    body: ApiError | undefined,
+    fallbackMessage: string,
+    code: ApiErrorCode = 'http',
+  ) {
     const message = body
       ? Array.isArray(body.message)
         ? body.message.join(', ')
@@ -123,7 +148,28 @@ export class ApiClientError extends Error {
     this.name = 'ApiClientError';
     this.status = status;
     this.body = body;
+    this.code = code;
   }
+
+  /** True when the request never reached the server (offline / unreachable). */
+  get isNetworkError(): boolean {
+    return this.code === 'network';
+  }
+}
+
+/**
+ * Normalise a thrown value from `fetch`/`performRequest` into an
+ * {@link ApiClientError}. A `TypeError` from `fetch` means the request never
+ * completed (offline, DNS, connection reset, CORS) → a `network` error with
+ * `status: 0`. `AbortError`s (caller cancellation) and already-typed
+ * `ApiClientError`s pass through untouched so retry/abort semantics are unchanged.
+ */
+function toApiClientError(error: unknown): unknown {
+  if (error instanceof ApiClientError) return error;
+  if (error instanceof TypeError) {
+    return new ApiClientError(0, undefined, error.message, 'network');
+  }
+  return error;
 }
 
 // ─────────────────────────── Core request ─────────────────────────────
@@ -187,9 +233,13 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 
 /** True for errors worth retrying: network/connection failures and 5xx. */
 function isRetryable(error: unknown): boolean {
-  if (error instanceof ApiClientError) return error.status >= 500 && error.status < 600;
-  // A TypeError from fetch means the request never completed (DNS, offline,
-  // connection reset). AbortErrors are explicitly NOT retried (caller intent).
+  if (error instanceof ApiClientError) {
+    // A `network` failure (fetch threw a TypeError → the request never completed:
+    // DNS, offline, connection reset) is transient and worth a retry, as are 5xx.
+    return error.code === 'network' || (error.status >= 500 && error.status < 600);
+  }
+  // A bare TypeError from fetch (e.g. from a path not yet normalised) is also a
+  // never-completed request. AbortErrors are explicitly NOT retried (caller intent).
   return error instanceof TypeError;
 }
 
@@ -288,15 +338,25 @@ async function performRequest<T>(path: string, options: RequestOptions): Promise
     if (access) finalHeaders.set('authorization', `Bearer ${access}`);
   }
 
-  const res = await fetch(buildUrl(path, query), {
-    ...init,
-    headers: finalHeaders,
-    signal,
-    // Send cookies (httpOnly refresh on /auth routes; presence flag) and accept
-    // Set-Cookie responses. Required for the cookie-based refresh strategy.
-    credentials: 'include',
-    body: json !== undefined ? JSON.stringify(json) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path, query), {
+      ...init,
+      headers: finalHeaders,
+      signal,
+      // Send cookies (httpOnly refresh on /auth routes; presence flag) and accept
+      // Set-Cookie responses. Required for the cookie-based refresh strategy.
+      credentials: 'include',
+      body: json !== undefined ? JSON.stringify(json) : undefined,
+    });
+  } catch (error) {
+    // `fetch` only throws when the request never completed: a `TypeError`
+    // (offline / DNS / connection reset / CORS) or an `AbortError` (caller
+    // cancellation). Normalise the former into a typed `network` ApiClientError
+    // so the UI shows friendly copy instead of the raw "Failed to fetch"; let
+    // AbortErrors propagate so cancellation/abort semantics stay unchanged.
+    throw toApiClientError(error);
+  }
 
   // Attempt one transparent refresh + retry on 401. (Unchanged hardened model:
   // the refresh token never leaves its httpOnly cookie; tryRefresh reads the

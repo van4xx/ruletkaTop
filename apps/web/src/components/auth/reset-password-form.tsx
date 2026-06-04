@@ -23,12 +23,14 @@ import { useTranslations } from 'next-intl';
 import { CircleAlert, TriangleAlert } from 'lucide-react';
 import { Button, toast } from '@ruletka/ui';
 import { resetPasswordFormSchema, type ResetPasswordFormValues } from '@/features/auth/schemas';
+import { useFieldError } from '@/features/auth/use-field-error';
 import { useResetPassword } from '@/features/auth/use-auth-email';
 import { FormField } from './form-field';
 import { PasswordField } from './password-field';
 
 export function ResetPasswordForm() {
   const t = useTranslations('auth');
+  const fieldError = useFieldError();
   const params = useSearchParams();
   const token = params.get('token')?.trim() ?? '';
   const resetPassword = useResetPassword();
@@ -124,7 +126,9 @@ export function ResetPasswordForm() {
             className="flex items-start gap-2.5 overflow-hidden rounded-xl border border-destructive/40 bg-destructive/10 px-3.5 py-3 text-sm text-destructive"
           >
             <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{resetPassword.error?.message ?? t('resetPassword.genericError')}</span>
+            {/* Generic, friendly copy — never the raw error string (could be a
+                "Failed to fetch" network error or an untranslated server key). */}
+            <span>{t('resetPassword.genericError')}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -133,7 +137,7 @@ export function ResetPasswordForm() {
         <FormField
           label={t('resetPassword.newPassword')}
           required
-          error={errors.password?.message}
+          error={fieldError(errors.password?.message)}
           hint={t('resetPassword.passwordHint')}
         >
           {(field) => (

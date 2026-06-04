@@ -8,11 +8,17 @@ export type ObjectId = z.infer<typeof objectIdSchema>;
 export const isoDateSchema = z.string();
 export type IsoDate = z.infer<typeof isoDateSchema>;
 
-/** ISO 3166-1 alpha-2 country code, uppercase (e.g. `RU`, `US`). */
+/**
+ * ISO 3166-1 alpha-2 country code, uppercase (e.g. `RU`, `US`).
+ *
+ * The messages are STABLE i18n KEYS (resolved client-side via
+ * `useTranslations('auth')` → `t(error.message)`, like the other shared
+ * validation messages), not display copy.
+ */
 export const countryCodeSchema = z
   .string()
-  .length(2)
-  .regex(/^[A-Z]{2}$/, 'Country must be ISO 3166-1 alpha-2');
+  .length(2, 'validation.countryRequired')
+  .regex(/^[A-Z]{2}$/, 'validation.countryInvalid');
 export type CountryCode = z.infer<typeof countryCodeSchema>;
 
 export const genderSchema = z.enum(['male', 'female', 'other']);

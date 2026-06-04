@@ -17,8 +17,10 @@ import { useTranslations } from 'next-intl';
 import { AtSign, CircleAlert } from 'lucide-react';
 import { Button, Input, toast } from '@ruletka/ui';
 import { loginFormSchema, type LoginFormValues } from '@/features/auth/schemas';
+import { useFieldError } from '@/features/auth/use-field-error';
 import { useLogin } from '@/features/auth/use-auth-mutations';
 import { track } from '@/lib/analytics';
+import { useErrorMessage } from '@/lib/error-message';
 import { FormField } from './form-field';
 import { PasswordField } from './password-field';
 
@@ -31,6 +33,8 @@ function safeNext(next: string | null): string {
 
 export function LoginForm() {
   const t = useTranslations('auth');
+  const fieldError = useFieldError();
+  const errorMessage = useErrorMessage();
   const params = useSearchParams();
   const login = useLogin();
 
@@ -58,8 +62,11 @@ export function LoginForm() {
     });
   });
 
+  // 401 = bad credentials (the expected rejection). Everything else (network
+  // outage, 5xx, unexpected 4xx) routes through the localized error helper so we
+  // never surface a raw "Failed to fetch" or an untranslated server string.
   const apiMessage =
-    login.error?.status === 401 ? t('login.invalidCredentials') : login.error?.message;
+    login.error?.status === 401 ? t('login.invalidCredentials') : errorMessage(login.error);
 
   const busy = isSubmitting || login.isPending;
 
@@ -86,7 +93,7 @@ export function LoginForm() {
       </AnimatePresence>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <FormField label={t('fields.email')} required error={errors.email?.message}>
+        <FormField label={t('fields.email')} required error={fieldError(errors.email?.message)}>
           {(field) => (
             <Input
               {...field}
@@ -101,7 +108,7 @@ export function LoginForm() {
           )}
         </FormField>
 
-        <FormField label={t('fields.password')} required error={errors.password?.message}>
+        <FormField label={t('fields.password')} required error={fieldError(errors.password?.message)}>
           {(field) => (
             <PasswordField
               {...field}

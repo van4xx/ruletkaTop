@@ -28,12 +28,14 @@ import {
 import { useAuth } from '@/features/auth/use-auth';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useDeleteAccount } from '@/features/settings/use-settings';
+import { useErrorMessage } from '@/lib/error-message';
 import { disconnectSocket } from '@/lib/socket';
 import { SettingsSection } from '../primitives';
 
 export function DangerTab() {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
+  const errorMessage = useErrorMessage();
   const { user } = useAuth();
   const clear = useAuthStore((s) => s.clear);
   const router = useRouter();
@@ -104,7 +106,7 @@ export function DangerTab() {
                 className="mb-2 flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 px-3.5 py-3 text-sm text-destructive"
               >
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{deleteAccount.error?.message}</span>
+                <span>{errorMessage(deleteAccount.error)}</span>
               </div>
             )}
 

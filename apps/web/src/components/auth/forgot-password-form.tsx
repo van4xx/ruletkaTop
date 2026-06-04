@@ -22,6 +22,7 @@ import { useTranslations } from 'next-intl';
 import { ArrowLeft, AtSign, MailCheck } from 'lucide-react';
 import { Button, Input } from '@ruletka/ui';
 import { forgotPasswordFormSchema, type ForgotPasswordFormValues } from '@/features/auth/schemas';
+import { useFieldError } from '@/features/auth/use-field-error';
 import { useRequestPasswordReset } from '@/features/auth/use-auth-email';
 import { FormField } from './form-field';
 
@@ -29,6 +30,7 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 export function ForgotPasswordForm() {
   const t = useTranslations('auth');
+  const fieldError = useFieldError();
   const requestReset = useRequestPasswordReset();
   // Flip to the neutral confirmation once the request has been ATTEMPTED — we
   // don't branch on success vs. error, to avoid leaking account existence.
@@ -94,7 +96,7 @@ export function ForgotPasswordForm() {
       </header>
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
-        <FormField label={t('fields.email')} required error={errors.email?.message}>
+        <FormField label={t('fields.email')} required error={fieldError(errors.email?.message)}>
           {(field) => (
             <Input
               {...field}

@@ -27,6 +27,8 @@ import {
   toast,
 } from '@ruletka/ui';
 import { useChangePassword } from '@/features/settings/use-settings';
+import { useFieldError } from '@/features/auth/use-field-error';
+import { useErrorMessage } from '@/lib/error-message';
 import { FormField } from '@/components/auth/form-field';
 import { PasswordField } from '@/components/auth/password-field';
 
@@ -39,6 +41,8 @@ interface FormValues {
 export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
+  const fieldError = useFieldError();
+  const errorMessage = useErrorMessage();
   const [open, setOpen] = useState(false);
   const changePassword = useChangePassword();
 
@@ -93,10 +97,13 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
     );
   });
 
+  // 401/400 = the current password was wrong. Anything else (network outage,
+  // 5xx, unexpected status) goes through the localized helper instead of leaking
+  // a raw "Failed to fetch"/server string.
   const apiMessage =
     changePassword.error?.status === 401 || changePassword.error?.status === 400
       ? t('password.errors.currentInvalid')
-      : changePassword.error?.message;
+      : errorMessage(changePassword.error);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,7 +128,7 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
           <FormField
             label={t('password.currentLabel')}
             required
-            error={errors.currentPassword?.message}
+            error={fieldError(errors.currentPassword?.message)}
           >
             {(field) => (
               <PasswordField
@@ -132,7 +139,11 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
             )}
           </FormField>
 
-          <FormField label={t('password.newLabel')} required error={errors.newPassword?.message}>
+          <FormField
+            label={t('password.newLabel')}
+            required
+            error={fieldError(errors.newPassword?.message)}
+          >
             {(field) => (
               <PasswordField
                 {...field}
@@ -147,7 +158,7 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
           <FormField
             label={t('password.confirmLabel')}
             required
-            error={errors.confirmPassword?.message}
+            error={fieldError(errors.confirmPassword?.message)}
           >
             {(field) => (
               <PasswordField

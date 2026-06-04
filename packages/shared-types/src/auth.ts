@@ -13,29 +13,37 @@ import {
  */
 const PASSWORD_CLASSES: readonly RegExp[] = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/];
 
+/**
+ * Validation messages on the shared schemas are STABLE i18n KEYS (e.g.
+ * `validation.passwordMin`), NOT display copy. The web client resolves them via
+ * `useTranslations('auth')` then `t(error.message)` (catalogs live under
+ * `apps/web/messages/<locale>/auth.json` in the `validation` object), mirroring
+ * how `birthDate` is already handled. Keep the validation LOGIC here; only the
+ * message strings are keys.
+ */
 export const passwordSchema = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
-  .max(128)
+  .min(8, 'validation.passwordMin')
+  .max(128, 'validation.passwordMax')
   // Strength floor (modern, passphrase-friendly): accept EITHER a long
   // passphrase (12+ chars, any composition) OR a shorter password that mixes at
   // least two distinct character classes. This rejects trivially weak secrets
   // like "12345678" / "password" while never penalising strong passphrases.
   .refine(
     (pw) => pw.length >= 12 || PASSWORD_CLASSES.filter((re) => re.test(pw)).length >= 2,
-    'Password is too weak: use 12+ characters, or mix letters, digits and symbols',
+    'validation.passwordWeak',
   )
   // Reject a single character repeated ("aaaaaaaa", "11111111").
-  .refine((pw) => !/^(.)\1+$/.test(pw), 'Password must not be a single repeated character');
+  .refine((pw) => !/^(.)\1+$/.test(pw), 'validation.passwordRepeated');
 
 export const nicknameSchema = z
   .string()
-  .min(3)
-  .max(24)
-  .regex(/^[a-zA-Z0-9_]+$/, 'Only letters, digits and underscore');
+  .min(3, 'validation.nicknameMin')
+  .max(24, 'validation.nicknameMax')
+  .regex(/^[a-zA-Z0-9_]+$/, 'validation.nicknameChars');
 
 export const registerSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email('validation.email'),
   password: passwordSchema,
   nickname: nicknameSchema,
   gender: genderSchema,
@@ -60,8 +68,8 @@ export const registerSchema = z.object({
 export type RegisterDto = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().email('validation.email'),
+  password: z.string().min(1, 'validation.passwordRequired'),
 });
 export type LoginDto = z.infer<typeof loginSchema>;
 
@@ -71,7 +79,7 @@ export const refreshSchema = z.object({
 export type RefreshDto = z.infer<typeof refreshSchema>;
 
 // ── Email verification + password reset (token-based, emailed link) ──
-export const requestPasswordResetSchema = z.object({ email: z.string().email() });
+export const requestPasswordResetSchema = z.object({ email: z.string().email('validation.email') });
 export type RequestPasswordResetDto = z.infer<typeof requestPasswordResetSchema>;
 
 export const resetPasswordSchema = z.object({
