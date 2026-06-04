@@ -63,7 +63,9 @@
       "title": "Join us",
       "p1": "Ready to meet someone new? The stream is already live — and all you need to start is the desire to connect.",
       "cta": "Start chatting"
-    }
+    },
+    "docLabel": "About",
+    "docTagline": "Why we built this and what is inside"
   },
   "help": {
     "metaTitle": "Help & FAQ",
@@ -140,7 +142,9 @@
       "q4": "Can I get a refund?",
       "a4Pre": "Refunds are handled in accordance with applicable law and the terms of service. If you were charged by mistake, reach out to us via the",
       "a4Link": "contact form"
-    }
+    },
+    "docLabel": "Help",
+    "docTagline": "Quick start, safety and answers"
   },
   "privacy": {
     "metaTitle": "Privacy Policy",
@@ -229,7 +233,9 @@
       "p1Pre": "For questions about the processing of personal data and the exercise of your rights, reach out via the",
       "p1Link": "help section",
       "p1Post": ". We will respond within a reasonable period as required by law."
-    }
+    },
+    "docLabel": "Privacy",
+    "docTagline": "What data we collect and why"
   },
   "rules": {
     "metaTitle": "Community Rules",
@@ -298,6 +304,18 @@
       "item3": "A permanent ban, with loss of access to your coin balance and purchased features.",
       "item4": "Handing over data to law enforcement where there are signs of a crime.",
       "outro": "Ban decisions can be appealed through the help section. We'll review your request and respond within a reasonable period."
-    }
+    },
+    "docLabel": "Rules",
+    "docTagline": "How we keep conversations respectful"
+  },
+  "hub": {
+    "metaTitle": "Documents — ruletka.top",
+    "metaDescription": "About, community rules, privacy policy and help — all of ruletka.top’s documents gathered in one place.",
+    "eyebrow": "All documents",
+    "title1": "Documents",
+    "title2": "as a book",
+    "lede": "About, the rules, privacy and support — gathered in one place. Pick a chapter on the left and page through it like a book.",
+    "contents": "Contents",
+    "next": "Next chapter"
   }
 }

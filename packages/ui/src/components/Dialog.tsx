@@ -65,34 +65,47 @@ export const DialogContent = React.forwardRef<
   return (
     <DialogPortal>
       <DialogOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          'fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2',
-          // Never exceed the viewport: tall modals (gift picker, buy coins,
-          // premium, …) scroll WITHIN the panel instead of overflowing off-screen.
-          'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain',
-          'glass-strong rounded-2xl p-6 shadow-xl',
-          'focus:outline-none',
-          contentMotion,
-          className,
-        )}
-        {...props}
-      >
-        {children}
-        {!hideClose && (
-          <DialogPrimitive.Close
-            className={cn(
-              'absolute right-4 top-4 inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground',
-              'transition-colors hover:bg-glass hover:text-foreground',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            )}
-          >
-            <X className="size-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Content>
+      {/*
+        Centering is done by THIS flex wrapper as pure layout — NOT by a
+        transform on the panel. The panel therefore animates only opacity +
+        scale (see `contentMotion` / the `modal-in`/`modal-out` keyframes), so
+        it fades/scales straight from the center on open AND close, with no
+        top-left corner flash.
+
+        The wrapper is `pointer-events-none` so clicks in the empty padding
+        around the panel fall through to the overlay, preserving Radix's
+        outside-click-to-close behavior; the panel re-enables pointer events.
+      */}
+      <div className="fixed inset-0 z-[var(--z-modal)] grid place-items-center p-4 pointer-events-none">
+        <DialogPrimitive.Content
+          ref={ref}
+          className={cn(
+            'relative pointer-events-auto w-[calc(100vw-2rem)] max-w-lg',
+            // Never exceed the viewport: tall modals (gift picker, buy coins,
+            // premium, …) scroll WITHIN the panel instead of overflowing off-screen.
+            'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain',
+            'glass-strong rounded-2xl p-6 shadow-xl',
+            'focus:outline-none',
+            contentMotion,
+            className,
+          )}
+          {...props}
+        >
+          {children}
+          {!hideClose && (
+            <DialogPrimitive.Close
+              className={cn(
+                'absolute right-4 top-4 inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground',
+                'transition-colors hover:bg-glass hover:text-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              )}
+            >
+              <X className="size-4" />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          )}
+        </DialogPrimitive.Content>
+      </div>
     </DialogPortal>
   );
 });

@@ -64,6 +64,8 @@ export const ROUTES = {
   privacy: '/privacy',
   help: '/help',
   about: '/about',
+  /** The «Документы» hub — all four legal/info docs presented as a book. */
+  documents: '/documents',
 } as const;
 
 export type RouteKey = keyof typeof ROUTES;

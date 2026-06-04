@@ -202,24 +202,28 @@
   }
 }
 
+/* Centering is handled by a flex overlay wrapper (pure layout), so the panel
+   animates ONLY opacity + scale — never `translate`/position. This avoids the
+   transform-vs-centering conflict that made modals flash at the top-left
+   corner before snapping to center on open (and back on close). */
 @keyframes modal-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -46%) scale(0.96);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
   }
 }
 @keyframes modal-out {
   from {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
   }
   to {
     opacity: 0;
-    transform: translate(-50%, -48%) scale(0.97);
+    transform: scale(0.97);
   }
 }
 

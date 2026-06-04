@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
-import { LegalDocPage } from '@/components/legal/documents';
+import { DocumentsHub } from '@/components/legal/documents-hub';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('legal');
   return {
-    title: t('about.metaTitle'),
-    description: t('about.metaDescription'),
+    title: t('hub.metaTitle'),
+    description: t('hub.metaDescription'),
   };
 }
 
-export default function AboutPage() {
-  return <LegalDocPage id="about" />;
+export default function DocumentsPage() {
+  return <DocumentsHub />;
 }
