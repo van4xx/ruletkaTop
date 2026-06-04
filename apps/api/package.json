@@ -22,6 +22,7 @@
     "@nestjs/platform-express": "^11.1.6",
     "@nestjs/platform-socket.io": "^11.1.6",
     "@nestjs/swagger": "^11.4.4",
+    "@nestjs/websockets": "^11.1.6",
     "@nestjs/throttler": "^6.5.0",
     "@nest-lab/throttler-storage-redis": "^1.2.0",
     "@ruletka/shared-types": "workspace:*",
