@@ -175,6 +175,7 @@
     "idCopied": "ID copied",
     "copyFailed": "Couldn't copy",
     "changeAvatarAria": "Change avatar",
+    "changeCoverAria": "Change cover",
     "copyIdAria": "Copy my ID",
     "copyIdTooltip": "Copy profile ID",
     "settingsAria": "Settings",
@@ -194,5 +195,19 @@
     "blockedTitle": "{name} is blocked",
     "blockedDescription": "You'll no longer receive messages or calls from this user.",
     "blockedAction": "To friends"
+  },
+  "cover": {
+    "names": {
+      "aurora": "Aurora",
+      "graphite": "Graphite",
+      "sunset": "Sunset Drive",
+      "mint": "Mint Glass",
+      "mesh": "Liquid Mesh",
+      "noir": "Noir Gold",
+      "bubbles": "Bubblegum",
+      "circuit": "Neon Circuit",
+      "galaxy": "Galaxy",
+      "prismatic": "Prismatic"
+    }
   }
 }

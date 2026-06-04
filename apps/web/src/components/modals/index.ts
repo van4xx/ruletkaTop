@@ -17,6 +17,7 @@
 export { ModalHost } from './modal-host';
 export { FiltersModal } from './filters-modal';
 export { GiftPickerModal } from './gift-picker-modal';
+export { CoverPickerModal } from './cover-picker-modal';
 export { BuyCoinsModal } from './buy-coins-modal';
 export { BuyTopModal } from './buy-top-modal';
 export { PremiumModal } from './premium-modal';

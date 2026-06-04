@@ -14,7 +14,7 @@ import type {
   ProfileCover,
   PublicProfile,
 } from '@ruletka/shared-types';
-import { COVER_CATALOGUE, FREE_COVER_IDS } from '@ruletka/shared-types';
+import { COVER_CATALOGUE, DEFAULT_COVER_ID, FREE_COVER_IDS } from '@ruletka/shared-types';
 
 import { Profile, ProfileDocument } from '../profiles/schemas/profile.schema';
 import { ProfilesService } from '../profiles/profiles.service';
@@ -175,7 +175,7 @@ export class CoversService {
     // Free ids ∪ purchased ids, deduped, free first then purchase order.
     const owned = [...FREE_COVER_IDS, ...purchased.filter((id) => !FREE_SET.has(id))];
     return {
-      active: (profile.activeCover as CoverId | undefined) ?? COVER_CATALOGUE[0].id,
+      active: (profile.activeCover as CoverId | undefined) ?? DEFAULT_COVER_ID,
       owned,
     };
   }

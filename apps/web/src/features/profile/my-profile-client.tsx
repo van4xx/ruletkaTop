@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Camera, Check, Copy, Pencil, Settings, X } from 'lucide-react';
+import { Camera, Check, Copy, Image as ImageIcon, Pencil, Settings, X } from 'lucide-react';
 import {
   Button,
   Card,
@@ -96,6 +96,20 @@ export function MyProfileClient() {
           <IconButton
             variant="glass"
             size="sm"
+            aria-label={t('myProfile.changeCoverAria')}
+            onClick={() => open('cover-picker')}
+          >
+            <ImageIcon aria-hidden="true" />
+          </IconButton>
+        </TooltipTrigger>
+        <TooltipContent>{t('myProfile.changeCoverAria')}</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <IconButton
+            variant="glass"
+            size="sm"
             aria-label={t('myProfile.copyIdAria')}
             onClick={copyId}
           >
@@ -130,7 +144,12 @@ export function MyProfileClient() {
     <div className="space-y-6">
       {/* The owner is, by definition, present while viewing their own profile —
           surface that as a live "online" presence (avatar pulse + status line). */}
-      <ProfileHeader profile={profile} status="online" actions={actions} />
+      <ProfileHeader
+        profile={profile}
+        status="online"
+        coverId={profile.activeCover}
+        actions={actions}
+      />
 
       <ProfileStats
         giftsValueCoins={giftsState.totalValueCoins}

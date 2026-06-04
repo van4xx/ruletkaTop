@@ -48,6 +48,11 @@ export interface ModalPropsMap {
     toNickname?: string;
     context?: GiftContext;
   };
+  /**
+   * Pick / buy / activate a profile-cover cosmetic. Always acts on the CALLER's
+   * own profile (no target id), so it takes no props.
+   */
+  'cover-picker': Record<string, never>;
   /** Coin storefront → CloudPayments checkout. */
   'buy-coins': {
     /** Pre-select a package by its code. */

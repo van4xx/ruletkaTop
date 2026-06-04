@@ -16,6 +16,7 @@ import {
   ArrowUpRight,
   Crown,
   Gift,
+  Image as ImageIcon,
   RotateCcw,
   ShoppingCart,
   Sparkles,
@@ -36,6 +37,7 @@ const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: Tone; badge: BadgeP
     refund: { icon: RotateCcw, tone: 'in', badge: 'accent' },
     gift_out: { icon: Gift, tone: 'out', badge: 'neutral' },
     top: { icon: Crown, tone: 'out', badge: 'warning' },
+    cover: { icon: ImageIcon, tone: 'out', badge: 'accent' },
   };
 
 type DirectionFilter = 'all' | 'in' | 'out';

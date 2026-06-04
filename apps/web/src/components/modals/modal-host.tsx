@@ -28,6 +28,9 @@ const FiltersModal = lazy(() =>
 const GiftPickerModal = lazy(() =>
   import('./gift-picker-modal').then((m) => ({ default: m.GiftPickerModal })),
 );
+const CoverPickerModal = lazy(() =>
+  import('./cover-picker-modal').then((m) => ({ default: m.CoverPickerModal })),
+);
 const BuyCoinsModal = lazy(() =>
   import('./buy-coins-modal').then((m) => ({ default: m.BuyCoinsModal })),
 );
@@ -64,6 +67,7 @@ const ConfirmModal = lazy(() =>
 const REGISTRY: Record<ModalType, ComponentType> = {
   filters: FiltersModal,
   'gift-picker': GiftPickerModal,
+  'cover-picker': CoverPickerModal,
   'buy-coins': BuyCoinsModal,
   'buy-top': BuyTopModal,
   premium: PremiumModal,
@@ -80,6 +84,7 @@ const REGISTRY: Record<ModalType, ComponentType> = {
 /** Per-modal dialog sizing (Tailwind max-width on the DialogContent). */
 const SIZE: Partial<Record<ModalType, string>> = {
   'gift-picker': 'max-w-xl',
+  'cover-picker': 'max-w-2xl',
   'buy-coins': 'max-w-xl',
   'buy-top': 'max-w-xl',
   premium: 'max-w-xl',

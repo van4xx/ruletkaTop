@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module';
 import { sentryEnabled } from './instrument';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { CoversModule } from './modules/covers/covers.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { GiftsModule } from './modules/gifts/gifts.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
@@ -149,6 +150,7 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
     //   friends     → profiles, presence
     //   chat        → friends, moderation
     //   gifts       → wallet, premium
+    //   covers      → wallet, profiles
     //   top         → wallet
     //   payments    → wallet, premium
     //   matchmaking → profiles, moderation, premium
@@ -179,6 +181,7 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
     // Economy
     WalletModule,
     GiftsModule,
+    CoversModule,
     TopModule,
     PremiumModule,
     PaymentsModule,

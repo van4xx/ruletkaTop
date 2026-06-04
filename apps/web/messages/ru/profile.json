@@ -175,6 +175,7 @@
     "idCopied": "ID скопирован",
     "copyFailed": "Не удалось скопировать",
     "changeAvatarAria": "Сменить аватар",
+    "changeCoverAria": "Сменить обложку",
     "copyIdAria": "Скопировать мой ID",
     "copyIdTooltip": "Скопировать ID профиля",
     "settingsAria": "Настройки",
@@ -194,5 +195,19 @@
     "blockedTitle": "{name} заблокирован",
     "blockedDescription": "Вы больше не будете получать сообщения и звонки от этого пользователя.",
     "blockedAction": "К друзьям"
+  },
+  "cover": {
+    "names": {
+      "aurora": "Аврора",
+      "graphite": "Графит",
+      "sunset": "Закат",
+      "mint": "Мятное стекло",
+      "mesh": "Жидкий мрак",
+      "noir": "Нуар-голд",
+      "bubbles": "Баблгам",
+      "circuit": "Неоновая схема",
+      "galaxy": "Галактика",
+      "prismatic": "Призма"
+    }
   }
 }

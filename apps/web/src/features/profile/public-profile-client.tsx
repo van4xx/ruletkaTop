@@ -92,6 +92,7 @@ export function PublicProfileClient({ profileId }: { profileId: string }) {
       <ProfileHeader
         profile={profile}
         status={status}
+        coverId={profile.activeCover}
         actions={
           <ProfileActions
             profileId={profileId}

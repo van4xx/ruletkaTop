@@ -16,10 +16,11 @@ import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { CalendarDays } from 'lucide-react';
-import type { OnlineStatus, PublicProfile } from '@ruletka/shared-types';
+import type { CoverId, OnlineStatus, PublicProfile } from '@ruletka/shared-types';
 import { Avatar, codeToFlag, COUNTRY_BY_CODE } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 import { ProfileBadges } from '@/components/social/profile-badges';
+import { ProfileCover } from './cover-presets';
 import { InterestChips } from './interest-chips';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -52,13 +53,18 @@ function MetaChip({ children }: { children: ReactNode }) {
 export function ProfileHeader({
   profile,
   status,
-  /** Optional cover image URL layered under the gradient (future-proof). */
-  coverUrl,
+  /**
+   * The cover cosmetic to render in the hero band. Defaults to the profile's
+   * `activeCover` (then the free `aurora`), so existing profiles look identical.
+   * Passed explicitly by the owner page so the live picker preview can override
+   * it before the server round-trip lands.
+   */
+  coverId,
   actions,
 }: {
   profile: PublicProfile;
   status?: OnlineStatus;
-  coverUrl?: string | null;
+  coverId?: CoverId;
   actions?: ReactNode;
 }) {
   const t = useTranslations('profile');
@@ -80,37 +86,11 @@ export function ProfileHeader({
       aria-labelledby="profile-name"
     >
       {/* ── Cover ─────────────────────────────────────────────────────── */}
+      {/* Registry-driven cosmetic: the active cover's layered visual. Looping
+          motion is gated on prefers-reduced-motion (the static gradient still
+          renders). `coverId` defaults to the profile's `activeCover`. */}
       <div aria-hidden="true" className="relative h-32 overflow-hidden sm:h-44">
-        {coverUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- remote, dynamic cover asset
-          <img
-            src={coverUrl}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover opacity-60"
-          />
-        )}
-        {/* Aurora base wash — richer so the cover reads vivid, not washed-out. */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-neon-violet)]/65 via-[var(--color-neon-magenta)]/40 to-[var(--color-neon-cyan)]/55" />
-        {/* Bright central bloom for depth under the identity block. */}
-        <div
-          aria-hidden="true"
-          className="absolute left-1/2 top-0 h-56 w-2/3 -translate-x-1/2 bg-[radial-gradient(ellipse_at_top,color-mix(in_oklch,var(--color-neon-cyan)_45%,transparent),transparent_70%)] blur-2xl"
-        />
-        {/* Drifting neon orbs (paused under reduced-motion). */}
-        <motion.div
-          className="absolute -left-10 -top-16 h-48 w-48 rounded-full bg-[radial-gradient(circle,var(--color-neon-violet),transparent_65%)] opacity-60 blur-2xl"
-          animate={reduce ? undefined : { x: [0, 24, 0], y: [0, 14, 0] }}
-          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute -right-8 top-0 h-40 w-40 rounded-full bg-[radial-gradient(circle,var(--color-neon-cyan),transparent_65%)] opacity-50 blur-2xl"
-          animate={reduce ? undefined : { x: [0, -20, 0], y: [0, 18, 0] }}
-          transition={{ duration: 17, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        {/* Tech grid + grain for texture, fading into the panel. */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:40px_40px] opacity-[0.12] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-        <div className="grain absolute inset-0" />
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[var(--color-card)]/70 to-transparent" />
+        <ProfileCover coverId={coverId ?? profile.activeCover} animated={!reduce} />
       </div>
 
       {/* ── Identity ──────────────────────────────────────────────────── */}

@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Gift,
   Crown,
+  Image as ImageIcon,
   Sparkles,
   RotateCcw,
   ShoppingCart,
@@ -28,6 +29,7 @@ const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: 'in' | 'out' }> = {
   refund: { icon: RotateCcw, tone: 'in' },
   gift_out: { icon: Gift, tone: 'out' },
   top: { icon: Crown, tone: 'out' },
+  cover: { icon: ImageIcon, tone: 'out' },
 };
 
 function TxRow({ tx }: { tx: CoinTransaction }) {
