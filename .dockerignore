@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Docker build-context excludes.
+#
+# Both images (api.Dockerfile, web.Dockerfile) use the repo root as context and do
+# `COPY . .` → `turbo prune` → fresh `pnpm install --frozen-lockfile` → framework
+# build INSIDE the image. So none of the host's installed deps or build outputs
+# belong in the context. Without this file the context was ~2 GB (node_modules +
+# .turbo + .next + .git) and every deploy crawled (~20 min just to transfer +
+# rebuild context). NEXT_PUBLIC_* values are injected as `--build-arg` (see the
+# `build.args` block in docker-compose.prod.yml), NOT read from a context .env,
+# so excluding env files here is safe and keeps secrets out of image layers.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Installed dependencies — reinstalled fresh in the image
+**/node_modules
+
+# Framework build outputs & caches — rebuilt in the image
+**/.next
+**/.turbo
+.turbo
+**/dist
+apps/mobile/build
+apps/mobile/.dart_tool
+
+# Secrets & local env — must never enter an image layer (NEXT_PUBLIC_* come via build args)
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS / CI metadata
+.git
+.gitignore
+.github
+
+# Editor / OS / logs / coverage noise
+.vscode
+.idea
+**/*.log
+**/.DS_Store
+**/coverage
+
+# Build/infra docs not needed inside the runtime images
+**/*.md
