@@ -102,7 +102,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      NODE_ENV: production
+      # NODE_ENV is deliberately NOT set job-wide: `pnpm install` under
+      # NODE_ENV=production skips devDependencies (→ `nest: not found` at build).
+      # It's applied to the API process only, in the boot step below.
       API_PORT: '4000'
       API_HOST: 0.0.0.0
       API_GLOBAL_PREFIX: api
@@ -133,7 +135,7 @@ jobs:
         run: pnpm --filter "@ruletka/api..." build
       - name: Boot API + run E2E
         run: |
-          node apps/api/dist/main.js > /tmp/api.log 2>&1 &
+          NODE_ENV=production node apps/api/dist/main.js > /tmp/api.log 2>&1 &
           API_PID=$!
           echo "Waiting for the API to become healthy…"
           for i in $(seq 1 60); do
