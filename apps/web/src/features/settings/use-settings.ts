@@ -107,7 +107,7 @@ export function useChangePassword(): UseMutationResult<
 export function useBlocks(): UseQueryResult<Block[], ApiClientError> {
   return useQuery<Block[], ApiClientError>({
     queryKey: BLOCKS_KEY,
-    queryFn: () => api.request<Block[]>('/moderation/blocks'),
+    queryFn: () => api.request<Block[]>('/blocks'),
     staleTime: 30_000,
   });
 }
@@ -116,7 +116,7 @@ export function useUnblock(): UseMutationResult<void, ApiClientError, string> {
   const queryClient = useQueryClient();
   return useMutation<void, ApiClientError, string>({
     mutationFn: (blockedUserId) =>
-      api.request<void>(`/moderation/blocks/${blockedUserId}`, { method: 'DELETE' }),
+      api.request<void>(`/blocks/${blockedUserId}`, { method: 'DELETE' }),
     onMutate: async (blockedUserId) => {
       await queryClient.cancelQueries({ queryKey: BLOCKS_KEY });
       const previous = queryClient.getQueryData<Block[]>(BLOCKS_KEY);
@@ -138,6 +138,7 @@ export function useUnblock(): UseMutationResult<void, ApiClientError, string> {
 // ──────────────────────────── Delete account ──────────────────────────────
 export function useDeleteAccount(): UseMutationResult<void, ApiClientError, void> {
   return useMutation<void, ApiClientError, void>({
-    mutationFn: () => api.request<void>('/auth/me', { method: 'DELETE' }),
+    // GDPR / 152-ФЗ erasure lives on the users controller: DELETE /users/me.
+    mutationFn: () => api.request<void>('/users/me', { method: 'DELETE' }),
   });
 }

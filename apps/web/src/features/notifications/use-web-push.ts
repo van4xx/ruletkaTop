@@ -164,11 +164,13 @@ export function useWebPush(): UseWebPushResult {
       const reg = await getRegistration();
       const sub = await reg.pushManager.getSubscription();
       if (sub) {
-        const { endpoint } = sub;
+        // Snapshot the full W3C DTO BEFORE unsubscribing locally (the API's
+        // DELETE validates the whole subscription shape, then drops by endpoint).
+        const dto = toDto(sub);
         await sub.unsubscribe();
         // Best-effort server cleanup; local state is already off.
         try {
-          await notificationsApi.unsubscribePush(endpoint);
+          await notificationsApi.unsubscribePush(dto);
         } catch {
           /* ignore — the subscription is gone locally regardless */
         }

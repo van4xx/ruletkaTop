@@ -563,9 +563,10 @@ export const api = {
     /** Register a browser Web Push subscription (idempotent server-side). */
     subscribePush: (sub: PushSubscriptionDto) =>
       request<void>('/notifications/push/subscribe', { method: 'POST', json: sub }),
-    /** Remove a browser Web Push subscription by its endpoint. */
-    unsubscribePush: (endpoint: string) =>
-      request<void>('/notifications/push/unsubscribe', { method: 'POST', json: { endpoint } }),
+    /** Remove a browser Web Push subscription (DELETE the subscribe route — the
+     *  API validates the full W3C subscription DTO and unsubscribes by endpoint). */
+    unsubscribePush: (sub: PushSubscriptionDto) =>
+      request<void>('/notifications/push/subscribe', { method: 'DELETE', json: sub }),
   },
 
   /** Community leaderboard — ranked by gifts received, coin balance, or Top days. */
