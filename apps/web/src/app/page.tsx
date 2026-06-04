@@ -17,6 +17,8 @@ import { useTranslations } from 'next-intl';
 import { ArrowRight, Globe2, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { FEATURE_HIGHLIGHTS, ROUTES } from '@/config/nav';
 import { TopMarquee } from '@/components/top-marquee';
+import { JsonLdScript } from '@/components/json-ld';
+import { webApplicationLd } from '@/lib/json-ld';
 import { cn } from '@/lib/cn';
 
 /** Shared "ease-out expo" curve as a typed bezier tuple (not widened to number[]). */
@@ -54,6 +56,10 @@ export default function HomePage() {
 
   return (
     <div className="grain relative overflow-hidden">
+      {/* Landing-specific structured data: WebApplication (social roulette). The
+          site-wide Organization + WebSite nodes live in the root layout. */}
+      <JsonLdScript data={webApplicationLd(t('headline1'), t('subheading'))} />
+
       {/* ── Atmospheric background ───────────────────────────────────── */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
         {/* Layered neon glows. */}

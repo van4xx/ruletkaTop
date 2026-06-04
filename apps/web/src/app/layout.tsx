@@ -6,6 +6,8 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { VerifyEmailBanner } from '@/components/auth/verify-email-banner';
 import { Analytics } from '@/components/analytics';
+import { JsonLdScript } from '@/components/json-ld';
+import { organizationLd, websiteLd } from '@/lib/json-ld';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import { headers } from 'next/headers';
@@ -47,6 +49,20 @@ export async function generateMetadata(): Promise<Metadata> {
     keywords: t.raw('keywords') as string[],
     authors: [{ name: 'ruletka.top' }],
     creator: 'ruletka.top',
+    // Canonical + hreflang. The locale is COOKIE-based with NO URL prefix, so
+    // every locale is served from the SAME clean URL — there's one canonical per
+    // page. We still advertise both locales (and x-default) pointing at that same
+    // root URL so search engines know the site is bilingual; this is the
+    // defensible standard for prefix-less i18n. Per-page canonicals (relative to
+    // `metadataBase`) are added in each route's own metadata where needed.
+    alternates: {
+      canonical: '/',
+      languages: {
+        ru: '/',
+        en: '/',
+        'x-default': '/',
+      },
+    },
     openGraph: {
       type: 'website',
       locale: locale === 'en' ? 'en_US' : 'ru_RU',
@@ -86,9 +102,18 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const locale = await getLocale();
   const messages = await getMessages();
   const t = await getTranslations('common');
+  const tm = await getTranslations('metadata');
   // Per-request CSP nonce (set by the middleware in prod) — passed to next-themes
   // so its pre-paint inline theme script is trusted without script 'unsafe-inline'.
   const nonce = (await headers()).get('x-nonce') ?? undefined;
+
+  // Site-wide structured data (Organization + WebSite), localized via the same
+  // `metadata` namespace that drives the document title/description. Inert
+  // `ld+json` — no CSP nonce required (see components/json-ld.tsx).
+  const structuredData = [
+    organizationLd(tm('description')),
+    websiteLd(tm('titleDefault'), tm('description')),
+  ];
 
   return (
     <html
@@ -97,6 +122,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       className={`${manrope.variable} ${unbounded.variable}`}
     >
       <body className="antialiased">
+        {/* Organization + WebSite structured data (schema.org JSON-LD). */}
+        <JsonLdScript data={structuredData} />
         {/* Privacy-first analytics loader — renders nothing unless configured. */}
         <Analytics />
         <NextIntlClientProvider locale={locale} messages={messages}>
