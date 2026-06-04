@@ -60,6 +60,23 @@ const ANALYTICS_INGEST = (() => {
   }
 })();
 
+/**
+ * CDN origin for build assets, present only when `NEXT_PUBLIC_ASSET_PREFIX` is
+ * set (e.g. https://cdn.ruletka.top). With a cross-origin assetPrefix, Next loads
+ * `/_next/static` scripts, CSS and fonts from this host, so the CSP must allow it
+ * for script/style/font (+ connect, for any fetch-based chunk load). Empty
+ * (same-origin) when the env is unset — the policy is then byte-for-byte unchanged.
+ */
+const ASSET_PREFIX_ORIGIN = (() => {
+  const prefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+  if (!prefix) return [] as string[];
+  try {
+    return [new URL(prefix).origin];
+  } catch {
+    return [] as string[];
+  }
+})();
+
 /** De-duplicated `connect-src` origins (API/WS may share a host in some envs). */
 const CONNECT_SRC = Array.from(
   new Set([
@@ -71,11 +88,17 @@ const CONNECT_SRC = Array.from(
     CLOUDPAYMENTS_WIDGET,
     ...SENTRY_INGEST,
     ...ANALYTICS_INGEST,
+    ...ASSET_PREFIX_ORIGIN,
   ]),
 ).join(' ');
 
 /** Third-party script hosts (loaded alongside the nonce; no `strict-dynamic`). */
-const SCRIPT_HOSTS = [CLOUDPAYMENTS_WIDGET, CLOUDFLARE_TURNSTILE, ...ANALYTICS_INGEST].join(' ');
+const SCRIPT_HOSTS = [
+  CLOUDPAYMENTS_WIDGET,
+  CLOUDFLARE_TURNSTILE,
+  ...ANALYTICS_INGEST,
+  ...ASSET_PREFIX_ORIGIN,
+].join(' ');
 
 /**
  * Build the production CSP string for a given per-request nonce.
@@ -91,9 +114,9 @@ export function buildCsp(nonce: string): string {
     `frame-ancestors 'none'`,
     `object-src 'none'`,
     `script-src 'self' 'nonce-${nonce}' ${SCRIPT_HOSTS}`.trim(),
-    `style-src 'self' 'unsafe-inline'`,
+    [`style-src`, `'self'`, `'unsafe-inline'`, ...ASSET_PREFIX_ORIGIN].join(' '),
     `img-src 'self' data: blob: https:`,
-    `font-src 'self' data:`,
+    [`font-src`, `'self'`, `data:`, ...ASSET_PREFIX_ORIGIN].join(' '),
     `connect-src ${CONNECT_SRC}`,
     `frame-src ${CLOUDPAYMENTS_WIDGET} ${CLOUDFLARE_TURNSTILE}`,
     `media-src 'self' blob:`,
