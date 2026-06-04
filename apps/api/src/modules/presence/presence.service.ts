@@ -8,6 +8,8 @@ import { REDIS_CLIENT } from '../../redis/redis.constants';
 import {
   DEFAULT_PRESENCE_TTL_SECONDS,
   PRESENCE_CHANNEL,
+  PRESENCE_CONN_TTL_SECONDS,
+  presenceConnKey,
   presenceStatusKey,
 } from './presence.constants';
 
@@ -88,6 +90,62 @@ export class PresenceService implements OnApplicationShutdown {
       await this.publish(userId, next);
     }
     return next;
+  }
+
+  // ── Global connection refcount (multi-replica online/offline) ──────────────
+
+  /**
+   * Register a newly-connected socket for `userId` and report whether this was
+   * the user's FIRST live connection cluster-wide (the 0→1 edge). Atomically
+   * `INCR`s the per-user connection counter ({@link presenceConnKey}) and re-arms
+   * its TTL, so a user holding sockets on multiple replicas is counted once.
+   *
+   * On the 0→1 edge we flip the user `online` (which publishes the transition);
+   * subsequent connects only bump the counter. Idempotent and safe to call from
+   * any replica — the counter is the single source of truth.
+   */
+  async connect(userId: string): Promise<void> {
+    const count = (await this.redis.eval(
+      CONN_INCR_LUA,
+      1,
+      presenceConnKey(userId),
+      String(PRESENCE_CONN_TTL_SECONDS),
+    )) as number;
+    if (count === 1) {
+      // First connection anywhere → online (setStatus publishes on change).
+      await this.setStatus(userId, 'online');
+    }
+  }
+
+  /**
+   * Account for a socket disconnecting and report whether it was the user's LAST
+   * live connection cluster-wide (the →0 edge). Atomically `DECR`s the counter,
+   * clamping at zero and deleting the key once it reaches zero (so a stray
+   * decrement can never drive it negative and a fully-offline user leaves no
+   * residue). On the →0 edge we flip the user `offline` (which publishes).
+   */
+  async disconnect(userId: string): Promise<void> {
+    const count = (await this.redis.eval(CONN_DECR_LUA, 1, presenceConnKey(userId))) as number;
+    if (count <= 0) {
+      await this.setStatus(userId, 'offline');
+    }
+  }
+
+  /**
+   * Re-arm the connection counter's TTL for a still-connected user (driven by
+   * the gateway's periodic heartbeat). Only touches the TTL when the counter
+   * actually exists, so it never resurrects a key for a user who has fully
+   * disconnected. Also refreshes the status heartbeat so an active user's status
+   * key never lapses mid-session.
+   */
+  async refreshConnection(userId: string): Promise<void> {
+    await this.redis.eval(
+      CONN_TOUCH_LUA,
+      1,
+      presenceConnKey(userId),
+      String(PRESENCE_CONN_TTL_SECONDS),
+    );
+    await this.heartbeat(userId);
   }
 
   /** Current status, or `offline` when no live heartbeat exists. */
@@ -199,3 +257,40 @@ export class PresenceService implements OnApplicationShutdown {
 function asMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
+
+/**
+ * Lua: INCR the connection counter and (re-)arm its TTL atomically, returning
+ * the new count. KEYS[1]=conn counter, ARGV[1]=ttl seconds. The TTL is re-armed
+ * on every connect so an active user's counter never lapses.
+ */
+const CONN_INCR_LUA = `
+local n = redis.call('INCR', KEYS[1])
+redis.call('EXPIRE', KEYS[1], ARGV[1])
+return n
+`;
+
+/**
+ * Lua: DECR the connection counter, deleting it once it hits zero, returning the
+ * resulting count (clamped at 0). KEYS[1]=conn counter. Atomic so two racing
+ * disconnects can't both observe the →0 edge.
+ */
+const CONN_DECR_LUA = `
+local n = redis.call('DECR', KEYS[1])
+if n <= 0 then
+  redis.call('DEL', KEYS[1])
+  return 0
+end
+return n
+`;
+
+/**
+ * Lua: re-arm the connection counter's TTL ONLY if it still exists, so a
+ * heartbeat never resurrects a key for a fully-disconnected user. KEYS[1]=conn
+ * counter, ARGV[1]=ttl seconds.
+ */
+const CONN_TOUCH_LUA = `
+if redis.call('EXISTS', KEYS[1]) == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return 1
+`;

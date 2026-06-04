@@ -68,6 +68,17 @@ export const MM_JOIN_LIMIT: RateLimitRule = {
 };
 
 /**
+ * `call:invite` — outgoing 1:1 friend-call invites. Tight enough to stop a user
+ * weaponising the ring against a friend (or spraying invites), generous enough
+ * for normal "call → no answer → call again" behaviour.
+ */
+export const CALL_INVITE_LIMIT: RateLimitRule = {
+  action: 'call:invite',
+  max: 10,
+  windowSec: 30,
+};
+
+/**
  * `rtc:*` signaling relays (offer/answer/ice). ICE trickling can be chatty, so
  * this is the most permissive bucket; it exists to stop a peer weaponising the
  * relay against the other side, not to throttle a healthy negotiation.

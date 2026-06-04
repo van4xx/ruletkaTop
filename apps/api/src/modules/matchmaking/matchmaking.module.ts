@@ -7,9 +7,11 @@ import { ModerationModule } from '../moderation/moderation.module';
 import { BlocksService } from '../moderation/blocks.service';
 import { PremiumModule } from '../premium/premium.module';
 import { PremiumService } from '../premium/premium.service';
+import { PresenceModule } from '../presence/presence.module';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { ProfilesService } from '../profiles/profiles.service';
 import { RealtimeSecurityModule } from '../realtime-security/realtime-security.module';
+import { CallService } from './call.service';
 import {
   BLOCKS_SERVICE,
   FRIENDS_SERVICE,
@@ -52,11 +54,13 @@ import { Match, MatchSchema } from './schemas/match.schema';
     ModerationModule,
     PremiumModule,
     FriendsModule,
+    PresenceModule,
     RealtimeSecurityModule,
   ],
   providers: [
     MatchService,
     MatchmakingService,
+    CallService,
     MatchmakingGateway,
     { provide: PROFILES_SERVICE, useExisting: ProfilesService },
     { provide: BLOCKS_SERVICE, useExisting: BlocksService },

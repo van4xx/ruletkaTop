@@ -52,3 +52,21 @@ export interface UserRoomPointer {
   filters: MatchFilters;
   type: MatchType;
 }
+
+/**
+ * A ringing 1:1 friend call, persisted in Redis (`mm:call:<callId>`) with a
+ * short TTL (the ring timeout) from invite until it is accepted, declined,
+ * ended or expires. The `callId` doubles as the Socket.io room id the two
+ * participants join on accept (`call:<callId>`), so the ensuing WebRTC
+ * signaling (`rtc:*` with `roomId = callId`) relays between them.
+ */
+export interface PendingCall {
+  callId: string;
+  /** The inviter. */
+  fromUserId: string;
+  /** The invitee — only THEY may accept/decline this call. */
+  toUserId: string;
+  type: MatchType;
+  /** Epoch ms the invite was minted (diagnostics / future ring metrics). */
+  createdAt: number;
+}

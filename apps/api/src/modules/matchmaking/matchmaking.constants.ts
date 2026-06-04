@@ -35,6 +35,31 @@ export function nextRateKey(userId: string): string {
 }
 
 /**
+ * STRING key (JSON {@link PendingCall}) holding a ringing 1:1 friend call until
+ * it is accepted, declined, ended or the ring times out. Keyed by the minted
+ * `callId` so the callee's `call:accept|decline` can validate + resolve it.
+ */
+export function callKey(callId: string): string {
+  return `mm:call:${callId}`;
+}
+
+/**
+ * Socket.io room a 1:1 friend call's two participants join on accept
+ * (`call:<callId>`). The ensuing WebRTC signaling (`rtc:*` with `roomId =
+ * callId`) relays between the room's members exactly like a matchmaking room.
+ */
+export function callRoom(callId: string): string {
+  return `call:${callId}`;
+}
+
+/**
+ * TTL (seconds) for a pending (ringing) call — the ring timeout. After this the
+ * pending-call key self-expires so a never-answered invite cannot linger; the
+ * caller's UI also auto-cancels on its own timer.
+ */
+export const CALL_RING_TTL_SECONDS = 60;
+
+/**
  * Priority weight applied to premium users in the pool score. A waiter's score
  * is `joinedAt - (isPremium ? PREMIUM_PRIORITY_BONUS : 0)`, so premium users
  * sort ahead of everyone who joined within ~3 years of them while still being

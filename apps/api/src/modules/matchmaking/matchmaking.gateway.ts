@@ -12,12 +12,18 @@ import type { Socket } from 'socket.io';
 import {
   type AppNotification,
   appNotificationSchema,
+  type CallInvitePayload,
+  callInvitePayloadSchema,
+  type CallResponsePayload,
+  callResponsePayloadSchema,
   type ClientToServerEvents,
   type MatchEndReason,
   type MmJoinPayload,
   mmJoinPayloadSchema,
   type ModerationActionPayload,
   moderationActionPayloadSchema,
+  type OnlineStatus,
+  type PresencePayload,
   type RtcAnswerPayload,
   rtcAnswerPayloadSchema,
   type RtcHangupPayload,
@@ -34,7 +40,12 @@ import {
 import { MetricsService } from '../../observability/metrics.service';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import type { AppIoServer } from '../../realtime/redis-io.adapter';
-import { MM_JOIN_LIMIT, RTC_SIGNAL_LIMIT } from '../realtime-security/realtime-security.constants';
+import { PresenceService } from '../presence/presence.service';
+import {
+  CALL_INVITE_LIMIT,
+  MM_JOIN_LIMIT,
+  RTC_SIGNAL_LIMIT,
+} from '../realtime-security/realtime-security.constants';
 import { WsAuthService } from '../realtime-security/ws-auth.service';
 
 /**
@@ -63,6 +74,8 @@ const MODERATION_ACTION_CHANNEL = 'moderation:action';
  */
 const NOTIFICATION_NEW_CHANNEL = 'notif:new';
 import { WsRateLimiterService } from '../realtime-security/ws-rate-limiter.service';
+import { CallService } from './call.service';
+import { callRoom } from './matchmaking.constants';
 import {
   type ConnectionVerifier,
   type MatchResult,
@@ -72,6 +85,31 @@ import type { WaiterEntry } from './matchmaking.types';
 
 /** Socket typed with the shared client→server map + per-connection data. */
 type MmSocket = Socket<ClientToServerEvents, ServerToClientEvents, never, SocketData>;
+
+/**
+ * Room a socket joins (per subscribed user id) to receive that user's presence
+ * transitions. The Socket.io Redis adapter fans `to(room)` out cluster-wide, so
+ * a watcher on one replica still sees a transition published from another.
+ */
+function presenceWatchRoom(userId: string): string {
+  return `presence:watch:${userId}`;
+}
+
+/**
+ * Cadence (ms) of the per-node presence heartbeat: re-arm the connection-counter
+ * + status TTL for every locally-connected user so an active user never lapses
+ * to offline mid-session, while a crashed replica's counts still self-heal once
+ * their (un-refreshed) TTL elapses. Comfortably shorter than
+ * `PRESENCE_CONN_TTL_SECONDS` so a single missed beat can't flap anyone offline.
+ */
+const PRESENCE_HEARTBEAT_MS = 30_000;
+
+/**
+ * Max user ids one socket may watch via a single `presence:subscribe`. The
+ * friends list / chat header watch a small, bounded set; this caps a socket
+ * joining an unbounded number of watch rooms.
+ */
+const PRESENCE_WATCH_LIMIT = 500;
 
 /**
  * Per-user room every device joins on connect. Signaling / teardown emit here
@@ -104,10 +142,30 @@ function userRoom(userId: string): string {
  *   `rtc:hangup` reason `next`) and re-queues with the same filters.
  * - `mm:leave` / disconnect — dequeue, end any active match, notify the peer.
  *
+ * Presence ({@link PresenceService}, Redis-backed, cross-replica): a per-user
+ * GLOBAL connection counter is bumped on connect / dropped on disconnect, so a
+ * user with sockets on multiple replicas is online ONCE — the 0→1 edge flips
+ * them `online` and the →0 edge `offline`, each published cluster-wide. A
+ * per-node heartbeat re-arms the counter/status TTL for live sockets (a crashed
+ * replica self-heals once its counts lapse). `presence:subscribe(userIds)` joins
+ * this socket to each `presence:watch:<id>` room and replies with each id's
+ * current status; transitions are relayed to those rooms (fanned cross-replica
+ * by the Redis adapter) as `presence:online`/`presence:offline`.
+ *
+ * Direct (friend) calls ({@link CallService}, Redis-backed): `call:invite`
+ * (rate-limited, block-gated, offline-callee short-circuited) mints a `callId`,
+ * stores a pending call with a ring TTL and relays `call:invite` to the callee's
+ * per-user room; `call:accept` validates the pending call, joins BOTH parties to
+ * a `call:<callId>` room and relays `call:accept` to the caller; `call:decline`
+ * /`call:end` relay to the other party and clear/teardown. The call's WebRTC
+ * media reuses the `rtc:*` relays with `roomId = callId`.
+ *
  * Signaling (server only relays SDP/ICE; media is P2P): `rtc:offer`,
- * `rtc:answer`, `rtc:ice-candidate`, `rtc:hangup` are validated, gated on room
- * membership and forwarded to the peer's user room only; the offer/answer/ice
- * relays are additionally per-user rate-limited to cap signaling floods.
+ * `rtc:answer`, `rtc:ice-candidate`, `rtc:hangup` are validated, per-user
+ * rate-limited and relayed to the OTHER party of `roomId` — generalised over
+ * BOTH a matchmaking room (authorised via Redis room state → peer's user room)
+ * AND a friend-call `call:<callId>` room (authorised via Socket.io membership →
+ * the room's other members), so `roomId = callId` works for friend calls.
  */
 @WebSocketGateway({ namespace: '/mm' })
 export class MatchmakingGateway
@@ -123,8 +181,16 @@ export class MatchmakingGateway
   /** Dedicated SUBSCRIBE connection for the notification-delivery channel. */
   private notifSub?: Redis;
 
+  /** Unsubscribe handle for the cluster-wide presence-transition relay. */
+  private presenceUnsub?: () => void;
+
+  /** Periodic presence-heartbeat timer (re-arms TTLs for local sockets). */
+  private presenceHeartbeat?: ReturnType<typeof setInterval>;
+
   constructor(
     private readonly matchmaking: MatchmakingService,
+    private readonly calls: CallService,
+    private readonly presence: PresenceService,
     private readonly wsAuth: WsAuthService,
     private readonly rateLimiter: WsRateLimiterService,
     private readonly metrics: MetricsService,
@@ -143,10 +209,30 @@ export class MatchmakingGateway
     });
     void this.subscribeModerationActions();
     void this.subscribeNotifications();
+    // Relay cluster-wide presence transitions to the sockets watching that user
+    // (`presence:watch:<id>` rooms). The Redis adapter fans the emit out, so a
+    // transition published on ANY replica reaches watchers on every replica.
+    this.presenceUnsub = this.presence.onPresenceEvent((payload) => {
+      this.relayPresence(payload);
+    });
+    // Re-arm presence TTLs for this node's connected users so an active user
+    // never lapses offline mid-session (a crashed replica still self-heals).
+    this.presenceHeartbeat = setInterval(() => {
+      void this.beatPresence();
+    }, PRESENCE_HEARTBEAT_MS);
+    // Don't keep the event loop alive on shutdown solely for the heartbeat.
+    this.presenceHeartbeat.unref?.();
   }
 
-  /** Close the dedicated moderation-action + notification subscribers on shutdown. */
+  /**
+   * Close the dedicated moderation-action + notification subscribers, drop the
+   * presence relay subscription and stop the presence heartbeat on shutdown.
+   */
   async onModuleDestroy(): Promise<void> {
+    this.presenceUnsub?.();
+    if (this.presenceHeartbeat) {
+      clearInterval(this.presenceHeartbeat);
+    }
     for (const sub of [this.modActionSub, this.notifSub]) {
       if (!sub) {
         continue;
@@ -202,6 +288,12 @@ export class MatchmakingGateway
     // decrement is in `handleDisconnect`, also gated on `userId` being set, so
     // rejected handshakes never skew the gauge.
     this.metrics.socketConnected();
+    // Bump the GLOBAL connection refcount; the 0→1 edge flips the user online
+    // (published cluster-wide → relayed to their watchers). Best-effort: a
+    // presence write must never block a healthy socket from connecting.
+    await this.presence.connect(payload.sub).catch((err: unknown) => {
+      this.logger.debug(`presence.connect failed for ${payload.sub}: ${asMessage(err)}`);
+    });
     this.logger.debug(`mm socket connected: user=${payload.sub} socket=${client.id}`);
   }
 
@@ -221,6 +313,10 @@ export class MatchmakingGateway
     this.logger.debug(`mm socket disconnected: user=${userId}`);
     try {
       await this.rateLimiter.releaseSocket(userId);
+      // Drop the GLOBAL connection refcount; the →0 edge flips the user offline
+      // (published cluster-wide → relayed to their watchers). A user still
+      // holding a socket on another replica stays online.
+      await this.presence.disconnect(userId);
       await this.matchmaking.dequeueAll(userId);
       await this.endActiveRoom(userId, 'disconnect');
     } catch (err) {
@@ -299,6 +395,210 @@ export class MatchmakingGateway
     await this.endActiveRoom(userId, 'stop');
   }
 
+  // ── Presence ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Subscribe THIS socket to the live presence of `userIds`: join each user's
+   * `presence:watch:<id>` room (so cluster-wide transitions are fanned here by
+   * the Redis adapter) and immediately reply with each requested user's CURRENT
+   * status as `presence:online`/`presence:offline`, so the client renders the
+   * right state before any transition fires. Watch rooms are left automatically
+   * on disconnect. Capped to a sane batch so one socket can't watch unbounded
+   * ids (the friends list / chat header watch a small, bounded set).
+   */
+  @SubscribeMessage('presence:subscribe')
+  async handlePresenceSubscribe(client: MmSocket, userIds: string[]): Promise<void> {
+    const watcher = client.data.userId;
+    if (!watcher || !Array.isArray(userIds)) {
+      return;
+    }
+    // De-dupe + bound + keep only well-formed ids (the contract's PresencePayload
+    // uses objectIdSchema, but the subscribe event itself is a raw string[]).
+    const ids = Array.from(new Set(userIds))
+      .filter((id) => typeof id === 'string' && id.length > 0 && id.length <= 64)
+      .slice(0, PRESENCE_WATCH_LIMIT);
+    if (ids.length === 0) {
+      return;
+    }
+    await Promise.all(ids.map((id) => client.join(presenceWatchRoom(id))));
+
+    // Reply with the current status of each requested id (one Redis round-trip).
+    let statuses: Record<string, OnlineStatus>;
+    try {
+      statuses = await this.presence.getStatuses(ids);
+    } catch (err) {
+      this.logger.debug(`presence:subscribe lookup failed for ${watcher}: ${asMessage(err)}`);
+      return;
+    }
+    for (const id of ids) {
+      this.emitPresenceTo(client, { userId: id, status: statuses[id] ?? 'offline' });
+    }
+  }
+
+  // ── Direct (friend) calls ──────────────────────────────────────────────────────
+
+  /**
+   * Place a 1:1 call to a friend. Rate-limited per caller. A self-call is
+   * ignored; a block (either direction) is refused with `ws:error` and never
+   * surfaced to the callee. If the callee is currently OFFLINE we reply
+   * `ws:error` to the caller at once so their "calling…" UI resolves instead of
+   * ringing out. Otherwise we mint a `callId`, persist the pending call with a
+   * ring TTL and relay `call:invite` to the callee's per-user room (reachable on
+   * any replica via the Redis adapter) — which opens their incoming-call modal.
+   */
+  @SubscribeMessage('call:invite')
+  async handleCallInvite(client: MmSocket, payload: CallInvitePayload): Promise<void> {
+    const fromUserId = client.data.userId;
+    if (!fromUserId) {
+      return;
+    }
+    if (!(await this.rateLimiter.consume(fromUserId, CALL_INVITE_LIMIT))) {
+      emitWsError(client, { code: 'rate_limited', event: 'call:invite' });
+      return;
+    }
+    const parsed = callInvitePayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      return;
+    }
+    const { toUserId, type } = parsed.data;
+    // Can't call yourself.
+    if (toUserId === fromUserId) {
+      return;
+    }
+    // Respect blocks in either direction — don't even surface the invite.
+    if (await this.matchmaking.isBlockedEitherWay(fromUserId, toUserId)) {
+      emitWsError(client, { code: 'forbidden', event: 'call:invite' });
+      return;
+    }
+    // Offline callee → tell the caller now so their "calling…" UI resolves
+    // instead of ringing out. The contract permits `call:decline` OR a
+    // `ws:error` here; we use `ws:error` because no `callId` has been minted yet
+    // (the invite carries none), so there is nothing for a `call:decline
+    // { callId }` to correlate against on the caller.
+    if (!(await this.presence.isOnline(toUserId))) {
+      emitWsError(client, { code: 'forbidden', event: 'call:invite', message: 'User is offline' });
+      return;
+    }
+
+    const call = await this.calls.createPending(fromUserId, toUserId, type);
+    // Relay the invite to all of the callee's devices on any replica. This is
+    // what opens their incoming-call modal (the modal host listens for
+    // `call:invite`). A persisted `notif:new` is intentionally NOT raised here:
+    // a correctly-localised, stored notification belongs to the notifications
+    // module, and the live invite already drives the ring UI — emitting a
+    // placeholder notification would surface raw, unlocalised text in the bell.
+    this.server.to(userRoom(toUserId)).emit('call:invite', {
+      toUserId,
+      type,
+      callId: call.callId,
+      fromUserId,
+    });
+  }
+
+  /**
+   * Accept a ringing call. Validates the pending call is addressed to THIS user
+   * (atomic consume — single-use, racing decline loses), relays `call:accept` to
+   * the CALLER and puts BOTH parties' sockets into the `call:<callId>` room so
+   * the subsequent `rtc:*` signaling (with `roomId = callId`) relays between
+   * them exactly like a matchmaking room.
+   */
+  @SubscribeMessage('call:accept')
+  async handleCallAccept(client: MmSocket, payload: CallResponsePayload): Promise<void> {
+    const userId = client.data.userId;
+    if (!userId) {
+      return;
+    }
+    const parsed = callResponsePayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      return;
+    }
+    const call = await this.calls.consumePendingForCallee(parsed.data.callId, userId);
+    if (!call) {
+      // Already answered / declined / rang out, or not addressed to this user.
+      return;
+    }
+    // Put BOTH users' sockets (every device, on every replica) into the call
+    // room so `rtc:*` relays between them. `socketsJoin` is fanned out by the
+    // Redis adapter, so a participant connected to another node joins too. AWAIT
+    // both joins BEFORE telling the caller to start: otherwise the caller's
+    // first `rtc:offer` could arrive before its socket is in the room and be
+    // dropped by the membership gate.
+    const room = callRoom(call.callId);
+    await Promise.all([
+      this.server.in(userRoom(call.fromUserId)).socketsJoin(room),
+      this.server.in(userRoom(call.toUserId)).socketsJoin(room),
+    ]);
+    // Tell the caller the call was accepted so they begin WebRTC negotiation.
+    this.server.to(userRoom(call.fromUserId)).emit('call:accept', { callId: call.callId });
+  }
+
+  /**
+   * Decline a ringing call. Validates + consumes the pending call (so it can't
+   * also be accepted) and relays `call:decline` to the caller so their ring UI
+   * resolves.
+   */
+  @SubscribeMessage('call:decline')
+  async handleCallDecline(client: MmSocket, payload: CallResponsePayload): Promise<void> {
+    const userId = client.data.userId;
+    if (!userId) {
+      return;
+    }
+    const parsed = callResponsePayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      return;
+    }
+    const call = await this.calls.consumePendingForCallee(parsed.data.callId, userId);
+    if (!call) {
+      return;
+    }
+    this.server.to(userRoom(call.fromUserId)).emit('call:decline', { callId: call.callId });
+  }
+
+  /**
+   * End a call. Two phases are covered:
+   *  - BEFORE accept (caller cancels a still-ringing invite): clear the pending
+   *    call and relay `call:end` to the callee so their incoming-call modal
+   *    closes.
+   *  - AFTER accept (either party hangs up): relay `call:end` to the OTHER
+   *    member of the `call:<callId>` room and tear the room down.
+   * Either party may end; we never trust the client's view of who the peer is —
+   * delivery is by pending-call record (pre-accept) or room membership (post-).
+   */
+  @SubscribeMessage('call:end')
+  async handleCallEnd(client: MmSocket, payload: CallResponsePayload): Promise<void> {
+    const userId = client.data.userId;
+    if (!userId) {
+      return;
+    }
+    const parsed = callResponsePayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      return;
+    }
+    const callId = parsed.data.callId;
+
+    // Pre-accept: a pending call still exists → caller (or callee) cancelled.
+    const pending = await this.calls.getPending(callId);
+    if (pending) {
+      // Only a participant may cancel the ring.
+      if (pending.fromUserId !== userId && pending.toUserId !== userId) {
+        return;
+      }
+      const cleared = await this.calls.clearPending(callId);
+      if (cleared) {
+        const other = cleared.fromUserId === userId ? cleared.toUserId : cleared.fromUserId;
+        this.server.to(userRoom(other)).emit('call:end', { callId });
+      }
+      return;
+    }
+
+    // Post-accept: relay to the other room member and tear the room down. Gated
+    // on the socket actually being in the call room.
+    if (this.isInCallRoom(client, callId)) {
+      client.to(callRoom(callId)).emit('call:end', { callId });
+      await this.teardownCallRoom(callId);
+    }
+  }
+
   // ── WebRTC signaling relays ──────────────────────────────────────────────────
 
   /** Relay an SDP offer to the peer after verifying room membership. */
@@ -311,11 +611,7 @@ export class MatchmakingGateway
     if (!parsed.success) {
       return;
     }
-    const peerId = await this.authorizedPeer(client, parsed.data.roomId);
-    if (!peerId) {
-      return;
-    }
-    this.server.to(userRoom(peerId)).emit('rtc:offer', parsed.data);
+    await this.relaySignal(client, parsed.data.roomId, 'rtc:offer', parsed.data);
   }
 
   /** Relay an SDP answer to the peer after verifying room membership. */
@@ -328,11 +624,7 @@ export class MatchmakingGateway
     if (!parsed.success) {
       return;
     }
-    const peerId = await this.authorizedPeer(client, parsed.data.roomId);
-    if (!peerId) {
-      return;
-    }
-    this.server.to(userRoom(peerId)).emit('rtc:answer', parsed.data);
+    await this.relaySignal(client, parsed.data.roomId, 'rtc:answer', parsed.data);
   }
 
   /** Relay a trickled ICE candidate to the peer after verifying membership. */
@@ -345,11 +637,7 @@ export class MatchmakingGateway
     if (!parsed.success) {
       return;
     }
-    const peerId = await this.authorizedPeer(client, parsed.data.roomId);
-    if (!peerId) {
-      return;
-    }
-    this.server.to(userRoom(peerId)).emit('rtc:ice-candidate', parsed.data);
+    await this.relaySignal(client, parsed.data.roomId, 'rtc:ice-candidate', parsed.data);
   }
 
   /**
@@ -366,13 +654,20 @@ export class MatchmakingGateway
     if (!parsed.success) {
       return;
     }
-    // Only allow hanging up a room the caller actually belongs to.
-    if (!(await this.matchmaking.isMember(parsed.data.roomId, userId))) {
+    const { roomId, reason } = parsed.data;
+    // Matchmaking room: tear down the durable match + notify the peer.
+    if (await this.matchmaking.isMember(roomId, userId)) {
+      const teardown = await this.matchmaking.teardownRoom(userId, reason);
+      if (teardown) {
+        this.notifyPeerHangup(teardown.peerUserId, teardown.roomId, reason);
+      }
       return;
     }
-    const teardown = await this.matchmaking.teardownRoom(userId, parsed.data.reason);
-    if (teardown) {
-      this.notifyPeerHangup(teardown.peerUserId, teardown.roomId, parsed.data.reason);
+    // Friend-call room (`call:<callId>`): relay the hangup to the OTHER member
+    // and tear the call room down. Gated on the socket actually being a member.
+    if (this.isInCallRoom(client, roomId)) {
+      client.to(callRoom(roomId)).emit('rtc:hangup', { roomId, reason });
+      await this.teardownCallRoom(roomId);
     }
   }
 
@@ -589,6 +884,102 @@ export class MatchmakingGateway
       return null;
     }
     return this.matchmaking.getPeerOf(roomId, userId);
+  }
+
+  /**
+   * Relay a `rtc:*` signal to the other party of `roomId`, generalised over BOTH
+   * room kinds the gateway hosts:
+   *  - a MATCHMAKING room — authorise via the authoritative Redis room state and
+   *    emit to the peer's per-user room (delivered cross-replica by the adapter);
+   *  - a FRIEND-CALL room (`call:<callId>`) — authorise by the sender actually
+   *    being a member of the Socket.io room and broadcast to the OTHER members.
+   * A socket that belongs to neither (spoofed / stale `roomId`) gets nothing.
+   */
+  private async relaySignal(
+    client: MmSocket,
+    roomId: string,
+    event: 'rtc:offer' | 'rtc:answer' | 'rtc:ice-candidate',
+    payload: RtcOfferPayload | RtcAnswerPayload | RtcIcePayload,
+  ): Promise<void> {
+    const peerId = await this.authorizedPeer(client, roomId);
+    if (peerId) {
+      this.server.to(userRoom(peerId)).emit(event, payload as never);
+      return;
+    }
+    if (this.isInCallRoom(client, roomId)) {
+      // `client.to(room)` excludes the sender → goes to the other member(s) only.
+      client.to(callRoom(roomId)).emit(event, payload as never);
+    }
+  }
+
+  /** Whether this socket is currently a member of the `call:<callId>` room. */
+  private isInCallRoom(client: MmSocket, callId: string): boolean {
+    return client.rooms.has(callRoom(callId));
+  }
+
+  /**
+   * Detach every socket (on any replica) from a friend-call room once the call
+   * ends, so a stale `call:<callId>` membership can never relay future signals.
+   * `socketsLeave` is fanned out cluster-wide by the Redis adapter.
+   */
+  private async teardownCallRoom(callId: string): Promise<void> {
+    try {
+      await this.calls.clearPending(callId);
+      this.server.in(callRoom(callId)).socketsLeave(callRoom(callId));
+    } catch (err) {
+      this.logger.debug(`teardownCallRoom failed for ${callId}: ${asMessage(err)}`);
+    }
+  }
+
+  /**
+   * Relay one cluster-wide presence transition to the sockets watching that user
+   * (`presence:watch:<id>` rooms). Online-ish statuses map to `presence:online`
+   * (carrying the precise status, e.g. `in_call`/`away`); `offline` maps to
+   * `presence:offline`. The Redis adapter fans the emit out to every replica.
+   */
+  private relayPresence(payload: PresencePayload): void {
+    const room = this.server.to(presenceWatchRoom(payload.userId));
+    if (payload.status === 'offline') {
+      room.emit('presence:offline', payload);
+    } else {
+      room.emit('presence:online', payload);
+    }
+  }
+
+  /** Emit a single user's current presence to ONE socket (the `presence:subscribe` reply). */
+  private emitPresenceTo(client: MmSocket, payload: PresencePayload): void {
+    if (payload.status === 'offline') {
+      client.emit('presence:offline', payload);
+    } else {
+      client.emit('presence:online', payload);
+    }
+  }
+
+  /**
+   * Re-arm the presence connection-counter + status TTL for every user with a
+   * live socket on THIS node (the per-node heartbeat). De-duplicated across a
+   * user's devices so we touch each user once. Best-effort.
+   */
+  private async beatPresence(): Promise<void> {
+    try {
+      const sockets = await this.server.fetchSockets();
+      const userIds = new Set<string>();
+      for (const s of sockets) {
+        const uid = s.data.userId;
+        if (uid) {
+          userIds.add(uid);
+        }
+      }
+      await Promise.all(
+        Array.from(userIds, (uid) =>
+          this.presence.refreshConnection(uid).catch((err: unknown) => {
+            this.logger.debug(`presence heartbeat failed for ${uid}: ${asMessage(err)}`);
+          }),
+        ),
+      );
+    } catch (err) {
+      this.logger.debug(`presence heartbeat sweep failed: ${asMessage(err)}`);
+    }
   }
 
   /**

@@ -263,6 +263,22 @@ export class MatchmakingService {
     return null;
   }
 
+  /**
+   * Whether `a` and `b` are blocked in EITHER direction. Thin passthrough to the
+   * injected blocks service so callers that already hold this service (the
+   * gateway, for the `call:invite` block gate) don't need a second dependency.
+   * Best-effort: a lookup failure resolves `false` (fail-open) so a transient DB
+   * blip never silently drops a legitimate call.
+   */
+  async isBlockedEitherWay(a: string, b: string): Promise<boolean> {
+    try {
+      return await this.blocks.isBlocked(a, b);
+    } catch (err) {
+      this.logger.debug(`isBlocked check failed for ${a}/${b}: ${asMessage(err)}`);
+      return false;
+    }
+  }
+
   /** Whether a user is still a member of the given pool (claim-race check). */
   private async isQueued(userId: string, type: MatchType): Promise<boolean> {
     const score = await this.redis.zscore(poolKey(type), userId);
