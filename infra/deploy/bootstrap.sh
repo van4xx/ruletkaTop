@@ -175,6 +175,17 @@ fi
 say "Building images + starting the stack (Mongo RS · Redis · coturn · API×2 · web · nginx · certbot)…"
 $COMPOSE up -d --build
 
+# nginx.conf is a SINGLE-FILE bind-mount: `up -d` does NOT pick up content changes
+# (the container keeps the old inode), so a config edit silently never applies.
+# Force-recreate nginx ONLY when the file changed since the last deploy — avoids a
+# needless ~1s :443 blip on deploys that don't touch nginx.
+NGINX_HASH="$(sha256sum infra/nginx/nginx.conf 2>/dev/null | cut -d' ' -f1)"
+if [ -n "$NGINX_HASH" ] && [ "$NGINX_HASH" != "$(cat .nginx.conf.hash 2>/dev/null || true)" ]; then
+  say "nginx.conf changed → recreating nginx so the new config takes effect…"
+  $COMPOSE up -d --no-deps --force-recreate nginx
+  printf '%s\n' "$NGINX_HASH" > .nginx.conf.hash
+fi
+
 say "Waiting for the API to become healthy…"
 OK=""
 for _ in $(seq 1 40); do

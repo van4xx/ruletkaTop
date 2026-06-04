@@ -3,19 +3,28 @@ name: Deploy to production
 # Auto-deploy ruletka.top on every push to main (and on-demand from the Actions
 # tab). Public repos get unlimited Actions minutes, so this is free to run.
 #
-# How it works: the GitHub-hosted runner SSHes into the production server
-# (186.246.9.90), pulls the latest main, and re-runs the idempotent
-# infra/deploy/bootstrap.sh — which rebuilds only the changed Docker images
-# (layer cache), reuses the existing .env + TLS cert, and restarts the stack.
+# HOW IT WORKS — detach + poll (NOT one long SSH session):
+#   1. Set up SSH    — write the deploy key + a `prod` host alias.
+#   2. Launch deploy — one SHORT SSH: sync main, then start bootstrap.sh fully
+#                      DETACHED (`setsid`, output → deploy.log, result → a marker
+#                      file), and return the SSH session immediately.
+#   3. Wait          — poll the marker file over SHORT SSH connections until the
+#                      build finishes; stream the tail; succeed/fail accordingly.
+#
+# WHY: the server has a lossy OUTBOUND path to international hosts (the same issue
+# that broke ACME http-01). A single SSH session left IDLE during the multi-minute
+# Docker build gets dropped at ~2m23s (exit 255) — which used to fail EVERY deploy
+# even though bootstrap finished server-side. Short, frequent polls never idle long
+# enough to be dropped, and the build is detached so an SSH blip can't kill it.
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   DEPLOY_HOST     186.246.9.90
 #   DEPLOY_USER     root
-#   DEPLOY_SSH_KEY  the PRIVATE key (full PEM, incl. BEGIN/END lines) whose
-#                   PUBLIC half is in the server's ~/.ssh/authorized_keys
+#   DEPLOY_SSH_KEY  the PRIVATE key (full PEM, incl. BEGIN/END) whose PUBLIC half
+#                   is in the server's ~/.ssh/authorized_keys
 #
-# The server keeps its own .env (with the SMTP secret) — it is gitignored and
-# untouched by `git reset`, so no secrets need to live in CI for a re-deploy.
+# The server keeps its own .env (with the SMTP secret) — gitignored, untouched by
+# `git reset`, so no app secrets need to live in CI.
 
 on:
   push:
@@ -36,12 +45,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
     steps:
-      - name: Deploy over SSH
-        env:
-          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      - name: Set up SSH
         run: |
           set -euo pipefail
           test -n "$SSH_KEY"     || { echo "::error::DEPLOY_SSH_KEY secret is empty"; exit 1; }
@@ -52,29 +61,54 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          # A `prod` host alias keeps every later `ssh prod …` short + identical.
+          cat > ~/.ssh/config <<EOF
+          Host prod
+            HostName $HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/id_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+            ConnectTimeout 25
+          EOF
+          chmod 600 ~/.ssh/config
 
-          # Re-deploy: sync the server's checkout to origin/main, then re-run the
-          # idempotent bootstrap. .env + the TLS cert volume persist across this.
-          #
-          # IMPORTANT: bootstrap's output goes to a server-side log file (nohup,
-          # detached from the SSH session), and only a short tail is streamed back.
-          # This server has a lossy OUTBOUND path to international hosts (the same
-          # issue that broke ACME http-01); streaming the full Docker build log to
-          # an Azure runner stalls and drops the SSH connection (exit 255). Keeping
-          # the channel idle during the build avoids that, and nohup means the build
-          # still finishes server-side even if SSH blips.
-          ssh -i ~/.ssh/id_deploy \
-              -o StrictHostKeyChecking=accept-new \
-              -o ServerAliveInterval=30 -o ServerAliveCountMax=40 \
-              "$DEPLOY_USER@$HOST" '
-            set -u
-            cd /opt/ruletka || exit 1
-            git fetch --depth 1 origin main && git reset --hard origin/main || exit 1
-            : > deploy.log
-            nohup bash infra/deploy/bootstrap.sh >deploy.log 2>&1 </dev/null &
-            wait $!
-            rc=$?
-            echo "==== bootstrap exit=$rc — last 40 log lines ===="
-            tail -n 40 deploy.log
-            exit $rc
+      - name: Launch deploy (detached on server)
+        run: |
+          set -euo pipefail
+          # ONE short SSH: sync main, then launch bootstrap fully detached so the
+          # build survives an SSH disconnect and this session returns in seconds.
+          # No `$` in the inner command → no quoting traps (success → "ok" marker).
+          ssh prod '
+            set -e
+            cd /opt/ruletka
+            git fetch --depth 1 origin main
+            git reset --hard origin/main
+            rm -f deploy.done deploy.log
+            setsid bash -c "if bash infra/deploy/bootstrap.sh > deploy.log 2>&1; then echo ok > deploy.done; else echo fail > deploy.done; fi" </dev/null >/dev/null 2>&1 &
+            sleep 1
+            echo "Bootstrap launched detached on $(hostname). SSH returning."
           '
+
+      - name: Wait for deploy to finish
+        run: |
+          set -uo pipefail
+          echo "Polling for completion over short SSH connections (build runs detached)…"
+          for i in $(seq 1 80); do          # 80 × 12s ≈ 16 min ceiling
+            status="$(ssh prod 'cat /opt/ruletka/deploy.done 2>/dev/null' 2>/dev/null || true)"
+            if [ -n "$status" ]; then
+              echo "==== bootstrap finished: $status — last 60 log lines ===="
+              ssh prod 'tail -n 60 /opt/ruletka/deploy.log 2>/dev/null' 2>/dev/null || true
+              if [ "$status" = "ok" ]; then echo "✅ Deploy succeeded."; exit 0; fi
+              echo "::error::bootstrap reported failure — see the log tail above."
+              exit 1
+            fi
+            if [ $((i % 5)) -eq 0 ]; then
+              echo "--- still deploying (~$((i * 12))s elapsed) — recent log: ---"
+              ssh prod 'tail -n 6 /opt/ruletka/deploy.log 2>/dev/null' 2>/dev/null || true
+            fi
+            sleep 12
+          done
+          echo "::error::Deploy timed out after ~16 min (build still running or stuck)."
+          ssh prod 'tail -n 80 /opt/ruletka/deploy.log 2>/dev/null' 2>/dev/null || true
+          exit 1
