@@ -292,9 +292,15 @@ export class ProfilesService {
       filter.country = query.country;
     }
     if (query.q) {
-      // Anchored, escaped, case-insensitive nickname PREFIX match (no ReDoS,
-      // no full-table contains-scan).
-      filter.nickname = { $regex: `^${escapeRegExp(query.q)}`, $options: 'i' };
+      // Anchored, escaped nickname PREFIX match (no ReDoS, no contains-scan).
+      // NOTE: no `i` flag — case-insensitivity comes from the query COLLATION
+      // (`strength: 2`) below, which lets the match use the `nickname_ci`
+      // collation index as an indexed RANGE scan. A regex with `$options: 'i'`
+      // would instead force a full `_id` index scan + per-doc filter (the
+      // planner cannot use a binary nickname index for a case-insensitive
+      // regex). The charset is `[a-zA-Z0-9_]`, so collation case-folding yields
+      // results identical to the previous `/i` match.
+      filter.nickname = { $regex: `^${escapeRegExp(query.q)}` };
     }
     // Cursor pagination on the monotonic `_id` (descending = newest profiles
     // first). The cursor is the last seen profile's `_id`.
@@ -303,8 +309,13 @@ export class ProfilesService {
     }
 
     // Fetch one extra row to compute `hasMore` without a second count query.
+    // The collation MUST match the `nickname_ci` index definition for the prefix
+    // query to be served by it; it also keeps any nickname comparison
+    // case-insensitive. `_id` sort/cursor bounds are binary ObjectIds and are
+    // unaffected by the collation.
     const rows = await this.profileModel
       .find(filter)
+      .collation({ locale: 'en', strength: 2 })
       .sort({ _id: -1 })
       .limit(query.limit + 1)
       .exec();

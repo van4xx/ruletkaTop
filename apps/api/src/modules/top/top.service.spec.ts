@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import type { Model } from 'mongoose';
+import type { Connection, Model } from 'mongoose';
 
 import type { TopPurchaseDto } from '@ruletka/shared-types';
 
@@ -16,6 +16,21 @@ function findSortReturning(docs: unknown[]): {
     sort: jest.fn().mockReturnThis(),
     exec: jest.fn().mockResolvedValue(docs),
   };
+}
+
+/**
+ * Mongoose `Connection` stub whose `collection('profiles').find().toArray()`
+ * resolves to `profileRows` — the single batched `$in` join the feed performs.
+ * Defaults to no rows (entries then carry `profile: null`).
+ */
+function connectionReturning(profileRows: unknown[] = []): Connection {
+  return {
+    collection: jest.fn().mockReturnValue({
+      find: jest.fn().mockReturnValue({
+        toArray: jest.fn().mockResolvedValue(profileRows),
+      }),
+    }),
+  } as unknown as Connection;
 }
 
 /** Build a stand-in hydrated placement document with ISO-capable date fields. */
@@ -55,6 +70,7 @@ describe('TopService.purchase', () => {
 
     service = new TopService(
       placementModel as unknown as Model<TopPlacementDocument>,
+      connectionReturning(),
       wallet as unknown as WalletService,
     );
   });
@@ -212,13 +228,19 @@ describe('TopService.getActiveFeed', () => {
   let placementModel: { create: jest.Mock; find: jest.Mock };
   let wallet: { debit: jest.Mock; credit: jest.Mock };
 
+  /** Rebuild the service with a profiles-join connection returning `profileRows`. */
+  function buildService(profileRows: unknown[] = []): void {
+    service = new TopService(
+      placementModel as unknown as Model<TopPlacementDocument>,
+      connectionReturning(profileRows),
+      wallet as unknown as WalletService,
+    );
+  }
+
   beforeEach(() => {
     placementModel = { create: jest.fn(), find: jest.fn() };
     wallet = { debit: jest.fn(), credit: jest.fn() };
-    service = new TopService(
-      placementModel as unknown as Model<TopPlacementDocument>,
-      wallet as unknown as WalletService,
-    );
+    buildService();
   });
 
   it('groups active placements into the two lanes, querying each lane with the active window', async () => {
@@ -275,5 +297,41 @@ describe('TopService.getActiveFeed', () => {
     const feed = await service.getActiveFeed();
 
     expect(feed).toEqual({ left: [], right: [] });
+  });
+
+  it('enriches every entry with the promoted profile in one batched join', async () => {
+    const uid = '507f1f77bcf86cd799439011';
+    // Same promoted user in both lanes — the batch must de-dupe to one row.
+    const leftDocs = [placementDoc({ _id: { toString: () => 'L1' }, lane: 'left' })];
+    const rightDocs = [placementDoc({ _id: { toString: () => 'R1' }, lane: 'right' })];
+    placementModel.find
+      .mockReturnValueOnce(findSortReturning(leftDocs))
+      .mockReturnValueOnce(findSortReturning(rightDocs));
+
+    // Rebuild with a connection whose profiles join returns the promoted user.
+    buildService([
+      { userId: { toString: () => uid }, nickname: 'mira', avatarUrl: null, isPremium: true },
+    ]);
+
+    const feed = await service.getActiveFeed();
+
+    expect(feed.left[0]?.profile).toEqual({
+      id: uid,
+      nickname: 'mira',
+      avatarUrl: null,
+      isPremium: true,
+    });
+    expect(feed.right[0]?.profile).toMatchObject({ id: uid, nickname: 'mira' });
+  });
+
+  it('falls back to profile: null when the promoted user has no profile', async () => {
+    placementModel.find
+      .mockReturnValueOnce(findSortReturning([placementDoc({ _id: { toString: () => 'L1' } })]))
+      .mockReturnValueOnce(findSortReturning([]));
+    // Default connection returns no profile rows.
+
+    const feed = await service.getActiveFeed();
+
+    expect(feed.left[0]?.profile).toBeNull();
   });
 });

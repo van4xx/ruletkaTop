@@ -76,6 +76,22 @@ export type GiftTransaction = z.infer<typeof giftTransactionSchema>;
 export const topLaneSchema = z.enum(['left', 'right']);
 export type TopLane = z.infer<typeof topLaneSchema>;
 
+/**
+ * Minimal promoted-user display fields embedded on each active Top placement so
+ * the `/top` feed renders a card WITHOUT a per-placement `GET /profiles/:id`
+ * round-trip (the previous N+1). Mirrors the `friendSummarySchema.profile` pick.
+ * OPTIONAL + nullable so the contract stays backward-compatible: an older API (or
+ * a placement whose profile no longer resolves) simply omits it, and the client
+ * falls back to a generic identicon.
+ */
+export const topPlacementProfileSchema = z.object({
+  id: objectIdSchema,
+  nickname: z.string(),
+  avatarUrl: z.string().nullable(),
+  isPremium: z.boolean(),
+});
+export type TopPlacementProfile = z.infer<typeof topPlacementProfileSchema>;
+
 export const topPlacementSchema = z.object({
   id: objectIdSchema,
   userId: objectIdSchema,
@@ -84,6 +100,12 @@ export const topPlacementSchema = z.object({
   coinsSpent: z.number().int().nonnegative(),
   startsAt: isoDateSchema,
   expiresAt: isoDateSchema,
+  /**
+   * Denormalised display profile for the promoted user, batch-loaded server-side.
+   * Additive + optional: pre-enrichment clients ignore it; `null` when the
+   * promoted user's profile can't be resolved.
+   */
+  profile: topPlacementProfileSchema.nullish(),
 });
 export type TopPlacement = z.infer<typeof topPlacementSchema>;
 

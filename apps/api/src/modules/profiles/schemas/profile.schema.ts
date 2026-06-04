@@ -112,7 +112,20 @@ export const ProfileSchema = SchemaFactory.createForClass(Profile);
 // ── Indexes (PROJECT_SPEC §6) ──────────────────────────────────────────────
 // One profile per account, and the primary lookup key.
 ProfileSchema.index({ userId: 1 }, { unique: true });
-// Unique, case-sensitive handle (validation enforces the charset).
+// Unique, case-sensitive handle (validation enforces the charset). This is the
+// integrity index — it guarantees no two profiles share a nickname (binary
+// comparison) and is NOT used by the case-insensitive search below.
 ProfileSchema.index({ nickname: 1 }, { unique: true });
+// Case-INSENSITIVE nickname index for `GET /profiles/search`'s prefix lookup.
+// `strength: 2` makes comparisons case-insensitive, so a collation-scoped
+// anchored prefix query (see `ProfilesService.searchProfiles`) is served by an
+// indexed RANGE scan instead of the `_id` full-index-scan + per-doc regex
+// fallback the planner is otherwise forced into (a case-insensitive `$regex`
+// cannot use the binary `nickname_1` index). Non-unique: uniqueness is owned by
+// the case-sensitive index above.
+ProfileSchema.index(
+  { nickname: 1 },
+  { name: 'nickname_ci', collation: { locale: 'en', strength: 2 } },
+);
 // Country/gender faceting for discovery surfaces.
 ProfileSchema.index({ country: 1, gender: 1 });

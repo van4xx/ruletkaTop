@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 
 import type {
   TopLane,
   TopPlacement as TopPlacementContract,
+  TopPlacementProfile,
   TopPurchaseDto,
 } from '@ruletka/shared-types';
 
@@ -44,12 +45,21 @@ export class TopService {
   constructor(
     @InjectModel(TopPlacement.name)
     private readonly placementModel: Model<TopPlacementDocument>,
+    @InjectConnection() private readonly connection: Connection,
     private readonly walletService: WalletService,
   ) {}
 
   /**
    * Currently-active placements grouped by lane, each ordered by `priority`
-   * descending (then newest first as a tiebreak).
+   * descending (then newest first as a tiebreak), with the promoted user's
+   * display profile DENORMALISED onto every entry.
+   *
+   * The profile join is a SINGLE batched `$in` over the `profiles` collection
+   * for ALL promoted users across both lanes (not one `GET /profiles/:id` per
+   * card) — this is what kills the previous client-side N+1: the feed now
+   * arrives card-ready in one round-trip. Profiles are read by collection name
+   * via the shared connection (the same approach friends/chat/leaderboard use)
+   * so the top module takes no hard dependency on ProfilesModule.
    */
   async getActiveFeed(): Promise<TopFeed> {
     const now = new Date();
@@ -57,7 +67,62 @@ export class TopService {
       this.activeForLane('left', now),
       this.activeForLane('right', now),
     ]);
-    return { left, right };
+
+    // ONE batched profile lookup for every promoted user across both lanes.
+    const profiles = await this.loadPromotedProfiles([...left, ...right]);
+    const withProfile = (p: TopPlacementContract): TopPlacementContract => ({
+      ...p,
+      profile: profiles.get(p.userId) ?? null,
+    });
+
+    return { left: left.map(withProfile), right: right.map(withProfile) };
+  }
+
+  /**
+   * Batch-load the minimal display profile for a set of placements in ONE `$in`
+   * query against the `profiles` collection, keyed by `userId` (string). Mirrors
+   * `FriendsService.loadMinimalProfiles`. Duplicate promoted users (the same
+   * person in both lanes) cost a single row. A promoted user whose profile no
+   * longer resolves is simply absent from the map (the entry gets `profile:
+   * null`).
+   */
+  private async loadPromotedProfiles(
+    placements: readonly TopPlacementContract[],
+  ): Promise<Map<string, TopPlacementProfile>> {
+    const out = new Map<string, TopPlacementProfile>();
+    if (placements.length === 0) {
+      return out;
+    }
+    const objectIds = Array.from(new Set(placements.map((p) => p.userId)))
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (objectIds.length === 0) {
+      return out;
+    }
+
+    const docs = await this.connection
+      .collection('profiles')
+      .find(
+        { userId: { $in: objectIds } },
+        { projection: { userId: 1, nickname: 1, avatarUrl: 1, isPremium: 1 } },
+      )
+      .toArray();
+
+    for (const doc of docs) {
+      const p = doc as unknown as {
+        userId: Types.ObjectId;
+        nickname?: string;
+        avatarUrl?: string | null;
+        isPremium?: boolean;
+      };
+      out.set(p.userId.toString(), {
+        id: p.userId.toString(),
+        nickname: p.nickname ?? '',
+        avatarUrl: p.avatarUrl ?? null,
+        isPremium: p.isPremium ?? false,
+      });
+    }
+    return out;
   }
 
   /**
