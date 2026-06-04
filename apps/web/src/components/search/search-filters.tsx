@@ -7,11 +7,12 @@
  */
 import { useTranslations } from 'next-intl';
 import { Search, X } from 'lucide-react';
-import type { CountryCode, Gender } from '@ruletka/shared-types';
+import type { CountryCode } from '@ruletka/shared-types';
 import { CountrySelect, IconButton, Input } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
+import type { GenderFilter } from '@/features/search/use-search';
 
-export type GenderFilter = Gender | 'any';
+export type { GenderFilter };
 
 const GENDERS: { value: GenderFilter; labelKey: string }[] = [
   { value: 'any', labelKey: 'search.filterGenderAny' },

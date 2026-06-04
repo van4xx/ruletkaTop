@@ -16,7 +16,9 @@ import type {
   AuthTokens,
   CoinPackage,
   CoinTransaction,
+  CountryCode,
   FriendRequestsResponse,
+  Gender,
   Gift,
   LeaderboardMetric,
   LeaderboardResponse,
@@ -454,6 +456,18 @@ export interface Paginated<T> {
 }
 
 /**
+ * One page of `GET /profiles/search` results — the exact contract shape
+ * (`ProfileSearchResult` on the API): a slice of public profiles plus a flat
+ * cursor (`nextCursor` is `null` when exhausted) and `hasMore`. Note this is the
+ * FLAT envelope (no nested `meta`), distinct from {@link Paginated}.
+ */
+export interface ProfileSearchPage {
+  items: PublicProfile[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/**
  * The high-level API surface. Grouped by domain and fully typed against
  * `@ruletka/shared-types`. Feature agents extend this object as new endpoints
  * land — keep request/response types sourced from the contract.
@@ -506,6 +520,38 @@ export const api = {
     byId: (id: string) => request<PublicProfile>(`/profiles/${id}`),
     update: (dto: UpdateProfileDto) =>
       request<PublicProfile>('/profiles/me', { method: 'PATCH', json: dto }),
+  },
+
+  /**
+   * Public-profile discovery. `search` hits `GET /profiles/search` — a free-text
+   * nickname-PREFIX query (`q`) with optional `gender`/`country` facets,
+   * cursor-paginated (`cursor`/`limit`). The server excludes the caller + anyone
+   * they've blocked. Empty/undefined params are dropped by `request`, so calling
+   * it with no `q` returns the newest profiles (still gender/country-filtered).
+   * Pass a `signal` so a stale, in-flight search is cancelled when the query
+   * string changes.
+   */
+  profiles: {
+    search: (
+      params: {
+        q?: string;
+        gender?: Gender;
+        country?: CountryCode;
+        cursor?: string;
+        limit?: number;
+      },
+      signal?: AbortSignal,
+    ) =>
+      request<ProfileSearchPage>('/profiles/search', {
+        query: {
+          q: params.q,
+          gender: params.gender,
+          country: params.country,
+          cursor: params.cursor,
+          limit: params.limit,
+        },
+        signal,
+      }),
   },
 
   /**
