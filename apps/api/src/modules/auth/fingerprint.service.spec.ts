@@ -88,6 +88,25 @@ describe('FingerprintService.compute', () => {
 });
 
 describe('FingerprintService.isBanned', () => {
+  // The gate is OFF by default (see FingerprintService.isBanned). These cases
+  // exercise the ENABLED path; the dedicated case below covers the default-off.
+  beforeEach(() => {
+    process.env.FINGERPRINT_BAN_ENABLED = 'true';
+  });
+  afterEach(() => {
+    delete process.env.FINGERPRINT_BAN_ENABLED;
+  });
+
+  it('is OFF by default — returns false without consulting storage unless FINGERPRINT_BAN_ENABLED=true', async () => {
+    delete process.env.FINGERPRINT_BAN_ENABLED;
+    const m = buildMocks();
+    Object.assign(m.bannedFingerprintModel, findOneLeanReturning({ _id: 'row' }));
+    const service = makeService(m);
+    // A matching banned row EXISTS, but the disabled gate must not even look.
+    await expect(service.isBanned({ ip: '5.5.5.5', userAgent: 'evader' })).resolves.toBe(false);
+    expect(m.bannedFingerprintModel.findOne).not.toHaveBeenCalled();
+  });
+
   it('returns true when an ACTIVE banned-fingerprint row matches the context', async () => {
     const m = buildMocks();
     Object.assign(m.bannedFingerprintModel, findOneLeanReturning({ _id: 'row' }));

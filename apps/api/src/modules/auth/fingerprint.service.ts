@@ -68,6 +68,17 @@ export class FingerprintService {
    * authoritative gate).
    */
   async isBanned(ctx: FingerprintContext): Promise<boolean> {
+    // OFF by default. The IP+UA fingerprint is deliberately coarse and
+    // false-positives badly behind shared egress (CGNAT, corporate / VPN exit
+    // IPs — extremely common in RU), where ONE banned user would collectively
+    // lock out everyone sharing that IP from register/login. Until a stronger
+    // device signal + mature moderation exist, keep the gate disabled so it can
+    // never strand legitimate users (it had locked out the operator's own
+    // account behind a VPN). `User.isBanned` remains the authoritative
+    // per-account gate. Set FINGERPRINT_BAN_ENABLED=true to re-enable.
+    if (String(process.env.FINGERPRINT_BAN_ENABLED ?? '').toLowerCase() !== 'true') {
+      return false;
+    }
     const fingerprint = this.compute(ctx);
     if (!fingerprint) {
       return false;
