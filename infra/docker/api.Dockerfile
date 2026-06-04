@@ -66,10 +66,19 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 nestjs
 
-# Production node_modules (root + workspace symlinks) and compiled output.
+# Production node_modules + compiled output.
+#   • /app/node_modules         → the root store (node_modules/.pnpm/* — the real
+#                                 package files) + root-level deps.
+#   • /app/apps/api/node_modules → the api package's OWN deps, which pnpm keeps as
+#                                 symlinks into ../../node_modules/.pnpm. WITHOUT
+#                                 this the runtime can't resolve the api's direct
+#                                 deps (@sentry/nestjs, @nestjs/*, …) since this
+#                                 repo uses pnpm's default isolated node-linker
+#                                 (no hoist), and crashes with MODULE_NOT_FOUND.
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/packages ./packages
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder --chown=nestjs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
 
 USER nestjs
