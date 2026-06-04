@@ -17,6 +17,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { validateCriticalConfig } from './common/config-validation';
 import { RedisIoAdapter } from './realtime/redis-io.adapter';
 
 /**
@@ -73,6 +74,14 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService);
   const logger = app.get(Logger);
   const isProd = config.get<string>('NODE_ENV') === 'production';
+
+  // ── Critical-secrets boot guard (FAIL-FAST in production) ──────────────
+  // Before wiring any network resource or accepting a request, assert the
+  // critical secrets (JWT access + refresh) are present and not a shipped
+  // placeholder when NODE_ENV=production; throwing here aborts bootstrap. Also
+  // WARNs (non-fatal) for unconfigured optional integrations (CloudPayments,
+  // TURN, SMTP, VAPID). No-op enforcement in dev/test. Never logs secret values.
+  validateCriticalConfig(config, logger);
 
   // ── Trust the reverse proxy (1 hop) ────────────────────────────────────
   // Behind a load balancer / ingress, Express must trust the first proxy so
