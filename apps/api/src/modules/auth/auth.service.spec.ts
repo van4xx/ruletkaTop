@@ -772,6 +772,92 @@ describe('AuthService.refresh', () => {
     expect(m.sessionModel.create).not.toHaveBeenCalled();
   });
 
+  it('ROTATION GRACE: a within-grace duplicate refresh (token already replaced just now, not revoked) re-issues idempotently and does NOT revoke the family', async () => {
+    const m = buildMocks('commit');
+    m.jwtService.verifyAsync.mockResolvedValue({ sub: USER_ID, family: FAMILY, jti: 'j1' });
+    // The presented token was rotated out ONE SECOND ago (well within the 20s
+    // grace) and was never explicitly revoked → a benign concurrent/double
+    // refresh (two tabs, or a reload racing an open tab presenting the SAME
+    // cookie), not a replay.
+    m.sessionModel.findOne.mockReturnValue(
+      findOneReturning(
+        liveSessionRow({
+          replacedByHash: 'successor-hash',
+          replacedAt: new Date(Date.now() - 1_000),
+        }),
+      ),
+    );
+    m.usersService.findById.mockResolvedValue(fakeUser() as never);
+    const service = makeService(m);
+
+    const res = await service.refresh(PRESENTED, ctx);
+
+    // A fresh pair is handed back in the SAME family — the caller stays logged in.
+    expect(res.tokens.accessToken).toBeTruthy();
+    expect(res.tokens.refreshToken).toBeTruthy();
+    expect(res.tokens.refreshToken).not.toBe(PRESENTED);
+    const [newRow] = m.sessionModel.create.mock.calls[0] as [{ family: string }];
+    expect(newRow.family).toBe(FAMILY);
+    // Crucially, the family is NOT burned: no family-wide revoke happened.
+    expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('detects REUSE of a token replaced LONG AGO (past the grace window) and revokes the whole family', async () => {
+    const m = buildMocks('commit');
+    m.jwtService.verifyAsync.mockResolvedValue({ sub: USER_ID, family: FAMILY, jti: 'j1' });
+    // Same shape as the grace case, but rotated out FIVE MINUTES ago — far past
+    // the grace window → a genuine replay of a long-since-rotated token.
+    m.sessionModel.findOne.mockReturnValue(
+      findOneReturning(
+        liveSessionRow({
+          replacedByHash: 'successor-hash',
+          replacedAt: new Date(Date.now() - 5 * 60 * 1000),
+        }),
+      ),
+    );
+    const service = makeService(m);
+
+    const err = await service.refresh(PRESENTED, ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(UnauthorizedException);
+    expect((err as UnauthorizedException).message).toMatch(/reuse detected/i);
+
+    // The ENTIRE family is burned and NO new token is issued.
+    expect(m.sessionModel.updateMany).toHaveBeenCalledTimes(1);
+    const [familyFilter] = m.sessionModel.updateMany.mock.calls[0] as [Record<string, unknown>];
+    expect(familyFilter).toMatchObject({ family: FAMILY, revokedAt: null });
+    expect(m.sessionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('ROTATION GRACE: a lost link race (modifiedCount !== 1) re-issues idempotently when the winner replaced the row within grace, instead of burning the family', async () => {
+    const m = buildMocks('commit');
+    m.jwtService.verifyAsync.mockResolvedValue({ sub: USER_ID, family: FAMILY, jti: 'j1' });
+    // First findOne (initial lookup) → a live, rotatable row. Second findOne
+    // (the post-race re-read) → the SAME row but now replaced just now by the
+    // winning concurrent rotation. This is the two-tab race where BOTH should
+    // succeed, not log the user out.
+    m.sessionModel.findOne
+      .mockReturnValueOnce(findOneReturning(liveSessionRow()))
+      .mockReturnValueOnce(
+        findOneReturning(
+          liveSessionRow({
+            replacedByHash: 'winner-hash',
+            replacedAt: new Date(Date.now() - 500),
+          }),
+        ),
+      );
+    m.usersService.findById.mockResolvedValue(fakeUser() as never);
+    // Our compare-and-set loses the race → 0 modified.
+    m.sessionModel.updateOne.mockReturnValue(findOneReturning({ modifiedCount: 0 }));
+    const service = makeService(m);
+
+    const res = await service.refresh(PRESENTED, ctx);
+
+    // The caller still gets a valid pair in the same family; the family survives.
+    expect(res.tokens.accessToken).toBeTruthy();
+    expect(res.tokens.refreshToken).toBeTruthy();
+    expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+  });
+
   it('rejects a token with a valid signature but no stored row, revoking the family defensively', async () => {
     const m = buildMocks('commit');
     m.jwtService.verifyAsync.mockResolvedValue({ sub: USER_ID, family: FAMILY, jti: 'j1' });

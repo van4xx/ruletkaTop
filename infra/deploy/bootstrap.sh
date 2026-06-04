@@ -93,6 +93,9 @@ API_PORT=4000
 API_HOST=0.0.0.0
 API_GLOBAL_PREFIX=api
 CORS_ORIGINS=https://ruletka.top,https://www.ruletka.top,https://admin.ruletka.top
+# Parent domain so the refresh + presence cookies are shared across the apex and
+# the api subdomain (fixes cross-subdomain presence-marker desync → spurious logouts).
+COOKIE_DOMAIN=.ruletka.top
 MONGODB_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/ruletka?replicaSet=rs0&retryWrites=true&w=majority
 REDIS_HOST=redis
 REDIS_PORT=6379

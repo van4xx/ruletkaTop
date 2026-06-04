@@ -30,4 +30,5 @@ export {
   useResendVerification,
 } from './use-auth-email';
 export { AuthBootstrapper } from './auth-bootstrapper';
+export { SessionExpiryWatcher } from './session-expiry-watcher';
 export { RequireAuth } from './require-auth';

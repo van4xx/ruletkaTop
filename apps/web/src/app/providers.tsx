@@ -22,8 +22,8 @@ import {
   type QueryClient as QueryClientType,
 } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
-import { TooltipProvider } from '@ruletka/ui';
-import { AuthBootstrapper } from '@/features/auth';
+import { Toaster, TooltipProvider } from '@ruletka/ui';
+import { AuthBootstrapper, SessionExpiryWatcher } from '@/features/auth';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { ModalHost } from '@/components/modals';
 import { ApiClientError } from '@/lib/api';
@@ -141,6 +141,10 @@ export function Providers({ children, nonce }: { children: ReactNode; nonce?: st
           {/* Hydrates the auth store from a persisted session and binds the
               realtime socket to the current token. Renders nothing. */}
           <AuthBootstrapper />
+          {/* Shows the "session expired, sign in again" toast + clears auth on a
+              hard refresh 401 (the api client's only true "session is gone"
+              signal). Renders nothing. */}
+          <SessionExpiryWatcher />
           {/* Warms likely-next-navigation caches once boot settles. Renders nothing. */}
           <RoutePrefetcher queryClient={queryClient} />
           {/* Re-registers an existing Web Push subscription for signed-in users. */}
@@ -150,6 +154,11 @@ export function Providers({ children, nonce }: { children: ReactNode; nonce?: st
               also owns the incoming-call socket listener, so any component can
               `open(...)` a modal without prop-drilling. */}
           <ModalHost />
+          {/* Single app-wide toast region. Cross-cutting toasts (e.g. the
+              session-expiry notice) can fire on ANY route, so the Toaster must be
+              global here. The former per-route-group <Toaster/> mounts (roulette,
+              admin) were removed to avoid a duplicate toast stack. */}
+          <Toaster />
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

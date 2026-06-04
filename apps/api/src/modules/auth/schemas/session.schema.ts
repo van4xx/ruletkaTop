@@ -34,6 +34,18 @@ export class Session {
   @Prop({ required: false, default: null, type: String })
   replacedByHash!: string | null;
 
+  /**
+   * When this token was rotated out (set alongside `replacedByHash`). Lets the
+   * refresh path apply a short ROTATION GRACE: a just-rotated token presented
+   * again within the grace window is a benign concurrent/double refresh (two
+   * tabs, a reload racing an open tab) and is re-issued idempotently against the
+   * successor instead of burning the whole family. A replay LONG after rotation
+   * (or any explicitly revoked token) still trips genuine reuse detection.
+   * Additive + nullable (defaults null), so no migration is required.
+   */
+  @Prop({ required: false, default: null, type: Date })
+  replacedAt!: Date | null;
+
   /** Set when explicitly revoked (logout) or revoked due to reuse detection. */
   @Prop({ required: false, default: null, type: Date })
   revokedAt!: Date | null;

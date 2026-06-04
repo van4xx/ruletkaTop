@@ -291,7 +291,28 @@ export class AuthController {
     return null;
   }
 
-  /** Cookie attributes: httpOnly, Secure (prod/https), SameSite=Strict, /auth-scoped. */
+  /**
+   * Optional parent-domain for the auth cookies (`COOKIE_DOMAIN`, e.g.
+   * `.ruletka.top` in prod). Sharing both cookies across `ruletka.top` +
+   * `api.ruletka.top` lets the server-set presence marker reach the edge
+   * middleware on the apex, and lets the refresh cookie ride the credentialed
+   * cross-subdomain refresh. Blank in dev (localhost is single-origin) → the
+   * cookie stays host-only, so `undefined` is returned and `res.cookie` omits
+   * the `Domain` attribute entirely.
+   */
+  private cookieDomain(): string | undefined {
+    const domain = this.configService.get<string>('COOKIE_DOMAIN');
+    return domain && domain.length > 0 ? domain : undefined;
+  }
+
+  /**
+   * Cookie attributes: httpOnly, Secure (prod/https), SameSite=Lax, /auth-scoped,
+   * optional parent-domain. SameSite=Lax (not Strict) is correct for a
+   * credentialed cross-subdomain refresh under a shared `COOKIE_DOMAIN`: Strict
+   * can withhold the cookie after top-level redirects / some reload paths, which
+   * surfaces as a spurious logout. The cookie is still httpOnly + Secure +
+   * path-scoped to `/<prefix>/auth`, so it never rides ordinary API calls.
+   */
   private refreshCookieOptions(): CookieOptions {
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
     const globalPrefix = this.configService.get<string>('API_GLOBAL_PREFIX', 'api');
@@ -301,15 +322,18 @@ export class AuthController {
     return {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'strict',
+      sameSite: 'lax',
       path,
+      domain: this.cookieDomain(),
       maxAge: this.refreshMaxAgeMs(),
     };
   }
 
   /**
-   * Presence-marker cookie options: non-httpOnly, root-path, SameSite=Lax so it
-   * rides the top-level navigations the edge middleware gates on.
+   * Presence-marker cookie options: non-httpOnly, root-path, SameSite=Lax,
+   * optional parent-domain so it rides the top-level navigations the edge
+   * middleware gates on and is visible on the apex when the API lives on a
+   * sibling subdomain.
    */
   private presenceCookieOptions(): CookieOptions {
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
@@ -318,6 +342,7 @@ export class AuthController {
       secure: isProd,
       sameSite: 'lax',
       path: '/',
+      domain: this.cookieDomain(),
       maxAge: this.refreshMaxAgeMs(),
     };
   }

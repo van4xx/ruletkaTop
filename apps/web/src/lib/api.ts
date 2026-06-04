@@ -98,6 +98,19 @@ export function configureTokenStore(store: TokenStore): void {
 /** Imperatively set or clear the current auth tokens (access token only). */
 export function setAuthTokens(tokens: AuthTokens | null): void {
   tokenStore.setTokens(tokens);
+  // Keep the proactive-refresh timer in lock-step with the live token: a fresh
+  // token (re)schedules a silent refresh just before its `exp`; clearing the
+  // token cancels it. This keeps a valid access token in memory continuously, so
+  // the first wave of requests after an idle period goes out authenticated
+  // instead of 401-then-refresh-retrying (the most common felt "it logged me out").
+  if (tokens?.accessToken) {
+    // A live session again → re-arm the expiry latch so a LATER genuine expiry
+    // can fire a fresh toast.
+    sessionExpiredNotified = false;
+    scheduleProactiveRefresh(tokens.accessToken);
+  } else {
+    stopProactiveRefresh();
+  }
 }
 
 /**
@@ -257,20 +270,83 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return url.toString();
 }
 
+// ───────────────────────── Refresh outcome ────────────────────────────
+/**
+ * Why a refresh attempt did NOT yield a token. Lets callers (boot, the 401
+ * retry) tell a TRUE rejection — the refresh cookie is gone/invalid, the only
+ * real "your session is over" signal — apart from a TRANSIENT failure (offline,
+ * 5xx, cold API) that should be retried rather than logging the user out.
+ *
+ * - `unauthorized` — the server answered `401` (refresh cookie missing/expired/
+ *   revoked / reuse-detected). Clear auth.
+ * - `transient`    — the request never completed (network) or the server 5xx'd.
+ *   Keep the session; retry.
+ */
+export type RefreshFailureReason = 'unauthorized' | 'transient';
+
+/** Result of a refresh attempt: success carries no reason; failure carries one. */
+export type RefreshResult =
+  | { ok: true }
+  | { ok: false; reason: RefreshFailureReason };
+
 /** In-flight refresh promise, so concurrent 401s share one refresh round-trip. */
-let refreshInFlight: Promise<boolean> | null = null;
+let refreshInFlight: Promise<RefreshResult> | null = null;
+
+// ───────────────────── Session-expiry notification ────────────────────
+/**
+ * Subscribers notified when a refresh is HARD-rejected (`401`) — the one true
+ * "your session is over" signal, as opposed to a transient network/5xx blip
+ * (which keeps the session and retries). This lets the React layer surface a
+ * localized "session expired, sign in again" toast and tear the session down in
+ * ONE place, without `api.ts` importing the store, i18n or the toast lib.
+ *
+ * Fired at most once per expiry burst (a `notified` latch is reset the moment a
+ * fresh token is stored), so a wave of concurrent 401s yields a single toast.
+ */
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+let sessionExpiredNotified = false;
+
+/**
+ * Subscribe to hard session-expiry. Returns an unsubscribe fn. Used by a small
+ * client component (mounted at the app root) to show the expiry toast + clear
+ * auth. Safe in SSR (the set simply never fires there).
+ */
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => sessionExpiredListeners.delete(listener);
+}
+
+/** Emit the hard-expiry signal once per burst. */
+function emitSessionExpired(): void {
+  if (sessionExpiredNotified) return;
+  sessionExpiredNotified = true;
+  for (const listener of sessionExpiredListeners) {
+    try {
+      listener();
+    } catch {
+      /* a misbehaving listener must not break the refresh path */
+    }
+  }
+}
 
 /**
  * Exchange the httpOnly refresh COOKIE for a fresh access token.
  *
  * Sends no body and no bearer — the refresh token rides along as a cookie
  * (`credentials: 'include'`), and the API rotates that cookie in its response.
- * The new access token (response body) is stored in memory. Returns `true` on
- * success. Concurrent callers share a single in-flight round-trip.
+ * The new access token (response body) is stored in memory. Concurrent callers
+ * share a single in-flight round-trip.
+ *
+ * Returns a {@link RefreshResult}: `{ ok: true }` on success, otherwise a reason
+ * distinguishing a hard `401` (`unauthorized` → clear auth) from a network/5xx
+ * blip (`transient` → keep the session, retry). On a hard 401 the in-memory
+ * token is cleared; on a transient failure it is LEFT ALONE so a still-valid
+ * cookie can succeed on the next attempt.
  */
-async function tryRefresh(): Promise<boolean> {
+async function tryRefresh(): Promise<RefreshResult> {
   if (!refreshInFlight) {
-    refreshInFlight = (async () => {
+    refreshInFlight = (async (): Promise<RefreshResult> => {
       try {
         const res = await fetch(buildUrl('/auth/refresh'), {
           method: 'POST',
@@ -278,8 +354,15 @@ async function tryRefresh(): Promise<boolean> {
           credentials: 'include',
         });
         if (!res.ok) {
+          // A 5xx is a server-side blip — transient, keep the in-memory token.
+          // Any other non-2xx (401/403/…) means the refresh credential is no
+          // longer honoured → a true rejection: clear auth.
+          if (res.status >= 500) {
+            return { ok: false, reason: 'transient' };
+          }
           setAuthTokens(null);
-          return false;
+          emitSessionExpired();
+          return { ok: false, reason: 'unauthorized' };
         }
         // The API returns an AuthResponse ({ user, tokens }); the refresh token
         // stays in the rotated httpOnly cookie, so only tokens.accessToken matters.
@@ -287,13 +370,15 @@ async function tryRefresh(): Promise<boolean> {
         const tokens = body.tokens;
         if (!tokens?.accessToken) {
           setAuthTokens(null);
-          return false;
+          emitSessionExpired();
+          return { ok: false, reason: 'unauthorized' };
         }
         setAuthTokens(tokens);
-        return true;
+        return { ok: true };
       } catch {
-        setAuthTokens(null);
-        return false;
+        // `fetch` threw → the request never completed (offline / DNS / reset).
+        // Transient: do NOT clear the token, so a recovered network can refresh.
+        return { ok: false, reason: 'transient' };
       } finally {
         refreshInFlight = null;
       }
@@ -305,11 +390,105 @@ async function tryRefresh(): Promise<boolean> {
 /**
  * Public boot/rehydrate hook: attempt to acquire an access token from the
  * refresh cookie. Used on app load (there is no persisted access token to
- * restore — only the httpOnly cookie). Returns `true` if a session was
- * re-established.
+ * restore — only the httpOnly cookie) and by the proactive scheduler. Returns
+ * the full {@link RefreshResult} so the boot sequence can retry on `transient`
+ * and clear only on `unauthorized`.
  */
-export function refreshAccessToken(): Promise<boolean> {
+export function refreshAccessToken(): Promise<RefreshResult> {
   return tryRefresh();
+}
+
+// ───────────────────────── Proactive refresh ──────────────────────────
+/**
+ * Decode a JWT's payload (the middle base64url segment) WITHOUT verifying the
+ * signature — the server is the only authority on validity; here we just want
+ * the `exp` claim to time a silent refresh. Returns `null` for anything that
+ * isn't a well-formed three-part JWT with a numeric `exp`.
+ */
+function readJwtExpMs(token: string): number | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const payloadSegment = parts[1];
+  if (!payloadSegment) return null;
+  try {
+    // base64url → base64, then decode. `atob` exists in browsers and modern
+    // Node; this scheduler only ever runs in the browser (timers are no-ops in
+    // SSR because `setAuthTokens` is only called client-side after login/boot).
+    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+    const json = typeof atob === 'function' ? atob(base64) : '';
+    if (!json) return null;
+    const payload = JSON.parse(json) as { exp?: unknown };
+    if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) return null;
+    return payload.exp * 1000;
+  } catch {
+    return null;
+  }
+}
+
+/** Lead time before `exp` at which we proactively refresh (60s). */
+const PROACTIVE_REFRESH_LEAD_MS = 60_000;
+/** Floor for the scheduled delay so a near-expiry token still defers briefly. */
+const PROACTIVE_REFRESH_MIN_MS = 10_000;
+
+/** Handle for the single pending proactive-refresh timer (browser only). */
+let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Cancel any pending proactive refresh. Safe to call repeatedly / in SSR. */
+export function stopProactiveRefresh(): void {
+  if (proactiveRefreshTimer !== null) {
+    clearTimeout(proactiveRefreshTimer);
+    proactiveRefreshTimer = null;
+  }
+}
+
+/**
+ * Schedule the next silent refresh ~`PROACTIVE_REFRESH_LEAD_MS` before the
+ * current access token's `exp` (clamped to a sane minimum). Recomputed on every
+ * successful refresh (each new token re-arms this), so a logged-in session keeps
+ * a valid token in memory continuously. No-op outside the browser, or when the
+ * token carries no decodable `exp`.
+ */
+function scheduleProactiveRefresh(accessToken: string): void {
+  stopProactiveRefresh();
+  if (typeof window === 'undefined') return;
+
+  const expMs = readJwtExpMs(accessToken);
+  if (expMs === null) return;
+
+  const delayMs = Math.max(expMs - Date.now() - PROACTIVE_REFRESH_LEAD_MS, PROACTIVE_REFRESH_MIN_MS);
+  proactiveRefreshTimer = setTimeout(() => {
+    proactiveRefreshTimer = null;
+    // Fire and forget: success re-arms the timer via setAuthTokens; a transient
+    // failure leaves the (still-valid) token in place, and the reactive 401 path
+    // plus the resume listeners remain as backstops.
+    void tryRefresh();
+  }, delayMs);
+}
+
+/**
+ * Refresh-on-resume: a tab suspended in the background (mobile especially) can
+ * miss its scheduled proactive refresh and wake with a dead access token. When
+ * the tab becomes visible or the network returns, refresh immediately IF a
+ * session marker exists but no live access token is held — so the first request
+ * after resume goes out authenticated instead of 401-ing. Registered once.
+ */
+let resumeListenersBound = false;
+export function bindRefreshOnResume(): void {
+  if (resumeListenersBound || typeof window === 'undefined') return;
+  resumeListenersBound = true;
+
+  const maybeRefresh = (): void => {
+    if (!hasSessionCookie()) return;
+    if (tokenStore.getAccessToken()) return;
+    void tryRefresh();
+  };
+
+  window.addEventListener('online', maybeRefresh);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') maybeRefresh();
+    });
+  }
 }
 
 /**
@@ -365,7 +544,7 @@ async function performRequest<T>(path: string, options: RequestOptions): Promise
   // fresh access token from body.tokens.accessToken and stores it in memory.)
   if (res.status === 401 && !skipAuth && !_isRetry) {
     const refreshed = await tryRefresh();
-    if (refreshed) {
+    if (refreshed.ok) {
       return performRequest<T>(path, { ...options, _isRetry: true });
     }
   }

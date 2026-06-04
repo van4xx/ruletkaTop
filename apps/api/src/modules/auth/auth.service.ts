@@ -64,6 +64,22 @@ const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
 
 /**
+ * ROTATION GRACE window. When a refresh token was rotated out (`replacedByHash`
+ * set) less than this long ago and was NOT explicitly revoked, presenting it
+ * again is treated as a benign concurrent/double refresh — multiple tabs, or a
+ * page reload racing an already-open tab, each present the SAME current cookie;
+ * the loser of the rotation race would otherwise look like a replayed token and
+ * burn the whole family (logging the user out everywhere).
+ *
+ * Within the grace window we re-issue idempotently against the recorded
+ * successor instead of revoking. Outside it (a true replay long after rotation),
+ * or for any revoked token, genuine reuse detection still burns the family. 20s
+ * comfortably covers slow-mobile double-loads while staying far below the access
+ * token TTL.
+ */
+const ROTATION_GRACE_MS = 20_000;
+
+/**
  * A small denylist of the most-breached passwords. The zod `passwordSchema`
  * already enforces length (≥8); this rejects the trivially-guessable strings
  * that still pass that bar. Compared case-insensitively. Kept intentionally
@@ -491,9 +507,23 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    // REUSE detection: a token we already replaced or explicitly revoked is
-    // being presented again → compromise. Burn the whole family.
-    if (existing.replacedByHash !== null || existing.revokedAt !== null) {
+    // A token we EXPLICITLY revoked (logout / reuse-burn / password reset) is a
+    // hard signal — never within grace. Burn the family.
+    if (existing.revokedAt !== null) {
+      await this.revokeFamily(existing.family);
+      throw new UnauthorizedException('Refresh token reuse detected');
+    }
+
+    // ROTATION GRACE: the token was already rotated out, but only just now and
+    // it was not revoked → this is a benign concurrent/double refresh (two tabs,
+    // or a reload racing an open tab presenting the same cookie). Re-issue
+    // idempotently against the family instead of burning it. A replay LONG after
+    // rotation falls through to genuine reuse detection below.
+    if (existing.replacedByHash !== null) {
+      if (this.isWithinRotationGrace(existing.replacedAt)) {
+        return this.reissueWithinGrace(existing.family, existing.userId.toString(), ctx);
+      }
+      // Stale replay of a long-since-rotated token → compromise. Burn the family.
       await this.revokeFamily(existing.family);
       throw new UnauthorizedException('Refresh token reuse detected');
     }
@@ -519,7 +549,7 @@ export class AuthService {
 
     // Mint the successor, then atomically link the old row to it. The compare
     // on `replacedByHash: null` makes concurrent rotations of the same token
-    // race-safe: only one wins; the loser is caught as reuse on its next use.
+    // race-safe: only one wins; the loser is caught here as `modifiedCount !== 1`.
     const tokens = await this.issueSession(
       { sub: userId, role: user.role, isPremium },
       existing.family,
@@ -528,12 +558,26 @@ export class AuthService {
     const linked = await this.sessionModel
       .updateOne(
         { tokenHash, replacedByHash: null, revokedAt: null },
-        { $set: { replacedByHash: this.hashToken(tokens.refreshToken) } },
+        { $set: { replacedByHash: this.hashToken(tokens.refreshToken), replacedAt: new Date() } },
       )
       .exec();
 
     if (linked.modifiedCount !== 1) {
-      // Lost a concurrent rotation race → treat as reuse and burn the family.
+      // Lost a concurrent rotation race. Re-read the row: if the WINNER replaced
+      // it just now (within grace) and it was not revoked, this is the same
+      // benign double refresh — re-issue idempotently rather than burning the
+      // family. (We already minted `tokens` above; that orphan row simply ages
+      // out via the TTL index — it is never handed to the caller.) Only a row
+      // that is revoked, or replaced long ago, is genuine reuse.
+      const current = await this.sessionModel.findOne({ tokenHash }).exec();
+      if (
+        current &&
+        current.revokedAt === null &&
+        current.replacedByHash !== null &&
+        this.isWithinRotationGrace(current.replacedAt)
+      ) {
+        return this.reissueWithinGrace(existing.family, userId, ctx);
+      }
       await this.revokeFamily(existing.family);
       throw new UnauthorizedException('Refresh token reuse detected');
     }
@@ -543,6 +587,52 @@ export class AuthService {
       email: user.email,
       role: user.role,
       nickname: await this.resolveNickname(userId),
+      isPremium,
+      emailVerified: user.emailVerified ?? false,
+    };
+    return { user: authUser, tokens };
+  }
+
+  /** True when a row was rotated out within the rotation-grace window. */
+  private isWithinRotationGrace(replacedAt: Date | null | undefined): boolean {
+    if (!replacedAt) return false;
+    return Date.now() - replacedAt.getTime() <= ROTATION_GRACE_MS;
+  }
+
+  /**
+   * Idempotently re-issue a fresh token pair in `family` for a benign within-grace
+   * duplicate refresh (concurrent tabs / reload race). Re-resolves live auth
+   * claims (so a since-banned account is still rejected) and mints a new session
+   * row in the SAME family WITHOUT revoking it. The genuine-reuse / stale-replay
+   * paths are handled by the caller; this is only reached inside the grace window.
+   */
+  private async reissueWithinGrace(
+    family: string,
+    userId: string,
+    ctx: SessionContext,
+  ): Promise<AuthResponse> {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      await this.revokeFamily(family);
+      throw new UnauthorizedException('Account no longer exists');
+    }
+    if (user.isBanned) {
+      await this.revokeFamily(family);
+      throw new UnauthorizedException('Account is banned');
+    }
+
+    const isPremium = await this.resolveIsPremium(user._id.toString());
+    const resolvedId = user._id.toString();
+    const tokens = await this.issueSession(
+      { sub: resolvedId, role: user.role, isPremium },
+      family,
+      ctx,
+    );
+    const authUser: AuthUser = {
+      id: resolvedId,
+      email: user.email,
+      role: user.role,
+      nickname: await this.resolveNickname(resolvedId),
       isPremium,
       emailVerified: user.emailVerified ?? false,
     };
@@ -875,6 +965,7 @@ export class AuthService {
       family,
       expiresAt: this.refreshExpiryDate(refreshToken),
       replacedByHash: null,
+      replacedAt: null,
       revokedAt: null,
       ip: ctx.ip ?? null,
       userAgent: ctx.userAgent ?? null,
