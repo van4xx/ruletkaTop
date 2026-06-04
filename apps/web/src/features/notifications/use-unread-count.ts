@@ -66,11 +66,16 @@ export function useUnreadCount(): UseUnreadCountResult {
   });
 
   // Keep the badge live: a new socket delivery increments the count even when
-  // the history list isn't mounted (de-duped by id across listeners).
-  useSocket();
-  useSocketEvent('notif:new', (n) => {
-    if (isAuthenticated) bumpOnce(queryClient, n.id);
-  });
+  // the history list isn't mounted (de-duped by id across listeners). `notif:new`
+  // is delivered on the /mm gateway, so we bind there.
+  useSocket('/mm');
+  useSocketEvent(
+    'notif:new',
+    (n) => {
+      if (isAuthenticated) bumpOnce(queryClient, n.id);
+    },
+    '/mm',
+  );
 
   return { count: query.data?.count ?? 0, isLoading: query.isLoading };
 }

@@ -109,14 +109,19 @@ export function useNotifications(): UseNotificationsResult {
   );
 
   // ── Realtime: fold every `notif:new` into the history cache ──
-  // The unread badge is bumped centrally by `useUnreadCount` (which this hook
-  // also consumes), so we only touch the feed cache here — no double counting
-  // when both the center and the header bell are mounted.
-  useSocket();
-  useSocketEvent('notif:new', (n: AppNotification) => {
-    const stored = toStoredNotification(n);
-    queryClient.setQueryData<FeedCache>(listKey, (prev) => prependToFeed(prev, stored));
-  });
+  // `notif:new` is delivered by the /mm gateway, so we bind on '/mm'. The unread
+  // badge is bumped centrally by `useUnreadCount` (which this hook also
+  // consumes), so we only touch the feed cache here — no double counting when
+  // both the center and the header bell are mounted.
+  useSocket('/mm');
+  useSocketEvent(
+    'notif:new',
+    (n: AppNotification) => {
+      const stored = toStoredNotification(n);
+      queryClient.setQueryData<FeedCache>(listKey, (prev) => prependToFeed(prev, stored));
+    },
+    '/mm',
+  );
 
   // ── Read mutations (optimistic; server is source of truth) ──
   const markReadMutation = useMutation({

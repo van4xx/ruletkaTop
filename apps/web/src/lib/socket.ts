@@ -31,24 +31,42 @@ import { getAccessToken } from '@/lib/api';
 /** Concrete, fully-typed socket instance type used across the app. */
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
+/**
+ * The realtime namespaces the backend exposes. Each is a SEPARATE socket.io
+ * connection (one engine.io transport per namespace):
+ *  - `/mm`   — matchmaking/roulette (`mm:*`, `rtc:*`), notification delivery
+ *    (`notif:new`), moderation (`mod:action`) and presence. The default socket.
+ *  - `/chat` — direct messaging (`chat:*`).
+ */
+export type SocketNamespace = '/mm' | '/chat';
+
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:4000';
 
-let socket: AppSocket | null = null;
+/**
+ * One socket per namespace, created lazily on first {@link getSocket} call.
+ * Both connections share the same handshake/auth and reconnection tuning; they
+ * are connected and disconnected together by {@link connectSocket} /
+ * {@link disconnectSocket} so their lifecycle is owned centrally by login.
+ */
+const sockets = new Map<SocketNamespace, AppSocket>();
 
 /**
  * The token to present at the NEXT handshake. Kept in module scope (not on
  * `socket.auth`) so the auth callback always reads the freshest value — set by
- * {@link connectSocket} and read lazily by the handshake function below.
+ * {@link connectSocket} and read lazily by the handshake function below. Shared
+ * across namespaces so every connection re-handshakes the same JWT.
  */
 let pendingToken: string | null = null;
 
 /**
- * Returns the shared socket instance, creating it on first use. Safe to call
- * during render — it does not connect until {@link connectSocket} is invoked.
+ * Returns the shared socket for `namespace`, creating it on first use. Safe to
+ * call during render — it does not connect until {@link connectSocket} is
+ * invoked. Defaults to the primary `/mm` socket (matchmaking + notifications).
  */
-export function getSocket(): AppSocket {
+export function getSocket(namespace: SocketNamespace = '/mm'): AppSocket {
+  let socket = sockets.get(namespace);
   if (!socket) {
-    socket = io(WS_URL, {
+    socket = io(`${WS_URL}${namespace}`, {
       autoConnect: false,
       // Prefer WebSocket; fall back to polling only if the upgrade fails.
       transports: ['websocket', 'polling'],
@@ -73,40 +91,55 @@ export function getSocket(): AppSocket {
         cb({ token: pendingToken ?? getAccessToken() });
       },
     });
+    sockets.set(namespace, socket);
   }
   return socket;
 }
 
+/** The namespaces opened app-wide on login (and torn down on logout). */
+const MANAGED_NAMESPACES: readonly SocketNamespace[] = ['/mm', '/chat'];
+
 /**
- * Sets the bearer token used in the handshake and (re)connects.
+ * Sets the bearer token used in the handshake and (re)connects EVERY managed
+ * namespace (`/mm` + `/chat`).
  *
- * The token is stored in module scope and read lazily by the handshake
+ * The token is stored in module scope and read lazily by each handshake
  * function, so reconnect attempts always use the freshest credentials. Passing
- * `null` clears the token and disconnects.
+ * `null` clears the token and disconnects all namespaces.
+ *
+ * Returns the primary `/mm` socket for callers that want a handle.
  */
 export function connectSocket(accessToken: string | null): AppSocket {
-  const s = getSocket();
   if (!accessToken) {
     pendingToken = null;
-    s.disconnect();
-    return s;
+    disconnectSocket();
+    return getSocket('/mm');
   }
   const tokenChanged = pendingToken !== accessToken;
   pendingToken = accessToken;
-  if (s.connected && tokenChanged) {
-    // Credentials changed mid-session (e.g. a token refresh): force a clean
-    // re-handshake so the gateway re-authenticates with the new token. If the
-    // token is unchanged, leave the live connection untouched (no flap).
-    s.disconnect();
-    s.connect();
-  } else if (!s.connected) {
-    s.connect();
+  for (const namespace of MANAGED_NAMESPACES) {
+    const s = getSocket(namespace);
+    if (s.connected && tokenChanged) {
+      // Credentials changed mid-session (e.g. a token refresh): force a clean
+      // re-handshake so the gateway re-authenticates with the new token. If the
+      // token is unchanged, leave the live connection untouched (no flap).
+      s.disconnect();
+      s.connect();
+    } else if (!s.connected) {
+      s.connect();
+    }
   }
-  return s;
+  return getSocket('/mm');
 }
 
-/** Disconnects the socket if connected, and clears the pending token. Idempotent. */
+/**
+ * Disconnects ALL namespaced sockets if connected, and clears the pending
+ * token. Idempotent. Only sockets already created are touched (we don't spin up
+ * a connection just to disconnect it).
+ */
 export function disconnectSocket(): void {
   pendingToken = null;
-  socket?.disconnect();
+  for (const s of sockets.values()) {
+    s.disconnect();
+  }
 }

@@ -19,7 +19,7 @@ import { Mic, PhoneIncoming, PhoneOff, Video } from 'lucide-react';
 import { Avatar, Button, DialogDescription, DialogHeader, DialogTitle } from '@ruletka/ui';
 import { api, ApiClientError } from '@/lib/api';
 import { useModal, useModalProps } from '@/lib/stores/modal-store';
-import { emitSocket } from '@/features/chat/lib/use-socket';
+import { emitSocketOn } from '@/features/chat/lib/use-socket';
 
 /** Auto-decline after this long if the user doesn't respond (ms). */
 const AUTO_DECLINE_MS = 30_000;
@@ -49,11 +49,12 @@ export function CallInviteModal() {
   const isVideo = type === 'video';
 
   function decline() {
-    emitSocket('call:decline', { callId });
+    // Calls ride the primary /mm socket (alongside matchmaking + notifications).
+    emitSocketOn('/mm', 'call:decline', { callId });
     close();
   }
   function accept() {
-    emitSocket('call:accept', { callId });
+    emitSocketOn('/mm', 'call:accept', { callId });
     close();
   }
 

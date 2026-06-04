@@ -35,17 +35,22 @@ export function useFriendRequestsInbox(): {
   const qc = useQueryClient();
   const [requests, setRequests] = useState<FriendRequestNotice[]>([]);
 
-  useSocketEvent('notif:new', (n) => {
-    if (n.kind === 'friend_request') {
-      const notice: FriendRequestNotice = { ...n, kind: 'friend_request' };
-      setRequests((prev) => {
-        if (prev.some((r) => r.id === notice.id)) return prev;
-        return [notice, ...prev].slice(0, 50);
-      });
-      // A new relationship may now be visible; refresh the accepted list lazily.
-      void qc.invalidateQueries({ queryKey: friendsKeys.list() });
-    }
-  });
+  useSocketEvent(
+    'notif:new',
+    (n) => {
+      if (n.kind === 'friend_request') {
+        const notice: FriendRequestNotice = { ...n, kind: 'friend_request' };
+        setRequests((prev) => {
+          if (prev.some((r) => r.id === notice.id)) return prev;
+          return [notice, ...prev].slice(0, 50);
+        });
+        // A new relationship may now be visible; refresh the accepted list lazily.
+        void qc.invalidateQueries({ queryKey: friendsKeys.list() });
+      }
+    },
+    // `notif:new` is delivered on the /mm gateway.
+    '/mm',
+  );
 
   const dismiss = (id: string) => setRequests((prev) => prev.filter((r) => r.id !== id));
 

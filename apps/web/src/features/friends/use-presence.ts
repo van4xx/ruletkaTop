@@ -6,6 +6,11 @@
  * real time via `presence:online` / `presence:offline`. Subscribes the socket
  * to the ids it cares about via `presence:subscribe`.
  *
+ * All presence traffic rides the `/mm` socket (presence is delivered by the /mm
+ * gateway). NOTE: the backend has no `presence:*` handler yet, so live updates
+ * won't actually arrive until that lands — this keeps the wiring on the right
+ * namespace so it lights up the moment the backend gap is closed.
+ *
  * Used by the friends list (live dots) and the chat header.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +25,7 @@ export type PresenceMap = Record<string, OnlineStatus>;
  * @param seed      initial statuses (e.g. server-provided), applied once per id
  */
 export function usePresence(userIds: string[], seed?: PresenceMap): PresenceMap {
-  const socket = useSocket();
+  const socket = useSocket('/mm');
   const [presence, setPresence] = useState<PresenceMap>(() => ({ ...seed }));
 
   // Stable, de-duplicated, sorted key so the subscribe effect only re-runs when
@@ -59,12 +64,20 @@ export function usePresence(userIds: string[], seed?: PresenceMap): PresenceMap 
     };
   }, [socket, idsKey]);
 
-  useSocketEvent('presence:online', (p) => {
-    setPresence((prev) => ({ ...prev, [p.userId]: p.status ?? 'online' }));
-  });
-  useSocketEvent('presence:offline', (p) => {
-    setPresence((prev) => ({ ...prev, [p.userId]: 'offline' }));
-  });
+  useSocketEvent(
+    'presence:online',
+    (p) => {
+      setPresence((prev) => ({ ...prev, [p.userId]: p.status ?? 'online' }));
+    },
+    '/mm',
+  );
+  useSocketEvent(
+    'presence:offline',
+    (p) => {
+      setPresence((prev) => ({ ...prev, [p.userId]: 'offline' }));
+    },
+    '/mm',
+  );
 
   return presence;
 }

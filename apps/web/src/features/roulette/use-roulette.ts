@@ -18,9 +18,13 @@
  *   ⇄ `rtc:ice-candidate` both directions (queued until remoteDescription set)
  *   ← `rtc:hangup` / socket disconnect → status 'ended' → auto-requeue
  *   next()  → `rtc:hangup` + close peer + emit `mm:next`
- *   stop()  → `mm:leave` + close peer + stop all tracks + disconnect
+ *   stop()  → `mm:leave` + close peer + stop all tracks
  *
- * Everything is torn down deterministically on stop()/next()/unmount.
+ * Everything is torn down deterministically on stop()/next()/unmount. NOTE:
+ * leaving a session does NOT disconnect the shared `/mm` socket — its lifecycle
+ * is owned by login/logout, and notifications + chat ride on it app-wide, so we
+ * only exit the queue/match (`mm:leave`) and tear down this hook's own listeners
+ * and local media.
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -31,7 +35,7 @@ import type {
   RtcOfferPayload,
 } from '@ruletka/shared-types';
 
-import { getSocket, connectSocket, disconnectSocket } from '@/lib/socket';
+import { getSocket, connectSocket } from '@/lib/socket';
 import { api } from '@/lib/api';
 import {
   FALLBACK_ICE_SERVERS,
@@ -269,7 +273,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   // ── Build a peer connection for the current match and kick off negotiation ─
   const beginNegotiation = useCallback(
     async (matched: MmMatchedPayload) => {
-      const socket = getSocket();
+      const socket = getSocket('/mm');
       const local = localStreamRef.current;
       const iceServers = iceServersRef.current ?? FALLBACK_ICE_SERVERS;
 
@@ -381,7 +385,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     // existing rtc:offer channel. (pc.restartIce() alone wouldn't emit an offer
     // in our manual-signaling setup since we don't listen to negotiationneeded.)
     if (isInitiatorRef.current) {
-      const socket = getSocket();
+      const socket = getSocket('/mm');
       void manager
         .createOffer({ iceRestart: true })
         .then((sdp) => {
@@ -496,7 +500,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   //    when the caller still has an active room. ──
   const requeue = useCallback(() => {
     if (!startedRef.current) return;
-    const socket = getSocket();
+    const socket = getSocket('/mm');
     dispatch({ type: 'SEARCHING' });
     clearMatchTimeout();
     matchTimeoutRef.current = setTimeout(() => {
@@ -522,7 +526,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   // ───────────────────────── Socket event wiring ───────────────────────
   // Bound once per session start (re-bound if `type` changes).
   useEffect(() => {
-    const socket = getSocket();
+    const socket = getSocket('/mm');
 
     const onConnect = () => {
       dispatch({ type: 'SOCKET', connected: true });
@@ -727,7 +731,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       connectSocket(token);
       // If the socket was already connected (e.g. quick stop→start), `connect`
       // won't refire — emit the join directly in that case.
-      const socket = getSocket();
+      const socket = getSocket('/mm');
       if (socket.connected && !peerRef.current && !roomIdRef.current) {
         joinedRef.current = true;
         socket.emit('mm:join', { type, filters: filtersRef.current });
@@ -753,7 +757,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   const next = useCallback(() => {
     if (!startedRef.current) return;
     track('match_skipped');
-    const socket = getSocket();
+    const socket = getSocket('/mm');
     clearRequeueTimeout();
     // Proactively hang up so the peer tears down instantly (the server also
     // notifies them as part of handling `mm:next`).
@@ -777,7 +781,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   }, [next]);
 
   const stop = useCallback(() => {
-    const socket = getSocket();
+    const socket = getSocket('/mm');
     if (roomIdRef.current) {
       socket.emit('rtc:hangup', { roomId: roomIdRef.current, reason: 'stop' });
     }
@@ -797,9 +801,13 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       void pending.then(stopStream).catch(() => undefined);
     }
     iceServersRef.current = null;
-    disconnectSocket();
+    // Do NOT disconnect the shared /mm socket here: its lifecycle is owned by
+    // login/logout, and notifications (`notif:new`) + the /chat socket ride on
+    // it app-wide. Leaving the roulette session only means exiting the queue/
+    // match — `mm:leave` (emitted above) does that server-side, and this hook's
+    // socket listeners are torn down by the wiring effect's cleanup on unmount.
+    // The connection stays live so the bell and chat keep working.
     dispatch({ type: 'RESET' });
-    dispatch({ type: 'SOCKET', connected: false });
   }, [closePeer, clearMatchTimeout, clearRequeueTimeout]);
 
   const toggleMic = useCallback(() => {
@@ -852,7 +860,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       if (iceGraceTimerRef.current) clearTimeout(iceGraceTimerRef.current);
       if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
       if (qualityTimerRef.current) clearInterval(qualityTimerRef.current);
-      const socket = getSocket();
+      const socket = getSocket('/mm');
       try {
         if (roomIdRef.current) {
           socket.emit('rtc:hangup', { roomId: roomIdRef.current, reason: 'stop' });
@@ -870,7 +878,10 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
         void acquiringRef.current.then(stopStream).catch(() => undefined);
         acquiringRef.current = null;
       }
-      disconnectSocket();
+      // Do NOT disconnect the shared /mm socket on unmount: it's owned by
+      // login/logout and shared app-wide (notifications + chat). We only leave
+      // the queue/match (`mm:leave` above); this hook's socket listeners are
+      // removed by the wiring effect's own cleanup, so nothing leaks.
     };
   }, []);
 

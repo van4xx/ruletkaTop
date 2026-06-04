@@ -99,6 +99,7 @@ export function ModalHost() {
   const openModal = useModalStore((s) => s.open);
 
   // Global incoming-call listener → opens the call-invite modal from anywhere.
+  // Calls ride the primary /mm socket (alongside matchmaking + notifications).
   useSocketEvent(
     'call:invite',
     useCallback(
@@ -111,6 +112,7 @@ export function ModalHost() {
       },
       [openModal],
     ),
+    '/mm',
   );
 
   const ActiveModal = type ? REGISTRY[type] : null;

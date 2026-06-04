@@ -52,15 +52,20 @@ export function useNotificationsPreview(): NotificationsPreview {
 
   const { count: unread } = useUnreadCount();
 
-  // Fold realtime deliveries into the preview cache (de-duped by id).
-  useSocket();
-  useSocketEvent('notif:new', (n: AppNotification) => {
-    queryClient.setQueryData<StoredNotification[]>(previewKey, (prev) => {
-      const list = prev ?? [];
-      if (list.some((it) => it.id === n.id)) return list;
-      return [toStoredNotification(n), ...list].slice(0, PREVIEW_LIMIT);
-    });
-  });
+  // Fold realtime deliveries into the preview cache (de-duped by id). `notif:new`
+  // is delivered on the /mm gateway, so we bind there.
+  useSocket('/mm');
+  useSocketEvent(
+    'notif:new',
+    (n: AppNotification) => {
+      queryClient.setQueryData<StoredNotification[]>(previewKey, (prev) => {
+        const list = prev ?? [];
+        if (list.some((it) => it.id === n.id)) return list;
+        return [toStoredNotification(n), ...list].slice(0, PREVIEW_LIMIT);
+      });
+    },
+    '/mm',
+  );
 
   const markAllReadMutation = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),

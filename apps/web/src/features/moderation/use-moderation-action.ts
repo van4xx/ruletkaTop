@@ -125,5 +125,6 @@ export function useModerationAction({ onKick }: UseModerationActionOptions = {})
     [onKick, open, logout, router, t],
   );
 
-  useSocketEvent('mod:action', handle);
+  // `mod:action` is emitted by the /mm gateway during a call.
+  useSocketEvent('mod:action', handle, '/mm');
 }

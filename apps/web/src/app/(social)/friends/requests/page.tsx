@@ -67,11 +67,16 @@ export default function FriendRequestsPage() {
   const remove = useRemoveFriendship();
 
   // Live: a new incoming request over the socket refreshes the list.
-  useSocketEvent('notif:new', (n) => {
-    if (n.kind === 'friend_request') {
-      void qc.invalidateQueries({ queryKey: friendsKeys.requests() });
-    }
-  });
+  // `notif:new` is delivered on the /mm gateway.
+  useSocketEvent(
+    'notif:new',
+    (n) => {
+      if (n.kind === 'friend_request') {
+        void qc.invalidateQueries({ queryKey: friendsKeys.requests() });
+      }
+    },
+    '/mm',
+  );
 
   // If the incoming tab empties out but outgoing has items, drift the user to
   // where the content is (only once they've acted on everything incoming).
