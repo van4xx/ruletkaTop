@@ -4,9 +4,35 @@
  * (same-site across *.ruletka.top). All requests are credentialed.
  */
 import type {
+  AdminAnalyticsOverview,
+  AdminAuditList,
+  AdminAuditQuery,
+  AdminBroadcastDto,
+  AdminBroadcastHistory,
+  AdminBroadcastResult,
+  AdminCallList,
+  AdminCallsStats,
+  AdminCoverList,
+  AdminAnnouncement,
+  AdminAnnouncementList,
+  AdminCreateAnnouncementDto,
+  AdminGrantPremiumDto,
+  AdminPatchSettingsDto,
+  AdminPatchSettingsResult,
+  AdminPaymentList,
+  AdminPaymentStats,
+  AdminPremiumList,
+  AdminSecurityEventList,
+  AdminSessionList,
+  AdminSettings,
+  AdminTimeseries,
+  AdminTimeseriesQuery,
   AdminUserList,
   AdminUserListQuery,
   AdminUserSummary,
+  AdminWalletAdjustResult,
+  AdminWalletDetail,
+  AdminWalletStats,
   AuthResponse,
   AuthUser,
   EconomyOverview,
@@ -148,6 +174,94 @@ export const adminApi = {
 
   // ── Admin: economy + population overview (moderator/admin) ──
   economyOverview: () => req<EconomyOverview>('/admin/economy/overview'),
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Expanded admin surface (Wave 1). Grouped by section; each method maps 1:1
+  // to a `/admin/...` endpoint in `apps/api/src/modules/admin`. The response
+  // types are the shared CONTRACT in `@ruletka/shared-types` (admin-panel.ts).
+  // ════════════════════════════════════════════════════════════════════════
+
+  /** Дашборд — KPI overview + timeseries. */
+  analytics: {
+    overview: () => req<AdminAnalyticsOverview>('/admin/analytics/overview'),
+    timeseries: (params: Partial<AdminTimeseriesQuery> = {}) =>
+      req<AdminTimeseries>('/admin/analytics/timeseries', {
+        query: { metric: params.metric, range: params.range },
+      }),
+  },
+
+  /** Баланс — wallet detail, manual adjust (admin), economy-wide stats. */
+  wallet: {
+    detail: (userId: string, cursor?: string) =>
+      req<AdminWalletDetail>(`/admin/wallet/${userId}`, { query: { cursor } }),
+    adjust: (userId: string, body: { amount: number; reason: string }) =>
+      req<AdminWalletAdjustResult>(`/admin/wallet/${userId}/adjust`, {
+        method: 'POST',
+        json: body,
+      }),
+    stats: () => req<AdminWalletStats>('/admin/wallet/stats'),
+  },
+
+  /** Премиум — subscribers list, grant/revoke (admin). */
+  premium: {
+    list: (cursor?: string) => req<AdminPremiumList>('/admin/premium', { query: { cursor } }),
+    grant: (userId: string, body: AdminGrantPremiumDto) =>
+      req<{ ok: true }>(`/admin/premium/${userId}/grant`, { method: 'POST', json: body }),
+    revoke: (userId: string) =>
+      req<{ ok: true }>(`/admin/premium/${userId}/revoke`, { method: 'POST' }),
+  },
+
+  /** Платежи — charges list + funnel stats. */
+  payments: {
+    list: (cursor?: string) => req<AdminPaymentList>('/admin/payments', { query: { cursor } }),
+    stats: () => req<AdminPaymentStats>('/admin/payments/stats'),
+  },
+
+  /** Звонки — call/match volume stats + recent feed. */
+  calls: {
+    stats: () => req<AdminCallsStats>('/admin/calls/stats'),
+    recent: () => req<AdminCallList>('/admin/calls/recent'),
+  },
+
+  /** Контент — cover catalogue + announcements CRUD (create is admin-only). */
+  content: {
+    covers: () => req<AdminCoverList>('/admin/content/covers'),
+    announcements: () => req<AdminAnnouncementList>('/admin/content/announcements'),
+    createAnnouncement: (body: AdminCreateAnnouncementDto) =>
+      req<AdminAnnouncement>('/admin/content/announcements', { method: 'POST', json: body }),
+  },
+
+  /** Рассылки — send a broadcast (admin) + history. */
+  broadcast: {
+    send: (body: AdminBroadcastDto) =>
+      req<AdminBroadcastResult>('/admin/broadcast', { method: 'POST', json: body }),
+    history: () => req<AdminBroadcastHistory>('/admin/broadcast'),
+  },
+
+  /** Безопасность — active sessions + security events (admin). */
+  security: {
+    sessions: () => req<AdminSessionList>('/admin/security/sessions'),
+    events: () => req<AdminSecurityEventList>('/admin/security/events'),
+  },
+
+  /** Настройки — feature flags + limits; patch (admin, stub). */
+  settings: {
+    get: () => req<AdminSettings>('/admin/settings'),
+    patch: (body: AdminPatchSettingsDto) =>
+      req<AdminPatchSettingsResult>('/admin/settings', { method: 'PATCH', json: body }),
+  },
+
+  /** Аудит — paginated admin action log. */
+  audit: {
+    list: (params: Partial<AdminAuditQuery> = {}) =>
+      req<AdminAuditList>('/admin/audit', {
+        query: {
+          action: params.action || undefined,
+          cursor: params.cursor || undefined,
+          limit: params.limit != null ? String(params.limit) : undefined,
+        },
+      }),
+  },
 };
 
 export type { AdminUserList, AdminUserSummary, EconomyOverview, ReviewItem, Role };

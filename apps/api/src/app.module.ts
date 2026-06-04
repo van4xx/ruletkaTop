@@ -11,6 +11,7 @@ import { ThrottlerBehindProxyGuard } from './common/throttler/throttler-behind-p
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { HealthModule } from './health/health.module';
 import { sentryEnabled } from './instrument';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { CoversModule } from './modules/covers/covers.module';
@@ -190,6 +191,11 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
     // Matchmaking + WebRTC
     MatchmakingModule,
     TurnModule,
+
+    // Admin panel (expanded surface) — reuses the moderation staff guard; reads
+    // existing collections by name; wires Wallet/Premium/Notifications for the
+    // privileged actions. Pre-existing admin endpoints stay in ModerationModule.
+    AdminModule,
   ],
   providers: [
     // Activate rate limiting globally. `ThrottlerBehindProxyGuard` extends the
