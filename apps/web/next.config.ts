@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 import createNextIntlPlugin from 'next-intl/plugin';
@@ -25,6 +26,13 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@ruletka/shared-types', '@ruletka/ui'],
   compress: true,
   poweredByHeader: false,
+  // Emit a self-contained server bundle (apps/web/.next/standalone) for the
+  // production Docker image (web.Dockerfile copies it + runs apps/web/server.js).
+  output: 'standalone',
+  // Monorepo: trace deps from the REPO ROOT so the standalone output mirrors the
+  // workspace layout (server entry lands at apps/web/server.js). __dirname is the
+  // config dir (apps/web) in both local builds and the pruned Docker context.
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
