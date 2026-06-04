@@ -76,18 +76,22 @@ jobs:
       - name: Launch deploy (detached on server)
         run: |
           set -euo pipefail
-          # ONE short SSH: sync main, then launch bootstrap fully detached so the
-          # build survives an SSH disconnect and this session returns in seconds.
-          # No `$` in the inner command → no quoting traps (success → "ok" marker).
+          # ONE short SSH: launch the WHOLE deploy (sync main + bootstrap) as a
+          # transient systemd unit via `systemd-run --no-block`. The unit runs in
+          # systemd's process tree — entirely OUTSIDE this SSH session — so SSH
+          # returns in seconds regardless of how long the build (or a slow
+          # server→GitHub fetch) takes. A plain `setsid … &` is NOT enough: docker's
+          # children keep the SSH channel held open, so SSH waited for the whole
+          # build and got dropped at ~2m23s (the server closes idle inbound SSH).
+          # No `$` in the inner command → no quoting traps. The unit always writes a
+          # deploy.done marker ("ok"/"fail") that the next step polls for.
           ssh prod '
             set -e
-            cd /opt/ruletka
-            git fetch --depth 1 origin main
-            git reset --hard origin/main
-            rm -f deploy.done deploy.log
-            setsid bash -c "if bash infra/deploy/bootstrap.sh > deploy.log 2>&1; then echo ok > deploy.done; else echo fail > deploy.done; fi" </dev/null >/dev/null 2>&1 &
-            sleep 1
-            echo "Bootstrap launched detached on $(hostname). SSH returning."
+            rm -f /opt/ruletka/deploy.done /opt/ruletka/deploy.log
+            systemctl reset-failed ruletka-deploy.service 2>/dev/null || true
+            systemd-run --collect --no-block --unit=ruletka-deploy --setenv=HOME=/root \
+              /bin/bash -lc "cd /opt/ruletka && { git fetch --depth 1 origin main && git reset --hard origin/main && bash infra/deploy/bootstrap.sh ; } > deploy.log 2>&1 && echo ok > deploy.done || echo fail > deploy.done"
+            echo "Deploy launched as ruletka-deploy.service; SSH returning."
           '
 
       - name: Wait for deploy to finish
