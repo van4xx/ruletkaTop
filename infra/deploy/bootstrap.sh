@@ -134,6 +134,10 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
 NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-${SENTRY_DSN:-}}
 NEXT_PUBLIC_ANALYTICS_DOMAIN=${ANALYTICS_DOMAIN:-}
 NEXT_PUBLIC_ANALYTICS_HOST=${ANALYTICS_HOST:-}
+# CDN asset prefix — empty = same-origin (today's behavior). Set ASSET_PREFIX
+# (e.g. https://cdn.ruletka.top) before bootstrap, or edit .env, to serve
+# /_next/static + build assets from the CDN, then rebuild the web image.
+NEXT_PUBLIC_ASSET_PREFIX=${ASSET_PREFIX:-}
 VITE_API_URL=https://api.ruletka.top/api
 EOF
   chmod 600 .env

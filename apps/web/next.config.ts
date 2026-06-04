@@ -26,6 +26,13 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@ruletka/shared-types', '@ruletka/ui'],
   compress: true,
   poweredByHeader: false,
+  // Optionally serve `/_next/static` + other build assets from a CDN. Env-gated
+  // and INERT by default: when NEXT_PUBLIC_ASSET_PREFIX is unset/empty it falls
+  // back to `undefined`, so Next emits same-origin asset URLs exactly as today.
+  // When set at build time (e.g. https://cdn.ruletka.top), Next prefixes asset
+  // URLs with it and auto-adds `crossOrigin` (the cross-origin chunks/fonts then
+  // ride CORS — see the static-asset location CORS headers in infra/nginx).
+  assetPrefix: process.env.NEXT_PUBLIC_ASSET_PREFIX || undefined,
   // Emit a self-contained server bundle (apps/web/.next/standalone) for the
   // production Docker image (web.Dockerfile copies it + runs apps/web/server.js).
   output: 'standalone',
