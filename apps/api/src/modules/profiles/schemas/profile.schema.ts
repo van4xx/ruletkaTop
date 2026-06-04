@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
 import type { Badge, CountryCode, Gender, Locale } from '@ruletka/shared-types';
+import { DEFAULT_COVER_ID } from '@ruletka/shared-types';
 
 const GENDERS: readonly Gender[] = ['male', 'female', 'other'];
 const BADGES: readonly Badge[] = ['premium', 'verified', 'top', 'staff'];
@@ -80,6 +81,22 @@ export class Profile {
   /** When the current premium period ends, or `null` if not premium. */
   @Prop({ required: false, default: null, type: Date })
   premiumUntil!: Date | null;
+
+  /**
+   * Selected profile-cover cosmetic id (denormalised, read on every hero
+   * render and surfaced on the public profile). Defaults to the free `aurora`
+   * cover; profiles predating the field fall back to it on read.
+   */
+  @Prop({ required: true, default: DEFAULT_COVER_ID, type: String })
+  activeCover!: string;
+
+  /**
+   * Owned PAID cover ids (private inventory; never projected onto the public
+   * profile). The two FREE covers are implicitly owned and never stored here —
+   * ownership is `FREE_COVER_IDS ∪ ownedCovers`. Appended to on purchase.
+   */
+  @Prop({ required: true, default: [], type: [String] })
+  ownedCovers!: string[];
 
   /** Lifetime non-owner profile views. */
   @Prop({ required: true, default: 0, min: 0 })

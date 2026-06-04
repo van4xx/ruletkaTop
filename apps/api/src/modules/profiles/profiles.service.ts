@@ -13,12 +13,14 @@ import { ClientSession, Connection, Model, type QueryFilter, Types } from 'mongo
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 
 import type {
+  CoverId,
   Gender,
   GiftTransaction,
   ProfileSearchQuery,
   PublicProfile,
   UpdateProfileDto,
 } from '@ruletka/shared-types';
+import { DEFAULT_COVER_ID } from '@ruletka/shared-types';
 
 import { BlocksService } from '../moderation/blocks.service';
 import { SettingsService } from '../settings/settings.service';
@@ -175,6 +177,8 @@ export class ProfilesService {
             badges: [],
             isPremium: false,
             premiumUntil: null,
+            activeCover: DEFAULT_COVER_ID,
+            ownedCovers: [],
             profileViews: 0,
             avatarUrl: null,
             status: null,
@@ -478,6 +482,9 @@ export class ProfilesService {
       interests: doc.interests ?? [],
       badges: doc.badges,
       isPremium: doc.isPremium,
+      // Profiles predating the field fall back to the default free cover so the
+      // response always satisfies `publicProfileSchema`.
+      activeCover: (doc.activeCover as CoverId | undefined) ?? DEFAULT_COVER_ID,
       profileViews: doc.profileViews,
       createdAt: doc.get('createdAt').toISOString(),
     };

@@ -13,6 +13,7 @@ export const coinTxTypeSchema = z.enum([
   'gift_out',
   'gift_in',
   'top',
+  'cover',
   'bonus',
   'refund',
 ]);

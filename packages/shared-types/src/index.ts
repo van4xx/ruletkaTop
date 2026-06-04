@@ -1,6 +1,7 @@
 export * from './common';
 export * from './auth';
 export * from './profile';
+export * from './cosmetics';
 export * from './social';
 export * from './economy';
 export * from './admin';

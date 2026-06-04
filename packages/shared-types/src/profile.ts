@@ -9,6 +9,7 @@ import {
   paginationQuerySchema,
 } from './common';
 import { nicknameSchema } from './auth';
+import { coverIdSchema, DEFAULT_COVER_ID } from './cosmetics';
 
 export const publicProfileSchema = z.object({
   id: objectIdSchema,
@@ -23,6 +24,12 @@ export const publicProfileSchema = z.object({
   interests: z.array(z.string().min(1).max(24)).max(10).default([]),
   badges: z.array(badgeSchema),
   isPremium: z.boolean(),
+  /**
+   * The user's selected profile-cover cosmetic, read on every hero render.
+   * Defaulted to {@link DEFAULT_COVER_ID} so responses from an API that predates
+   * the field (and older mobile/admin mirrors) still validate client-side.
+   */
+  activeCover: coverIdSchema.default(DEFAULT_COVER_ID),
   profileViews: z.number().int().nonnegative(),
   createdAt: isoDateSchema,
 });
