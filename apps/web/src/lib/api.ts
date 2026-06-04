@@ -396,7 +396,7 @@ async function requestWithRetry<T>(path: string, options: RequestOptions): Promi
   const retryEnabled = !options.noRetry && IDEMPOTENT_METHODS.has(method);
 
   let attempt = 0;
-  // eslint-disable-next-line no-constant-condition
+
   while (true) {
     try {
       return await performRequest<T>(path, options);

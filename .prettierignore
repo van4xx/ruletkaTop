@@ -1,0 +1,18 @@
+# Build outputs + generated
+**/node_modules/
+**/dist/
+**/.next/
+**/build/
+**/coverage/
+**/.turbo/
+**/next-env.d.ts
+
+# Lockfiles + generated manifests (never hand-formatted)
+pnpm-lock.yaml
+**/pnpm-lock.yaml
+
+# Agent worktrees / local Claude session state
+.claude/
+
+# Flutter app — Dart tooling owns its formatting (dart format), not Prettier
+apps/mobile/

@@ -127,10 +127,10 @@ jobs:
           cache: pnpm
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
-      - name: Build shared-types contract
-        run: pnpm --filter @ruletka/shared-types build
-      - name: Build API
-        run: pnpm --filter @ruletka/api build
+      # Build the API together with its workspace deps (shared-types first) in one
+      # topological command — more robust than two standalone builds.
+      - name: Build API (+ deps)
+        run: pnpm --filter "@ruletka/api..." build
       - name: Boot API + run E2E
         run: |
           node apps/api/dist/main.js > /tmp/api.log 2>&1 &

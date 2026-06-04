@@ -30,7 +30,7 @@ export default function GlobalError({
   // harmless no-op, so this is safe in dev / CI.
   useEffect(() => {
     Sentry.captureException(error);
-    // eslint-disable-next-line no-console
+
     console.error(error);
   }, [error]);
 

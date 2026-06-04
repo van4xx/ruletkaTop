@@ -6,6 +6,7 @@
  * every page consistent and on-brand without duplicating markup.
  */
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, LogIn, RefreshCw } from 'lucide-react';
@@ -94,7 +95,7 @@ export function SignInRequired({ description }: { description?: string }) {
       description={description ?? t('signInRequiredDescription')}
       action={
         <Button asChild variant="primary" size="sm">
-          <a href="/">{t('goHome')}</a>
+          <Link href="/">{t('goHome')}</Link>
         </Button>
       }
     />

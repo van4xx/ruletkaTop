@@ -108,7 +108,11 @@ export function LoginForm() {
           )}
         </FormField>
 
-        <FormField label={t('fields.password')} required error={fieldError(errors.password?.message)}>
+        <FormField
+          label={t('fields.password')}
+          required
+          error={fieldError(errors.password?.message)}
+        >
           {(field) => (
             <PasswordField
               {...field}

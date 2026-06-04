@@ -334,7 +334,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       // Non-initiator waits for `rtc:offer` (handled in the socket effect).
     },
     // handlePeerGone defined below; included via ref pattern to avoid cycle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [clearMatchTimeout],
   );
 
@@ -508,7 +508,6 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       dispatch({ type: 'WAITING', positionHint: null });
     }, MATCH_TIMEOUT_MS);
     socket.emit('mm:join', { type, filters: filtersRef.current });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearMatchTimeout, type]);
 
   // ── Fetch ICE servers (cached on the ref for the session) ──

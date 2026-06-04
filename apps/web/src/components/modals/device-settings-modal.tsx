@@ -196,7 +196,7 @@ export function DeviceSettingsModal() {
           {/* Camera preview */}
           {wantCamera && (
             <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-border/60 bg-background-base">
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption -- self-view preview, no audio track rendered */}
+              {}
               <video
                 ref={videoRef}
                 muted

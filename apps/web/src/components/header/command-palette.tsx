@@ -148,7 +148,7 @@ export function CommandPalette() {
         {/* Search input row */}
         <div className="flex items-center gap-3 border-b border-border/70 px-4">
           <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+          {}
           <input
             autoFocus
             type="text"

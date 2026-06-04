@@ -213,7 +213,7 @@ function GiftThumb({ gift }: { gift: Gift }) {
   if (!gift.animationUrl || failed) {
     return <GiftIcon className="relative h-7 w-7 text-foreground/80" aria-hidden="true" />;
   }
-  // eslint-disable-next-line @next/next/no-img-element
+
   return (
     <img
       src={gift.animationUrl}

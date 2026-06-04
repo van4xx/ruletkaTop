@@ -108,26 +108,28 @@ export function useProfileSearch(query: string, filters: PeopleFilters): Profile
   const hasFacet = gender !== 'any' || country !== null;
   const enabled = hasQuery || hasFacet;
 
-  const result: UseInfiniteQueryResult<InfiniteData<ProfileSearchPage, string | undefined>, Error> =
-    useInfiniteQuery({
-      queryKey: searchKeys.query(debouncedQuery, gender, country),
-      queryFn: ({ pageParam, signal }) =>
-        api.profiles.search(
-          {
-            q: hasQuery ? debouncedQuery : undefined,
-            gender: gender === 'any' ? undefined : gender,
-            country: country ?? undefined,
-            cursor: pageParam,
-            limit: SEARCH_PAGE_SIZE,
-          },
-          signal,
-        ),
-      initialPageParam: undefined as string | undefined,
-      getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
-      enabled,
-      staleTime: 30_000,
-      retry: false,
-    });
+  const result: UseInfiniteQueryResult<
+    InfiniteData<ProfileSearchPage, string | undefined>,
+    Error
+  > = useInfiniteQuery({
+    queryKey: searchKeys.query(debouncedQuery, gender, country),
+    queryFn: ({ pageParam, signal }) =>
+      api.profiles.search(
+        {
+          q: hasQuery ? debouncedQuery : undefined,
+          gender: gender === 'any' ? undefined : gender,
+          country: country ?? undefined,
+          cursor: pageParam,
+          limit: SEARCH_PAGE_SIZE,
+        },
+        signal,
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
 
   const people = useMemo<PublicProfile[]>(
     () => result.data?.pages.flatMap((p) => p.items) ?? [],
