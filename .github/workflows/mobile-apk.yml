@@ -1,0 +1,64 @@
+name: Mobile APK
+
+# Builds an installable Android APK for the Flutter app and uploads it as a
+# downloadable artifact — so you can grab a fresh build from the Actions tab and
+# sideload it onto a phone without Android Studio.
+#
+# Triggers: manual ("Run workflow"), and automatically when the mobile app changes
+# on main. It is SEPARATE from CI (the Android/Gradle build is slow) so it never
+# blocks the fast quality gate.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Build mode'
+        type: choice
+        default: debug
+        options: [debug, release]
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+
+concurrency:
+  group: mobile-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: build apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      # Flutter's Android build needs a JDK (17) + the Android SDK. The JDK is set
+      # up here; the Android SDK is preinstalled on the GitHub ubuntu runner.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Build APK (${{ github.event.inputs.mode || 'debug' }})
+        run: flutter build apk --${{ github.event.inputs.mode || 'debug' }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruletka-android-${{ github.event.inputs.mode || 'debug' }}-apk
+          path: apps/mobile/build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,44 @@
+name: CodeQL
+
+# GitHub's static security analysis. Scans the JS/TS codebase for vulnerabilities
+# (injection, auth flaws, unsafe APIs, etc.) on every push/PR to main and weekly.
+# Findings show up under the repo's Security → Code scanning tab. Free for public
+# repos (no GitHub Advanced Security needed).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly re-scan (Mondays 03:30 UTC) catches issues in newly-disclosed CVEs.
+    - cron: '30 3 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # The security-extended suite adds higher-signal security queries on top
+          # of the default set.
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'

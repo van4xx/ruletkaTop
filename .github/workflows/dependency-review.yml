@@ -1,0 +1,24 @@
+name: Dependency review
+
+# On every PR, diffs the dependency manifest and BLOCKS the merge if it pulls in a
+# package with a known vulnerability (or a disallowed license). Catches supply-chain
+# risk before it lands. Runs only on pull requests (nothing to diff on a push).
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: vulnerable / disallowed deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          # Fail the check on High+ severity vulnerabilities in added deps.
+          fail-on-severity: high
