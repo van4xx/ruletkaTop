@@ -75,11 +75,13 @@ export function RegisterForm() {
       birthDate: '',
       country: '' as CountryCode,
       locale: 'ru',
+      acceptedTerms: false,
     },
     mode: 'onTouched',
   });
 
   const passwordValue = watch('password');
+  const termsAccepted = watch('acceptedTerms');
 
   const onSubmit = handleSubmit((values) => {
     // Attach the Turnstile token when present; omit the key entirely otherwise
@@ -106,9 +108,10 @@ export function RegisterForm() {
       : errorMessage(registerMutation.error);
 
   const busy = isSubmitting || registerMutation.isPending;
-  // Block submission until the CAPTCHA is solved — but only when it's actually
-  // configured (otherwise the gate would deadlock the dev/no-key flow).
-  const submitDisabled = busy || (captchaRequired && !captchaToken);
+  // Block submission until the CAPTCHA is solved (only when configured, else the
+  // gate would deadlock the dev/no-key flow) AND the consent box is ticked (the
+  // API rejects a registration without `acceptedTerms: true`).
+  const submitDisabled = busy || (captchaRequired && !captchaToken) || !termsAccepted;
 
   return (
     <div>
@@ -259,6 +262,51 @@ export function RegisterForm() {
 
         {/* Anti-abuse CAPTCHA. Renders nothing when no site key is configured. */}
         <TurnstileWidget onToken={setCaptchaToken} className="flex justify-center" />
+
+        {/* Explicit consent (152-ФЗ / GDPR) — the API requires acceptedTerms===true. */}
+        <Controller
+          control={control}
+          name="acceptedTerms"
+          render={({ field: { value, onChange } }) => (
+            <div>
+              <label className="flex cursor-pointer select-none items-start gap-2.5 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={value ?? false}
+                  onChange={(e) => onChange(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-[var(--color-neon-cyan)]"
+                />
+                <span>
+                  {t.rich('register.acceptTerms', {
+                    terms: (chunks) => (
+                      <Link
+                        href="/rules"
+                        target="_blank"
+                        className="font-medium text-foreground underline-offset-4 transition-colors hover:text-[var(--color-neon-cyan)] hover:underline"
+                      >
+                        {chunks}
+                      </Link>
+                    ),
+                    privacy: (chunks) => (
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        className="font-medium text-foreground underline-offset-4 transition-colors hover:text-[var(--color-neon-cyan)] hover:underline"
+                      >
+                        {chunks}
+                      </Link>
+                    ),
+                  })}
+                </span>
+              </label>
+              {errors.acceptedTerms && (
+                <p className="mt-1.5 text-xs text-destructive">
+                  {fieldError(errors.acceptedTerms.message)}
+                </p>
+              )}
+            </div>
+          )}
+        />
 
         <Button
           type="submit"

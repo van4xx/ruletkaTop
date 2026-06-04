@@ -73,6 +73,11 @@ export const registerFormSchema = baseRegisterSchema.extend({
     .refine((v) => !Number.isNaN(new Date(v).getTime()), 'validation.birthInvalid')
     .refine((v) => new Date(v).getTime() <= Date.now(), 'validation.birthFuture')
     .refine((v) => ageFromBirthDate(v) >= MIN_AGE, 'validation.birthTooYoung'),
+  // Explicit consent (152-ФЗ / GDPR). The wire contract leaves `acceptedTerms`
+  // optional for additivity, but the API REQUIRES it to be `true` — so the form
+  // must collect it and we enforce it client-side (a ticked box) to mirror the
+  // server rule and avoid a confusing 400 on submit.
+  acceptedTerms: z.boolean().refine((v) => v === true, 'validation.acceptTerms'),
 });
 export type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
