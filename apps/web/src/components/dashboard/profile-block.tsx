@@ -4,7 +4,7 @@
  * The dashboard identity block — a compact, premium "who am I" panel:
  *   - avatar (aurora ring for premium) + nickname + premium badge
  *   - live coin balance with a prominent "Пополнить" action (opens the
- *     buy-coins modal, falls back to /coins)
+ *     buy-coins modal, falls back to /wallet)
  *   - quick "Редактировать" link to the profile editor
  *   - a premium-gated "Кто смотрел профиль" teaser driven by `profileViews`
  *     (locked CTA for non-premium users → /premium)
@@ -27,7 +27,8 @@ import { DashboardCard } from './dashboard-card';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
-const COINS_ROUTE = '/coins';
+/** Fallback route if the modal host isn't mounted (the buy-coins modal is primary). */
+const COINS_ROUTE = '/wallet';
 const PREMIUM_ROUTE = '/premium';
 
 export function ProfileBlock() {

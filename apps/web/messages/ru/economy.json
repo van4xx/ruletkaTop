@@ -42,16 +42,6 @@
   "topMarquee": {
     "onAir": "в эфире {country}"
   },
-  "coins": {
-    "eyebrow": "Магазин монет",
-    "titlePrefix": "Монеты для",
-    "titleHighlight": "подарков и Топа",
-    "lede": "Пополняйте баланс, чтобы дарить анимированные подарки, покупать места в Топе и открывать больше возможностей.",
-    "packagesHeading": "Выберите пакет",
-    "packagesErrorTitle": "Не удалось загрузить пакеты",
-    "packagesErrorDescription": "Каталог монет временно недоступен.",
-    "ledgerHeading": "История операций"
-  },
   "package": {
     "bestValue": "Выгодно",
     "coinsSuffix": "монет",

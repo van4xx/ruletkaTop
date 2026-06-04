@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { Crown, Gift as GiftIcon, Sparkles } from 'lucide-react';
+import { Crown, Gift as GiftIcon, Plus, Sparkles } from 'lucide-react';
 import type { Gift } from '@ruletka/shared-types';
 import { Badge, Button, CoinBalance, TooltipProvider } from '@ruletka/ui';
 import { EconomyShell } from '@/components/economy/economy-shell';
@@ -22,6 +22,7 @@ import { RARITY_STYLES } from '@/features/gifts/rarity';
 import { useGifts, useGiftsByRarity } from '@/features/gifts/use-gifts';
 import { useIsPremium } from '@/features/economy/use-me';
 import { useCoinBalance } from '@/hooks/wallet/use-wallet';
+import { useModal } from '@/lib/stores/modal-store';
 
 export default function GiftsPage() {
   const t = useTranslations('economy');
@@ -29,6 +30,7 @@ export default function GiftsPage() {
   const grouped = useGiftsByRarity(gifts.data);
   const isPremium = useIsPremium();
   const balance = useCoinBalance();
+  const { open } = useModal();
   const [selected, setSelected] = useState<Gift | null>(null);
 
   return (
@@ -50,8 +52,13 @@ export default function GiftsPage() {
         actions={
           <div className="flex items-center gap-3">
             <CoinBalance amount={balance ?? 0} variant="pill" />
-            <Button asChild variant="outline" size="sm">
-              <Link href="/coins">{t('gifts.topUp')}</Link>
+            <Button
+              variant="outline"
+              size="sm"
+              leadingIcon={<Plus className="h-4 w-4" />}
+              onClick={() => open('buy-coins')}
+            >
+              {t('gifts.topUp')}
             </Button>
           </div>
         }

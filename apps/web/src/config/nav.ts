@@ -54,8 +54,6 @@ export const ROUTES = {
   wallet: '/wallet',
   gifts: '/gifts',
   premium: '/premium',
-  /** Where the coin-balance "+" sends the user to top up. */
-  coins: '/wallet',
   leaderboard: '/leaderboard',
   onboarding: '/onboarding',
 

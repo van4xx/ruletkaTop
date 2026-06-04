@@ -127,7 +127,7 @@
       "coins": "монет",
       "bestValue": "Выгодно",
       "bonus": "+{amount} бонусом",
-      "openFullStore": "Открыть магазин целиком"
+      "secure": "Безопасная оплата CloudPayments"
     },
     "buyTop": {
       "duration1h": "1 час",

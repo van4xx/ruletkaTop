@@ -12,7 +12,7 @@
  *
  * INTEGRATOR NOTE: `<ModalHost/>` must be mounted once (in `providers.tsx`).
  * The modals feature's `index.ts` documents this; once mounted, every button
- * here opens the real modal. The route fallbacks (/coins, /top, /video|/voice)
+ * here opens the real modal. The route fallbacks (/wallet, /top, /video|/voice)
  * remain valid destinations regardless.
  */
 import { useCallback } from 'react';

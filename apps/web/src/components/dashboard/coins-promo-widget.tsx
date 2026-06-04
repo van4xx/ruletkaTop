@@ -3,11 +3,11 @@
 /**
  * Daily-bonus / coins promo — a vibrant, gradient "earn & spend coins" card.
  * It anchors the economy CTAs on the dashboard: a primary "Пополнить" (opens the
- * buy-coins modal, fallback /coins) and a secondary link to Premium perks.
+ * buy-coins modal, fallback /wallet) and a secondary link to Premium perks.
  *
  * A lightweight "daily bonus" streak strip is presented as an aspirational
- * teaser (7-day ladder). There is no daily-bonus endpoint yet, so the claim CTA
- * routes to /coins; see the integrator note below.
+ * teaser (7-day ladder). There is no daily-bonus endpoint yet; see the
+ * integrator note below.
  *
  * INTEGRATOR / BACKEND NOTE: a real daily bonus needs an endpoint pair, e.g.
  *   GET  /economy/daily-bonus  → { streak, claimedToday, nextRewardCoins, ... }
@@ -22,7 +22,8 @@ import { cn } from '@/lib/cn';
 import { MODAL, useAppModals } from '@/hooks/dashboard/use-app-modals';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
-const COINS_ROUTE = '/coins';
+/** Fallback route if the modal host isn't mounted (the buy-coins modal is primary). */
+const COINS_ROUTE = '/wallet';
 const PREMIUM_ROUTE = '/premium';
 
 /** Aspirational 7-day reward ladder (static teaser until the API lands). */

@@ -42,16 +42,6 @@
   "topMarquee": {
     "onAir": "on air {country}"
   },
-  "coins": {
-    "eyebrow": "Coin store",
-    "titlePrefix": "Coins for",
-    "titleHighlight": "gifts and the Top",
-    "lede": "Top up your balance to send animated gifts, buy spots in the Top, and unlock more features.",
-    "packagesHeading": "Choose a pack",
-    "packagesErrorTitle": "Couldn't load the packs",
-    "packagesErrorDescription": "The coin catalogue is temporarily unavailable.",
-    "ledgerHeading": "Transaction history"
-  },
   "package": {
     "bestValue": "Best value",
     "coinsSuffix": "coins",

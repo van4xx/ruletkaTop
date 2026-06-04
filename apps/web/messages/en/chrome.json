@@ -127,7 +127,7 @@
       "coins": "coins",
       "bestValue": "Best value",
       "bonus": "+{amount} bonus",
-      "openFullStore": "Open the full store"
+      "secure": "Secure payment via CloudPayments"
     },
     "buyTop": {
       "duration1h": "1 hour",

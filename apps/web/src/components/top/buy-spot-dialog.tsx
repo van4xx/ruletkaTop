@@ -10,7 +10,6 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import Link from 'next/link';
 import { ArrowLeftToLine, ArrowRightToLine, Coins, Crown, Trophy } from 'lucide-react';
 import { topPurchaseSchema, type TopLane, type TopPurchaseDto } from '@ruletka/shared-types';
 import {
@@ -31,6 +30,7 @@ import { ApiClientError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/features/economy/format';
 import { usePurchaseTop } from '@/features/top/use-top';
+import { useModal } from '@/lib/stores/modal-store';
 
 const DURATION_PRESETS = [
   { hours: 6, key: 'preset6h' },
@@ -51,6 +51,7 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
   const t = useTranslations('economy');
   const tc = useTranslations('common');
   const purchase = usePurchaseTop();
+  const { open: openModal } = useModal();
   const [duration, setDuration] = useState(24);
 
   const {
@@ -226,12 +227,17 @@ export function BuySpotDialog({ open, onClose, balance }: BuySpotDialogProps) {
                   : t('buySpot.minCoins')}
               </p>
               {insufficient && (
-                <Link
-                  href="/coins"
+                <button
+                  type="button"
+                  onClick={() => {
+                    const shortfall = balance !== null ? Math.max(0, coins - balance) : undefined;
+                    onClose();
+                    openModal('buy-coins', shortfall ? { shortfall } : {});
+                  }}
                   className="text-xs font-semibold text-[var(--color-neon-cyan)] hover:underline"
                 >
                   {t('buySpot.topUp')}
-                </Link>
+                </button>
               )}
             </div>
             {errors.coins && <p className="text-xs text-destructive">{errors.coins.message}</p>}

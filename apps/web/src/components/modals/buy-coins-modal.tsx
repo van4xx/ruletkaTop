@@ -5,14 +5,24 @@
  *
  * - GET /coin-packages (`useCoinPackages`), best-value highlighted.
  * - Choose a pack → POST /payments/coins/checkout, then the hosted
- *   CloudPayments widget opens (card data never touches us). All of this is the
- *   same `useBuyCoins` state machine the full /coins page uses, so behaviour is
- *   identical: a "pending" state after a successful charge while the
- *   webhook-driven credit lands (the hook polls the balance).
+ *   CloudPayments widget opens (card data never touches us). All of this runs on
+ *   the shared `useBuyCoins` state machine (also used by the wallet top-up
+ *   dialog), so behaviour is identical: a "pending" state after a successful
+ *   charge while the webhook-driven credit lands (the hook polls the balance).
+ *
+ * This modal IS the coin storefront — there is no standalone `/coins` page
+ * anymore; every "top up" entry point opens it via `open('buy-coins')`.
  */
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { CheckCircle2, Loader2, ShoppingBag, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  CheckCircle2,
+  Loader2,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react';
 import type { CoinPackage } from '@ruletka/shared-types';
 import {
   Badge,
@@ -30,7 +40,7 @@ import { useModal, useModalProps } from '@/lib/stores/modal-store';
 import { formatNumber, formatRub, pricePerCoin } from '@/features/economy/format';
 import { useCoinPackages, useBuyCoins } from '@/features/coins/use-coins';
 import { useCoinBalance } from '@/hooks/wallet/use-wallet';
-import { BalancePill, FullPageLink } from './shared';
+import { BalancePill } from './shared';
 
 export function BuyCoinsModal() {
   const { close } = useModal();
@@ -165,7 +175,10 @@ export function BuyCoinsModal() {
       </div>
 
       <DialogFooter className="sm:justify-between">
-        <FullPageLink href="/coins">{t('modals.buyCoins.openFullStore')}</FullPageLink>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+          {t('modals.buyCoins.secure')}
+        </span>
         <Button type="button" variant="ghost" onClick={close} disabled={buy.isBusy}>
           {t('modals.buyCoins.close')}
         </Button>

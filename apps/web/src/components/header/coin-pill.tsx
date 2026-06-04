@@ -4,9 +4,10 @@
  * Coin-balance pill (header) — live balance + a "+" to top up.
  *
  * Wires to {@link useCoinBalance} (TanStack Query against `/wallet`, gated by
- * auth). The pill body links to the wallet; the trailing "+" is its own link
- * straight to the top-up flow so the two affordances are distinct targets. A
- * subtle key-bump animates the number whenever it changes (a purchase landing).
+ * auth). The pill body links to the wallet; the trailing "+" opens the
+ * «Купить монеты» modal (the coin storefront) so the two affordances are
+ * distinct targets. A subtle key-bump animates the number whenever it changes
+ * (a purchase landing).
  *
  * States: skeleton shimmer while the balance is unknown; formatted `ru-RU`
  * number once loaded. Memoised on the numeric value.
@@ -18,6 +19,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Coins, Plus } from 'lucide-react';
 import { ROUTES } from '@/config/nav';
 import { cn } from '@/lib/cn';
+import { useModal } from '@/lib/stores/modal-store';
 
 interface CoinPillProps {
   /** Current coin balance. `null` while unknown (renders a skeleton). */
@@ -27,6 +29,7 @@ interface CoinPillProps {
 
 function CoinPillImpl({ balance, className }: CoinPillProps) {
   const t = useTranslations('chrome');
+  const { open } = useModal();
   const reduceMotion = useReducedMotion();
   const display = balance === null ? null : new Intl.NumberFormat('ru-RU').format(balance);
 
@@ -70,8 +73,9 @@ function CoinPillImpl({ balance, className }: CoinPillProps) {
           </span>
         )}
       </Link>
-      <Link
-        href={ROUTES.coins}
+      <button
+        type="button"
+        onClick={() => open('buy-coins')}
         aria-label={t('coinPill.topUpAria')}
         className={cn(
           'inline-flex h-6 w-6 items-center justify-center rounded-full outline-none',
@@ -81,7 +85,7 @@ function CoinPillImpl({ balance, className }: CoinPillProps) {
         )}
       >
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-      </Link>
+      </button>
     </div>
   );
 }
