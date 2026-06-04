@@ -94,11 +94,25 @@
   "chat": {
     "ariaLabel": "Chat with {name}",
     "title": "Chat",
+    "titleWith": "Chat · {name}",
     "close": "Close chat",
     "empty": "Messages are visible only to the two of you and disappear after the call.",
     "placeholder": "Message…",
     "messageAriaLabel": "Message text",
     "send": "Send"
+  },
+  "layout": {
+    "groupLabel": "Layout",
+    "standard": "Standard",
+    "grid": "Grid",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "you": "You"
+  },
+  "grid": {
+    "waitingForPartner": "Waiting for a partner…",
+    "cameraIdle": "Camera is off",
+    "chatIdle": "Chat will appear once you're matched."
   },
   "filters": {
     "genderAny": "Any",

@@ -94,11 +94,25 @@
   "chat": {
     "ariaLabel": "Чат с {name}",
     "title": "Чат",
+    "titleWith": "Чат · {name}",
     "close": "Закрыть чат",
     "empty": "Сообщения видны только вам двоим и исчезнут после звонка.",
     "placeholder": "Сообщение…",
     "messageAriaLabel": "Текст сообщения",
     "send": "Отправить"
+  },
+  "layout": {
+    "groupLabel": "Раскладка",
+    "standard": "Обычная",
+    "grid": "Сетка",
+    "fullscreen": "На весь экран",
+    "exitFullscreen": "Свернуть",
+    "you": "Вы"
+  },
+  "grid": {
+    "waitingForPartner": "Ждём собеседника…",
+    "cameraIdle": "Камера выключена",
+    "chatIdle": "Чат появится, когда найдётся собеседник."
   },
   "filters": {
     "genderAny": "Любой",

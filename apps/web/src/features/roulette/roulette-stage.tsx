@@ -4,10 +4,22 @@
  * The full roulette experience for a given mode (video|voice). Owns dialog
  * visibility and wires the {@link useRoulette} engine to all the chrome:
  * filters, controls, peer overlay, gift/report/block dialogs, in-call chat, and
- * the stage layout (remote full-screen + local PiP for video; avatars +
- * equalizers for voice).
+ * the stage layout.
+ *
+ * VIDEO has two switchable layouts (persisted via {@link useRouletteLayoutStore}):
+ *   - `'standard'` — remote video full-bleed + draggable local PiP + floating
+ *     chat/controls (the classic stage).
+ *   - `'grid'` — a 2×2 grid (peer / me / square controls / docked per-call chat),
+ *     rendered by {@link RouletteGrid}.
+ * Either layout can also go FULLSCREEN: the stage element itself enters the
+ * browser Fullscreen API (or a CSS faux-fullscreen fallback), the real
+ * SiteHeader drops away, and a slim auto-hiding {@link FullscreenBar} restores
+ * the brand mark + layout switcher inside the stage.
+ *
+ * VOICE keeps the classic avatar/equalizer layout (no grid); only the
+ * fullscreen toggle is offered there.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import type { MatchType } from '@ruletka/shared-types';
@@ -27,6 +39,9 @@ import { ReportDialog } from '@/components/roulette/report-dialog';
 import { BlockConfirmDialog } from '@/components/roulette/block-confirm-dialog';
 import { VideoTile } from '@/components/roulette/video-tile';
 import { VoiceVisualizer } from '@/components/roulette/voice-visualizer';
+import { RouletteGrid } from '@/components/roulette/roulette-grid';
+import { VideoLayoutSwitcher } from '@/components/roulette/video-layout-switcher';
+import { FullscreenBar } from '@/components/roulette/fullscreen-bar';
 import {
   EndedScreen,
   ErrorScreen,
@@ -35,8 +50,20 @@ import {
   SearchingScreen,
   SignInScreen,
 } from '@/components/roulette/status-screens';
+import { useLayoutMode, useLayoutHydrated } from '@/lib/stores/roulette-layout-store';
 import { COUNTRY_BY_CODE, codeToFlag } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
+
+/** Vendor-prefixed Fullscreen API surface (Safari) on top of the std types. */
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+type FullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+
+/** Idle delay before the fullscreen chrome (bar + cursor) fades out. */
+const FULLSCREEN_IDLE_MS = 2500;
 
 export function RouletteStage({ type }: { type: MatchType }) {
   const t = useTranslations('roulette');
@@ -44,6 +71,20 @@ export function RouletteStage({ type }: { type: MatchType }) {
   const { token, ready, isPremium } = useAuthToken();
   const r = useRoulette({ type, token });
   const addFriend = useAddFriend();
+
+  // ── Layout (video only) ──────────────────────────────────────────────
+  // Persisted standard-vs-grid choice; `hydrated` gates an SSR/CSR flash by
+  // pinning 'standard' on the server and until localStorage rehydrates.
+  const layoutMode = useLayoutMode();
+  const layoutHydrated = useLayoutHydrated();
+  const gridMode = isVideo && layoutHydrated && layoutMode === 'grid';
+
+  // Fullscreen is ephemeral (the Fullscreen API needs a user gesture, so we
+  // never persist/auto-enter it). `fauxRef` tracks the CSS fallback used when
+  // element-fullscreen is unavailable (e.g. iOS Safari) so exit/Esc still work.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const fauxRef = useRef(false);
 
   // ── Trust & Safety ────────────────────────────────────────────────────
   // On-device NSFW screening of the LOCAL camera (video calls only). On a
@@ -101,6 +142,102 @@ export function RouletteStage({ type }: { type: MatchType }) {
     if (token && r.status === 'idle') prewarm();
   }, [token, r.status, prewarm]);
 
+  // ── Fullscreen ────────────────────────────────────────────────────────
+  // Keep `fullscreen` in sync with the real API so pressing Esc (or the OS
+  // chrome) updates our UI. Only relevant when NOT in the faux fallback.
+  useEffect(() => {
+    const onChange = () => {
+      if (fauxRef.current) return;
+      setFullscreen(document.fullscreenElement === stageRef.current);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const el = stageRef.current as FullscreenElement | null;
+    const doc = document as FullscreenDocument;
+
+    // ── Exit ──
+    if (fullscreen) {
+      if (fauxRef.current) {
+        fauxRef.current = false;
+        setFullscreen(false);
+        return;
+      }
+      if (doc.exitFullscreen) void doc.exitFullscreen();
+      else if (doc.webkitExitFullscreen) void doc.webkitExitFullscreen();
+      // `fullscreenchange` will flip the flag; flip eagerly too for safety.
+      setFullscreen(false);
+      return;
+    }
+
+    // ── Enter ──
+    if (!el) return;
+    if (el.requestFullscreen) {
+      // The change listener flips `fullscreen`; if it rejects (e.g. iOS Safari
+      // element FS is unsupported), fall back to CSS faux-fullscreen.
+      void Promise.resolve(el.requestFullscreen()).catch(() => {
+        fauxRef.current = true;
+        setFullscreen(true);
+      });
+    } else if (el.webkitRequestFullscreen) {
+      void Promise.resolve(el.webkitRequestFullscreen()).catch(() => {
+        fauxRef.current = true;
+        setFullscreen(true);
+      });
+    } else {
+      // No element-fullscreen support → faux-fullscreen.
+      fauxRef.current = true;
+      setFullscreen(true);
+    }
+  }, [fullscreen]);
+
+  // In the faux (CSS) fullscreen there's no native Esc-to-exit, so wire it up.
+  useEffect(() => {
+    if (!fullscreen || !fauxRef.current) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        fauxRef.current = false;
+        setFullscreen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
+
+  // ── Fullscreen chrome auto-hide ──────────────────────────────────────
+  // Player-style behaviour: the FullscreenBar + cursor show on entry, then fade
+  // after an idle period; any pointer/key activity over the stage reveals them.
+  const [chromeVisible, setChromeVisible] = useState(true);
+  useEffect(() => {
+    if (!fullscreen) {
+      setChromeVisible(true);
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    const reveal = () => {
+      setChromeVisible(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setChromeVisible(false), FULLSCREEN_IDLE_MS);
+    };
+    reveal(); // visible on entry, then start the idle countdown
+    const node = stageRef.current;
+    node?.addEventListener('pointermove', reveal);
+    node?.addEventListener('pointerdown', reveal);
+    window.addEventListener('keydown', reveal);
+    return () => {
+      clearTimeout(timer);
+      node?.removeEventListener('pointermove', reveal);
+      node?.removeEventListener('pointerdown', reveal);
+      window.removeEventListener('keydown', reveal);
+    };
+  }, [fullscreen]);
+
   const peer = r.peer;
   // Interests shared with the matched peer (for the in-call badge). Derived from
   // the existing profile fetches; safely empty when the peer profile is hidden
@@ -131,7 +268,7 @@ export function RouletteStage({ type }: { type: MatchType }) {
   // ── Not authenticated → sign-in prompt ──
   if (ready && !token && r.status === 'idle') {
     return (
-      <StageFrame isVideo={isVideo}>
+      <StageFrame isVideo={isVideo} fullscreen={false} containerRef={stageRef}>
         <div className="grid h-full place-items-center">
           <SignInScreen isVideo={isVideo} />
         </div>
@@ -147,8 +284,92 @@ export function RouletteStage({ type }: { type: MatchType }) {
       })
     : '';
 
+  // Top-right controls cluster (filters + layout switcher). Shown only when NOT
+  // fullscreen; in fullscreen the FullscreenBar carries the switcher instead.
+  const topRightCluster = !fullscreen && (
+    <div className="absolute right-3 top-3 z-30 flex items-start gap-2 sm:right-4 sm:top-4">
+      <VideoLayoutSwitcher
+        isVideo={isVideo}
+        fullscreen={fullscreen}
+        onToggleFullscreen={toggleFullscreen}
+      />
+      {/* During an active call the overlay sits top-left, so nudge the cluster
+          down a touch on small screens when a peer is present. */}
+      <div className={cn(hasPeer && isVideo && 'mt-16 sm:mt-0')}>
+        <FiltersDialog value={r.filters} onApply={r.setFilters} isPremium={isPremium} />
+      </div>
+    </div>
+  );
+
+  // Self-contained gift/report/block dialogs — shared by both layouts.
+  const dialogs = peer && (
+    <>
+      <GiftPicker
+        open={giftOpen}
+        onOpenChange={setGiftOpen}
+        toUserId={peer.userId}
+        peerName={peer.nickname}
+        isPremium={isPremium}
+      />
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        againstUserId={peer.userId}
+        peerName={peer.nickname}
+        onReported={skipNext}
+      />
+      <BlockConfirmDialog
+        open={blockOpen}
+        onOpenChange={setBlockOpen}
+        blockedUserId={peer.userId}
+        peerName={peer.nickname}
+        onBlocked={skipNext}
+      />
+    </>
+  );
+
+  // ── GRID layout (video only) ──────────────────────────────────────────
+  if (gridMode) {
+    return (
+      <StageFrame
+        isVideo={isVideo}
+        fullscreen={fullscreen}
+        containerRef={stageRef}
+        cursorHidden={fullscreen && !chromeVisible}
+      >
+        <RouletteGrid
+          r={r}
+          peer={peer}
+          hasPeer={hasPeer}
+          showStage={showStage}
+          longWait={longWait}
+          flagged={screening.flagged}
+          sharedInterests={peerSharedInterests}
+          onGift={() => setGiftOpen(true)}
+          onAddFriend={handleAddFriend}
+          onReport={() => setReportOpen(true)}
+          onBlock={() => setBlockOpen(true)}
+        />
+
+        {topRightCluster}
+
+        {fullscreen && (
+          <FullscreenBar isVideo={isVideo} onExit={toggleFullscreen} visible={chromeVisible} />
+        )}
+
+        {dialogs}
+      </StageFrame>
+    );
+  }
+
+  // ── STANDARD layout (classic stage; also used by voice) ───────────────
   return (
-    <StageFrame isVideo={isVideo}>
+    <StageFrame
+      isVideo={isVideo}
+      fullscreen={fullscreen}
+      containerRef={stageRef}
+      cursorHidden={fullscreen && !chromeVisible}
+    >
       {/* ── Media layer ─────────────────────────────────────────── */}
       <div className="absolute inset-0">
         {isVideo
@@ -285,13 +506,8 @@ export function RouletteStage({ type }: { type: MatchType }) {
         />
       </div>
 
-      {/* ── Top-right: filters (pre/in session) ─────────────────── */}
-      <div className="absolute right-3 top-3 z-30 sm:right-4 sm:top-4">
-        {/* During an active call the overlay sits top-left, so filters move down a touch via a wrapper when peer present */}
-        <div className={cn(hasPeer && isVideo && 'mt-16 sm:mt-0')}>
-          <FiltersDialog value={r.filters} onApply={r.setFilters} isPremium={isPremium} />
-        </div>
-      </div>
+      {/* ── Top-right: layout switcher + filters ─────────────────── */}
+      {topRightCluster}
 
       {/* ── Bottom control bar ──────────────────────────────────── */}
       <div className="absolute inset-x-0 bottom-0 z-30 flex justify-center p-3 sm:p-5">
@@ -316,32 +532,13 @@ export function RouletteStage({ type }: { type: MatchType }) {
         />
       </div>
 
-      {/* ── Dialogs (self-contained) ────────────────────────────── */}
-      {peer && (
-        <>
-          <GiftPicker
-            open={giftOpen}
-            onOpenChange={setGiftOpen}
-            toUserId={peer.userId}
-            peerName={peer.nickname}
-            isPremium={isPremium}
-          />
-          <ReportDialog
-            open={reportOpen}
-            onOpenChange={setReportOpen}
-            againstUserId={peer.userId}
-            peerName={peer.nickname}
-            onReported={skipNext}
-          />
-          <BlockConfirmDialog
-            open={blockOpen}
-            onOpenChange={setBlockOpen}
-            blockedUserId={peer.userId}
-            peerName={peer.nickname}
-            onBlocked={skipNext}
-          />
-        </>
+      {/* ── Fullscreen chrome (slim auto-hiding bar) ─────────────── */}
+      {fullscreen && (
+        <FullscreenBar isVideo={isVideo} onExit={toggleFullscreen} visible={chromeVisible} />
       )}
+
+      {/* ── Dialogs (self-contained) ────────────────────────────── */}
+      {dialogs}
     </StageFrame>
   );
 }
@@ -350,15 +547,42 @@ export function RouletteStage({ type }: { type: MatchType }) {
  * The stage canvas: an atmospheric, rounded glass arena that fills the viewport
  * height under the sticky header. Provides the dark gradient backdrop both
  * modes share.
+ *
+ * When `fullscreen`, the element becomes the Fullscreen API target (or, in the
+ * CSS faux-fullscreen fallback, a fixed full-viewport overlay): it drops its
+ * rounded frame/margins and fills the screen, while the `absolute`/grid children
+ * reflow automatically — so the grid and standard layouts work identically
+ * embedded and fullscreen with no extra code. The cursor hides while the
+ * fullscreen chrome is faded out.
  */
-function StageFrame({ isVideo, children }: { isVideo: boolean; children: React.ReactNode }) {
+function StageFrame({
+  isVideo,
+  fullscreen,
+  containerRef,
+  cursorHidden = false,
+  children,
+}: {
+  isVideo: boolean;
+  fullscreen: boolean;
+  containerRef: React.Ref<HTMLDivElement>;
+  /** Hide the cursor (fullscreen idle) along with the chrome. */
+  cursorHidden?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="mx-auto w-full max-w-6xl px-2 py-3 sm:px-4 sm:py-5">
+    <div
+      className={cn(
+        !fullscreen && 'mx-auto w-full max-w-6xl px-2 py-3 sm:px-4 sm:py-5',
+      )}
+    >
       <div
+        ref={containerRef}
         className={cn(
-          'relative isolate overflow-hidden rounded-3xl border border-border/60',
-          'h-[calc(100dvh-5.5rem)] min-h-[30rem] sm:h-[calc(100dvh-7rem)]',
-          'bg-[#07070b]',
+          'relative isolate overflow-hidden bg-[#07070b]',
+          fullscreen
+            ? 'fixed inset-0 z-50 h-screen w-screen rounded-none border-0'
+            : 'rounded-3xl border border-border/60 h-[calc(100dvh-5.5rem)] min-h-[30rem] sm:h-[calc(100dvh-7rem)]',
+          cursorHidden && 'cursor-none',
         )}
       >
         {/* Ambient backdrop for non-video / placeholder areas. */}

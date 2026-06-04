@@ -36,6 +36,9 @@ export const iconButtonVariants = cva(
       shape: {
         rounded: '',
         circle: 'rounded-full',
+        // A pronounced rounded-square tile — used by the grid layout's big
+        // control buttons. Pairs with any `size`; overrides its border-radius.
+        square: 'rounded-2xl',
       },
     },
     defaultVariants: { variant: 'ghost', size: 'md', shape: 'rounded' },
