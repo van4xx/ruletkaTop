@@ -30,8 +30,8 @@ class TopScreen extends ConsumerWidget {
       actions: [
         CoinBalancePill(
           balance: balance ?? 0,
-          onTap: () => context.go(AppRoutes.wallet),
-          onAddTap: () => context.go(AppRoutes.coins),
+          onTap: () => context.push(AppRoutes.wallet),
+          onAddTap: () => context.push(AppRoutes.coins),
         ),
         const SizedBox(width: AppSpacing.xs),
       ],
@@ -196,7 +196,7 @@ class _Lane extends StatelessWidget {
               entry: entries[i],
               rank: i + 1,
               onTap: () =>
-                  context.go(AppRoutes.profileOf(entries[i].profile.id)),
+                  context.push(AppRoutes.profileOf(entries[i].profile.id)),
             ),
           ],
       ],

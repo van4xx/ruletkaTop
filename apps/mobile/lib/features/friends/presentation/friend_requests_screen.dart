@@ -138,7 +138,7 @@ class _RequestsBody extends StatelessWidget {
             message:
                 'Когда кто-то захочет добавить вас в друзья — или вы отправите заявку — она появится здесь.',
             actionLabel: 'Найти людей',
-            onAction: () => context.go(AppRoutes.search),
+            onAction: () => context.push(AppRoutes.search),
           ),
         ],
       );
@@ -162,7 +162,7 @@ class _RequestsBody extends StatelessWidget {
               item: incoming[i],
               busy: busyId == incoming[i].friendshipId,
               onOpenProfile: () =>
-                  context.go(AppRoutes.profileOf(incoming[i].profile.id)),
+                  context.push(AppRoutes.profileOf(incoming[i].profile.id)),
               primary: _IncomingActions(
                 busy: busyId == incoming[i].friendshipId,
                 onAccept: () => onAccept(incoming[i]),
@@ -186,7 +186,7 @@ class _RequestsBody extends StatelessWidget {
               item: outgoing[i],
               busy: busyId == outgoing[i].friendshipId,
               onOpenProfile: () =>
-                  context.go(AppRoutes.profileOf(outgoing[i].profile.id)),
+                  context.push(AppRoutes.profileOf(outgoing[i].profile.id)),
               primary: _OutgoingActions(
                 busy: busyId == outgoing[i].friendshipId,
                 onCancel: () => onCancel(outgoing[i]),

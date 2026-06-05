@@ -313,7 +313,7 @@ class _BalanceRow extends StatelessWidget {
         fullWidth: false,
         height: 40,
         glow: false,
-        onPressed: () => context.go(AppRoutes.coins),
+        onPressed: () => context.push(AppRoutes.coins),
       ),
     );
   }
@@ -371,7 +371,7 @@ class _ProfileViewsTeaser extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       blurSigma: 0,
       intensity: 0.6,
-      onTap: () => context.go(AppRoutes.premium),
+      onTap: () => context.push(AppRoutes.premium),
       child: Row(
         children: [
           Container(

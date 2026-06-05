@@ -55,9 +55,9 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     final existing =
         ref.read(conversationsControllerProvider.notifier).conversationWithPeer(userId);
     if (existing != null) {
-      context.go(AppRoutes.chatTo('c:${existing.id}'));
+      context.push(AppRoutes.chatTo('c:${existing.id}'));
     } else {
-      context.go(AppRoutes.chatTo('u:$userId'));
+      context.push(AppRoutes.chatTo('u:$userId'));
     }
   }
 
@@ -150,7 +150,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       actions: [
         IconButton(
           tooltip: 'Заявки в друзья',
-          onPressed: () => context.go(AppRoutes.friendRequests),
+          onPressed: () => context.push(AppRoutes.friendRequests),
           icon: Badge(
             isLabelVisible: requestCount > 0,
             label: Text(requestCount > 99 ? '99+' : '$requestCount'),
@@ -211,7 +211,7 @@ class _FriendsList extends StatelessWidget {
             message:
                 'Знакомьтесь в рулетке или найдите людей по нику — и добавляйте их в друзья.',
             actionLabel: 'Найти людей',
-            onAction: () => context.go(AppRoutes.search),
+            onAction: () => context.push(AppRoutes.search),
           ),
         ],
       );
@@ -257,7 +257,7 @@ class _FriendsList extends StatelessWidget {
           friend: friend,
           onMessage: () => onMessage(friend.profile.id),
           onCall: () => onCall(friend),
-          onOpenProfile: () => context.go(AppRoutes.profileOf(friend.profile.id)),
+          onOpenProfile: () => context.push(AppRoutes.profileOf(friend.profile.id)),
           onRemove: () => onRemove(friend),
           onBlock: () => onBlock(friend),
         );

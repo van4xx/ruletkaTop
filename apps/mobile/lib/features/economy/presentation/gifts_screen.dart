@@ -38,7 +38,7 @@ class GiftsScreen extends ConsumerWidget {
           child: CoinBalancePill(
             balance: balance ?? 0,
             compact: true,
-            onTap: () => context.go(AppRoutes.coins),
+            onTap: () => context.push(AppRoutes.coins),
           ),
         ),
       ],
@@ -113,7 +113,7 @@ class GiftsScreen extends ConsumerWidget {
           ),
           action: SnackBarAction(
             label: 'Премиум',
-            onPressed: () => context.go(AppRoutes.premium),
+            onPressed: () => context.push(AppRoutes.premium),
           ),
         ),
       );
@@ -173,7 +173,7 @@ class _PremiumUpsell extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: () => context.go(AppRoutes.premium),
+            onPressed: () => context.push(AppRoutes.premium),
             child: const Text('Подробнее'),
           ),
         ],
@@ -484,7 +484,7 @@ class _SendGiftSheetState extends ConsumerState<_SendGiftSheet> {
                         icon: Icons.add_rounded,
                         onPressed: () {
                           Navigator.of(context).pop();
-                          context.go(AppRoutes.coins);
+                          context.push(AppRoutes.coins);
                         },
                       ),
                       const SizedBox(height: AppSpacing.xs),

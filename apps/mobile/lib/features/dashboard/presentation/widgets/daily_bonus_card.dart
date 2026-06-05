@@ -154,7 +154,7 @@ class DailyBonusCard extends ConsumerWidget {
               gradientColors: [colors.warning, colors.neonMagenta],
               onPressed: () {
                 ref.read(dailyBonusProvider.notifier).claim();
-                context.go(AppRoutes.coins);
+                context.push(AppRoutes.coins);
               },
             )
           else

@@ -89,7 +89,7 @@ class _ChatRow extends ConsumerWidget {
 
     return InkWell(
       borderRadius: AppRadii.brLg,
-      onTap: () => context.go(AppRoutes.chatTo(conversation.id)),
+      onTap: () => context.push(AppRoutes.chatTo(conversation.id)),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         child: Row(

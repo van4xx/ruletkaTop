@@ -129,7 +129,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             prompt: 'Нет аккаунта?',
             actionLabel: 'Создать',
             onPressed:
-                auth.isBusy ? null : () => context.go(AppRoutes.register),
+                auth.isBusy ? null : () => context.push(AppRoutes.register),
           ),
         ],
       ),

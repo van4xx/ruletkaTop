@@ -59,7 +59,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         IconButton(
           tooltip: 'Магазин монет',
           icon: const Icon(Icons.shopping_bag_outlined),
-          onPressed: () => context.go(AppRoutes.coins),
+          onPressed: () => context.push(AppRoutes.coins),
         ),
       ],
       body: RefreshIndicator(
@@ -78,7 +78,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     balance: wallet.value?.balanceCoins,
                     isLoading: wallet.isLoading,
                     isError: wallet.hasError,
-                    onTopUp: () => context.go(AppRoutes.coins),
+                    onTopUp: () => context.push(AppRoutes.coins),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   WalletStats(transactions: items, isLoading: tx.isLoading),
@@ -111,7 +111,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   message:
                       'Пополните баланс, чтобы начать дарить подарки и покупать места в Топе.',
                   actionLabel: 'Пополнить',
-                  onAction: () => context.go(AppRoutes.coins),
+                  onAction: () => context.push(AppRoutes.coins),
                 ),
               )
             else

@@ -161,7 +161,7 @@ class _FriendChip extends StatelessWidget {
       width: 64,
       child: InkWell(
         borderRadius: AppRadii.brLg,
-        onTap: () => context.go(AppRoutes.profileOf(profile.id)),
+        onTap: () => context.push(AppRoutes.profileOf(profile.id)),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
@@ -228,7 +228,7 @@ class _EmptyFriends extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           TextButton.icon(
-            onPressed: () => context.go(AppRoutes.search),
+            onPressed: () => context.push(AppRoutes.search),
             icon: Icon(Icons.person_add_rounded, size: 16, color: colors.neonCyan),
             label: Text(hasAny ? 'Открыть друзей' : 'Найти друзей'),
           ),

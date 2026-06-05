@@ -367,7 +367,7 @@ class _TopPurchaseSheetState extends ConsumerState<TopPurchaseSheet> {
                           TextButton.icon(
                             onPressed: () {
                               Navigator.of(context).pop();
-                              context.go(AppRoutes.coins);
+                              context.push(AppRoutes.coins);
                             },
                             icon: const Icon(Icons.add_rounded, size: 18),
                             label: const Text('Пополнить'),

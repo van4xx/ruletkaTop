@@ -82,7 +82,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen>
             response: res,
             metric: metric,
             selfId: selfId,
-            onTapUser: (id) => context.go(AppRoutes.profileOf(id)),
+            onTapUser: (id) => context.push(AppRoutes.profileOf(id)),
           ),
         ),
       ),

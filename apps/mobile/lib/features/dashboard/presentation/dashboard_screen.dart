@@ -92,8 +92,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       actions: [
         CoinBalancePill(
           balance: balance,
-          onTap: () => context.go(AppRoutes.wallet),
-          onAddTap: () => context.go(AppRoutes.coins),
+          onTap: () => context.push(AppRoutes.wallet),
+          onAddTap: () => context.push(AppRoutes.coins),
         ),
         NotificationsButton(count: unread),
         const SizedBox(width: AppSpacing.xs),

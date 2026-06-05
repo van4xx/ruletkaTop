@@ -144,7 +144,7 @@ class _Results extends ConsumerWidget {
               return PersonCard(
                 profile: profile,
                 status: presence[profile.id],
-                onTap: () => context.go(AppRoutes.profileOf(profile.id)),
+                onTap: () => context.push(AppRoutes.profileOf(profile.id)),
               );
             },
           );

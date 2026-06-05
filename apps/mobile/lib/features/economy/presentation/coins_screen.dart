@@ -39,7 +39,7 @@ class CoinsScreen extends ConsumerWidget {
         IconButton(
           tooltip: 'Кошелёк',
           icon: const Icon(Icons.account_balance_wallet_outlined),
-          onPressed: () => context.go(AppRoutes.wallet),
+          onPressed: () => context.push(AppRoutes.wallet),
         ),
       ],
       body: RefreshIndicator(
@@ -90,7 +90,7 @@ class CoinsScreen extends ConsumerWidget {
             SectionHeader(
               title: 'История операций',
               trailing: TextButton(
-                onPressed: () => context.go(AppRoutes.wallet),
+                onPressed: () => context.push(AppRoutes.wallet),
                 child: const Text('Все'),
               ),
             ),

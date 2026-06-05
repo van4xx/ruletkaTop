@@ -189,7 +189,7 @@ class _GiftPickerState extends ConsumerState<GiftPicker> {
                         onSend: _send,
                         onTopUp: () {
                           Navigator.of(context).pop();
-                          context.go(AppRoutes.coins);
+                          context.push(AppRoutes.coins);
                         },
                       ),
                   ],
@@ -210,7 +210,7 @@ class _GiftPickerState extends ConsumerState<GiftPicker> {
           label: 'Премиум',
           onPressed: () {
             Navigator.of(context).pop();
-            context.go(AppRoutes.premium);
+            context.push(AppRoutes.premium);
           },
         ),
       ),

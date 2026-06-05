@@ -229,7 +229,7 @@ class _TopCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
       blurSigma: 0,
-      onTap: () => context.go(AppRoutes.profileOf(profile.id)),
+      onTap: () => context.push(AppRoutes.profileOf(profile.id)),
       child: Row(
         children: [
           NeonAvatar(
@@ -389,7 +389,7 @@ class _BuyPlacementBand extends StatelessWidget {
             icon: Icons.emoji_events_rounded,
             gradientColors: [colors.warning, colors.neonMagenta],
             height: 46,
-            onPressed: () => context.go(AppRoutes.top),
+            onPressed: () => context.push(AppRoutes.top),
           ),
         ],
       ),

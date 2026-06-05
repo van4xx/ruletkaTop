@@ -257,7 +257,7 @@ class NotificationsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      onPressed: onTap ?? () => context.go(AppRoutes.notifications),
+      onPressed: onTap ?? () => context.push(AppRoutes.notifications),
       icon: Badge(
         isLabelVisible: count > 0,
         label: Text(count > 99 ? '99+' : '$count'),

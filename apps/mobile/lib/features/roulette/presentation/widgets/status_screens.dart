@@ -621,7 +621,7 @@ class SignInScreen extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             OutlinedButton(
-              onPressed: () => context.go(AppRoutes.register),
+              onPressed: () => context.push(AppRoutes.register),
               child: const Text('Регистрация'),
             ),
           ],

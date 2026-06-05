@@ -61,7 +61,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
           IconButton(
             tooltip: 'Настройки',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.go(AppRoutes.settings),
+            onPressed: () => context.push(AppRoutes.settings),
           ),
         const SizedBox(width: AppSpacing.xs),
       ],
@@ -243,7 +243,7 @@ class _ActionsPanel extends StatelessWidget {
             icon: Icons.settings_outlined,
             label: 'Настройки',
             subtitle: 'Приватность, уведомления, аккаунт',
-            onTap: () => context.go(AppRoutes.settings),
+            onTap: () => context.push(AppRoutes.settings),
           ),
         ],
       ),
