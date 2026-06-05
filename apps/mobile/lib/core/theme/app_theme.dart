@@ -75,29 +75,33 @@ abstract final class AppTheme {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
+        // Translucent "glass" inputs on dark so they sit on the aurora.
         fillColor: isDark ? AppPalette.darkInput : Colors.white,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+            const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.lg - 2),
         hintStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
         labelStyle: textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant),
+        floatingLabelStyle: textTheme.labelLarge?.copyWith(color: scheme.primary),
+        prefixIconColor: scheme.onSurfaceVariant,
+        suffixIconColor: scheme.onSurfaceVariant,
         border: OutlineInputBorder(
-          borderRadius: AppRadii.brMd,
+          borderRadius: AppRadii.brLg,
           borderSide: BorderSide(color: scheme.outline),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadii.brMd,
+          borderRadius: AppRadii.brLg,
           borderSide: BorderSide(color: scheme.outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadii.brMd,
+          borderRadius: AppRadii.brLg,
           borderSide: BorderSide(color: scheme.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: AppRadii.brMd,
+          borderRadius: AppRadii.brLg,
           borderSide: BorderSide(color: scheme.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: AppRadii.brMd,
+          borderRadius: AppRadii.brLg,
           borderSide: BorderSide(color: scheme.error, width: 2),
         ),
       ),
@@ -106,7 +110,7 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           minimumSize: const Size(0, 52),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.brMd),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadii.brLg),
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -117,7 +121,7 @@ abstract final class AppTheme {
           foregroundColor: scheme.onSurface,
           side: BorderSide(color: scheme.outline),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-          shape: const RoundedRectangleBorder(borderRadius: AppRadii.brMd),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadii.brLg),
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -177,9 +181,14 @@ abstract final class AppTheme {
 
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surfaceContainerHigh,
+        // Modal sheets are nudged translucent so a wrapping glass blur reads;
+        // they still look solid if shown without one.
+        modalBackgroundColor:
+            isDark ? AppPalette.darkPopover.withValues(alpha: 0.92) : Colors.white,
         surfaceTintColor: Colors.transparent,
+        dragHandleColor: scheme.onSurfaceVariant.withValues(alpha: 0.5),
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.xxl)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.xxxl)),
         ),
         showDragHandle: true,
       ),
@@ -217,27 +226,29 @@ abstract final class AppTheme {
     brightness: Brightness.dark,
     primary: AppPalette.darkPrimary,
     onPrimary: AppPalette.darkPrimaryFg,
-    primaryContainer: Color(0xFF3A1E66),
-    onPrimaryContainer: Color(0xFFEADCFF),
+    primaryContainer: Color(0xFF351961), // oklch(0.30 0.12 296)
+    onPrimaryContainer: Color(0xFFE7DDFF), // oklch(0.92 0.06 296)
     secondary: AppPalette.darkSecondary,
     onSecondary: AppPalette.darkSecondaryFg,
-    secondaryContainer: Color(0xFF06384A),
-    onSecondaryContainer: Color(0xFFCBF6FF),
+    secondaryContainer: Color(0xFF003744), // oklch(0.30 0.08 210)
+    onSecondaryContainer: Color(0xFFBFEFF4), // oklch(0.92 0.05 205)
     tertiary: AppPalette.darkAccent,
     onTertiary: AppPalette.darkAccentFg,
-    tertiaryContainer: Color(0xFF5A1240),
-    onTertiaryContainer: Color(0xFFFFD7EE),
+    tertiaryContainer: Color(0xFF550436), // oklch(0.30 0.12 350)
+    onTertiaryContainer: Color(0xFFFFD5EA), // oklch(0.92 0.06 350)
     error: AppPalette.darkDestructive,
     onError: Color(0xFFFFFFFF),
-    errorContainer: Color(0xFF5C1117),
-    onErrorContainer: Color(0xFFFFD9DB),
+    errorContainer: Color(0xFF560005), // oklch(0.28 0.12 25)
+    onErrorContainer: Color(0xFFFFD6D1), // oklch(0.92 0.06 25)
     surface: AppPalette.darkBackground,
     onSurface: AppPalette.darkForeground,
-    surfaceContainerLowest: Color(0xFF08090F),
-    surfaceContainerLow: Color(0xFF111119),
-    surfaceContainer: AppPalette.darkCard,
-    surfaceContainerHigh: Color(0xFF1B1B28),
-    surfaceContainerHighest: Color(0xFF222230),
+    // Violet-tinted neutral ladder, each step an exact oklch→sRGB conversion
+    // (0.115 → 0.275 L on hue 280–285) so elevation reads as cooler/lighter.
+    surfaceContainerLowest: Color(0xFF04040B), // oklch(0.115 0.018 280)
+    surfaceContainerLow: Color(0xFF0F0F1A), // oklch(0.175 0.022 283)
+    surfaceContainer: AppPalette.darkCard, // oklch(0.205 0.024 285)
+    surfaceContainerHigh: Color(0xFF1D1D29), // oklch(0.235 0.024 285)
+    surfaceContainerHighest: Color(0xFF262633), // oklch(0.275 0.024 285)
     onSurfaceVariant: AppPalette.darkMutedFg,
     outline: AppPalette.darkBorder,
     outlineVariant: Color(0x14FFFFFF),

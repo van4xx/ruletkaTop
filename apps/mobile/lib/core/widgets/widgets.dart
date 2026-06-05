@@ -8,6 +8,7 @@
 library;
 
 export 'app_scaffold.dart';
+export 'aurora_background.dart';
 export 'badges.dart';
 export 'coin_balance_pill.dart';
 export 'country_flag.dart';

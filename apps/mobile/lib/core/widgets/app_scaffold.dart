@@ -1,12 +1,16 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../router/routes.dart';
 import '../theme/theme.dart';
+import 'aurora_background.dart';
 
 /// The app's standard page chrome, mirroring the web header essentials: a
 /// gradient wordmark, optional title, trailing actions (e.g. a coin pill /
-/// notifications bell) and a glassy bottom navigation bar over the dark void.
+/// notifications bell) and a glassy bottom navigation bar floating over the
+/// signature neon-aurora void.
 ///
 /// Usage:
 /// ```dart
@@ -53,7 +57,7 @@ class AppScaffold extends StatelessWidget {
   final bool showWordmark;
   final Widget? floatingActionButton;
 
-  /// Paint the signature radial neon ambience behind the body.
+  /// Paint the signature neon-aurora ambience behind the body.
   final bool backgroundDecoration;
 
   /// Optional app-bar bottom (e.g. a TabBar or search field).
@@ -61,20 +65,93 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: false,
+    // The body floats over the aurora. We keep the body laid out *below* the
+    // app bar and *above* the nav bar (extend* = false) so every existing
+    // screen renders exactly where it did before — the chrome is glassy, but
+    // the safe content rect is unchanged, preserving all ~80 consumers.
+    final scaffold = Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: showAppBar
-          ? AppBar(
+          ? _GlassAppBar(
               leading: leading,
-              title: showWordmark ? const _Wordmark() : (title != null ? Text(title!) : null),
+              titleWidget: showWordmark
+                  ? const _Wordmark()
+                  : (title != null ? Text(title!) : null),
               actions: actions,
               bottom: bottom,
             )
           : null,
-      body: backgroundDecoration ? _AmbientBackground(child: body) : body,
+      body: body,
       floatingActionButton: floatingActionButton,
       bottomNavigationBar:
           showBottomNav ? _BottomNav(currentRoute: currentRoute) : null,
+    );
+
+    if (!backgroundDecoration) {
+      // Still give it the solid void base so transparent scaffold isn't black.
+      return ColoredBox(color: context.scheme.surface, child: scaffold);
+    }
+    return AuroraBackground(child: scaffold);
+  }
+}
+
+/// A glassmorphic [AppBar]: transparent base with a real backdrop blur and a
+/// soft top-down scrim, so titles/actions stay legible as content scrolls
+/// beneath it. Implements [PreferredSizeWidget] to drop into [Scaffold.appBar].
+class _GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
+  const _GlassAppBar({
+    this.leading,
+    this.titleWidget,
+    this.actions,
+    this.bottom,
+  });
+
+  final Widget? leading;
+  final Widget? titleWidget;
+  final List<Widget>? actions;
+  final PreferredSizeWidget? bottom;
+
+  @override
+  Size get preferredSize => Size.fromHeight(
+        kToolbarHeight + (bottom?.preferredSize.height ?? 0),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+
+    // The inner AppBar reserves the status-bar inset itself; the blur + scrim
+    // wrap it (including that strip) so the whole top reads as one glass plane.
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: AppBlur.heavy, sigmaY: AppBlur.heavy),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            // A vertical scrim: a touch of surface up top fading to clear, so
+            // the bar reads over busy content without a hard edge.
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                scheme.surface.withValues(alpha: 0.72),
+                scheme.surface.withValues(alpha: 0.0),
+              ],
+            ),
+            border: Border(
+              bottom: BorderSide(color: context.colors.glassBorder, width: 0.5),
+            ),
+          ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: leading,
+            title: titleWidget,
+            actions: actions,
+            bottom: bottom,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -87,45 +164,21 @@ class _Wordmark extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return ShaderMask(
-      shaderCallback: (bounds) => LinearGradient(colors: colors.brandGradient).createShader(bounds),
+      shaderCallback: (bounds) =>
+          AppGradients.brand(colors, begin: Alignment.centerLeft, end: Alignment.centerRight)
+              .createShader(bounds),
       child: Text(
         'ruletka',
-        style: AppTypography.display(fontSize: 22, color: Colors.white, letterSpacing: -1),
+        style: AppTypography.wordmark(fontSize: 22, color: Colors.white),
       ),
     );
   }
 }
 
-/// A faint radial neon glow anchored top-center — the app's atmospheric
-/// backdrop, echoing the web's layered void.
-class _AmbientBackground extends StatelessWidget {
-  const _AmbientBackground({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    if (!context.isDark) return child;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(0, -1.1),
-          radius: 1.3,
-          colors: [
-            colors.neonViolet.withValues(alpha: 0.10),
-            context.scheme.surface,
-          ],
-          stops: const [0, 0.6],
-        ),
-      ),
-      child: child,
-    );
-  }
-}
-
-/// The glassy bottom navigation, driven by [kBottomNavDestinations]. Navigating
-/// uses `context.go` so tabs replace (not stack) the current location.
+/// The floating glass bottom navigation, driven by [kBottomNavDestinations].
+/// Navigating uses `context.go` so tabs replace (not stack) the current
+/// location. The bar is a true liquid-glass slab: backdrop blur, a translucent
+/// fill, a hairline top highlight and an ambient shadow lifting it off content.
 class _BottomNav extends StatelessWidget {
   const _BottomNav({this.currentRoute});
 
@@ -133,38 +186,62 @@ class _BottomNav extends StatelessWidget {
 
   int get _selectedIndex {
     if (currentRoute == null) return 0;
-    final idx = kBottomNavDestinations.indexWhere((d) => d.route == currentRoute);
+    final idx =
+        kBottomNavDestinations.indexWhere((d) => d.route == currentRoute);
     return idx < 0 ? 0 : idx;
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final hasSelection =
-        currentRoute != null && kBottomNavDestinations.any((d) => d.route == currentRoute);
+    final scheme = context.scheme;
+    final hasSelection = currentRoute != null &&
+        kBottomNavDestinations.any((d) => d.route == currentRoute);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: colors.glassBorder)),
-      ),
-      child: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) {
-          final dest = kBottomNavDestinations[i];
-          if (dest.route != currentRoute) context.go(dest.route);
-        },
-        destinations: [
-          for (var i = 0; i < kBottomNavDestinations.length; i++)
-            NavigationDestination(
-              icon: Icon(kBottomNavDestinations[i].icon),
-              selectedIcon: Icon(
-                kBottomNavDestinations[i].selectedIcon,
-                color: hasSelection ? colors.neonViolet : null,
-              ),
-              label: kBottomNavDestinations[i].label,
+    final bar = ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: AppBlur.heavy, sigmaY: AppBlur.heavy),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            // Denser glass than a card so labels/icons stay crisp.
+            color: scheme.surface.withValues(alpha: context.isDark ? 0.55 : 0.82),
+            border: Border(
+              top: BorderSide(color: colors.glassHighlight.withValues(alpha: 0.18)),
             ),
+          ),
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (i) {
+              final dest = kBottomNavDestinations[i];
+              if (dest.route != currentRoute) context.go(dest.route);
+            },
+            destinations: [
+              for (var i = 0; i < kBottomNavDestinations.length; i++)
+                NavigationDestination(
+                  icon: Icon(kBottomNavDestinations[i].icon),
+                  selectedIcon: Icon(
+                    kBottomNavDestinations[i].selectedIcon,
+                    color: hasSelection ? colors.neonViolet : null,
+                  ),
+                  label: kBottomNavDestinations[i].label,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // A soft shadow above the bar grounds it as a floating slab.
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        boxShadow: [
+          BoxShadow(color: Color(0x40000000), blurRadius: 20, offset: Offset(0, -4)),
         ],
       ),
+      child: bar,
     );
   }
 }

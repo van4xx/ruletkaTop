@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Type system mirroring the web: **Unbounded** for display/headings (a bold,
-/// geometric display face) and **Manrope** for body/labels (a clean grotesque).
-/// Fonts are fetched + cached at runtime by `google_fonts`, so nothing is
-/// bundled in the app binary.
+/// geometric display face — web `--font-display`) and **Manrope** for
+/// body/labels (a clean grotesque — web `--font-sans`). Fonts are fetched +
+/// cached at runtime by `google_fonts`, so nothing is bundled in the binary.
 abstract final class AppTypography {
   /// Build the [TextTheme] for a given [brightness]. Manrope is the base for
   /// every slot; the display/headline slots are then overridden with Unbounded
@@ -13,7 +13,8 @@ abstract final class AppTypography {
     final base = ThemeData(brightness: brightness).textTheme;
     final body = GoogleFonts.manropeTextTheme(base);
 
-    TextStyle display(double size, {double height = 1.05, FontWeight weight = FontWeight.w700}) =>
+    TextStyle display(double size,
+            {double height = 1.05, FontWeight weight = FontWeight.w700}) =>
         GoogleFonts.unbounded(
           fontSize: size,
           height: height,
@@ -53,11 +54,48 @@ abstract final class AppTypography {
     FontWeight fontWeight = FontWeight.w800,
     Color? color,
     double letterSpacing = -0.5,
+    double? height,
   }) =>
       GoogleFonts.unbounded(
         fontSize: fontSize,
         fontWeight: fontWeight,
         color: color,
         letterSpacing: letterSpacing,
+        height: height,
+      );
+
+  /// The "ruletka" wordmark style (Unbounded, tight tracking). Color is left
+  /// null so callers can paint it with a [ShaderMask] brand gradient.
+  static TextStyle wordmark({double fontSize = 22, Color? color}) =>
+      GoogleFonts.unbounded(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -1,
+        color: color,
+      );
+
+  /// An eyebrow/overline label (Manrope, wide tracking, uppercase intent) for
+  /// section kickers above headings.
+  static TextStyle eyebrow({double fontSize = 11, Color? color}) =>
+      GoogleFonts.manrope(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.6,
+        color: color,
+      );
+
+  /// A tabular-figures Manrope style for stat counters / balances so digits
+  /// don't jitter as they change.
+  static TextStyle stat({
+    double fontSize = 22,
+    FontWeight fontWeight = FontWeight.w800,
+    Color? color,
+  }) =>
+      GoogleFonts.manrope(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        letterSpacing: -0.3,
+        fontFeatures: const [FontFeature.tabularFigures()],
       );
 }

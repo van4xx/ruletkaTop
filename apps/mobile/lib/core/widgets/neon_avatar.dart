@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -37,8 +39,12 @@ class NeonAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final scheme = context.scheme;
     final ringWidth = ring ? (size * 0.06).clamp(2.0, 4.0) : 0.0;
-    final inner = size - ringWidth * 2;
+    // A hair of dark gap between the ring and the photo reads as a polished
+    // "floating" halo rather than a painted border.
+    final gap = ring ? (size * 0.02).clamp(1.0, 2.5) : 0.0;
+    final inner = size - (ringWidth + gap) * 2;
 
     Widget avatar = ClipOval(
       child: SizedBox(
@@ -59,13 +65,31 @@ class NeonAvatar extends StatelessWidget {
       avatar = Container(
         width: size,
         height: size,
-        padding: EdgeInsets.all(ringWidth),
+        padding: EdgeInsets.all(ringWidth + gap),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: SweepGradient(colors: [...colors.brandGradient, colors.neonViolet]),
+          // Tilt the sweep slightly so the seam isn't at 3 o'clock; the extra
+          // trailing violet stop closes the loop smoothly.
+          gradient: SweepGradient(
+            transform: const GradientRotation(-math.pi / 2),
+            colors: [
+              colors.neonViolet,
+              colors.neonCyan,
+              colors.neonMagenta,
+              colors.neonViolet,
+            ],
+          ),
           boxShadow: glow ? AppShadows.glow(colors.neonViolet, strength: 0.6) : null,
         ),
-        child: avatar,
+        // Carve the gap so the photo sits on the void, not on the gradient.
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: scheme.surface,
+          ),
+          padding: EdgeInsets.all(gap),
+          child: avatar,
+        ),
       );
     } else {
       avatar = SizedBox(width: size, height: size, child: avatar);
@@ -73,6 +97,7 @@ class NeonAvatar extends StatelessWidget {
 
     if (status == null) return avatar;
 
+    final statusColor = _statusColor(context, status!);
     final dotSize = (size * 0.28).clamp(10.0, 16.0);
     return SizedBox(
       width: size,
@@ -87,9 +112,18 @@ class NeonAvatar extends StatelessWidget {
               width: dotSize,
               height: dotSize,
               decoration: BoxDecoration(
-                color: _statusColor(context, status!),
+                color: statusColor,
                 shape: BoxShape.circle,
-                border: Border.all(color: context.scheme.surface, width: 2),
+                border: Border.all(color: scheme.surface, width: 2),
+                boxShadow: status == OnlineStatus.offline
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: statusColor.withValues(alpha: 0.6),
+                          blurRadius: 6,
+                          spreadRadius: -1,
+                        ),
+                      ],
               ),
             ),
           ),
