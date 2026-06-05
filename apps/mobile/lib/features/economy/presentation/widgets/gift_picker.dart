@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -87,7 +89,9 @@ class _GiftPickerState extends ConsumerState<GiftPicker> {
     FocusScope.of(context).unfocus();
 
     final message = _messageController.text.trim();
-    final result = await ref.read(sendGiftControllerProvider.notifier).send(
+    final result = await ref
+        .read(sendGiftControllerProvider.notifier)
+        .send(
           SendGiftDto(
             giftId: gift.id,
             toUserId: widget.toUserId,
@@ -104,8 +108,9 @@ class _GiftPickerState extends ConsumerState<GiftPicker> {
           SnackBar(content: Text('Подарок «${gift.title}» отправлен')),
         );
       case SendGiftFailure(:final message):
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -130,50 +135,65 @@ class _GiftPickerState extends ConsumerState<GiftPicker> {
         maxChildSize: 0.95,
         builder: (context, scrollController) {
           return ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(AppRadii.xxl)),
-            child: ColoredBox(
-              color: context.scheme.surface,
-              child: Column(
-                children: [
-                  const _SheetGrip(),
-                  _Header(toName: widget.toName, balance: balance),
-                  Divider(height: 1, color: colors.glassBorder),
-                  Expanded(
-                    child: gifts.when(
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (_, _) => ErrorView(
-                        title: 'Не удалось загрузить подарки',
-                        onRetry: () => ref.invalidate(giftsProvider),
-                      ),
-                      data: (list) => _GiftGrid(
-                        gifts: list,
-                        selectedId: selected?.id,
-                        isLocked: _isLocked,
-                        scrollController: scrollController,
-                        onPick: (g) {
-                          if (_isLocked(g)) {
-                            _promptPremium();
-                            return;
-                          }
-                          setState(() => _selected = g);
-                        },
-                      ),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadii.xxl),
+            ),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: AppBlur.heavy,
+                sigmaY: AppBlur.heavy,
+              ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.scheme.surface.withValues(alpha: 0.86),
+                  border: Border(
+                    top: BorderSide(
+                      color: colors.glassHighlight.withValues(alpha: 0.2),
                     ),
                   ),
-                  if (selected != null)
-                    _SendBar(
-                      gift: selected,
-                      messageController: _messageController,
-                      sending: isSending,
-                      affordable: affordable,
-                      onSend: _send,
-                      onTopUp: () {
-                        Navigator.of(context).pop();
-                        context.go(AppRoutes.coins);
-                      },
+                ),
+                child: Column(
+                  children: [
+                    const _SheetGrip(),
+                    _Header(toName: widget.toName, balance: balance),
+                    Divider(height: 1, color: colors.glassBorder),
+                    Expanded(
+                      child: gifts.when(
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (_, _) => ErrorView(
+                          title: 'Не удалось загрузить подарки',
+                          onRetry: () => ref.invalidate(giftsProvider),
+                        ),
+                        data: (list) => _GiftGrid(
+                          gifts: list,
+                          selectedId: selected?.id,
+                          isLocked: _isLocked,
+                          scrollController: scrollController,
+                          onPick: (g) {
+                            if (_isLocked(g)) {
+                              _promptPremium();
+                              return;
+                            }
+                            setState(() => _selected = g);
+                          },
+                        ),
+                      ),
                     ),
-                ],
+                    if (selected != null)
+                      _SendBar(
+                        gift: selected,
+                        messageController: _messageController,
+                        sending: isSending,
+                        affordable: affordable,
+                        onSend: _send,
+                        onTopUp: () {
+                          Navigator.of(context).pop();
+                          context.go(AppRoutes.coins);
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
           );
@@ -208,7 +228,11 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.xs, AppSpacing.lg, AppSpacing.md),
+        AppSpacing.lg,
+        AppSpacing.xs,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -219,8 +243,9 @@ class _Header extends StatelessWidget {
                 if (toName != null && toName!.isNotEmpty)
                   Text(
                     'Для $toName',
-                    style: context.texts.bodySmall
-                        ?.copyWith(color: context.scheme.onSurfaceVariant),
+                    style: context.texts.bodySmall?.copyWith(
+                      color: context.scheme.onSurfaceVariant,
+                    ),
                   ),
               ],
             ),
@@ -325,7 +350,11 @@ class _SendBar extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Icon(Icons.monetization_on_rounded, size: 16, color: colors.warning),
+                Icon(
+                  Icons.monetization_on_rounded,
+                  size: 16,
+                  color: colors.warning,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   EconomyFormat.number(gift.priceCoins),
@@ -358,8 +387,9 @@ class _SendBar extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Недостаточно монет для этого подарка',
-                style: context.texts.bodySmall
-                    ?.copyWith(color: context.scheme.onSurfaceVariant),
+                style: context.texts.bodySmall?.copyWith(
+                  color: context.scheme.onSurfaceVariant,
+                ),
               ),
             ] else
               GradientButton(

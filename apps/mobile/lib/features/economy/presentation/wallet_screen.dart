@@ -91,16 +91,15 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
             // Ledger body.
             if (tx.isLoading)
-              SliverToBoxAdapter(
-                child: LoadingShimmer.list(items: 8),
-              )
+              SliverToBoxAdapter(child: LoadingShimmer.list(items: 8))
             else if (tx.hasError)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: ErrorView(
                   title: 'Не удалось загрузить историю',
                   message: 'Лента операций временно недоступна.',
-                  onRetry: () => ref.read(transactionsProvider.notifier).refresh(),
+                  onRetry: () =>
+                      ref.read(transactionsProvider.notifier).refresh(),
                 ),
               )
             else if (items.isEmpty)
@@ -109,7 +108,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                 child: EmptyState(
                   icon: Icons.account_balance_wallet_outlined,
                   title: 'Пока нет операций',
-                  message: 'Пополните баланс, чтобы начать дарить подарки и покупать места в Топе.',
+                  message:
+                      'Пополните баланс, чтобы начать дарить подарки и покупать места в Топе.',
                   actionLabel: 'Пополнить',
                   onAction: () => context.go(AppRoutes.coins),
                 ),
@@ -117,9 +117,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
             else
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                ),
                 sliver: SliverList.separated(
-                  itemCount: items.length + ((txState?.hasMore ?? false) ? 1 : 0),
+                  itemCount:
+                      items.length + ((txState?.hasMore ?? false) ? 1 : 0),
                   separatorBuilder: (_, _) =>
                       Divider(height: 1, color: context.colors.glassBorder),
                   itemBuilder: (context, i) {

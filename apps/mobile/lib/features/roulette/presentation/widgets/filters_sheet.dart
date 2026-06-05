@@ -49,6 +49,7 @@ Future<MatchFilters?> showFiltersSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.55),
     builder: (_) => _FiltersSheet(value: value, isPremium: isPremium),
   );
 }
@@ -73,8 +74,14 @@ class _FiltersSheet extends StatefulWidget {
 class _FiltersSheetState extends State<_FiltersSheet> {
   late GenderPreference _gender = widget.value.gender;
   late RangeValues _age = RangeValues(
-    widget.value.ageMin.toDouble().clamp(_kAgeMin.toDouble(), _kAgeMax.toDouble()),
-    widget.value.ageMax.toDouble().clamp(_kAgeMin.toDouble(), _kAgeMax.toDouble()),
+    widget.value.ageMin.toDouble().clamp(
+      _kAgeMin.toDouble(),
+      _kAgeMax.toDouble(),
+    ),
+    widget.value.ageMax.toDouble().clamp(
+      _kAgeMin.toDouble(),
+      _kAgeMax.toDouble(),
+    ),
   );
   late Set<String> _countries = {...widget.value.countries};
   late bool _sharedInterestsOnly = widget.value.sharedInterestsOnly;
@@ -112,33 +119,54 @@ class _FiltersSheetState extends State<_FiltersSheet> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: GlassCard(
           margin: const EdgeInsets.all(AppSpacing.sm),
-          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
           borderRadius: AppRadii.brXxl,
-          blurSigma: 24,
+          blurSigma: AppBlur.heavy,
+          intensity: 1.1,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: scheme.onSurfaceVariant.withValues(alpha: 0.3),
-                    borderRadius: AppRadii.brPill,
-                  ),
-                ),
-              ),
+              Center(child: _DragHandle()),
               const SizedBox(height: AppSpacing.lg),
-              Text('Фильтры поиска',
-                  style: AppTypography.display(fontSize: 20, color: scheme.onSurface)),
+              Row(
+                children: [
+                  ShaderMask(
+                    shaderCallback: (b) => LinearGradient(
+                      colors: colors.brandGradient,
+                    ).createShader(b),
+                    child: const Icon(
+                      Icons.tune_rounded,
+                      size: 20,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Фильтры поиска',
+                    style: AppTypography.display(
+                      fontSize: 20,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.xs),
               Text(
                 'Настройте, с кем хотите общаться. Пол и страна доступны в Premium.',
-                style: context.texts.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                style: context.texts.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: AppSpacing.xl),
 
@@ -159,7 +187,8 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                             onTap: () => setState(() => _gender = g.value),
                           ),
                         ),
-                        if (g.value != _kGenders.last.value) const SizedBox(width: AppSpacing.sm),
+                        if (g.value != _kGenders.last.value)
+                          const SizedBox(width: AppSpacing.sm),
                       ],
                     ],
                   ),
@@ -174,7 +203,9 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                   Text('Возраст', style: context.texts.titleSmall),
                   Text(
                     '${_age.start.round()}–${_age.end.round()}',
-                    style: context.texts.titleSmall?.copyWith(color: colors.neonCyan),
+                    style: context.texts.titleSmall?.copyWith(
+                      color: colors.neonCyan,
+                    ),
                   ),
                 ],
               ),
@@ -183,7 +214,10 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                 max: _kAgeMax.toDouble(),
                 divisions: _kAgeMax - _kAgeMin,
                 values: _age,
-                labels: RangeLabels('${_age.start.round()}', '${_age.end.round()}'),
+                labels: RangeLabels(
+                  '${_age.start.round()}',
+                  '${_age.end.round()}',
+                ),
                 onChanged: (v) => setState(() => _age = v),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -205,7 +239,9 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                           name: c.name,
                           selected: _countries.contains(c.code),
                           onTap: () => setState(() {
-                            if (!_countries.add(c.code)) _countries.remove(c.code);
+                            if (!_countries.add(c.code)) {
+                              _countries.remove(c.code);
+                            }
                           }),
                         ),
                     ],
@@ -228,13 +264,38 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                   TextButton(onPressed: _reset, child: const Text('Сбросить')),
                   const Spacer(),
                   Expanded(
-                    child: GradientButton(label: 'Применить', onPressed: _apply),
+                    child: GradientButton(
+                      label: 'Применить',
+                      onPressed: _apply,
+                    ),
                   ),
                 ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The grabber pill at the top of the glass sheet — a soft gradient bar so it
+/// reads as part of the neon liquid-glass language rather than a grey nub.
+class _DragHandle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      width: 44,
+      height: 5,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colors.neonViolet.withValues(alpha: 0.7),
+            colors.neonMagenta.withValues(alpha: 0.7),
+          ],
+        ),
+        borderRadius: AppRadii.brPill,
       ),
     );
   }
@@ -283,7 +344,11 @@ class _InterestsToggle extends StatelessWidget {
       opacity: enabled ? 1 : 0.55,
       child: Container(
         padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md, AppSpacing.sm, AppSpacing.sm, AppSpacing.sm),
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.sm,
+          AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           borderRadius: AppRadii.brLg,
           color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
@@ -295,11 +360,13 @@ class _InterestsToggle extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.interests_rounded,
-                size: 20,
-                color: value && enabled
-                    ? colors.neonMagenta
-                    : scheme.onSurfaceVariant),
+            Icon(
+              Icons.interests_rounded,
+              size: 20,
+              color: value && enabled
+                  ? colors.neonMagenta
+                  : scheme.onSurfaceVariant,
+            ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Column(
@@ -308,8 +375,10 @@ class _InterestsToggle extends StatelessWidget {
                   Row(
                     children: [
                       Flexible(
-                        child: Text('Только с общими интересами',
-                            style: context.texts.titleSmall),
+                        child: Text(
+                          'Только с общими интересами',
+                          style: context.texts.titleSmall,
+                        ),
                       ),
                       if (!enabled) ...[
                         const SizedBox(width: AppSpacing.sm),
@@ -320,8 +389,9 @@ class _InterestsToggle extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     'Подбираем собеседников минимум с одним общим интересом.',
-                    style: context.texts.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: context.texts.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -342,7 +412,11 @@ class _InterestsToggle extends StatelessWidget {
 }
 
 class _SegmentChip extends StatelessWidget {
-  const _SegmentChip({required this.label, required this.selected, required this.onTap});
+  const _SegmentChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
@@ -351,27 +425,48 @@ class _SegmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+    return AnimatedContainer(
+      duration: AppDurations.fast,
+      curve: AppCurves.glass,
+      decoration: BoxDecoration(
         borderRadius: AppRadii.brMd,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.brMd,
-            gradient: selected ? LinearGradient(colors: colors.ctaGradient) : null,
-            color: selected ? null : context.scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-            border: Border.all(
-              color: selected ? Colors.transparent : colors.glassBorder,
+        boxShadow: selected
+            ? AppShadows.glow(colors.neonMagenta, strength: 0.4)
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: AppRadii.brMd,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadii.brMd,
+          splashColor: colors.neonViolet.withValues(alpha: 0.14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: AppRadii.brMd,
+              gradient: selected
+                  ? LinearGradient(colors: colors.ctaGradient)
+                  : null,
+              color: selected
+                  ? null
+                  : context.scheme.surfaceContainerHighest.withValues(
+                      alpha: 0.4,
+                    ),
+              border: Border.all(
+                color: selected ? Colors.transparent : colors.glassBorder,
+              ),
             ),
-          ),
-          child: Text(
-            label,
-            style: context.texts.labelLarge?.copyWith(
-              color: selected ? Colors.white : context.scheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
+            child: Text(
+              label,
+              style: context.texts.labelLarge?.copyWith(
+                color: selected
+                    ? Colors.white
+                    : context.scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -402,14 +497,19 @@ class _CountryChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: AppRadii.brPill,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           decoration: BoxDecoration(
             borderRadius: AppRadii.brPill,
             color: selected
                 ? colors.neonViolet.withValues(alpha: 0.18)
                 : context.scheme.surfaceContainerHighest.withValues(alpha: 0.4),
             border: Border.all(
-              color: selected ? colors.neonViolet.withValues(alpha: 0.6) : colors.glassBorder,
+              color: selected
+                  ? colors.neonViolet.withValues(alpha: 0.6)
+                  : colors.glassBorder,
             ),
           ),
           child: Row(
@@ -420,7 +520,9 @@ class _CountryChip extends StatelessWidget {
               Text(
                 name,
                 style: context.texts.labelMedium?.copyWith(
-                  color: selected ? context.scheme.onSurface : context.scheme.onSurfaceVariant,
+                  color: selected
+                      ? context.scheme.onSurface
+                      : context.scheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
               ),

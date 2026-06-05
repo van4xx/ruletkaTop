@@ -7,6 +7,7 @@ import '../../../../core/router/routes.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../dashboard_providers.dart';
+import 'dash_section_header.dart';
 
 /// A horizontally-scrolling strip of friends who are reachable right now
 /// (online / away / in-call), each with a live presence dot. Taps through to a
@@ -32,12 +33,12 @@ class OnlineFriendsSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SectionHeader(
+          DashWidgetHeader(
+            icon: Icons.bolt_rounded,
             title: 'Друзья онлайн',
-            trailing: TextButton(
-              onPressed: () => context.go(AppRoutes.friends),
-              child: const Text('Все'),
-            ),
+            accent: colors.neonCyan,
+            count: online.length,
+            linkRoute: AppRoutes.friends,
           ),
           const SizedBox(height: AppSpacing.sm),
           friendsAsync.when(
@@ -73,11 +74,36 @@ class OnlineFriendsSection extends ConsumerWidget {
             },
           ),
           if (online.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '${online.length} ${_pluralOnline(online.length)} в сети',
-              style: context.texts.labelSmall
-                  ?.copyWith(color: colors.neonCyan, fontWeight: FontWeight.w700),
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.brPill,
+                  color: colors.neonCyan.withValues(alpha: 0.12),
+                  border:
+                      Border.all(color: colors.neonCyan.withValues(alpha: 0.28)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle, color: colors.neonCyan),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${online.length} ${_pluralOnline(online.length)} в сети',
+                      style: context.texts.labelSmall?.copyWith(
+                          color: colors.neonCyan, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ],

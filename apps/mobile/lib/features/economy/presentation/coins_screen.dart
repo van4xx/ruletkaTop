@@ -66,8 +66,9 @@ class CoinsScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Пополняйте баланс, чтобы дарить подарки, покупать места в Топе и открывать больше возможностей.',
-              style: context.texts.bodyMedium
-                  ?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.texts.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
 
@@ -125,8 +126,9 @@ class CoinsScreen extends ConsumerWidget {
               onRetry: () {
                 final pkg = state.activePackage;
                 Navigator.of(dialogContext).pop();
-                final notifier =
-                    dialogRef.read(buyCoinsControllerProvider.notifier);
+                final notifier = dialogRef.read(
+                  buyCoinsControllerProvider.notifier,
+                );
                 notifier.reset();
                 if (pkg != null) notifier.buy(context, pkg);
               },
@@ -169,7 +171,7 @@ class _PackagesGrid extends ConsumerWidget {
           itemCount: list.length,
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
             maxCrossAxisExtent: 220,
-            mainAxisExtent: 168,
+            mainAxisExtent: 188,
             crossAxisSpacing: AppSpacing.md,
             mainAxisSpacing: AppSpacing.md,
           ),
@@ -178,10 +180,12 @@ class _PackagesGrid extends ConsumerWidget {
             return CoinPackageCard(
               package: pkg,
               best: i == bestIndex,
-              loading: buyState.isBusy && buyState.activePackage?.code == pkg.code,
+              loading:
+                  buyState.isBusy && buyState.activePackage?.code == pkg.code,
               disabled: buyState.isBusy,
-              onBuy: () =>
-                  ref.read(buyCoinsControllerProvider.notifier).buy(context, pkg),
+              onBuy: () => ref
+                  .read(buyCoinsControllerProvider.notifier)
+                  .buy(context, pkg),
             );
           },
         );
@@ -203,8 +207,9 @@ class _RecentTransactions extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
         child: Text(
           'Не удалось загрузить историю',
-          style: context.texts.bodyMedium
-              ?.copyWith(color: context.scheme.onSurfaceVariant),
+          style: context.texts.bodyMedium?.copyWith(
+            color: context.scheme.onSurfaceVariant,
+          ),
         ),
       ),
       data: (data) {
@@ -213,19 +218,24 @@ class _RecentTransactions extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
             child: Text(
               'Пока нет операций — пополните баланс, чтобы начать.',
-              style: context.texts.bodyMedium
-                  ?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.texts.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
           );
         }
         final preview = data.items.take(5).toList();
         return GlassCard(
+          borderRadius: AppRadii.brXxl,
           padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
           child: Column(
             children: [
               for (var i = 0; i < preview.length; i++) ...[
-                if (i > 0) Divider(height: 1, color: context.colors.glassBorder),
+                if (i > 0)
+                  Divider(height: 1, color: context.colors.glassBorder),
                 TransactionTile(tx: preview[i]),
               ],
             ],
@@ -251,11 +261,7 @@ class _Eyebrow extends StatelessWidget {
         const SizedBox(width: AppSpacing.xs),
         Text(
           label.toUpperCase(),
-          style: context.texts.labelSmall?.copyWith(
-            color: colors.warning,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppTypography.eyebrow(fontSize: 11, color: colors.warning),
         ),
       ],
     );
@@ -274,14 +280,14 @@ class _GridSkeleton extends StatelessWidget {
         itemCount: 4,
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: 220,
-          mainAxisExtent: 168,
+          mainAxisExtent: 188,
           crossAxisSpacing: AppSpacing.md,
           mainAxisSpacing: AppSpacing.md,
         ),
         itemBuilder: (_, _) => Container(
           decoration: BoxDecoration(
             color: context.scheme.surfaceContainerHighest,
-            borderRadius: AppRadii.brXl,
+            borderRadius: AppRadii.brXxl,
           ),
         ),
       ),

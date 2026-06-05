@@ -3,15 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/di/di.dart';
+import '../../../../core/models/models.dart';
 import '../../../../core/router/routes.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../dashboard_providers.dart';
 
-/// The dashboard identity block — a compact "who am I" panel mirroring the web:
-///   • an aurora cover strip with the avatar overlapping it
-///   • nickname + premium crown + account-type line (with country flag)
-///   • a balance row with a prominent "Пополнить" action
+/// The dashboard identity block — a premium "who am I" hero mirroring the web:
+///   • an aurora cover strip (gradient + radial bloom) with the avatar
+///     overlapping it
+///   • nickname + premium crown + an account-type / status chip row
+///   • a neon balance stat with a prominent "Пополнить" action
 ///   • a "Кто смотрел профиль" teaser (premium → count; otherwise an upsell)
 ///   • a quick edit affordance routing to the profile editor
 ///
@@ -33,26 +35,55 @@ class ProfileBlock extends ConsumerWidget {
 
     return GlassCard(
       padding: EdgeInsets.zero,
+      intensity: 1.15,
+      glowColor: isPremium ? colors.neonViolet : null,
+      glowStrength: 0.5,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Aurora cover strip.
+          // Aurora cover strip: brand gradient with a soft radial bloom.
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.xl)),
             child: SizedBox(
-              height: 76,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colors.neonViolet.withValues(alpha: 0.45),
-                      colors.neonMagenta.withValues(alpha: 0.30),
-                      colors.neonCyan.withValues(alpha: 0.35),
-                    ],
+              height: 84,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          colors.neonViolet.withValues(alpha: 0.50),
+                          colors.neonMagenta.withValues(alpha: 0.32),
+                          colors.neonCyan.withValues(alpha: 0.38),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(-0.7, -1.4),
+                        radius: 1.2,
+                        colors: [
+                          colors.neonViolet.withValues(alpha: 0.55),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.6],
+                      ),
+                    ),
+                  ),
+                  // A soft specular sheen along the cover's top edge.
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: Container(
+                      height: 1,
+                      color: colors.glassHighlight.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -64,7 +95,7 @@ class ProfileBlock extends ConsumerWidget {
               children: [
                 // Identity row — avatar overlaps the cover.
                 Transform.translate(
-                  offset: const Offset(0, -28),
+                  offset: const Offset(0, -30),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -73,11 +104,14 @@ class ProfileBlock extends ConsumerWidget {
                           shape: BoxShape.circle,
                           border: Border.all(
                               color: context.scheme.surface, width: 3),
+                          boxShadow: isPremium
+                              ? AppShadows.glow(colors.neonViolet, strength: 0.5)
+                              : null,
                         ),
                         child: NeonAvatar(
                           imageUrl: profile?.avatarUrl,
                           name: nickname,
-                          size: 72,
+                          size: 76,
                           ring: isPremium,
                           glow: isPremium,
                         ),
@@ -107,30 +141,12 @@ class ProfileBlock extends ConsumerWidget {
                                   ],
                                 ],
                               ),
-                              const SizedBox(height: 2),
-                              if (profile != null)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CountryFlag(
-                                        countryCode: profile.country, size: 14),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        isPremium
-                                            ? 'Премиум-аккаунт'
-                                            : 'Базовый аккаунт',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: context.texts.bodySmall?.copyWith(
-                                            color: context
-                                                .scheme.onSurfaceVariant),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              else
-                                const ShimmerBox(width: 110, height: 12),
+                              const SizedBox(height: 6),
+                              _IdentityChips(
+                                profile: profile,
+                                isPremium: isPremium,
+                                loading: profileAsync.isLoading,
+                              ),
                             ],
                           ),
                         ),
@@ -147,7 +163,7 @@ class ProfileBlock extends ConsumerWidget {
                 ),
                 // Pull the rest up so the negative-offset avatar doesn't leave a gap.
                 Transform.translate(
-                  offset: const Offset(0, -16),
+                  offset: const Offset(0, -18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -173,6 +189,108 @@ class ProfileBlock extends ConsumerWidget {
   }
 }
 
+/// The status line under the nickname: a flag + account-type pill and a small
+/// "online" presence chip, mirroring the web's identity meta row.
+class _IdentityChips extends StatelessWidget {
+  const _IdentityChips({
+    required this.profile,
+    required this.isPremium,
+    required this.loading,
+  });
+
+  final PublicProfile? profile;
+  final bool isPremium;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    if (profile == null) {
+      return loading
+          ? const ShimmerBox(width: 130, height: 22)
+          : const SizedBox.shrink();
+    }
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _MetaPill(
+          color: isPremium ? colors.warning : context.scheme.onSurfaceVariant,
+          tinted: isPremium,
+          leading: CountryFlag(countryCode: profile!.country, size: 13),
+          label: isPremium ? 'Премиум-аккаунт' : 'Базовый аккаунт',
+        ),
+        _MetaPill(
+          color: colors.success,
+          tinted: true,
+          dot: true,
+          label: 'В сети',
+        ),
+      ],
+    );
+  }
+}
+
+/// A compact meta pill — either tinted (filled) or hairline — with an optional
+/// leading widget or status dot.
+class _MetaPill extends StatelessWidget {
+  const _MetaPill({
+    required this.color,
+    required this.label,
+    this.leading,
+    this.dot = false,
+    this.tinted = false,
+  });
+
+  final Color color;
+  final String label;
+  final Widget? leading;
+  final bool dot;
+  final bool tinted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: AppRadii.brPill,
+        color: tinted
+            ? color.withValues(alpha: 0.14)
+            : context.scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        border: Border.all(
+          color: tinted ? color.withValues(alpha: 0.30) : context.colors.glassBorder,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 5),
+          ] else if (dot) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+            ),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: context.texts.labelSmall?.copyWith(
+              color: tinted ? color : context.scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BalanceRow extends StatelessWidget {
   const _BalanceRow({required this.balance, required this.loading});
 
@@ -182,65 +300,20 @@ class _BalanceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        borderRadius: AppRadii.brXl,
-        color: context.scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-        border: Border.all(color: colors.glassBorder),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              borderRadius: AppRadii.brMd,
-              color: colors.warning.withValues(alpha: 0.16),
-            ),
-            child: Icon(Icons.monetization_on_rounded,
-                size: 20, color: colors.warning),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'БАЛАНС',
-                  style: context.texts.labelSmall?.copyWith(
-                      color: context.scheme.onSurfaceVariant,
-                      letterSpacing: 0.6),
-                ),
-                const SizedBox(height: 2),
-                if (loading)
-                  const ShimmerBox(width: 70, height: 18)
-                else
-                  RichText(
-                    text: TextSpan(
-                      style: context.texts.titleLarge,
-                      children: [
-                        TextSpan(text: balance != null ? _format(balance!) : '—'),
-                        TextSpan(
-                          text: ' монет',
-                          style: context.texts.bodySmall?.copyWith(
-                              color: context.scheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          GradientButton(
-            label: 'Пополнить',
-            icon: Icons.add_rounded,
-            fullWidth: false,
-            height: 40,
-            glow: false,
-            onPressed: () => context.go(AppRoutes.coins),
-          ),
-        ],
+    return _StatTile(
+      iconColor: colors.warning,
+      icon: Icons.monetization_on_rounded,
+      label: 'БАЛАНС',
+      loading: loading,
+      value: balance != null ? _format(balance!) : '—',
+      unit: 'монет',
+      trailing: GradientButton(
+        label: 'Пополнить',
+        icon: Icons.add_rounded,
+        fullWidth: false,
+        height: 40,
+        glow: false,
+        onPressed: () => context.go(AppRoutes.coins),
       ),
     );
   }
@@ -274,7 +347,7 @@ class _ProfileViewsTeaser extends StatelessWidget {
 
     if (loading) {
       return Container(
-        height: 60,
+        height: 66,
         decoration: BoxDecoration(
           borderRadius: AppRadii.brXl,
           color: context.scheme.surfaceContainerHighest.withValues(alpha: 0.4),
@@ -283,55 +356,13 @@ class _ProfileViewsTeaser extends StatelessWidget {
     }
 
     if (isPremium) {
-      return Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          borderRadius: AppRadii.brXl,
-          color: context.scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          border: Border.all(color: colors.glassBorder),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                borderRadius: AppRadii.brMd,
-                color: colors.neonCyan.withValues(alpha: 0.16),
-              ),
-              child: Icon(Icons.visibility_rounded,
-                  size: 20, color: colors.neonCyan),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'КТО СМОТРЕЛ ПРОФИЛЬ',
-                    style: context.texts.labelSmall?.copyWith(
-                        color: context.scheme.onSurfaceVariant,
-                        letterSpacing: 0.6),
-                  ),
-                  const SizedBox(height: 2),
-                  RichText(
-                    text: TextSpan(
-                      style: context.texts.titleLarge,
-                      children: [
-                        TextSpan(text: '${views ?? 0}'),
-                        TextSpan(
-                          text: ' просмотров',
-                          style: context.texts.bodySmall?.copyWith(
-                              color: context.scheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      return _StatTile(
+        iconColor: colors.neonCyan,
+        icon: Icons.visibility_rounded,
+        label: 'КТО СМОТРЕЛ ПРОФИЛЬ',
+        loading: false,
+        value: '${views ?? 0}',
+        unit: 'просмотров',
       );
     }
 
@@ -339,12 +370,13 @@ class _ProfileViewsTeaser extends StatelessWidget {
     return GlassCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       blurSigma: 0,
+      intensity: 0.6,
       onTap: () => context.go(AppRoutes.premium),
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               borderRadius: AppRadii.brMd,
               color: context.scheme.surfaceContainerHighest,
@@ -357,8 +389,7 @@ class _ProfileViewsTeaser extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Кто смотрел профиль',
-                    style: context.texts.titleSmall),
+                Text('Кто смотрел профиль', style: context.texts.titleSmall),
                 Text(
                   'Доступно с Премиумом',
                   style: context.texts.bodySmall
@@ -388,6 +419,91 @@ class _ProfileViewsTeaser extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A neon-iconed stat row used for the balance + profile-views surfaces: a
+/// tinted glyph chip, an eyebrow label over a [stat]-styled value (+ unit), and
+/// an optional trailing action.
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.loading,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+  final String unit;
+  final bool loading;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        borderRadius: AppRadii.brXl,
+        color: context.scheme.surfaceContainerHighest.withValues(alpha: 0.42),
+        border: Border.all(color: colors.glassBorder),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: AppRadii.brMd,
+              color: iconColor.withValues(alpha: 0.16),
+              border: Border.all(color: iconColor.withValues(alpha: 0.28)),
+            ),
+            child: Icon(icon, size: 20, color: iconColor),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: context.texts.labelSmall?.copyWith(
+                      color: context.scheme.onSurfaceVariant, letterSpacing: 0.8),
+                ),
+                const SizedBox(height: 3),
+                if (loading)
+                  const ShimmerBox(width: 72, height: 18)
+                else
+                  RichText(
+                    text: TextSpan(
+                      style: AppTypography.stat(
+                          fontSize: 18, color: context.scheme.onSurface),
+                      children: [
+                        TextSpan(text: value),
+                        TextSpan(
+                          text: ' $unit',
+                          style: context.texts.bodySmall?.copyWith(
+                              color: context.scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            trailing!,
+          ],
         ],
       ),
     );

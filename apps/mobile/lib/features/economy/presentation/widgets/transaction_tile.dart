@@ -22,11 +22,12 @@ class TransactionTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: tint.withValues(alpha: 0.14),
+              borderRadius: AppRadii.brMd,
+              color: tint.withValues(alpha: 0.15),
+              border: Border.all(color: tint.withValues(alpha: 0.22)),
             ),
             child: Icon(icon, size: 20, color: tint),
           ),
@@ -44,8 +45,9 @@ class TransactionTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   EconomyFormat.dateTime(tx.createdAt),
-                  style: context.texts.bodySmall
-                      ?.copyWith(color: context.scheme.onSurfaceVariant),
+                  style: context.texts.bodySmall?.copyWith(
+                    color: context.scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -56,16 +58,29 @@ class TransactionTile extends StatelessWidget {
             children: [
               Text(
                 EconomyFormat.signed(tx.delta),
-                style: context.texts.titleSmall?.copyWith(
+                style: AppTypography.stat(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
                   color: isInflow ? colors.success : context.scheme.onSurface,
-                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                EconomyFormat.number(tx.balanceAfter),
-                style: context.texts.labelSmall
-                    ?.copyWith(color: context.scheme.onSurfaceVariant),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.monetization_on_rounded,
+                    size: 11,
+                    color: context.scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    EconomyFormat.number(tx.balanceAfter),
+                    style: context.texts.labelSmall?.copyWith(
+                      color: context.scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

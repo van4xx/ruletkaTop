@@ -56,13 +56,13 @@ abstract final class EconomyFormat {
 
   /// Human label for a coin-ledger entry type.
   static String txTypeLabel(CoinTxType type) => switch (type) {
-        CoinTxType.purchase => 'Пополнение',
-        CoinTxType.giftOut => 'Отправлен подарок',
-        CoinTxType.giftIn => 'Получен подарок',
-        CoinTxType.top => 'Место в Топе',
-        CoinTxType.bonus => 'Бонус',
-        CoinTxType.refund => 'Возврат',
-      };
+    CoinTxType.purchase => 'Пополнение',
+    CoinTxType.giftOut => 'Отправлен подарок',
+    CoinTxType.giftIn => 'Получен подарок',
+    CoinTxType.top => 'Место в Топе',
+    CoinTxType.bonus => 'Бонус',
+    CoinTxType.refund => 'Возврат',
+  };
 
   /// Interval label for a premium plan (`/ мес`, `/ нед`, `/ 7 дн`).
   static String planInterval(int intervalDays) {
@@ -72,7 +72,9 @@ abstract final class EconomyFormat {
     }
     if (intervalDays % 7 == 0) {
       final w = intervalDays ~/ 7;
-      return w == 1 ? '/ нед' : '/ $w ${plural(w, 'неделю', 'недели', 'недель')}';
+      return w == 1
+          ? '/ нед'
+          : '/ $w ${plural(w, 'неделю', 'недели', 'недель')}';
     }
     return '/ $intervalDays ${plural(intervalDays, 'день', 'дня', 'дней')}';
   }

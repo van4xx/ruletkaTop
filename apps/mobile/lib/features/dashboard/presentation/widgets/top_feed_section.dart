@@ -7,6 +7,7 @@ import '../../../../core/theme/theme.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../data/dashboard_repository.dart';
 import '../dashboard_providers.dart';
+import 'dash_section_header.dart';
 
 /// The dashboard's slice of the SIGNATURE Top feed: two horizontally-scrolling
 /// marquee rows moving in OPPOSITE directions (top lane → right, bottom lane →
@@ -27,12 +28,12 @@ class TopFeedSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SectionHeader(
+          DashWidgetHeader(
+            icon: Icons.emoji_events_rounded,
             title: 'Топ эфира',
-            trailing: TextButton(
-              onPressed: () => context.go(AppRoutes.top),
-              child: const Text('Весь Топ'),
-            ),
+            accent: context.colors.warning,
+            linkRoute: AppRoutes.top,
+            linkLabel: 'Весь Топ',
           ),
           const SizedBox(height: AppSpacing.sm),
           feedAsync.when(
@@ -332,27 +333,55 @@ class _BuyPlacementBand extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         borderRadius: AppRadii.brXl,
-        border: Border.all(color: colors.glassBorder),
+        border: Border.all(color: colors.warning.withValues(alpha: 0.24)),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            colors.warning.withValues(alpha: 0.16),
+            colors.warning.withValues(alpha: 0.18),
+            colors.neonMagenta.withValues(alpha: 0.10),
             colors.neonViolet.withValues(alpha: 0.16),
           ],
         ),
+        boxShadow: AppShadows.glow(colors.warning, strength: 0.28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Хотите оказаться здесь?', style: context.texts.titleMedium),
-          const SizedBox(height: 2),
-          Text(
-            occupied
-                ? 'Сделайте ставку выше — и поднимитесь в начало ленты.'
-                : 'Дорожки свободны — станьте первым в Топе.',
-            style: context.texts.bodySmall
-                ?.copyWith(color: context.scheme.onSurfaceVariant),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.brMd,
+                  gradient: LinearGradient(
+                    colors: [colors.warning, colors.neonMagenta],
+                  ),
+                  boxShadow: AppShadows.glow(colors.warning, strength: 0.4),
+                ),
+                child: const Icon(Icons.emoji_events_rounded,
+                    size: 20, color: Colors.white),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Хотите оказаться здесь?',
+                        style: context.texts.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      occupied
+                          ? 'Сделайте ставку выше — и поднимитесь в начало ленты.'
+                          : 'Дорожки свободны — станьте первым в Топе.',
+                      style: context.texts.bodySmall
+                          ?.copyWith(color: context.scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           GradientButton(

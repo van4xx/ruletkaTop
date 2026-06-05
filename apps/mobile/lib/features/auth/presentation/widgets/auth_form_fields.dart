@@ -5,9 +5,170 @@ import '../../../../core/theme/theme.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../domain/auth_options.dart';
 
+/// Builds the shared frosted-glass [InputDecoration] for every auth field. The
+/// fill is a translucent glass wash (so the card's aurora reads through it), the
+/// resting border is a hairline glass stroke, and focus lifts to a 2px neon
+/// violet ring — the native echo of the website's focus treatment.
+///
+/// Pass a [prefixIcon]/[suffixIcon], an optional [helperText], and an
+/// [errorText] (for the read-only picker "fields" that surface validation
+/// manually).
+InputDecoration authInputDecoration(
+  BuildContext context, {
+  String? labelText,
+  String? hintText,
+  String? helperText,
+  String? errorText,
+  Widget? prefixIcon,
+  Widget? suffixIcon,
+}) {
+  final colors = context.colors;
+  final scheme = context.scheme;
+
+  OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
+        borderRadius: AppRadii.brLg,
+        borderSide: BorderSide(color: color, width: width),
+      );
+
+  return InputDecoration(
+    labelText: labelText,
+    hintText: hintText,
+    helperText: helperText,
+    errorText: errorText,
+    filled: true,
+    // A cool translucent glass fill over the card's frosted body.
+    fillColor: colors.glassFill.withValues(
+      alpha: context.isDark ? 0.55 : 0.85,
+    ),
+    isDense: false,
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.lg,
+      vertical: AppSpacing.lg - 2,
+    ),
+    prefixIcon: prefixIcon,
+    suffixIcon: suffixIcon,
+    prefixIconColor: scheme.onSurfaceVariant,
+    suffixIconColor: scheme.onSurfaceVariant,
+    helperStyle: context.texts.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    ),
+    errorStyle: context.texts.bodySmall?.copyWith(
+      color: scheme.error,
+      fontWeight: FontWeight.w600,
+    ),
+    floatingLabelStyle: context.texts.labelLarge?.copyWith(
+      color: colors.neonViolet,
+      fontWeight: FontWeight.w600,
+    ),
+    border: border(colors.glassBorder, 1),
+    enabledBorder: border(colors.glassBorder, 1),
+    focusedBorder: border(colors.neonViolet, 2),
+    errorBorder: border(scheme.error.withValues(alpha: 0.7), 1.4),
+    focusedErrorBorder: border(scheme.error, 2),
+  );
+}
+
+/// Wraps a focusable field so that, while focused, a soft neon-violet bloom
+/// pools behind it — the tactile "lit input" feel from the brand language. The
+/// glow is purely decorative; the wrapped field owns all behavior.
+class AuthFieldGlow extends StatefulWidget {
+  const AuthFieldGlow({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<AuthFieldGlow> createState() => _AuthFieldGlowState();
+}
+
+class _AuthFieldGlowState extends State<AuthFieldGlow> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (v) {
+        if (_focused != v) setState(() => _focused = v);
+      },
+      child: AnimatedContainer(
+        duration: AppDurations.normal,
+        curve: AppCurves.glass,
+        decoration: BoxDecoration(
+          borderRadius: AppRadii.brLg,
+          boxShadow: _focused
+              ? AppShadows.glow(colors.neonViolet, strength: 0.45)
+              : const [],
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// A frosted-glass email/text field for the auth forms — a [TextFormField]
+/// dressed in [authInputDecoration] and wrapped in an [AuthFieldGlow] so it
+/// lights up on focus. All input behavior (validator, formatters, autofill) is
+/// passed straight through.
+class AuthTextField extends StatelessWidget {
+  const AuthTextField({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.helperText,
+    this.prefixIcon,
+    this.keyboardType,
+    this.textInputAction,
+    this.autofillHints,
+    this.inputFormatters,
+    this.validator,
+    this.onChanged,
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final String? helperText;
+  final IconData? prefixIcon;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? Function(String?)? validator;
+  final ValueChanged<String>? onChanged;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    return AuthFieldGlow(
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        autofillHints: autofillHints,
+        inputFormatters: inputFormatters,
+        autofocus: autofocus,
+        decoration: authInputDecoration(
+          context,
+          labelText: label,
+          hintText: hint,
+          helperText: helperText,
+          prefixIcon: prefixIcon != null ? Icon(prefixIcon) : null,
+        ),
+        validator: validator,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
 /// A segmented (pill) single-choice selector — the mobile analogue of the web's
 /// `SegmentedControl`. Used for gender + interface language on the register
-/// screen. Generic over the choice value [T].
+/// screen. The selected segment fills with the neon CTA gradient + a soft glow;
+/// the track is a frosted glass groove. Generic over the choice value [T].
 class SegmentedChoice<T> extends StatelessWidget {
   const SegmentedChoice({
     super.key,
@@ -23,13 +184,12 @@ class SegmentedChoice<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final scheme = context.scheme;
 
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-        borderRadius: AppRadii.brMd,
+        color: colors.glassFill.withValues(alpha: context.isDark ? 0.5 : 0.8),
+        borderRadius: AppRadii.brLg,
         border: Border.all(color: colors.glassBorder),
       ),
       child: Row(
@@ -65,28 +225,29 @@ class _Segment extends StatelessWidget {
     final scheme = context.scheme;
 
     return AnimatedContainer(
-      duration: AppDurations.fast,
-      curve: Curves.easeOut,
+      duration: AppDurations.normal,
+      curve: AppCurves.glass,
       decoration: BoxDecoration(
-        borderRadius: AppRadii.brSm,
+        borderRadius: AppRadii.brMd,
         gradient: selected ? LinearGradient(colors: colors.ctaGradient) : null,
         boxShadow:
-            selected ? AppShadows.glow(colors.neonViolet, strength: 0.35) : null,
+            selected ? AppShadows.glow(colors.neonViolet, strength: 0.4) : null,
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: AppRadii.brSm,
+          borderRadius: AppRadii.brMd,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: context.texts.labelLarge?.copyWith(
+            child: AnimatedDefaultTextStyle(
+              duration: AppDurations.fast,
+              style: context.texts.labelLarge!.copyWith(
                 color: selected ? Colors.white : scheme.onSurfaceVariant,
                 fontWeight: FontWeight.w700,
               ),
+              textAlign: TextAlign.center,
+              child: Text(label, textAlign: TextAlign.center),
             ),
           ),
         ),
@@ -96,8 +257,9 @@ class _Segment extends StatelessWidget {
 }
 
 /// A password [TextFormField] with a show/hide toggle and an optional strength
-/// meter (used on register). The strength heuristic mirrors the web's meter:
-/// length + character-class variety.
+/// meter (used on register). Dressed in the frosted [authInputDecoration] and
+/// lit on focus by an [AuthFieldGlow]. The strength heuristic mirrors the web's
+/// meter: length + character-class variety.
 class PasswordField extends StatefulWidget {
   const PasswordField({
     super.key,
@@ -141,32 +303,37 @@ class _PasswordFieldState extends State<PasswordField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextFormField(
-          controller: widget.controller,
-          obscureText: _obscure,
-          autofillHints: widget.autofillHints,
-          textInputAction: widget.textInputAction,
-          onFieldSubmitted: (_) => widget.onSubmitted?.call(),
-          decoration: InputDecoration(
-            labelText: widget.label,
-            helperText: widget.hint,
-            prefixIcon: const Icon(Icons.lock_outline_rounded),
-            suffixIcon: IconButton(
-              tooltip: _obscure ? 'Показать' : 'Скрыть',
-              onPressed: () => setState(() => _obscure = !_obscure),
-              icon: Icon(_obscure
-                  ? Icons.visibility_outlined
-                  : Icons.visibility_off_outlined),
+        AuthFieldGlow(
+          child: TextFormField(
+            controller: widget.controller,
+            obscureText: _obscure,
+            autofillHints: widget.autofillHints,
+            textInputAction: widget.textInputAction,
+            onFieldSubmitted: (_) => widget.onSubmitted?.call(),
+            decoration: authInputDecoration(
+              context,
+              labelText: widget.label,
+              helperText: widget.hint,
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+              suffixIcon: IconButton(
+                tooltip: _obscure ? 'Показать пароль' : 'Скрыть пароль',
+                onPressed: () => setState(() => _obscure = !_obscure),
+                icon: Icon(
+                  _obscure
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+              ),
             ),
+            validator: widget.validator,
+            onChanged: (v) {
+              if (widget.showStrength) setState(() => _value = v);
+              widget.onChanged?.call(v);
+            },
           ),
-          validator: widget.validator,
-          onChanged: (v) {
-            if (widget.showStrength) setState(() => _value = v);
-            widget.onChanged?.call(v);
-          },
         ),
         if (widget.showStrength && _value.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.sm + 2),
           _StrengthMeter(score: _passwordScore(_value)),
         ],
       ],
@@ -209,13 +376,23 @@ class _StrengthMeter extends StatelessWidget {
                 if (i > 0) const SizedBox(width: 4),
                 Expanded(
                   child: AnimatedContainer(
-                    duration: AppDurations.fast,
-                    height: 4,
+                    duration: AppDurations.normal,
+                    curve: AppCurves.glass,
+                    height: 5,
                     decoration: BoxDecoration(
                       color: i < score
                           ? color
-                          : context.scheme.surfaceContainerHighest,
+                          : colors.glassFill.withValues(alpha: 0.6),
                       borderRadius: AppRadii.brPill,
+                      boxShadow: i < score
+                          ? [
+                              BoxShadow(
+                                color: color.withValues(alpha: 0.5),
+                                blurRadius: 6,
+                                spreadRadius: -2,
+                              ),
+                            ]
+                          : null,
                     ),
                   ),
                 ),
@@ -224,9 +401,13 @@ class _StrengthMeter extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
-        Text(
-          label,
-          style: context.texts.labelSmall?.copyWith(color: color),
+        AnimatedDefaultTextStyle(
+          duration: AppDurations.fast,
+          style: context.texts.labelSmall!.copyWith(
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
+          child: Text(label),
         ),
       ],
     );
@@ -235,7 +416,7 @@ class _StrengthMeter extends StatelessWidget {
 
 /// A read-only "field" that opens a searchable country picker sheet. Renders
 /// the selected country's flag + name (or a placeholder) and surfaces a
-/// validation [errorText] in the Material input style.
+/// validation [errorText] in the frosted auth-field style.
 class CountryPickerField extends StatelessWidget {
   const CountryPickerField({
     super.key,
@@ -255,33 +436,36 @@ class CountryPickerField extends StatelessWidget {
   Widget build(BuildContext context) {
     final selectedName = value != null ? kCountryNameByCode[value] : null;
 
-    return InkWell(
-      borderRadius: AppRadii.brMd,
-      onTap: () async {
-        final picked = await showCountryPickerSheet(context, selected: value);
-        if (picked != null) onChanged(picked);
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          errorText: errorText,
-          prefixIcon: const Icon(Icons.public_rounded),
-          suffixIcon: const Icon(Icons.expand_more_rounded),
-        ),
-        child: Row(
-          children: [
-            if (value != null) ...[
-              CountryFlag(countryCode: value, size: 20),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: Text(selectedName ?? value!)),
-            ] else
-              Expanded(
-                child: Text(
-                  'Выберите страну',
-                  style: TextStyle(color: context.scheme.onSurfaceVariant),
+    return AuthFieldGlow(
+      child: InkWell(
+        borderRadius: AppRadii.brLg,
+        onTap: () async {
+          final picked = await showCountryPickerSheet(context, selected: value);
+          if (picked != null) onChanged(picked);
+        },
+        child: InputDecorator(
+          decoration: authInputDecoration(
+            context,
+            labelText: label,
+            errorText: errorText,
+            prefixIcon: const Icon(Icons.public_rounded),
+            suffixIcon: const Icon(Icons.expand_more_rounded),
+          ),
+          child: Row(
+            children: [
+              if (value != null) ...[
+                CountryFlag(countryCode: value, size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text(selectedName ?? value!)),
+              ] else
+                Expanded(
+                  child: Text(
+                    'Выбери страну',
+                    style: TextStyle(color: context.scheme.onSurfaceVariant),
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -396,7 +580,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
 
 /// A read-only date "field" that opens the platform date picker, constrained to
 /// the 18+ window. Renders the chosen date (or placeholder) + a validation
-/// [errorText].
+/// [errorText], in the frosted auth-field style.
 class BirthDateField extends StatelessWidget {
   const BirthDateField({
     super.key,
@@ -417,32 +601,33 @@ class BirthDateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: AppRadii.brMd,
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: value ?? lastDate,
-          firstDate: DateTime(1920),
-          lastDate: lastDate,
-          helpText: 'Дата рождения',
-        );
-        if (picked != null) onChanged(picked);
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          errorText: errorText,
-          prefixIcon: const Icon(Icons.cake_outlined),
-          suffixIcon: const Icon(Icons.calendar_today_rounded, size: 18),
-        ),
-        child: Text(
-          value != null
-              ? _formatDate(value!)
-              : 'дд.мм.гггг',
-          style: value == null
-              ? TextStyle(color: context.scheme.onSurfaceVariant)
-              : null,
+    return AuthFieldGlow(
+      child: InkWell(
+        borderRadius: AppRadii.brLg,
+        onTap: () async {
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: value ?? lastDate,
+            firstDate: DateTime(1920),
+            lastDate: lastDate,
+            helpText: 'Дата рождения',
+          );
+          if (picked != null) onChanged(picked);
+        },
+        child: InputDecorator(
+          decoration: authInputDecoration(
+            context,
+            labelText: label,
+            errorText: errorText,
+            prefixIcon: const Icon(Icons.cake_outlined),
+            suffixIcon: const Icon(Icons.calendar_today_rounded, size: 18),
+          ),
+          child: Text(
+            value != null ? _formatDate(value!) : 'дд.мм.гггг',
+            style: value == null
+                ? TextStyle(color: context.scheme.onSurfaceVariant)
+                : null,
+          ),
         ),
       ),
     );

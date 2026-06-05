@@ -50,42 +50,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final scheme = context.scheme;
     final auth = ref.watch(authStateProvider);
 
     return AuthShell(
+      tagline: 'С возвращением в эфир',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           GlassCard(
             padding: const EdgeInsets.all(AppSpacing.xl),
             glowColor: colors.neonViolet,
-            glowStrength: 0.4,
+            glowStrength: 0.45,
+            intensity: 1.1,
             child: Form(
               key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('С возвращением', style: context.texts.titleLarge),
+                  // Eyebrow + display heading — the brand's high-impact lockup.
+                  Text(
+                    'ВХОД',
+                    style: AppTypography.eyebrow(color: colors.neonCyan),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'С возвращением',
+                    style: context.texts.headlineSmall,
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    'Войдите, чтобы продолжить общение',
+                    'Войди, чтобы продолжить общение в эфире.',
                     style: context.texts.bodyMedium
-                        ?.copyWith(color: context.scheme.onSurfaceVariant),
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  TextFormField(
+
+                  AuthTextField(
                     controller: _emailController,
+                    label: 'Email',
+                    hint: 'you@example.com',
+                    prefixIcon: Icons.alternate_email_rounded,
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const [AutofillHints.email],
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.alternate_email_rounded),
-                    ),
                     validator: AuthValidators.email,
                     onChanged: (_) => _clearError(),
                   ),
                   const SizedBox(height: AppSpacing.md),
+
                   PasswordField(
                     controller: _passwordController,
                     autofillHints: const [AutofillHints.password],
@@ -94,13 +107,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onChanged: (_) => _clearError(),
                     onSubmitted: _submit,
                   ),
+
                   if (auth.errorMessage != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     AuthErrorBanner(message: auth.errorMessage!),
                   ],
+
                   const SizedBox(height: AppSpacing.xl),
                   GradientButton(
                     label: 'Войти',
+                    icon: Icons.login_rounded,
                     loading: auth.isBusy,
                     onPressed: _submit,
                   ),
@@ -109,22 +125,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Нет аккаунта?',
-                style: context.texts.bodyMedium
-                    ?.copyWith(color: context.scheme.onSurfaceVariant),
-              ),
-              TextButton(
-                onPressed: auth.isBusy ? null : () => context.go(AppRoutes.register),
-                child: const Text('Создать'),
-              ),
-            ],
+          _SwitchAuthRow(
+            prompt: 'Нет аккаунта?',
+            actionLabel: 'Создать',
+            onPressed:
+                auth.isBusy ? null : () => context.go(AppRoutes.register),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The "switch to the other auth screen" row — a muted prompt with a neon-cyan
+/// text action, centered under the card.
+class _SwitchAuthRow extends StatelessWidget {
+  const _SwitchAuthRow({
+    required this.prompt,
+    required this.actionLabel,
+    required this.onPressed,
+  });
+
+  final String prompt;
+  final String actionLabel;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          prompt,
+          style: context.texts.bodyMedium
+              ?.copyWith(color: context.scheme.onSurfaceVariant),
+        ),
+        TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(foregroundColor: colors.neonCyan),
+          child: Text(
+            actionLabel,
+            style: context.texts.labelLarge?.copyWith(
+              color: colors.neonCyan,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

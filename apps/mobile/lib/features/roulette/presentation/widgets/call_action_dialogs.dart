@@ -36,7 +36,12 @@ Future<void> showGiftPicker(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _GiftPickerSheet(toUserId: toUserId, peerName: peerName, isPremium: isPremium),
+    barrierColor: Colors.black.withValues(alpha: 0.55),
+    builder: (_) => _GiftPickerSheet(
+      toUserId: toUserId,
+      peerName: peerName,
+      isPremium: isPremium,
+    ),
   );
 }
 
@@ -63,7 +68,10 @@ class _GiftPickerSheetState extends ConsumerState<_GiftPickerSheet> {
   void initState() {
     super.initState();
     final api = ref.read(apiClientProvider);
-    _future = Future.wait([api.gifts(), api.wallet()]).then((r) => (r[0] as List<Gift>, r[1] as Wallet));
+    _future = Future.wait([
+      api.gifts(),
+      api.wallet(),
+    ]).then((r) => (r[0] as List<Gift>, r[1] as Wallet));
   }
 
   Future<void> _send(Gift gift, int balance) async {
@@ -73,11 +81,15 @@ class _GiftPickerSheetState extends ConsumerState<_GiftPickerSheet> {
     }
     setState(() => _sendingGiftId = gift.id);
     try {
-      await ref.read(apiClientProvider).sendGift(SendGiftDto(
-            giftId: gift.id,
-            toUserId: widget.toUserId,
-            context: GiftContext.call,
-          ));
+      await ref
+          .read(apiClientProvider)
+          .sendGift(
+            SendGiftDto(
+              giftId: gift.id,
+              toUserId: widget.toUserId,
+              context: GiftContext.call,
+            ),
+          );
       if (!mounted) return;
       Navigator.of(context).pop();
       showCallToast(context, 'Подарок отправлен ${widget.peerName}');
@@ -95,22 +107,34 @@ class _GiftPickerSheetState extends ConsumerState<_GiftPickerSheet> {
       top: false,
       child: GlassCard(
         margin: const EdgeInsets.all(AppSpacing.sm),
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
         borderRadius: AppRadii.brXxl,
-        blurSigma: 24,
+        blurSigma: AppBlur.heavy,
+        intensity: 1.1,
         child: FutureBuilder<(List<Gift>, Wallet)>(
           future: _future,
           builder: (context, snap) {
+            final colors = context.colors;
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
                   child: Container(
-                    width: 40,
-                    height: 4,
+                    width: 44,
+                    height: 5,
                     decoration: BoxDecoration(
-                      color: scheme.onSurfaceVariant.withValues(alpha: 0.3),
+                      gradient: LinearGradient(
+                        colors: [
+                          colors.neonViolet.withValues(alpha: 0.7),
+                          colors.neonMagenta.withValues(alpha: 0.7),
+                        ],
+                      ),
                       borderRadius: AppRadii.brPill,
                     ),
                   ),
@@ -118,15 +142,32 @@ class _GiftPickerSheetState extends ConsumerState<_GiftPickerSheet> {
                 const SizedBox(height: AppSpacing.lg),
                 Row(
                   children: [
+                    ShaderMask(
+                      shaderCallback: (b) => LinearGradient(
+                        colors: colors.brandGradient,
+                      ).createShader(b),
+                      child: const Icon(
+                        Icons.card_giftcard_rounded,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
                         'Подарок для ${widget.peerName}',
-                        style: AppTypography.display(fontSize: 18, color: scheme.onSurface),
+                        style: AppTypography.display(
+                          fontSize: 18,
+                          color: scheme.onSurface,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (snap.hasData)
-                      CoinBalancePill(balance: snap.data!.$2.balanceCoins, compact: true),
+                      CoinBalancePill(
+                        balance: snap.data!.$2.balanceCoins,
+                        compact: true,
+                      ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -140,7 +181,9 @@ class _GiftPickerSheetState extends ConsumerState<_GiftPickerSheet> {
                     padding: const EdgeInsets.all(AppSpacing.lg),
                     child: Text(
                       'Не удалось загрузить подарки',
-                      style: context.texts.bodyMedium?.copyWith(color: scheme.error),
+                      style: context.texts.bodyMedium?.copyWith(
+                        color: scheme.error,
+                      ),
                     ),
                   )
                 else if (snap.hasData)
@@ -184,7 +227,9 @@ class _GiftGrid extends StatelessWidget {
       );
     }
     return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.5,
+      ),
       child: GridView.builder(
         shrinkWrap: true,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -212,7 +257,7 @@ class _GiftGrid extends StatelessWidget {
   }
 }
 
-class _GiftCard extends StatelessWidget {
+class _GiftCard extends StatefulWidget {
   const _GiftCard({
     required this.gift,
     required this.disabled,
@@ -228,65 +273,114 @@ class _GiftCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_GiftCard> createState() => _GiftCardState();
+}
+
+class _GiftCardState extends State<_GiftCard> {
+  bool _pressed = false;
+
+  void _set(bool v) {
+    if (widget.disabled || _pressed == v) return;
+    setState(() => _pressed = v);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final scheme = context.scheme;
+    final gift = widget.gift;
+    final locked = widget.locked;
+    final sending = widget.sending;
+    final disabled = widget.disabled;
     return Opacity(
       opacity: disabled && !sending ? 0.5 : 1,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: disabled ? null : onTap,
-          borderRadius: AppRadii.brLg,
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
+      child: AnimatedScale(
+        scale: _pressed ? 0.95 : 1,
+        duration: AppDurations.press,
+        curve: AppCurves.glass,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: AppRadii.brLg,
+            boxShadow: _pressed
+                ? AppShadows.glow(colors.neonMagenta, strength: 0.5)
+                : null,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: AppRadii.brLg,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: disabled ? null : widget.onTap,
+              onHighlightChanged: _set,
               borderRadius: AppRadii.brLg,
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-              border: Border.all(color: colors.glassBorder),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: sending
-                      ? const Center(
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : Center(
-                          child: locked
-                              ? Icon(Icons.lock_rounded, color: colors.warning, size: 28)
-                              : Icon(Icons.card_giftcard_rounded, color: colors.neonMagenta, size: 30),
-                        ),
+              splashColor: colors.neonMagenta.withValues(alpha: 0.14),
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.brLg,
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                  border: Border.all(color: colors.glassBorder),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  gift.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: context.texts.labelSmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Row(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.monetization_on_rounded, size: 12, color: colors.warning),
-                    const SizedBox(width: 3),
+                    Expanded(
+                      child: sending
+                          ? const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : Center(
+                              child: locked
+                                  ? Icon(
+                                      Icons.lock_rounded,
+                                      color: colors.warning,
+                                      size: 28,
+                                    )
+                                  : Icon(
+                                      Icons.card_giftcard_rounded,
+                                      color: colors.neonMagenta,
+                                      size: 30,
+                                    ),
+                            ),
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      '${gift.priceCoins}',
+                      gift.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                       style: context.texts.labelSmall?.copyWith(
-                        color: scheme.onSurface,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.monetization_on_rounded,
+                          size: 12,
+                          color: colors.warning,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${gift.priceCoins}',
+                          style: context.texts.labelSmall?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -318,6 +412,7 @@ Future<void> showReportDialog(
 }) {
   return showDialog<void>(
     context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.62),
     builder: (_) => _ReportDialog(
       ref: ref,
       againstUserId: againstUserId,
@@ -358,11 +453,17 @@ class _ReportDialogState extends State<_ReportDialog> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
-      await widget.ref.read(apiClientProvider).report(CreateReportDto(
-            againstUserId: widget.againstUserId,
-            reason: _reason,
-            details: _details.text.trim().isEmpty ? null : _details.text.trim(),
-          ));
+      await widget.ref
+          .read(apiClientProvider)
+          .report(
+            CreateReportDto(
+              againstUserId: widget.againstUserId,
+              reason: _reason,
+              details: _details.text.trim().isEmpty
+                  ? null
+                  : _details.text.trim(),
+            ),
+          );
       if (!mounted) return;
       Navigator.of(context).pop();
       showCallToast(context, 'Жалоба отправлена');
@@ -376,51 +477,52 @@ class _ReportDialogState extends State<_ReportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Пожаловаться на ${widget.peerName}'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Причина', style: context.texts.titleSmall),
-            const SizedBox(height: AppSpacing.sm),
-            // RadioGroup owns the selected value + change handler; each tile
-            // just declares its `value` (the pre-3.32 per-tile groupValue/
-            // onChanged API is deprecated).
-            RadioGroup<ReportReason>(
-              groupValue: _reason,
-              onChanged: (v) {
-                if (_submitting || v == null) return;
-                setState(() => _reason = v);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final e in _reasonLabels.entries)
-                    RadioListTile<ReportReason>(
-                      value: e.key,
-                      enabled: !_submitting,
-                      title: Text(e.value),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                ],
-              ),
+    final scheme = context.scheme;
+    return _GlassDialog(
+      icon: Icons.flag_rounded,
+      iconColor: scheme.error,
+      title: 'Пожаловаться на ${widget.peerName}',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Причина', style: context.texts.titleSmall),
+          const SizedBox(height: AppSpacing.sm),
+          // RadioGroup owns the selected value + change handler; each tile
+          // just declares its `value` (the pre-3.32 per-tile groupValue/
+          // onChanged API is deprecated).
+          RadioGroup<ReportReason>(
+            groupValue: _reason,
+            onChanged: (v) {
+              if (_submitting || v == null) return;
+              setState(() => _reason = v);
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final e in _reasonLabels.entries)
+                  RadioListTile<ReportReason>(
+                    value: e.key,
+                    enabled: !_submitting,
+                    title: Text(e.value),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            TextField(
-              controller: _details,
-              enabled: !_submitting,
-              minLines: 2,
-              maxLines: 4,
-              maxLength: 500,
-              decoration: const InputDecoration(
-                hintText: 'Подробности (необязательно)',
-              ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _details,
+            enabled: !_submitting,
+            minLines: 2,
+            maxLines: 4,
+            maxLength: 500,
+            decoration: const InputDecoration(
+              hintText: 'Подробности (необязательно)',
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -429,9 +531,13 @@ class _ReportDialogState extends State<_ReportDialog> {
         ),
         FilledButton(
           onPressed: _submitting ? null : _submit,
-          style: FilledButton.styleFrom(backgroundColor: context.scheme.error),
+          style: FilledButton.styleFrom(backgroundColor: scheme.error),
           child: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Отправить'),
         ),
       ],
@@ -452,6 +558,7 @@ Future<void> showBlockDialog(
 }) {
   return showDialog<void>(
     context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.62),
     builder: (_) => _BlockDialog(
       ref: ref,
       blockedUserId: blockedUserId,
@@ -498,11 +605,17 @@ class _BlockDialogState extends State<_BlockDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('Заблокировать ${widget.peerName}?'),
-      content: const Text(
+    final scheme = context.scheme;
+    return _GlassDialog(
+      icon: Icons.block_rounded,
+      iconColor: scheme.error,
+      title: 'Заблокировать ${widget.peerName}?',
+      content: Text(
         'Вы больше не будете встречать этого пользователя в рулетке, а он — вас. '
         'Разблокировать можно в настройках.',
+        style: context.texts.bodyMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+        ),
       ),
       actions: [
         TextButton(
@@ -511,12 +624,102 @@ class _BlockDialogState extends State<_BlockDialog> {
         ),
         FilledButton(
           onPressed: _submitting ? null : _submit,
-          style: FilledButton.styleFrom(backgroundColor: context.scheme.error),
+          style: FilledButton.styleFrom(backgroundColor: scheme.error),
           child: _submitting
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Заблокировать'),
         ),
       ],
+    );
+  }
+}
+
+/// A liquid-glass dialog shell shared by the report + block confirmations: a
+/// frosted [GlassCard] floating over a blurred scrim, with a neon-tinted icon
+/// chip, a display title, the body content, and a trailing actions row. Mirrors
+/// the glass language of the rest of the call UI instead of a flat Material
+/// `AlertDialog`.
+class _GlassDialog extends StatelessWidget {
+  const _GlassDialog({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.content,
+    required this.actions,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final Widget content;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.xl,
+      ),
+      child: GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        borderRadius: AppRadii.brXxl,
+        blurSigma: AppBlur.heavy,
+        intensity: 1.15,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: AppRadii.brLg,
+                    color: iconColor.withValues(alpha: 0.14),
+                    border: Border.all(color: iconColor.withValues(alpha: 0.4)),
+                  ),
+                  child: Icon(icon, size: 20, color: iconColor),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      title,
+                      style: AppTypography.display(
+                        fontSize: 18,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Flexible(child: SingleChildScrollView(child: content)),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                for (var i = 0; i < actions.length; i++) ...[
+                  if (i > 0) const SizedBox(width: AppSpacing.sm),
+                  actions[i],
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

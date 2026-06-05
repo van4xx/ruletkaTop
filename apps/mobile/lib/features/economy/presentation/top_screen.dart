@@ -39,13 +39,17 @@ class TopScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(walletProvider);
           ref.invalidate(topFeedProvider);
-          await ref.read(topFeedViewProvider.future).catchError(
-                (_) => TopFeedView.empty,
-              );
+          await ref
+              .read(topFeedViewProvider.future)
+              .catchError((_) => TopFeedView.empty);
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xxxl),
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.xxxl,
+          ),
           children: [
             const _Eyebrow(),
             const SizedBox(height: AppSpacing.sm),
@@ -60,8 +64,9 @@ class TopScreen extends ConsumerWidget {
             Text(
               'Места в Топе показываются всем на главной. Сделайте ставку монетами — '
               'чем больше ставка, тем выше вы в ленте.',
-              style: context.texts.bodyMedium
-                  ?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.texts.bodyMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             _BuyBand(onBuy: () => _openPurchase(context, ref)),
@@ -144,7 +149,11 @@ class _FeedBody extends StatelessWidget {
 /// One ranked lane: a labelled header + a vertical list of placement cards
 /// (rank = position in the list). An empty lane shows an inviting hint.
 class _Lane extends StatelessWidget {
-  const _Lane({required this.title, required this.accent, required this.entries});
+  const _Lane({
+    required this.title,
+    required this.accent,
+    required this.entries,
+  });
 
   final String title;
   final Color accent;
@@ -171,8 +180,9 @@ class _Lane extends StatelessWidget {
             const SizedBox(width: AppSpacing.sm),
             Text(
               '${entries.length}',
-              style: context.texts.labelMedium
-                  ?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.texts.labelMedium?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -203,10 +213,13 @@ class _LaneEmpty extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.lg),
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.lg,
+      ),
       decoration: BoxDecoration(
         borderRadius: AppRadii.brXl,
-        border: Border.all(color: context.colors.glassBorder),
+        color: accent.withValues(alpha: 0.06),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
       ),
       child: Row(
         children: [
@@ -215,8 +228,9 @@ class _LaneEmpty extends StatelessWidget {
           Expanded(
             child: Text(
               'Дорожка свободна — займите место!',
-              style: context.texts.bodySmall
-                  ?.copyWith(color: context.scheme.onSurfaceVariant),
+              style: context.texts.bodySmall?.copyWith(
+                color: context.scheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],
@@ -234,43 +248,87 @@ class _BuyBand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        borderRadius: AppRadii.brXl,
-        border: Border.all(color: colors.glassBorder),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            colors.warning.withValues(alpha: 0.16),
-            colors.neonViolet.withValues(alpha: 0.16),
-          ],
-        ),
-      ),
-      child: Row(
+    return GlassCard(
+      borderRadius: AppRadii.brXxl,
+      glowColor: colors.warning,
+      glowStrength: 0.4,
+      intensity: 1.1,
+      padding: EdgeInsets.zero,
+      child: Stack(
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(colors: [colors.warning, colors.neonMagenta]),
-              boxShadow: AppShadows.glow(colors.warning, strength: 0.5),
+          // Gold→violet wash filling the showcase.
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colors.warning.withValues(alpha: 0.18),
+                    Colors.transparent,
+                    colors.neonViolet.withValues(alpha: 0.18),
+                  ],
+                  stops: const [0.0, 0.55, 1.0],
+                ),
+              ),
             ),
-            child: const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 26),
           ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Хотите оказаться здесь?', style: context.texts.titleMedium),
-                const SizedBox(height: 2),
-                Text(
-                  'Купите место и будьте на виду у всех.',
-                  style: context.texts.bodySmall
-                      ?.copyWith(color: context.scheme.onSurfaceVariant),
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        borderRadius: AppRadii.brXl,
+                        gradient: LinearGradient(
+                          colors: [colors.warning, colors.neonMagenta],
+                        ),
+                        boxShadow: AppShadows.glow(
+                          colors.warning,
+                          strength: 0.55,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.emoji_events_rounded,
+                        color: Colors.white,
+                        size: 27,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.lg),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Хотите оказаться здесь?',
+                            style: context.texts.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Купите место и будьте на виду у всех.',
+                            style: context.texts.bodySmall?.copyWith(
+                              color: context.scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                GradientButton(
+                  label: 'Купить место в Топе',
+                  icon: Icons.emoji_events_rounded,
+                  gradientColors: [colors.warning, colors.neonMagenta],
+                  onPressed: onBuy,
+                  height: 50,
                 ),
               ],
             ),
@@ -294,11 +352,7 @@ class _Eyebrow extends StatelessWidget {
         const SizedBox(width: AppSpacing.xs),
         Text(
           'ТОП ЭФИРА',
-          style: context.texts.labelSmall?.copyWith(
-            color: colors.neonMagenta,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppTypography.eyebrow(fontSize: 11, color: colors.neonMagenta),
         ),
       ],
     );
@@ -312,22 +366,22 @@ class _FeedSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget lane() => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const ShimmerBox(width: 100, height: 16),
-            const SizedBox(height: AppSpacing.md),
-            for (var i = 0; i < 3; i++) ...[
-              if (i > 0) const SizedBox(height: AppSpacing.sm),
-              Container(
-                height: 72,
-                decoration: BoxDecoration(
-                  color: context.scheme.surfaceContainerHighest,
-                  borderRadius: AppRadii.brXl,
-                ),
-              ),
-            ],
-          ],
-        );
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const ShimmerBox(width: 100, height: 16),
+        const SizedBox(height: AppSpacing.md),
+        for (var i = 0; i < 3; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.sm),
+          Container(
+            height: 72,
+            decoration: BoxDecoration(
+              color: context.scheme.surfaceContainerHighest,
+              borderRadius: AppRadii.brXl,
+            ),
+          ),
+        ],
+      ],
+    );
 
     return LoadingShimmer(
       child: Column(

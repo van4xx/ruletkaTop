@@ -7,10 +7,14 @@ import '../../domain/roulette_state.dart';
 /// The floating call control bar shared by /video and /voice — the Dart port of
 /// the web `CallControls`.
 ///
-///  - Primary action: a single Start → Next button (the product's core loop).
+///  - Primary action: a single Start → Next button (the product's core loop),
+///    a neon violet→magenta gradient pill with a tactile press-scale + glow.
 ///  - Media toggles: mic always (+ camera, camera-flip in video mode).
 ///  - Social actions: gift, add friend, chat, plus a "more" menu (report/block).
 ///  - Stop ends the session entirely.
+///
+/// Every round button is a true liquid-glass disc that scales down + blooms a
+/// neon press glow when held, so the bar feels alive and native-premium.
 class CallControls extends StatelessWidget {
   const CallControls({
     super.key,
@@ -53,16 +57,21 @@ class CallControls extends StatelessWidget {
   final VoidCallback onReport;
   final VoidCallback onBlock;
 
-  bool get _idle => status == RouletteStatus.idle || status == RouletteStatus.error;
+  bool get _idle =>
+      status == RouletteStatus.idle || status == RouletteStatus.error;
 
   @override
   Widget build(BuildContext context) {
     final active = !_idle; // searching / connecting / connected / ended
 
     return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.sm,
+      ),
       borderRadius: AppRadii.brPill,
-      blurSigma: 24,
+      blurSigma: AppBlur.heavy,
+      intensity: 1.1,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -76,7 +85,9 @@ class CallControls extends StatelessWidget {
             if (isVideo) ...[
               const SizedBox(width: AppSpacing.sm),
               _CircleControl(
-                icon: cameraOff ? Icons.videocam_off_rounded : Icons.videocam_rounded,
+                icon: cameraOff
+                    ? Icons.videocam_off_rounded
+                    : Icons.videocam_rounded,
                 label: cameraOff ? 'Включить камеру' : 'Выключить камеру',
                 danger: cameraOff,
                 onTap: onToggleCamera,
@@ -105,6 +116,7 @@ class CallControls extends StatelessWidget {
               icon: Icons.card_giftcard_rounded,
               label: 'Подарок',
               enabled: hasPeer,
+              glow: context.colors.neonMagenta,
               onTap: onGift,
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -123,11 +135,7 @@ class CallControls extends StatelessWidget {
               onTap: onToggleChat,
             ),
             const SizedBox(width: AppSpacing.sm),
-            _MoreMenu(
-              enabled: hasPeer,
-              onReport: onReport,
-              onBlock: onBlock,
-            ),
+            _MoreMenu(enabled: hasPeer, onReport: onReport, onBlock: onBlock),
             const SizedBox(width: AppSpacing.sm),
             _CircleControl(
               icon: Icons.call_end_rounded,
@@ -143,7 +151,7 @@ class CallControls extends StatelessWidget {
   }
 }
 
-class _PrimaryButton extends StatelessWidget {
+class _PrimaryButton extends StatefulWidget {
   const _PrimaryButton({
     required this.label,
     required this.icon,
@@ -157,48 +165,89 @@ class _PrimaryButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_PrimaryButton> createState() => _PrimaryButtonState();
+}
+
+class _PrimaryButtonState extends State<_PrimaryButton> {
+  bool _pressed = false;
+
+  void _set(bool v) {
+    if (_pressed != v) setState(() => _pressed = v);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: AppRadii.brPill,
-        boxShadow: AppShadows.glow(colors.neonMagenta, strength: 0.6),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: loading ? null : onTap,
+    return AnimatedScale(
+      scale: _pressed && !widget.loading ? 0.96 : 1,
+      duration: AppDurations.press,
+      curve: AppCurves.glass,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           borderRadius: AppRadii.brPill,
-          child: Ink(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: colors.ctaGradient),
-              borderRadius: AppRadii.brPill,
-            ),
-            child: Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-              alignment: Alignment.center,
-              child: loading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        valueColor: AlwaysStoppedAnimation(Colors.white),
-                      ),
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(icon, size: 22, color: Colors.white),
-                        const SizedBox(width: 6),
-                        Text(
-                          label,
-                          style: context.texts.labelLarge
-                              ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+          boxShadow: AppShadows.glow(
+            colors.neonMagenta,
+            strength: _pressed ? 1.0 : 0.65,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.loading ? null : widget.onTap,
+            onHighlightChanged: _set,
+            borderRadius: AppRadii.brPill,
+            splashColor: Colors.white.withValues(alpha: 0.18),
+            highlightColor: Colors.white.withValues(alpha: 0.06),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: colors.ctaGradient),
+                borderRadius: AppRadii.brPill,
+              ),
+              child: Ink(
+                // Glassy top sheen over the gradient for depth.
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.brPill,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.24),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                    stops: const [0.0, 0.55],
+                  ),
+                ),
+                child: Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                  ),
+                  alignment: Alignment.center,
+                  child: widget.loading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        )
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(widget.icon, size: 22, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.label,
+                              style: context.texts.labelLarge?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                ),
+              ),
             ),
           ),
         ),
@@ -207,7 +256,10 @@ class _PrimaryButton extends StatelessWidget {
   }
 }
 
-class _CircleControl extends StatelessWidget {
+/// A round liquid-glass control disc with a tactile press (scale-down + neon
+/// bloom). States: default (glass), active (violet tint), danger (red tint),
+/// filledDanger (solid red — the hang-up), disabled (dimmed + inert).
+class _CircleControl extends StatefulWidget {
   const _CircleControl({
     required this.icon,
     required this.label,
@@ -216,6 +268,7 @@ class _CircleControl extends StatelessWidget {
     this.danger = false,
     this.filledDanger = false,
     this.enabled = true,
+    this.glow,
   });
 
   final IconData icon;
@@ -226,6 +279,21 @@ class _CircleControl extends StatelessWidget {
   final bool filledDanger;
   final bool enabled;
 
+  /// Override the press-glow color (defaults to violet, or red for danger).
+  final Color? glow;
+
+  @override
+  State<_CircleControl> createState() => _CircleControlState();
+}
+
+class _CircleControlState extends State<_CircleControl> {
+  bool _pressed = false;
+
+  void _set(bool v) {
+    if (!widget.enabled || _pressed == v) return;
+    setState(() => _pressed = v);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -233,16 +301,16 @@ class _CircleControl extends StatelessWidget {
 
     final Color bg;
     final Color fg;
-    if (!enabled) {
+    if (!widget.enabled) {
       bg = scheme.surfaceContainerHighest.withValues(alpha: 0.25);
       fg = scheme.onSurfaceVariant.withValues(alpha: 0.4);
-    } else if (filledDanger) {
+    } else if (widget.filledDanger) {
       bg = scheme.error;
       fg = Colors.white;
-    } else if (danger) {
+    } else if (widget.danger) {
       bg = scheme.error.withValues(alpha: 0.18);
       fg = scheme.error;
-    } else if (active) {
+    } else if (widget.active) {
       bg = colors.neonViolet.withValues(alpha: 0.22);
       fg = colors.neonViolet;
     } else {
@@ -250,26 +318,53 @@ class _CircleControl extends StatelessWidget {
       fg = scheme.onSurface;
     }
 
+    // The press-glow accent: explicit override → red (danger) → violet.
+    final glowColor =
+        widget.glow ??
+        (widget.danger || widget.filledDanger
+            ? scheme.error
+            : colors.neonViolet);
+
     return Tooltip(
-      message: label,
+      message: widget.label,
       child: Semantics(
         button: true,
-        label: label,
-        child: Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          child: InkWell(
-            onTap: enabled ? onTap : null,
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: bg,
-                border: Border.all(color: colors.glassBorder),
+        label: widget.label,
+        child: AnimatedScale(
+          scale: _pressed ? 0.9 : 1,
+          duration: AppDurations.press,
+          curve: AppCurves.glass,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                if (_pressed && widget.enabled)
+                  ...AppShadows.glow(glowColor, strength: 0.9)
+                else if (widget.filledDanger)
+                  ...AppShadows.glow(scheme.error, strength: 0.4),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: widget.enabled ? widget.onTap : null,
+                onHighlightChanged: _set,
+                customBorder: const CircleBorder(),
+                splashColor: glowColor.withValues(alpha: 0.18),
+                highlightColor: glowColor.withValues(alpha: 0.10),
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: bg,
+                    border: Border.all(color: colors.glassBorder),
+                  ),
+                  child: Icon(widget.icon, size: 22, color: fg),
+                ),
               ),
-              child: Icon(icon, size: 22, color: fg),
             ),
           ),
         ),
@@ -279,7 +374,11 @@ class _CircleControl extends StatelessWidget {
 }
 
 class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.enabled, required this.onReport, required this.onBlock});
+  const _MoreMenu({
+    required this.enabled,
+    required this.onReport,
+    required this.onBlock,
+  });
 
   final bool enabled;
   final VoidCallback onReport;
@@ -293,6 +392,11 @@ class _MoreMenu extends StatelessWidget {
       enabled: enabled,
       tooltip: 'Ещё',
       position: PopupMenuPosition.over,
+      color: scheme.surface.withValues(alpha: 0.96),
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadii.brXl,
+        side: BorderSide(color: colors.glassBorder),
+      ),
       onSelected: (v) {
         if (v == 'report') onReport();
         if (v == 'block') onBlock();
@@ -324,13 +428,17 @@ class _MoreMenu extends StatelessWidget {
         height: 52,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: enabled ? colors.glassFill : scheme.surfaceContainerHighest.withValues(alpha: 0.25),
+          color: enabled
+              ? colors.glassFill
+              : scheme.surfaceContainerHighest.withValues(alpha: 0.25),
           border: Border.all(color: colors.glassBorder),
         ),
         child: Icon(
           Icons.more_vert_rounded,
           size: 22,
-          color: enabled ? scheme.onSurface : scheme.onSurfaceVariant.withValues(alpha: 0.4),
+          color: enabled
+              ? scheme.onSurface
+              : scheme.onSurfaceVariant.withValues(alpha: 0.4),
         ),
       ),
     );

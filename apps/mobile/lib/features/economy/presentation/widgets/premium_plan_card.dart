@@ -5,8 +5,10 @@ import '../../../../core/theme/theme.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../economy_format.dart';
 
-/// A premium tier card: title, price + interval, the perk list and a subscribe
-/// CTA. The [featured] (best-value) plan gets a neon ring + glow and a label.
+/// A premium tier card: a crowned title, the price + interval, a perk checklist
+/// (success-tinted checks) and a subscribe CTA. The [featured] (best-value) plan
+/// is wrapped in the signature brand-gradient border, lifted with a violet glow
+/// and tagged "Популярный". Mirrors the web's `PlanCard`.
 class PremiumPlanCard extends StatelessWidget {
   const PremiumPlanCard({
     super.key,
@@ -30,11 +32,42 @@ class PremiumPlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final accent = featured ? colors.neonViolet : colors.neonCyan;
+    final card = _card(context);
+
+    if (!featured) return card;
+
+    // Featured: a brand-gradient border frame with a soft violet bloom behind.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: AppRadii.brXxxl,
+        boxShadow: AppShadows.glow(colors.neonViolet, strength: 0.5),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(1.4),
+        decoration: BoxDecoration(
+          borderRadius: AppRadii.brXxxl,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [colors.neonViolet, colors.neonMagenta, colors.neonCyan],
+          ),
+        ),
+        child: card,
+      ),
+    );
+  }
+
+  Widget _card(BuildContext context) {
+    final colors = context.colors;
+    final scheme = context.scheme;
 
     return GlassCard(
-      glowColor: featured ? colors.neonViolet : null,
-      glowStrength: 0.5,
+      // The featured card sits inside a gradient frame, so it draws no border
+      // or extra shadow of its own — the frame supplies both.
+      border: !featured,
+      shadow: !featured,
+      intensity: featured ? 1.2 : 1,
+      borderRadius: AppRadii.brXxl,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -42,23 +75,19 @@ class PremiumPlanCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              Icon(
+                Icons.workspace_premium_rounded,
+                size: 20,
+                color: featured ? colors.neonMagenta : colors.warning,
+              ),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(plan.title, style: context.texts.titleLarge),
               ),
-              if (featured)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 3),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: colors.ctaGradient),
-                    borderRadius: AppRadii.brPill,
-                  ),
-                  child: Text(
-                    'Популярный',
-                    style: context.texts.labelSmall
-                        ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                  ),
-                ),
+              if (isCurrent)
+                _StatusPill(label: 'Активен', color: colors.success, dot: true)
+              else if (featured)
+                const _PopularPill(),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -68,16 +97,18 @@ class PremiumPlanCard extends StatelessWidget {
             children: [
               Text(
                 EconomyFormat.rub(plan.priceRub),
-                style: AppTypography.display(
-                  fontSize: 28,
-                  color: context.scheme.onSurface,
+                style: AppTypography.stat(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onSurface,
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
               Text(
                 EconomyFormat.planInterval(plan.intervalDays),
-                style: context.texts.bodySmall
-                    ?.copyWith(color: context.scheme.onSurfaceVariant),
+                style: context.texts.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -88,10 +119,28 @@ class PremiumPlanCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle_rounded, size: 18, color: accent),
+                  Container(
+                    width: 20,
+                    height: 20,
+                    margin: const EdgeInsets.only(top: 1),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: colors.success.withValues(alpha: 0.16),
+                    ),
+                    child: Icon(
+                      Icons.check_rounded,
+                      size: 13,
+                      color: colors.success,
+                    ),
+                  ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
-                    child: Text(perk, style: context.texts.bodyMedium),
+                    child: Text(
+                      perk,
+                      style: context.texts.bodyMedium?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.92),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -106,11 +155,96 @@ class PremiumPlanCard extends StatelessWidget {
           else
             GradientButton(
               label: 'Оформить',
-              gradientColors: featured ? null : [colors.neonCyan, colors.neonViolet],
+              gradientColors: featured
+                  ? null
+                  : [colors.neonCyan, colors.neonViolet],
               loading: loading,
               onPressed: disabled ? null : onSubscribe,
-              height: 48,
+              height: 50,
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The brand-gradient "Популярный" pill with a sparkle.
+class _PopularPill extends StatelessWidget {
+  const _PopularPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors.ctaGradient),
+        borderRadius: AppRadii.brPill,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.auto_awesome_rounded, size: 11, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            'Популярный',
+            style: context.texts.labelSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A tinted status pill (e.g. the active-subscription marker), with an optional
+/// leading dot.
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.label,
+    required this.color,
+    this.dot = false,
+  });
+
+  final String label;
+  final Color color;
+  final bool dot;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: AppRadii.brPill,
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (dot) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            label,
+            style: context.texts.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );

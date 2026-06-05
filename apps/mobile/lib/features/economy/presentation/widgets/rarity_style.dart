@@ -13,12 +13,16 @@ class RarityStyle {
   static RarityStyle of(BuildContext context, Rarity rarity) {
     final colors = context.colors;
     return switch (rarity) {
-      Rarity.common =>
-        RarityStyle(label: 'Обычные', color: context.scheme.onSurfaceVariant),
+      Rarity.common => RarityStyle(
+        label: 'Обычные',
+        color: context.scheme.onSurfaceVariant,
+      ),
       Rarity.rare => RarityStyle(label: 'Редкие', color: colors.neonCyan),
       Rarity.epic => RarityStyle(label: 'Эпические', color: colors.neonViolet),
-      Rarity.legendary =>
-        RarityStyle(label: 'Легендарные', color: colors.warning),
+      Rarity.legendary => RarityStyle(
+        label: 'Легендарные',
+        color: colors.warning,
+      ),
     };
   }
 }

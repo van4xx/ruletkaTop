@@ -8,6 +8,7 @@ import '../../../../core/router/routes.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../dashboard_providers.dart';
+import 'dash_section_header.dart';
 
 /// A preview of the most-recently-active conversations (capped), each row
 /// showing the peer's avatar, nickname, last-message preview, relative time and
@@ -28,31 +29,12 @@ class RecentChatsSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SectionHeader(
+          DashWidgetHeader(
+            icon: Icons.chat_bubble_rounded,
             title: 'Сообщения',
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (unread > 0)
-                  Container(
-                    margin: const EdgeInsets.only(right: AppSpacing.sm),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      borderRadius: AppRadii.brPill,
-                      color: context.colors.neonMagenta,
-                    ),
-                    child: Text(
-                      unread > 99 ? '99+' : '$unread',
-                      style: context.texts.labelSmall
-                          ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                TextButton(
-                  onPressed: () => context.go(AppRoutes.chats),
-                  child: const Text('Все'),
-                ),
-              ],
-            ),
+            accent: context.colors.neonMagenta,
+            count: unread,
+            linkRoute: AppRoutes.chats,
           ),
           const SizedBox(height: AppSpacing.xs),
           chatsAsync.when(
@@ -71,7 +53,15 @@ class RecentChatsSection extends ConsumerWidget {
               final preview = chats.take(limit).toList(growable: false);
               return Column(
                 children: [
-                  for (final c in preview) _ChatRow(conversation: c),
+                  for (var i = 0; i < preview.length; i++) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: context.colors.glassBorder.withValues(alpha: 0.5),
+                      ),
+                    _ChatRow(conversation: preview[i]),
+                  ],
                 ],
               );
             },
@@ -101,7 +91,7 @@ class _ChatRow extends ConsumerWidget {
       borderRadius: AppRadii.brLg,
       onTap: () => context.go(AppRoutes.chatTo(conversation.id)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         child: Row(
           children: [
             NeonAvatar(

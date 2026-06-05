@@ -109,7 +109,11 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
   }
 
   Future<void> _openFilters(MatchFilters current, bool isPremium) async {
-    final next = await showFiltersSheet(context, value: current, isPremium: isPremium);
+    final next = await showFiltersSheet(
+      context,
+      value: current,
+      isPremium: isPremium,
+    );
     if (next != null) _controller.setFilters(next);
   }
 
@@ -177,22 +181,26 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
                           placeholderAvatar: peer?.avatarUrl,
                         )
                       : (peer != null
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.xl, vertical: 96),
-                                child: SingleChildScrollView(
-                                  child: VoiceVisualizer(
-                                    name: peer.nickname,
-                                    avatarUrl: peer.avatarUrl,
-                                    subtitle: _peerSubtitle(peer),
-                                    tone: VisualizerTone.peer,
-                                    active: state.status == RouletteStatus.connected,
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.xl,
+                                    vertical: 96,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    child: VoiceVisualizer(
+                                      name: peer.nickname,
+                                      avatarUrl: peer.avatarUrl,
+                                      subtitle: _peerSubtitle(peer),
+                                      tone: VisualizerTone.peer,
+                                      active:
+                                          state.status ==
+                                          RouletteStatus.connected,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            )
-                          : const SizedBox.shrink()),
+                              )
+                            : const SizedBox.shrink()),
                 ),
 
               // ── Status screens for every non-stage phase ──
@@ -253,7 +261,9 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
                     bottom: 112,
                     child: GlassCard(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
                       borderRadius: AppRadii.brXl,
                       blurSigma: 18,
                       child: VoiceVisualizer(
@@ -288,7 +298,9 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
                   child: Center(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                      ),
                       child: CallControls(
                         status: state.status,
                         isVideo: _isVideo,
@@ -339,36 +351,42 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
     }
     return switch (state.status) {
       RouletteStatus.idle || RouletteStatus.requesting => KeyedSubtree(
-          key: const ValueKey('idle'),
-          child: IdleScreen(isVideo: _isVideo),
-        ),
+        key: const ValueKey('idle'),
+        child: IdleScreen(isVideo: _isVideo),
+      ),
       RouletteStatus.searching => KeyedSubtree(
-          key: const ValueKey('searching'),
-          child: SearchingScreen(
-            positionHint: state.positionHint,
-            longWait: _longWait,
-          ),
+        key: const ValueKey('searching'),
+        child: SearchingScreen(
+          positionHint: state.positionHint,
+          longWait: _longWait,
         ),
+      ),
       RouletteStatus.ended => const KeyedSubtree(
-          key: ValueKey('ended'),
-          child: EndedScreen(),
-        ),
+        key: ValueKey('ended'),
+        child: EndedScreen(),
+      ),
       RouletteStatus.error => KeyedSubtree(
-          key: const ValueKey('error'),
-          child: RouletteErrorScreen(
-            error: state.error ??
-                const RouletteError(kind: 'unknown', message: 'Что-то пошло не так.'),
-            onRetry: _controller.start,
-          ),
+        key: const ValueKey('error'),
+        child: RouletteErrorScreen(
+          error:
+              state.error ??
+              const RouletteError(
+                kind: 'unknown',
+                message: 'Что-то пошло не так.',
+              ),
+          onRetry: _controller.start,
         ),
+      ),
       // connecting / connected are handled by the stage, never reach here.
       _ => const SizedBox.shrink(),
     };
   }
 }
 
-/// The dark, atmospheric arena both modes share: a near-black canvas with a
-/// faint top-center violet glow (mirrors the web `StageFrame` backdrop).
+/// The dark, atmospheric arena both modes share: a near-black canvas lit by
+/// three soft neon aurora blobs (violet top-center, cyan bottom-right, magenta
+/// bottom-left) — the native twin of the web `StageFrame` backdrop. Voice mode
+/// turns the ambience up a touch since there's no full-bleed video to carry it.
 class _StageBackground extends StatelessWidget {
   const _StageBackground({required this.isVideo, required this.child});
 
@@ -378,11 +396,12 @@ class _StageBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final boost = isVideo ? 1.0 : 1.4;
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFF07070B)),
       child: Stack(
         children: [
-          // Soft neon ambience for the idle/voice areas.
+          // Violet bloom anchored above the top-center (the dominant glow).
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -391,7 +410,9 @@ class _StageBackground extends StatelessWidget {
                     center: const Alignment(0, -1.05),
                     radius: 1.25,
                     colors: [
-                      colors.neonViolet.withValues(alpha: isVideo ? 0.14 : 0.20),
+                      colors.neonViolet.withValues(
+                        alpha: (isVideo ? 0.16 : 0.24),
+                      ),
                       const Color(0xFF07070B),
                     ],
                     stops: const [0, 0.62],
@@ -400,22 +421,64 @@ class _StageBackground extends StatelessWidget {
               ),
             ),
           ),
+          // Cyan accent, lower-right.
           Positioned(
-            right: -80,
-            bottom: -60,
+            right: -120,
+            bottom: -90,
             child: IgnorePointer(
-              child: Container(
-                width: 280,
-                height: 280,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: AppShadows.glow(colors.neonCyan, strength: 0.5),
-                ),
+              child: _Blob(
+                color: colors.neonCyan,
+                size: 320,
+                strength: 0.16 * boost,
+              ),
+            ),
+          ),
+          // Magenta counterweight, lower-left.
+          Positioned(
+            left: -130,
+            bottom: -110,
+            child: IgnorePointer(
+              child: _Blob(
+                color: colors.neonMagenta,
+                size: 300,
+                strength: 0.13 * boost,
               ),
             ),
           ),
           child,
         ],
+      ),
+    );
+  }
+}
+
+/// A soft circular neon bloob (radial fill that fades to transparent) for the
+/// stage ambience.
+class _Blob extends StatelessWidget {
+  const _Blob({
+    required this.color,
+    required this.size,
+    required this.strength,
+  });
+
+  final Color color;
+  final double size;
+  final double strength;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            color.withValues(alpha: strength.clamp(0.0, 1.0)),
+            color.withValues(alpha: 0),
+          ],
+          stops: const [0.0, 1.0],
+        ),
       ),
     );
   }
@@ -434,6 +497,7 @@ class _LocalPip extends StatefulWidget {
 
 class _LocalPipState extends State<_LocalPip> {
   Offset _drag = Offset.zero;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -442,43 +506,72 @@ class _LocalPipState extends State<_LocalPip> {
       offset: _drag,
       child: GestureDetector(
         onPanUpdate: (d) => setState(() => _drag += d.delta),
-        child: Container(
-          width: 112,
-          height: 156,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.brXl,
-            border: Border.all(color: colors.glassBorder),
-            boxShadow: AppShadows.card,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              VideoTile(
-                stream: widget.stream,
-                mirror: true,
-                cameraOff: widget.cameraOff,
-                placeholderName: 'Вы',
-              ),
-              Positioned(
-                left: 6,
-                bottom: 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    borderRadius: AppRadii.brSm,
+        onPanEnd: (_) => setState(() => _pressed = false),
+        onPanDown: (_) => setState(() => _pressed = true),
+        child: AnimatedScale(
+          scale: _pressed ? 1.03 : 1,
+          duration: AppDurations.fast,
+          curve: AppCurves.glass,
+          child: Container(
+            width: 112,
+            height: 156,
+            decoration: BoxDecoration(
+              borderRadius: AppRadii.brXl,
+              boxShadow: [
+                ...AppShadows.glass(strength: 0.9),
+                if (_pressed)
+                  ...AppShadows.glow(colors.neonViolet, strength: 0.6),
+              ],
+            ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // The tile body, clipped, with a neon-tinted gradient ring.
+                ClipRRect(
+                  borderRadius: AppRadii.brXl,
+                  child: VideoTile(
+                    stream: widget.stream,
+                    mirror: true,
+                    cameraOff: widget.cameraOff,
+                    placeholderName: 'Вы',
                   ),
-                  child: Text(
-                    'Вы',
-                    style: context.texts.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
+                ),
+                // Gradient hairline ring (a Container border can't take a
+                // gradient, so we stroke a rounded rect with a shader instead).
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _GradientRingPainter(
+                        borderRadius: AppRadii.brXl,
+                        colors: [
+                          colors.neonViolet.withValues(alpha: 0.85),
+                          colors.neonCyan.withValues(alpha: 0.55),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+                Positioned(
+                  left: 6,
+                  bottom: 6,
+                  child: GlassCard(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    borderRadius: AppRadii.brSm,
+                    blurSigma: AppBlur.subtle,
+                    child: Text(
+                      'Вы',
+                      style: context.texts.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -486,58 +579,118 @@ class _LocalPipState extends State<_LocalPip> {
   }
 }
 
-/// The glassy filters trigger pill, with an active-filter count badge.
-class _FiltersButton extends StatelessWidget {
+/// Strokes a rounded-rect frame with a linear gradient — used for the self-view
+/// PiP's neon ring (Flutter's [Border] can't carry a gradient).
+class _GradientRingPainter extends CustomPainter {
+  const _GradientRingPainter({
+    required this.borderRadius,
+    required this.colors,
+  });
+
+  final BorderRadius borderRadius;
+  final List<Color> colors;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = borderRadius.toRRect(rect).deflate(0.75);
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: colors,
+      ).createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawRRect(rrect, paint);
+  }
+
+  @override
+  bool shouldRepaint(_GradientRingPainter old) =>
+      old.colors != colors || old.borderRadius != borderRadius;
+}
+
+/// The glassy filters trigger pill, with an active-filter count badge. Lights up
+/// with a violet glow when filters are active, and presses in tactilely.
+class _FiltersButton extends StatefulWidget {
   const _FiltersButton({required this.count, required this.onTap});
 
   final int count;
   final VoidCallback onTap;
 
   @override
+  State<_FiltersButton> createState() => _FiltersButtonState();
+}
+
+class _FiltersButtonState extends State<_FiltersButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final scheme = context.scheme;
-    return Material(
-      color: Colors.transparent,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            GlassCard(
-              padding: EdgeInsets.zero,
-              borderRadius: AppRadii.brPill,
-              blurSigma: 18,
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: Icon(Icons.tune_rounded, size: 22, color: scheme.onSurface),
-              ),
-            ),
-            if (count > 0)
-              Positioned(
-                top: -2,
-                right: -2,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: colors.ctaGradient),
-                    borderRadius: AppRadii.brPill,
-                    border: Border.all(color: const Color(0xFF07070B), width: 2),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: context.texts.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    ),
+    final active = widget.count > 0;
+    return AnimatedScale(
+      scale: _pressed ? 0.92 : 1,
+      duration: AppDurations.press,
+      curve: AppCurves.glass,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHighlightChanged: (v) => setState(() => _pressed = v),
+          customBorder: const CircleBorder(),
+          splashColor: colors.neonViolet.withValues(alpha: 0.16),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GlassCard(
+                padding: EdgeInsets.zero,
+                borderRadius: AppRadii.brPill,
+                blurSigma: AppBlur.glass,
+                glowColor: active || _pressed ? colors.neonViolet : null,
+                glowStrength: _pressed ? 0.7 : 0.4,
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Icon(
+                    Icons.tune_rounded,
+                    size: 22,
+                    color: active ? colors.neonViolet : scheme.onSurface,
                   ),
                 ),
               ),
-          ],
+              if (widget.count > 0)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: colors.ctaGradient),
+                      borderRadius: AppRadii.brPill,
+                      border: Border.all(
+                        color: const Color(0xFF07070B),
+                        width: 2,
+                      ),
+                    ),
+                    child: Text(
+                      '${widget.count}',
+                      style: context.texts.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

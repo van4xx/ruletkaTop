@@ -7,9 +7,11 @@ import '../../../../core/widgets/widgets.dart';
 import '../economy_format.dart';
 import 'rarity_style.dart';
 
-/// A single gift tile: the animated/static media on a rarity-tinted backdrop,
-/// the title, a coin price and a premium-lock affordance. Tapping selects it
-/// (the parent opens the send flow). Used in the catalog grid and the picker.
+/// A single gift tile: the animated/static media on a rarity-tinted backdrop
+/// (with a rarity inset ring + corner glow), the title, a coin price and a
+/// premium-lock affordance. Tapping selects it (the parent opens the send
+/// flow). Used in the catalog grid and the picker. Mirrors the web's
+/// rarity-glow `GiftCard`.
 class GiftCard extends StatelessWidget {
   const GiftCard({
     super.key,
@@ -37,12 +39,15 @@ class GiftCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = RarityStyle.of(context, gift.rarity);
     final colors = context.colors;
+    final scheme = context.scheme;
 
     return GlassCard(
       padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.md),
+      borderRadius: AppRadii.brXl,
       onTap: onTap,
       glowColor: selected ? style.color : null,
-      glowStrength: 0.6,
+      glowStrength: 0.7,
+      intensity: selected ? 1.2 : 1,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -55,17 +60,28 @@ class GiftCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: AppRadii.brLg,
                     gradient: RadialGradient(
+                      center: const Alignment(0, -0.2),
+                      radius: 0.9,
                       colors: [
-                        style.color.withValues(alpha: 0.22),
-                        style.color.withValues(alpha: 0.04),
+                        style.color.withValues(alpha: 0.26),
+                        style.color.withValues(alpha: 0.05),
                       ],
                     ),
                     border: Border.all(
                       color: selected
                           ? style.color
-                          : style.color.withValues(alpha: 0.25),
-                      width: selected ? 1.5 : 1,
+                          : style.color.withValues(alpha: 0.32),
+                      width: selected ? 1.6 : 1,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: style.color.withValues(
+                          alpha: selected ? 0.35 : 0.16,
+                        ),
+                        blurRadius: selected ? 18 : 12,
+                        spreadRadius: -6,
+                      ),
+                    ],
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(AppSpacing.sm),
@@ -79,10 +95,17 @@ class GiftCard extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
-                        color: colors.scrim,
+                        color: colors.warning.withValues(alpha: 0.22),
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colors.warning.withValues(alpha: 0.5),
+                        ),
                       ),
-                      child: Icon(Icons.lock_rounded, size: 13, color: colors.warning),
+                      child: Icon(
+                        Icons.workspace_premium_rounded,
+                        size: 13,
+                        color: colors.warning,
+                      ),
                     ),
                   ),
               ],
@@ -93,19 +116,26 @@ class GiftCard extends StatelessWidget {
             gift.title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: context.texts.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: context.texts.labelMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 2),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.monetization_on_rounded, size: 13, color: colors.warning),
+              Icon(
+                Icons.monetization_on_rounded,
+                size: 13,
+                color: colors.warning,
+              ),
               const SizedBox(width: 3),
               Text(
                 EconomyFormat.number(gift.priceCoins),
-                style: context.texts.labelSmall?.copyWith(
-                  color: context.scheme.onSurface,
-                  fontWeight: FontWeight.w700,
+                style: AppTypography.stat(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onSurface,
                 ),
               ),
             ],
@@ -135,16 +165,23 @@ class _GiftMedia extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (gift.animationUrl.isEmpty || !_isImage) {
-      return Center(child: Icon(Icons.card_giftcard_rounded, size: 40, color: tint));
+      return Center(
+        child: Icon(Icons.card_giftcard_rounded, size: 40, color: tint),
+      );
     }
     return CachedNetworkImage(
       imageUrl: gift.animationUrl,
       fit: BoxFit.contain,
       placeholder: (_, _) => Center(
-        child: Icon(Icons.card_giftcard_outlined, size: 32, color: tint.withValues(alpha: 0.5)),
+        child: Icon(
+          Icons.card_giftcard_outlined,
+          size: 32,
+          color: tint.withValues(alpha: 0.5),
+        ),
       ),
-      errorWidget: (_, _, _) =>
-          Center(child: Icon(Icons.card_giftcard_rounded, size: 40, color: tint)),
+      errorWidget: (_, _, _) => Center(
+        child: Icon(Icons.card_giftcard_rounded, size: 40, color: tint),
+      ),
     );
   }
 }

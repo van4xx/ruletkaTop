@@ -88,14 +88,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final auth = ref.watch(authStateProvider);
 
     return AuthShell(
-      tagline: 'Пара шагов — и вы в эфире',
+      tagline: 'Присоединяйся к эфиру',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           GlassCard(
             padding: const EdgeInsets.all(AppSpacing.xl),
             glowColor: colors.neonMagenta,
-            glowStrength: 0.35,
+            glowStrength: 0.4,
+            intensity: 1.1,
             child: Form(
               key: _formKey,
               autovalidateMode: _submitted
@@ -104,41 +105,48 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Создать аккаунт', style: context.texts.titleLarge),
+                  // Eyebrow + display heading.
+                  Text(
+                    'РЕГИСТРАЦИЯ',
+                    style: AppTypography.eyebrow(color: colors.neonMagenta),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Создать аккаунт',
+                    style: context.texts.headlineSmall,
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    'Заполните профиль, чтобы начать знакомиться',
+                    'Пара шагов — и ты в эфире.',
                     style: context.texts.bodyMedium
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: AppSpacing.xl),
 
                   // Email
-                  TextFormField(
+                  AuthTextField(
                     controller: _emailController,
+                    label: 'Email',
+                    hint: 'you@example.com',
+                    prefixIcon: Icons.alternate_email_rounded,
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const [AutofillHints.email],
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.alternate_email_rounded),
-                    ),
                     validator: AuthValidators.email,
                     onChanged: (_) => _clearError(),
                   ),
                   const SizedBox(height: AppSpacing.md),
 
                   // Nickname
-                  TextFormField(
+                  AuthTextField(
                     controller: _nicknameController,
+                    label: 'Никнейм',
+                    hint: 'cosmic_fox',
+                    helperText: '3–24 символа: латиница, цифры и _',
+                    prefixIcon: Icons.person_outline_rounded,
                     autofillHints: const [AutofillHints.newUsername],
                     textInputAction: TextInputAction.next,
                     inputFormatters: [nicknameFormatter],
-                    decoration: const InputDecoration(
-                      labelText: 'Никнейм',
-                      helperText: '3–24 символа: латиница, цифры и _',
-                      prefixIcon: Icon(Icons.person_outline_rounded),
-                    ),
                     validator: AuthValidators.nickname,
                     onChanged: (_) => _clearError(),
                   ),
@@ -158,7 +166,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: AppSpacing.lg),
 
                   // Gender
-                  _FieldLabel('Пол'),
+                  const _FieldLabel('Пол'),
                   const SizedBox(height: AppSpacing.sm),
                   SegmentedChoice<Gender>(
                     options: kGenderChoices,
@@ -191,7 +199,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const SizedBox(height: AppSpacing.lg),
 
                   // Interface language
-                  _FieldLabel('Язык интерфейса'),
+                  const _FieldLabel('Язык интерфейса'),
                   const SizedBox(height: AppSpacing.sm),
                   SegmentedChoice<Locale>(
                     options: kLocaleChoices,
@@ -210,31 +218,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     const SizedBox(height: AppSpacing.md),
                     AuthErrorBanner(message: auth.errorMessage!),
                   ],
+
                   const SizedBox(height: AppSpacing.xl),
                   GradientButton(
                     label: 'Создать аккаунт',
+                    icon: Icons.auto_awesome_rounded,
+                    gradientColors: [colors.neonViolet, colors.neonMagenta],
                     loading: auth.isBusy,
                     onPressed: _acceptedTerms ? _submit : null,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Регистрируясь, ты подтверждаешь, что тебе есть 18 лет.',
+                    textAlign: TextAlign.center,
+                    style: context.texts.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Уже есть аккаунт?',
-                style: context.texts.bodyMedium
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-              TextButton(
-                onPressed:
-                    auth.isBusy ? null : () => context.go(AppRoutes.login),
-                child: const Text('Войти'),
-              ),
-            ],
+          _SwitchAuthRow(
+            prompt: 'Уже есть аккаунт?',
+            actionLabel: 'Войти',
+            onPressed: auth.isBusy ? null : () => context.go(AppRoutes.login),
           ),
         ],
       ),
@@ -258,8 +266,49 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
+/// The "switch to the other auth screen" row — a muted prompt with a neon-cyan
+/// text action, centered under the card.
+class _SwitchAuthRow extends StatelessWidget {
+  const _SwitchAuthRow({
+    required this.prompt,
+    required this.actionLabel,
+    required this.onPressed,
+  });
+
+  final String prompt;
+  final String actionLabel;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          prompt,
+          style: context.texts.bodyMedium
+              ?.copyWith(color: context.scheme.onSurfaceVariant),
+        ),
+        TextButton(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(foregroundColor: colors.neonCyan),
+          child: Text(
+            actionLabel,
+            style: context.texts.labelLarge?.copyWith(
+              color: colors.neonCyan,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// The Terms/Privacy consent row. Maps to `acceptedTerms` — registration is
-/// blocked until it's checked (the API rejects otherwise).
+/// blocked until it's checked (the API rejects otherwise). Rendered as a frosted
+/// glass tile that lights up its border when accepted.
 class _ConsentTile extends StatelessWidget {
   const _ConsentTile({required this.value, required this.onChanged});
 
@@ -269,54 +318,72 @@ class _ConsentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.scheme;
-    return InkWell(
-      borderRadius: AppRadii.brMd,
-      onTap: () => onChanged(!value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Checkbox(
-              value: value,
-              onChanged: (v) => onChanged(v ?? false),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
+    final colors = context.colors;
+
+    return AnimatedContainer(
+      duration: AppDurations.normal,
+      curve: AppCurves.glass,
+      decoration: BoxDecoration(
+        color: colors.glassFill.withValues(alpha: value ? 0.6 : 0.35),
+        borderRadius: AppRadii.brMd,
+        border: Border.all(
+          color: value
+              ? colors.neonCyan.withValues(alpha: 0.5)
+              : colors.glassBorder,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: AppRadii.brMd,
+          onTap: () => onChanged(!value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.md),
-                child: Text.rich(
-                  TextSpan(
-                    style: context.texts.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                    children: [
-                      const TextSpan(
-                          text: 'Регистрируясь, я подтверждаю, что мне есть '
-                              '18 лет, и принимаю '),
-                      TextSpan(
-                        text: 'Условия использования',
-                        style: TextStyle(
-                          color: context.colors.neonCyan,
-                          fontWeight: FontWeight.w600,
-                        ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Checkbox(
+                  value: value,
+                  onChanged: (v) => onChanged(v ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      style: context.texts.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        height: 1.4,
                       ),
-                      const TextSpan(text: ' и '),
-                      TextSpan(
-                        text: 'Политику конфиденциальности',
-                        style: TextStyle(
-                          color: context.colors.neonCyan,
-                          fontWeight: FontWeight.w600,
+                      children: [
+                        const TextSpan(text: 'Я принимаю '),
+                        TextSpan(
+                          text: 'Условия использования',
+                          style: TextStyle(
+                            color: colors.neonCyan,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      const TextSpan(text: '.'),
-                    ],
+                        const TextSpan(text: ' и '),
+                        TextSpan(
+                          text: 'Политику конфиденциальности',
+                          style: TextStyle(
+                            color: colors.neonCyan,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const TextSpan(text: '.'),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

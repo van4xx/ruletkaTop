@@ -62,10 +62,12 @@ class _CloudPaymentsWebViewState extends State<CloudPaymentsWebView> {
             // Ignore subresource errors (ads/analytics in the widget); only a
             // hard main-frame failure should abort.
             if (error.isForMainFrame == true) {
-              _resolve(const CloudPaymentsMessage(
-                CloudPaymentsEvent.fail,
-                reason: 'Не удалось загрузить страницу оплаты',
-              ));
+              _resolve(
+                const CloudPaymentsMessage(
+                  CloudPaymentsEvent.fail,
+                  reason: 'Не удалось загрузить страницу оплаты',
+                ),
+              );
             }
           },
         ),
@@ -99,7 +101,9 @@ class _CloudPaymentsWebViewState extends State<CloudPaymentsWebView> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.xxl)),
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(AppRadii.xxl),
+      ),
       child: Scaffold(
         backgroundColor: context.scheme.surface,
         appBar: AppBar(

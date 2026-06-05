@@ -42,79 +42,138 @@ class CallOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.scheme;
+    final colors = context.colors;
     final connected = status == RouletteStatus.connected;
     final genderSuffix = _genderLabel[peer.gender] ?? '';
 
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      borderRadius: AppRadii.brXl,
-      blurSigma: 12,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!compact) ...[
-            NeonAvatar(
-              imageUrl: peer.avatarUrl,
-              name: peer.nickname,
-              size: 40,
-              ring: peer.isPremium,
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Flexible(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        peer.nickname,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.display(fontSize: 14, color: scheme.onSurface),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      genderSuffix.isEmpty ? '${peer.age}' : '${peer.age}, $genderSuffix',
-                      style: context.texts.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CountryFlag(countryCode: peer.country, size: 13),
-                    const SizedBox(width: 4),
-                    Text(
-                      peer.country,
-                      style: context.texts.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                    if (peer.badges.isNotEmpty) ...[
-                      const SizedBox(width: AppSpacing.sm),
-                      ...peer.badges.take(2).map(
-                            (b) => Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: UserBadgePill(badge: b),
-                            ),
+    return _SlideIn(
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        borderRadius: AppRadii.brXl,
+        blurSigma: AppBlur.glass,
+        glowColor: peer.isPremium ? colors.neonViolet : null,
+        glowStrength: 0.3,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!compact) ...[
+              NeonAvatar(
+                imageUrl: peer.avatarUrl,
+                name: peer.nickname,
+                size: 40,
+                ring: peer.isPremium,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          peer.nickname,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.display(
+                            fontSize: 14,
+                            color: scheme.onSurface,
                           ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        genderSuffix.isEmpty
+                            ? '${peer.age}'
+                            : '${peer.age}, $genderSuffix',
+                        style: context.texts.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CountryFlag(countryCode: peer.country, size: 13),
+                      const SizedBox(width: 4),
+                      Text(
+                        peer.country,
+                        style: context.texts.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (peer.badges.isNotEmpty) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        ...peer.badges
+                            .take(2)
+                            .map(
+                              (b) => Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: UserBadgePill(badge: b),
+                              ),
+                            ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          // Live signal-strength bars (only once connected with a real sample).
-          if (connected && quality != ConnectionQuality.unknown) ...[
-            _SignalBars(quality: quality, dimmed: reconnecting),
             const SizedBox(width: AppSpacing.sm),
+            // Live signal-strength bars (only once connected with a real sample).
+            if (connected && quality != ConnectionQuality.unknown) ...[
+              _SignalBars(quality: quality, dimmed: reconnecting),
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            _StatusPill(connected: connected, reconnecting: reconnecting),
           ],
-          _StatusPill(connected: connected, reconnecting: reconnecting),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A soft slide-down + fade entrance for the peer overlay, so the identity card
+/// drops in gently rather than popping when a match lands.
+class _SlideIn extends StatefulWidget {
+  const _SlideIn({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SlideIn> createState() => _SlideInState();
+}
+
+class _SlideInState extends State<_SlideIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: AppDurations.slow,
+  )..forward();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final curved = CurvedAnimation(parent: _c, curve: AppCurves.glass);
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -0.18),
+          end: Offset.zero,
+        ).animate(curved),
+        child: widget.child,
       ),
     );
   }
@@ -190,12 +249,15 @@ class _StatusPill extends StatelessWidget {
     final color = reconnecting
         ? colors.warning
         : connected
-            ? colors.success
-            : colors.neonMagenta;
+        ? colors.success
+        : colors.neonMagenta;
     final showTimer = connected && !reconnecting;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 4,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.16),
         borderRadius: AppRadii.brPill,
@@ -209,18 +271,27 @@ class _StatusPill extends StatelessWidget {
               : Container(
                   width: 7,
                   height: 7,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
                 ),
           const SizedBox(width: 5),
           showTimer
               ? CallTimer(
                   running: true,
-                  style: context.texts.labelSmall
-                      ?.copyWith(color: color, fontWeight: FontWeight.w700, fontFeatures: const []),
+                  style: context.texts.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [],
+                  ),
                 )
               : Text(
                   reconnecting ? 'Переподключение…' : 'Соединение…',
-                  style: context.texts.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w700),
+                  style: context.texts.labelSmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
         ],
       ),
@@ -238,7 +309,8 @@ class _PulsingDot extends StatefulWidget {
   State<_PulsingDot> createState() => _PulsingDotState();
 }
 
-class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 850),

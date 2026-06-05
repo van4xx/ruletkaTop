@@ -17,14 +17,20 @@ class PremiumScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.listen<PremiumState>(premiumControllerProvider, (prev, next) {
-      if (next.phase == SubscribePhase.active && prev?.phase != SubscribePhase.active) {
+      if (next.phase == SubscribePhase.active &&
+          prev?.phase != SubscribePhase.active) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Подписка оформлена! Премиум активируется после оплаты.')),
+          const SnackBar(
+            content: Text(
+              'Подписка оформлена! Премиум активируется после оплаты.',
+            ),
+          ),
         );
         ref.read(premiumControllerProvider.notifier).reset();
       } else if (next.phase == SubscribePhase.error && next.error != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(next.error!)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(next.error!)));
         ref.read(premiumControllerProvider.notifier).reset();
       }
     });
@@ -46,12 +52,16 @@ class PremiumScreen extends ConsumerWidget {
           children: [
             _Hero(subscription: subscription),
             const SizedBox(height: AppSpacing.xl),
-            if (subscription != null && subscription.status != SubscriptionStatus.none)
+            if (subscription != null &&
+                subscription.status != SubscriptionStatus.none)
               _CurrentSubscriptionCard(subscription: subscription),
+            const _PerksHighlights(),
+            const SizedBox(height: AppSpacing.xl),
             const SectionHeader(title: 'Выберите план'),
             const SizedBox(height: AppSpacing.sm),
             plans.when(
-              loading: () => LoadingShimmer.list(items: 2, padding: EdgeInsets.zero),
+              loading: () =>
+                  LoadingShimmer.list(items: 2, padding: EdgeInsets.zero),
               error: (_, _) => ErrorView(
                 title: 'Не удалось загрузить планы',
                 message: 'Тарифы временно недоступны.',
@@ -79,9 +89,11 @@ class PremiumScreen extends ConsumerWidget {
                       PremiumPlanCard(
                         plan: list[i],
                         featured: i == featuredIdx,
-                        isCurrent: subscription?.status == SubscriptionStatus.active &&
+                        isCurrent:
+                            subscription?.status == SubscriptionStatus.active &&
                             subscription?.plan == list[i].code,
-                        loading: premiumState.isBusy &&
+                        loading:
+                            premiumState.isBusy &&
                             premiumState.activePlan?.code == list[i].code,
                         disabled: premiumState.isBusy,
                         onSubscribe: () => ref
@@ -114,15 +126,34 @@ class _Hero extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            Icon(
+              Icons.workspace_premium_rounded,
+              size: 15,
+              color: colors.warning,
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              'ПРЕМИУМ',
+              style: AppTypography.eyebrow(fontSize: 11, color: colors.warning),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
         Container(
-          width: 56,
-          height: 56,
+          width: 60,
+          height: 60,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
+            borderRadius: AppRadii.brXl,
             gradient: LinearGradient(colors: colors.brandGradient),
-            boxShadow: AppShadows.glow(colors.neonViolet, strength: 0.6),
+            boxShadow: AppShadows.glow(colors.neonViolet, strength: 0.7),
           ),
-          child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 30),
+          child: const Icon(
+            Icons.workspace_premium_rounded,
+            color: Colors.white,
+            size: 32,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         ShaderMask(
@@ -136,10 +167,76 @@ class _Hero extends StatelessWidget {
         const SizedBox(height: AppSpacing.xs),
         Text(
           'Больше возможностей: приоритет в поиске, эксклюзивные подарки, продвинутые фильтры и никакой рекламы.',
-          style: context.texts.bodyMedium
-              ?.copyWith(color: context.scheme.onSurfaceVariant),
+          style: context.texts.bodyMedium?.copyWith(
+            color: context.scheme.onSurfaceVariant,
+          ),
         ),
       ],
+    );
+  }
+}
+
+/// A 2x2 strip of premium perk highlights (mirrors the web's HIGHLIGHTS grid).
+class _PerksHighlights extends StatelessWidget {
+  const _PerksHighlights();
+
+  static const _items = [
+    (Icons.tune_rounded, 'Фильтры', 'Поиск по интересам и стране'),
+    (Icons.block_rounded, 'Без рекламы', 'Чистый интерфейс'),
+    (Icons.bolt_rounded, 'Приоритет', 'Выше в подборе собеседников'),
+    (Icons.auto_awesome_rounded, 'Статус', 'Премиум-значок и кольцо'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _items.length,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 220,
+        mainAxisExtent: 124,
+        crossAxisSpacing: AppSpacing.md,
+        mainAxisSpacing: AppSpacing.md,
+      ),
+      itemBuilder: (context, i) {
+        final (icon, title, text) = _items[i];
+        final colors = context.colors;
+        return GlassCard(
+          borderRadius: AppRadii.brXl,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.brMd,
+                  color: colors.neonViolet.withValues(alpha: 0.14),
+                ),
+                child: Icon(icon, size: 19, color: colors.neonViolet),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                title,
+                style: context.texts.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: context.texts.bodySmall?.copyWith(
+                  color: context.scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -185,7 +282,9 @@ class _CurrentSubscriptionCardState
     if (!mounted) return;
     setState(() => _canceling = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error ?? 'Подписка будет отменена в конце периода')),
+      SnackBar(
+        content: Text(error ?? 'Подписка будет отменена в конце периода'),
+      ),
     );
   }
 
@@ -195,17 +294,26 @@ class _CurrentSubscriptionCardState
     final sub = widget.subscription;
     final (statusLabel, statusColor) = switch (sub.status) {
       SubscriptionStatus.active => ('Активна', colors.success),
-      SubscriptionStatus.canceled => ('Отменена', context.scheme.onSurfaceVariant),
+      SubscriptionStatus.canceled => (
+        'Отменена',
+        context.scheme.onSurfaceVariant,
+      ),
       SubscriptionStatus.pastDue => ('Просрочена', colors.warning),
-      SubscriptionStatus.none => ('Нет подписки', context.scheme.onSurfaceVariant),
+      SubscriptionStatus.none => (
+        'Нет подписки',
+        context.scheme.onSurfaceVariant,
+      ),
     };
     final periodEnd = sub.currentPeriodEnd;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
       child: GlassCard(
-        glowColor: sub.status == SubscriptionStatus.active ? colors.success : null,
+        glowColor: sub.status == SubscriptionStatus.active
+            ? colors.success
+            : null,
         glowStrength: 0.3,
+        borderRadius: AppRadii.brXxl,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -214,19 +322,26 @@ class _CurrentSubscriptionCardState
                 Icon(Icons.verified_rounded, size: 20, color: statusColor),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text('Ваша подписка', style: context.texts.titleMedium),
+                  child: Text(
+                    'Ваша подписка',
+                    style: context.texts.titleMedium,
+                  ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 3),
+                    horizontal: AppSpacing.sm,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.15),
                     borderRadius: AppRadii.brPill,
                   ),
                   child: Text(
                     statusLabel,
-                    style: context.texts.labelSmall
-                        ?.copyWith(color: statusColor, fontWeight: FontWeight.w700),
+                    style: context.texts.labelSmall?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -237,11 +352,13 @@ class _CurrentSubscriptionCardState
                 sub.cancelAtPeriodEnd
                     ? 'Действует до ${EconomyFormat.date(periodEnd)}'
                     : 'Продлится ${EconomyFormat.date(periodEnd)}',
-                style: context.texts.bodySmall
-                    ?.copyWith(color: context.scheme.onSurfaceVariant),
+                style: context.texts.bodySmall?.copyWith(
+                  color: context.scheme.onSurfaceVariant,
+                ),
               ),
             ],
-            if (sub.status == SubscriptionStatus.active && !sub.cancelAtPeriodEnd) ...[
+            if (sub.status == SubscriptionStatus.active &&
+                !sub.cancelAtPeriodEnd) ...[
               const SizedBox(height: AppSpacing.md),
               Align(
                 alignment: Alignment.centerLeft,

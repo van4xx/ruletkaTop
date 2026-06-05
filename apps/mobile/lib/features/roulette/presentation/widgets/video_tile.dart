@@ -93,6 +93,65 @@ class _VideoTileState extends State<VideoTile> {
   }
 }
 
+/// A slowly-breathing neon halo behind the placeholder avatar, so a connecting
+/// peer tile feels alive rather than frozen.
+class _BreathingHalo extends StatefulWidget {
+  const _BreathingHalo({
+    required this.size,
+    required this.color,
+    required this.child,
+  });
+
+  final double size;
+  final Color color;
+  final Widget child;
+
+  @override
+  State<_BreathingHalo> createState() => _BreathingHaloState();
+}
+
+class _BreathingHaloState extends State<_BreathingHalo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final pulse = 0.5 + 0.5 * _c.value;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: widget.size * 1.5,
+              height: widget.size * 1.5,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: AppShadows.glow(
+                  widget.color,
+                  strength: 0.5 + pulse * 0.8,
+                ),
+              ),
+            ),
+            child!,
+          ],
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
 class _Placeholder extends StatelessWidget {
   const _Placeholder({this.name, this.avatarUrl, this.cameraOff = false});
 
@@ -103,23 +162,48 @@ class _Placeholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    // Camera-off reads as a calm magenta state; an awaited peer pulses violet.
+    final haloColor = cameraOff ? colors.neonMagenta : colors.neonViolet;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          NeonAvatar(imageUrl: avatarUrl, name: name, size: 92, glow: true),
+          _BreathingHalo(
+            size: 92,
+            color: haloColor,
+            child: NeonAvatar(
+              imageUrl: avatarUrl,
+              name: name,
+              size: 92,
+              glow: false,
+            ),
+          ),
           if (cameraOff) ...[
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.videocam_off_rounded, size: 16, color: colors.neonMagenta),
-                const SizedBox(width: 6),
-                Text(
-                  'Камера выключена',
-                  style: context.texts.bodySmall?.copyWith(color: context.scheme.onSurfaceVariant),
-                ),
-              ],
+            const SizedBox(height: AppSpacing.lg),
+            GlassCard(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              borderRadius: AppRadii.brPill,
+              blurSigma: AppBlur.subtle,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.videocam_off_rounded,
+                    size: 16,
+                    color: colors.neonMagenta,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Камера выключена',
+                    style: context.texts.labelMedium?.copyWith(
+                      color: context.scheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],

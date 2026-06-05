@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -60,6 +62,8 @@ class GiftsScreen extends ConsumerWidget {
             return ListView(
               padding: AppSpacing.page,
               children: [
+                _GiftsEyebrow(),
+                const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Дарите эмоции',
                   style: AppTypography.display(
@@ -70,8 +74,9 @@ class GiftsScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   'Анимированные подарки для звонков, чатов и профилей. Чем выше редкость — тем ярче впечатление.',
-                  style: context.texts.bodyMedium
-                      ?.copyWith(color: context.scheme.onSurfaceVariant),
+                  style: context.texts.bodyMedium?.copyWith(
+                    color: context.scheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 if (!isPremium) const _PremiumUpsell(),
@@ -94,11 +99,18 @@ class GiftsScreen extends ConsumerWidget {
     );
   }
 
-  void _onGiftTap(BuildContext context, WidgetRef ref, Gift gift, bool isPremium) {
+  void _onGiftTap(
+    BuildContext context,
+    WidgetRef ref,
+    Gift gift,
+    bool isPremium,
+  ) {
     if (gift.isPremiumOnly && !isPremium) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Этот подарок доступен только премиум-участникам'),
+          content: const Text(
+            'Этот подарок доступен только премиум-участникам',
+          ),
           action: SnackBarAction(
             label: 'Премиум',
             onPressed: () => context.go(AppRoutes.premium),
@@ -121,20 +133,37 @@ class _PremiumUpsell extends StatelessWidget {
       margin: const EdgeInsets.only(top: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: colors.warning.withValues(alpha: 0.10),
-        borderRadius: AppRadii.brLg,
-        border: Border.all(color: colors.warning.withValues(alpha: 0.25)),
+        borderRadius: AppRadii.brXl,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colors.warning.withValues(alpha: 0.16),
+            colors.neonViolet.withValues(alpha: 0.10),
+          ],
+        ),
+        border: Border.all(color: colors.warning.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: colors.warning.withValues(alpha: 0.20),
+              gradient: RadialGradient(
+                colors: [
+                  colors.warning.withValues(alpha: 0.34),
+                  colors.warning.withValues(alpha: 0.12),
+                ],
+              ),
+              border: Border.all(color: colors.warning.withValues(alpha: 0.4)),
             ),
-            child: Icon(Icons.workspace_premium_rounded, size: 18, color: colors.warning),
+            child: Icon(
+              Icons.workspace_premium_rounded,
+              size: 19,
+              color: colors.warning,
+            ),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -153,6 +182,24 @@ class _PremiumUpsell extends StatelessWidget {
   }
 }
 
+/// The small uppercase kicker above the gifts title (magenta, sparkle).
+class _GiftsEyebrow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Row(
+      children: [
+        Icon(Icons.auto_awesome_rounded, size: 15, color: colors.neonMagenta),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          'ПОДАРКИ',
+          style: AppTypography.eyebrow(fontSize: 11, color: colors.neonMagenta),
+        ),
+      ],
+    );
+  }
+}
+
 class _RarityHeader extends StatelessWidget {
   const _RarityHeader({required this.group});
 
@@ -163,21 +210,36 @@ class _RarityHeader extends StatelessWidget {
     final style = RarityStyle.of(context, group.rarity);
     return Row(
       children: [
+        Container(
+          width: 10,
+          height: 10,
+          margin: const EdgeInsets.only(right: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: style.color,
+            shape: BoxShape.circle,
+            boxShadow: AppShadows.glow(style.color, strength: 0.7),
+          ),
+        ),
         Text(
           style.label,
           style: context.texts.titleMedium?.copyWith(color: style.color),
         ),
         const SizedBox(width: AppSpacing.sm),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 1),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 1,
+          ),
           decoration: BoxDecoration(
             color: style.color.withValues(alpha: 0.16),
             borderRadius: AppRadii.brPill,
           ),
           child: Text(
             '${group.gifts.length}',
-            style: context.texts.labelSmall
-                ?.copyWith(color: style.color, fontWeight: FontWeight.w700),
+            style: context.texts.labelSmall?.copyWith(
+              color: style.color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         const SizedBox(width: AppSpacing.md),
@@ -186,7 +248,10 @@ class _RarityHeader extends StatelessWidget {
             height: 1,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [style.color.withValues(alpha: 0.4), Colors.transparent],
+                colors: [
+                  style.color.withValues(alpha: 0.4),
+                  Colors.transparent,
+                ],
               ),
             ),
           ),
@@ -267,13 +332,16 @@ class _SendGiftSheetState extends ConsumerState<_SendGiftSheet> {
   Future<void> _send() async {
     final recipient = _recipientController.text.trim();
     if (recipient.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Укажите получателя')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Укажите получателя')));
       return;
     }
     FocusScope.of(context).unfocus();
     final message = _messageController.text.trim();
-    final result = await ref.read(sendGiftControllerProvider.notifier).send(
+    final result = await ref
+        .read(sendGiftControllerProvider.notifier)
+        .send(
           SendGiftDto(
             giftId: widget.gift.id,
             toUserId: recipient,
@@ -289,8 +357,9 @@ class _SendGiftSheetState extends ConsumerState<_SendGiftSheet> {
           SnackBar(content: Text('Подарок «${widget.gift.title}» отправлен')),
         );
       case SendGiftFailure(:final message):
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -307,108 +376,134 @@ class _SendGiftSheetState extends ConsumerState<_SendGiftSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: insets.bottom),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.xxl)),
-        child: ColoredBox(
-          color: context.scheme.surface,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: AppSpacing.page,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: colors.glassBorder,
-                        borderRadius: AppRadii.brPill,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 64,
-                        height: 64,
-                        child: GiftCard(gift: gift, compact: true, onTap: () {}),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(gift.title, style: context.texts.titleMedium),
-                            const SizedBox(height: AppSpacing.xs),
-                            Row(
-                              children: [
-                                RarityChip(rarity: gift.rarity),
-                                const SizedBox(width: AppSpacing.sm),
-                                Icon(Icons.monetization_on_rounded,
-                                    size: 14, color: colors.warning),
-                                const SizedBox(width: 3),
-                                Text(
-                                  EconomyFormat.number(gift.priceCoins),
-                                  style: context.texts.labelMedium?.copyWith(
-                                    color: style.color,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppRadii.xxl),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: AppBlur.heavy,
+            sigmaY: AppBlur.heavy,
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: context.scheme.surface.withValues(alpha: 0.88),
+              border: Border(
+                top: BorderSide(
+                  color: colors.glassHighlight.withValues(alpha: 0.2),
+                ),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: AppSpacing.page,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: colors.glassBorder,
+                          borderRadius: AppRadii.brPill,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  TextField(
-                    controller: _recipientController,
-                    decoration: const InputDecoration(
-                      labelText: 'ID получателя',
-                      hintText: 'Кому отправить',
-                      prefixIcon: Icon(Icons.person_outline_rounded),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: _messageController,
-                    maxLength: 200,
-                    maxLines: 2,
-                    minLines: 1,
-                    decoration: const InputDecoration(
-                      hintText: 'Сообщение (необязательно)',
-                      counterText: '',
+                    const SizedBox(height: AppSpacing.lg),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 64,
+                          height: 64,
+                          child: GiftCard(
+                            gift: gift,
+                            compact: true,
+                            onTap: () {},
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                gift.title,
+                                style: context.texts.titleMedium,
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              Row(
+                                children: [
+                                  RarityChip(rarity: gift.rarity),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Icon(
+                                    Icons.monetization_on_rounded,
+                                    size: 14,
+                                    color: colors.warning,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    EconomyFormat.number(gift.priceCoins),
+                                    style: context.texts.labelMedium?.copyWith(
+                                      color: style.color,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (!affordable) ...[
-                    GradientButton(
-                      label: 'Пополнить баланс',
-                      icon: Icons.add_rounded,
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        context.go(AppRoutes.coins);
-                      },
+                    const SizedBox(height: AppSpacing.lg),
+                    TextField(
+                      controller: _recipientController,
+                      decoration: const InputDecoration(
+                        labelText: 'ID получателя',
+                        hintText: 'Кому отправить',
+                        prefixIcon: Icon(Icons.person_outline_rounded),
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Недостаточно монет для этого подарка',
-                      textAlign: TextAlign.center,
-                      style: context.texts.bodySmall
-                          ?.copyWith(color: context.scheme.onSurfaceVariant),
+                    const SizedBox(height: AppSpacing.md),
+                    TextField(
+                      controller: _messageController,
+                      maxLength: 200,
+                      maxLines: 2,
+                      minLines: 1,
+                      decoration: const InputDecoration(
+                        hintText: 'Сообщение (необязательно)',
+                        counterText: '',
+                      ),
                     ),
-                  ] else
-                    GradientButton(
-                      label: 'Отправить подарок',
-                      icon: Icons.send_rounded,
-                      loading: sending,
-                      onPressed: _send,
-                    ),
-                ],
+                    const SizedBox(height: AppSpacing.md),
+                    if (!affordable) ...[
+                      GradientButton(
+                        label: 'Пополнить баланс',
+                        icon: Icons.add_rounded,
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          context.go(AppRoutes.coins);
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Недостаточно монет для этого подарка',
+                        textAlign: TextAlign.center,
+                        style: context.texts.bodySmall?.copyWith(
+                          color: context.scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ] else
+                      GradientButton(
+                        label: 'Отправить подарок',
+                        icon: Icons.send_rounded,
+                        loading: sending,
+                        onPressed: _send,
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
