@@ -32,9 +32,7 @@ export function absoluteUrl(path: string): string {
  * Sane defaults for a sitemap entry, tuned per crawl-priority tier so the most
  * important marketing/funnel pages outrank utility pages.
  */
-type ChangeFrequency = NonNullable<
-  import('next').MetadataRoute.Sitemap[number]['changeFrequency']
->;
+type ChangeFrequency = NonNullable<import('next').MetadataRoute.Sitemap[number]['changeFrequency']>;
 
 interface PublicRoute {
   path: string;

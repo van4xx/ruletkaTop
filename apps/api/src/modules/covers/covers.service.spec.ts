@@ -147,9 +147,7 @@ describe('CoversService', () => {
     });
 
     it('rejects an ALREADY-OWNED cover (409) without charging', async () => {
-      profiles.findByUserId.mockResolvedValue(
-        profileDoc({ ownedCovers: ['sunset', 'galaxy'] }),
-      );
+      profiles.findByUserId.mockResolvedValue(profileDoc({ ownedCovers: ['sunset', 'galaxy'] }));
 
       await expect(service.purchase(userId, 'galaxy')).rejects.toBeInstanceOf(ConflictException);
 

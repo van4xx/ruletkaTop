@@ -8,12 +8,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
-import type {
-  CoverId,
-  CoverInventory,
-  ProfileCover,
-  PublicProfile,
-} from '@ruletka/shared-types';
+import type { CoverId, CoverInventory, ProfileCover, PublicProfile } from '@ruletka/shared-types';
 import { COVER_CATALOGUE, DEFAULT_COVER_ID, FREE_COVER_IDS } from '@ruletka/shared-types';
 
 import { Profile, ProfileDocument } from '../profiles/schemas/profile.schema';

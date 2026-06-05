@@ -35,7 +35,12 @@ import { cn } from '@/lib/cn';
 import { useModal } from '@/lib/stores/modal-store';
 import { formatNumber } from '@/features/economy/format';
 import { useCoinBalance } from '@/hooks/wallet/use-wallet';
-import { useCovers, useMyCovers, usePurchaseCover, useSetActiveCover } from '@/features/covers/use-covers';
+import {
+  useCovers,
+  useMyCovers,
+  usePurchaseCover,
+  useSetActiveCover,
+} from '@/features/covers/use-covers';
 import { COVER_PRESETS } from '@/components/profile/cover-presets';
 import { BalancePill, InsufficientCoins } from './shared';
 

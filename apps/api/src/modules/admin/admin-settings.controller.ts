@@ -45,7 +45,9 @@ export class AdminSettingsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Feature flags + throttle limits (live store-backed ⊕ env/config-derived)' })
+  @ApiOperation({
+    summary: 'Feature flags + throttle limits (live store-backed ⊕ env/config-derived)',
+  })
   @ApiOkResponse({ description: 'Settings snapshot' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
   settings(): Promise<AdminSettings> {

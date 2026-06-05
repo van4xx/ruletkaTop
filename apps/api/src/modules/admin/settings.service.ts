@@ -92,7 +92,11 @@ export class SettingsService {
    * (these are all booleans today). Returns `true` when applied; `false` when the
    * key is not a known live flag (caller surfaces the "needs restart" note).
    */
-  async set(key: string, value: boolean | number | string, actorId?: string | null): Promise<boolean> {
+  async set(
+    key: string,
+    value: boolean | number | string,
+    actorId?: string | null,
+  ): Promise<boolean> {
     const def = LIVE_FLAG_BY_KEY.get(key);
     if (!def) {
       return false;

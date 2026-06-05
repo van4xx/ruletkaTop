@@ -113,9 +113,7 @@ export function Users({ role: viewerRole }: { role: Role }) {
     {
       key: 'role',
       header: 'Роль',
-      render: (u) => (
-        <Badge variant={ROLE_BADGE[u.role]}>{ROLE_LABEL[u.role]}</Badge>
-      ),
+      render: (u) => <Badge variant={ROLE_BADGE[u.role]}>{ROLE_LABEL[u.role]}</Badge>,
     },
     {
       key: 'status',
@@ -259,7 +257,8 @@ function Dossier({
     onError: (e) => setError(errMessage(e, 'Не удалось разбанить')),
   });
   const verifyEmail = useMutation({
-    mutationFn: () => req<AdminUserSummary>(`/admin/users/${userId}/verify-email`, { method: 'POST' }),
+    mutationFn: () =>
+      req<AdminUserSummary>(`/admin/users/${userId}/verify-email`, { method: 'POST' }),
     onMutate: () => setError(null),
     onSuccess: () => refresh(),
     onError: (e) => setError(errMessage(e, 'Не удалось подтвердить email')),
@@ -431,12 +430,7 @@ function Dossier({
                   Разбанить
                 </Button>
               ) : (
-                <Button
-                  size="sm"
-                  variant="danger"
-                  disabled={busy}
-                  onClick={() => setBanOpen(true)}
-                >
+                <Button size="sm" variant="danger" disabled={busy} onClick={() => setBanOpen(true)}>
                   Забанить
                 </Button>
               )}
@@ -616,10 +610,15 @@ function BanModal({
           <Button variant="ghost" size="sm" onClick={onClose}>
             Отмена
           </Button>
-          <Button variant="danger" size="sm" loading={ban.isPending} onClick={() => {
-            setLocalError(null);
-            ban.mutate();
-          }}>
+          <Button
+            variant="danger"
+            size="sm"
+            loading={ban.isPending}
+            onClick={() => {
+              setLocalError(null);
+              ban.mutate();
+            }}
+          >
             Забанить
           </Button>
         </>
@@ -655,7 +654,8 @@ function AdjustModal({
   const [error, setError] = useState<string | null>(null);
 
   const adjust = useMutation({
-    mutationFn: () => adminApi.wallet.adjust(userId, { amount: Number(amount), reason: reason.trim() }),
+    mutationFn: () =>
+      adminApi.wallet.adjust(userId, { amount: Number(amount), reason: reason.trim() }),
     onSuccess: () => {
       setAmount('');
       setReason('');

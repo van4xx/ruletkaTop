@@ -37,7 +37,10 @@ const Calls = page(() => import('./pages/Calls'), 'Calls');
 const Content = page<{ role: Role }>(() => import('./pages/Content'), 'Content');
 const Broadcast = page<{ role: Role }>(() => import('./pages/Broadcast'), 'Broadcast');
 const Security = page(() => import('./pages/Security'), 'Security');
-const SystemSettings = page<{ role: Role }>(() => import('./pages/SystemSettings'), 'SystemSettings');
+const SystemSettings = page<{ role: Role }>(
+  () => import('./pages/SystemSettings'),
+  'SystemSettings',
+);
 const Audit = page(() => import('./pages/Audit'), 'Audit');
 
 /* ───────────────────────────── Root / auth gate ──────────────────────────── */
@@ -150,19 +153,24 @@ interface NavGroup {
 const I = {
   dashboard: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" />
-      <rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" />
+      <rect x="3" y="3" width="7" height="9" rx="1.5" />
+      <rect x="14" y="3" width="7" height="5" rx="1.5" />
+      <rect x="14" y="12" width="7" height="9" rx="1.5" />
+      <rect x="3" y="16" width="7" height="5" rx="1.5" />
     </svg>
   ),
   users: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" strokeLinecap="round" />
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" strokeLinecap="round" />
       <path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 19a5.2 5.2 0 0 0-2.5-4.4" strokeLinecap="round" />
     </svg>
   ),
   wallet: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <rect x="3" y="6" width="18" height="13" rx="2.5" /><path d="M3 10h18" /><circle cx="16.5" cy="14" r="1.2" />
+      <rect x="3" y="6" width="18" height="13" rx="2.5" />
+      <path d="M3 10h18" />
+      <circle cx="16.5" cy="14" r="1.2" />
     </svg>
   ),
   premium: (
@@ -172,47 +180,62 @@ const I = {
   ),
   economy: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <circle cx="12" cy="12" r="8.5" /><path d="M12 7v10M9.5 9.5h4a1.8 1.8 0 0 1 0 3.6h-3a1.8 1.8 0 0 0 0 3.6h4" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="8.5" />
+      <path
+        d="M12 7v10M9.5 9.5h4a1.8 1.8 0 0 1 0 3.6h-3a1.8 1.8 0 0 0 0 3.6h4"
+        strokeLinecap="round"
+      />
     </svg>
   ),
   payments: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <rect x="2.5" y="5" width="19" height="14" rx="2.5" /><path d="M2.5 9.5h19M6.5 15h4" strokeLinecap="round" />
+      <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+      <path d="M2.5 9.5h19M6.5 15h4" strokeLinecap="round" />
     </svg>
   ),
   moderation: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Z" strokeLinejoin="round" /><path d="M9.5 12l1.8 1.8 3.5-3.6" strokeLinecap="round" />
+      <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Z" strokeLinejoin="round" />
+      <path d="M9.5 12l1.8 1.8 3.5-3.6" strokeLinecap="round" />
     </svg>
   ),
   calls: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <rect x="3" y="6" width="12" height="12" rx="2.5" /><path d="M15 10.5l6-3v9l-6-3" strokeLinejoin="round" />
+      <rect x="3" y="6" width="12" height="12" rx="2.5" />
+      <path d="M15 10.5l6-3v9l-6-3" strokeLinejoin="round" />
     </svg>
   ),
   content: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 9h18M7.5 13h9M7.5 16.5h5" strokeLinecap="round" />
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M3 9h18M7.5 13h9M7.5 16.5h5" strokeLinecap="round" />
     </svg>
   ),
   broadcast: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <path d="M4 10v4l9 4V6l-9 4Z" strokeLinejoin="round" /><path d="M13 8.5a4 4 0 0 1 0 7" strokeLinecap="round" />
+      <path d="M4 10v4l9 4V6l-9 4Z" strokeLinejoin="round" />
+      <path d="M13 8.5a4 4 0 0 1 0 7" strokeLinecap="round" />
     </svg>
   ),
   security: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7.5a4 4 0 0 1 8 0V10" strokeLinecap="round" />
+      <rect x="5" y="10" width="14" height="10" rx="2" />
+      <path d="M8 10V7.5a4 4 0 0 1 8 0V10" strokeLinecap="round" />
     </svg>
   ),
   settings: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="3" />
+      <path
+        d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"
+        strokeLinecap="round"
+      />
     </svg>
   ),
   audit: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
-      <path d="M6 3h8l4 4v14H6V3Z" strokeLinejoin="round" /><path d="M14 3v4h4M9 12h6M9 15.5h6M9 8.5h2" strokeLinecap="round" />
+      <path d="M6 3h8l4 4v14H6V3Z" strokeLinejoin="round" />
+      <path d="M14 3v4h4M9 12h6M9 15.5h6M9 8.5h2" strokeLinecap="round" />
     </svg>
   ),
 };
@@ -289,7 +312,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
   return (
     <div className="flex min-h-dvh bg-background text-foreground">
       {/* Sidebar */}
-      <Sidebar role={role} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} onLogout={logout} user={user} />
+      <Sidebar
+        role={role}
+        mobileOpen={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        onLogout={logout}
+        user={user}
+      />
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -300,7 +329,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => void }) {
             onClick={() => setMobileOpen(true)}
             aria-label="Меню"
           >
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              viewBox="0 0 24 24"
+              className="size-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
             </svg>
           </button>
@@ -406,7 +441,9 @@ function Sidebar({
   const inner = (
     <>
       <div className="mb-6 flex items-center gap-2 px-2">
-        <span className="grid size-8 place-items-center rounded-lg bg-aurora text-sm font-bold text-white">R</span>
+        <span className="grid size-8 place-items-center rounded-lg bg-aurora text-sm font-bold text-white">
+          R
+        </span>
         <span className="font-display font-bold">Админ</span>
       </div>
       {nav}

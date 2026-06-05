@@ -171,7 +171,11 @@ export function Moderation() {
         title="Модерация"
         subtitle="Жалобы, AI-флаги и санкции — единая консоль модерации."
       />
-      <Tabs items={TABS as unknown as { key: string; label: ReactNode }[]} value={tab} onChange={(k) => setTab(k as TabKey)} />
+      <Tabs
+        items={TABS as unknown as { key: string; label: ReactNode }[]}
+        value={tab}
+        onChange={(k) => setTab(k as TabKey)}
+      />
       {tab === 'reports' && <ReportsTab />}
       {tab === 'review' && <ReviewTab />}
       {tab === 'bans' && <BansTab />}
@@ -237,7 +241,9 @@ function ReportsTab() {
 
   const loadMore = useMutation({
     mutationFn: () =>
-      modReq<Page<Report>>('/reports', { query: { status, cursor: q.data?.nextCursor ?? undefined } }),
+      modReq<Page<Report>>('/reports', {
+        query: { status, cursor: q.data?.nextCursor ?? undefined },
+      }),
     onSuccess: (page) => {
       setItems((prev) => [...prev, ...page.items]);
       qc.setQueryData(['mod-reports', status], page);
@@ -457,7 +463,9 @@ function ReviewTab() {
 
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <IdChip value={item.userId} />
-                <span title="Автодействие политики">авто: {AUTO_ACTION_LABEL[item.autoAction] ?? item.autoAction}</span>
+                <span title="Автодействие политики">
+                  авто: {AUTO_ACTION_LABEL[item.autoAction] ?? item.autoAction}
+                </span>
               </div>
               <RelativeTime iso={item.createdAt} />
 
@@ -484,9 +492,9 @@ function ReviewTab() {
                     confirmTitle="Забанить пользователя"
                     confirmBody={
                       <>
-                        Аккаунт <code>{shortId(item.userId)}</code> будет забанен (сессии
-                        отозваны, сокеты отключены), а флаг — подтверждён. Действие можно отменить
-                        разбаном во вкладке «Баны».
+                        Аккаунт <code>{shortId(item.userId)}</code> будет забанен (сессии отозваны,
+                        сокеты отключены), а флаг — подтверждён. Действие можно отменить разбаном во
+                        вкладке «Баны».
                       </>
                     }
                     confirmLabel="Забанить"
@@ -575,7 +583,11 @@ function BansTab() {
       key: 'when',
       header: 'Забанен',
       render: (u) =>
-        u.bannedAt ? <RelativeTime iso={u.bannedAt} /> : <span className="text-muted-foreground">—</span>,
+        u.bannedAt ? (
+          <RelativeTime iso={u.bannedAt} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: 'actions',
@@ -675,17 +687,17 @@ function FingerprintsTab() {
       key: 'expires',
       header: 'Истекает',
       render: (f) =>
-        f.expiresAt ? (
-          <RelativeTime iso={f.expiresAt} />
-        ) : (
-          <Badge variant="muted">бессрочно</Badge>
-        ),
+        f.expiresAt ? <RelativeTime iso={f.expiresAt} /> : <Badge variant="muted">бессрочно</Badge>,
     },
     {
       key: 'created',
       header: 'Создан',
       render: (f) =>
-        f.createdAt ? <RelativeTime iso={f.createdAt} /> : <span className="text-muted-foreground">—</span>,
+        f.createdAt ? (
+          <RelativeTime iso={f.createdAt} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: 'actions',

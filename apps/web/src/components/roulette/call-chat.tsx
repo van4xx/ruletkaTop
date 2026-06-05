@@ -81,7 +81,10 @@ function ChatBody({
           <p className="mt-6 text-center text-xs text-muted-foreground">{t('chat.empty')}</p>
         ) : (
           messages.map((m) => (
-            <div key={m.id} className={cn('flex', m.from === 'me' ? 'justify-end' : 'justify-start')}>
+            <div
+              key={m.id}
+              className={cn('flex', m.from === 'me' ? 'justify-end' : 'justify-start')}
+            >
               <span
                 className={cn(
                   'max-w-[80%] rounded-2xl px-3 py-1.5 text-sm',

@@ -253,7 +253,8 @@ export class AdminEconomyService {
     const code = this.requireCode(dto.code);
     const coins = this.requireInt(dto.coins, 'coins', 1);
     const priceRub = this.requireInt(dto.priceRub, 'priceRub', 1);
-    const bonusCoins = dto.bonusCoins === undefined ? 0 : this.requireInt(dto.bonusCoins, 'bonusCoins', 0);
+    const bonusCoins =
+      dto.bonusCoins === undefined ? 0 : this.requireInt(dto.bonusCoins, 'bonusCoins', 0);
 
     const coll = this.connection.collection('coinpackages');
     if (await coll.findOne({ code })) {
@@ -271,7 +272,8 @@ export class AdminEconomyService {
     const set: Record<string, number | Date> = {};
     if (dto.coins !== undefined) set.coins = this.requireInt(dto.coins, 'coins', 1);
     if (dto.priceRub !== undefined) set.priceRub = this.requireInt(dto.priceRub, 'priceRub', 1);
-    if (dto.bonusCoins !== undefined) set.bonusCoins = this.requireInt(dto.bonusCoins, 'bonusCoins', 0);
+    if (dto.bonusCoins !== undefined)
+      set.bonusCoins = this.requireInt(dto.bonusCoins, 'bonusCoins', 0);
     if (Object.keys(set).length === 0) {
       throw new BadRequestException('No updatable fields provided');
     }
@@ -324,7 +326,16 @@ export class AdminEconomyService {
       throw new ConflictException(`Gift with code "${code}" already exists`);
     }
     const now = new Date();
-    const doc = { code, title, animationUrl, priceCoins, rarity, isPremiumOnly, createdAt: now, updatedAt: now };
+    const doc = {
+      code,
+      title,
+      animationUrl,
+      priceCoins,
+      rarity,
+      isPremiumOnly,
+      createdAt: now,
+      updatedAt: now,
+    };
     const { insertedId } = await coll.insertOne(doc);
     return this.toGiftRow({ _id: insertedId, ...doc });
   }
@@ -336,7 +347,8 @@ export class AdminEconomyService {
     if (dto.title !== undefined) set.title = this.requireString(dto.title, 'title', 64);
     if (dto.animationUrl !== undefined)
       set.animationUrl = this.requireString(dto.animationUrl, 'animationUrl', 512);
-    if (dto.priceCoins !== undefined) set.priceCoins = this.requireInt(dto.priceCoins, 'priceCoins', 0);
+    if (dto.priceCoins !== undefined)
+      set.priceCoins = this.requireInt(dto.priceCoins, 'priceCoins', 0);
     if (dto.rarity !== undefined) set.rarity = this.requireRarity(dto.rarity);
     if (dto.isPremiumOnly !== undefined)
       set.isPremiumOnly = this.requireBool(dto.isPremiumOnly, 'isPremiumOnly');
@@ -468,10 +480,7 @@ export class AdminEconomyService {
     if (userIds.length === 0) return out;
     const docs = await this.connection
       .collection('profiles')
-      .find(
-        { userId: { $in: userIds } },
-        { projection: { userId: 1, nickname: 1, avatarUrl: 1 } },
-      )
+      .find({ userId: { $in: userIds } }, { projection: { userId: 1, nickname: 1, avatarUrl: 1 } })
       .toArray();
     for (const doc of docs) {
       const p = doc as unknown as {

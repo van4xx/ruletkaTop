@@ -29,7 +29,10 @@ export function Content({ role }: { role: Role }) {
   const [editing, setEditing] = useState<AdminAnnouncement | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const covers = useQuery({ queryKey: ['content-covers'], queryFn: () => adminApi.content.covers() });
+  const covers = useQuery({
+    queryKey: ['content-covers'],
+    queryFn: () => adminApi.content.covers(),
+  });
   const announcements = useQuery({
     queryKey: ['content-announcements'],
     queryFn: () => adminApi.content.announcements(),
@@ -68,9 +71,16 @@ export function Content({ role }: { role: Role }) {
     {
       key: 'state',
       header: 'Статус',
-      render: (a) => <Badge variant={a.active ? 'success' : 'muted'}>{a.active ? 'активно' : 'выкл'}</Badge>,
+      render: (a) => (
+        <Badge variant={a.active ? 'success' : 'muted'}>{a.active ? 'активно' : 'выкл'}</Badge>
+      ),
     },
-    { key: 'created', header: 'Создано', align: 'right', render: (a) => <RelativeTime iso={a.createdAt} /> },
+    {
+      key: 'created',
+      header: 'Создано',
+      align: 'right',
+      render: (a) => <RelativeTime iso={a.createdAt} />,
+    },
     {
       key: 'actions',
       header: '',
@@ -78,7 +88,12 @@ export function Content({ role }: { role: Role }) {
       render: (a) =>
         isAdmin ? (
           <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" size="sm" loading={toggle.isPending} onClick={() => toggle.mutate(a)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={toggle.isPending}
+              onClick={() => toggle.mutate(a)}
+            >
               {a.active ? 'Выключить' : 'Включить'}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setEditing(a)}>
@@ -129,7 +144,10 @@ export function Content({ role }: { role: Role }) {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {(covers.data?.items ?? []).map((c) => (
               <div key={c.id} className="overflow-hidden rounded-2xl ring-1 ring-border/50">
-                <div className="h-16" style={{ background: `linear-gradient(135deg, ${c.accent}, transparent)` }} />
+                <div
+                  className="h-16"
+                  style={{ background: `linear-gradient(135deg, ${c.accent}, transparent)` }}
+                />
                 <div className="glass-strong p-3">
                   <div className="flex items-center justify-between gap-1">
                     <p className="truncate text-sm font-semibold">{c.name}</p>
@@ -138,7 +156,9 @@ export function Content({ role }: { role: Role }) {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {c.priceCoins > 0 ? `${fmtInt(c.priceCoins)} мон.` : 'Бесплатно'}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{fmtInt(c.ownedCount)} владельцев</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {fmtInt(c.ownedCount)} владельцев
+                  </p>
                 </div>
               </div>
             ))}
@@ -204,7 +224,11 @@ function AnnouncementModal({
             method: 'PATCH',
             json: { title: title.trim(), body: body.trim() },
           })
-        : adminApi.content.createAnnouncement({ title: title.trim(), body: body.trim(), active: true }),
+        : adminApi.content.createAnnouncement({
+            title: title.trim(),
+            body: body.trim(),
+            active: true,
+          }),
     onSuccess: onDone,
     onError: (e) => setError(e instanceof AdminApiError ? e.message : 'Не удалось сохранить'),
   });
@@ -236,7 +260,12 @@ function AnnouncementModal({
     >
       <div className="flex flex-col gap-3">
         <Input placeholder="Заголовок" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <Textarea placeholder="Текст" rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
+        <Textarea
+          placeholder="Текст"
+          rows={4}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+        />
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>
     </Modal>

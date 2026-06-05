@@ -73,15 +73,21 @@ export class AdminPaymentsService {
     const payments = this.connection.collection('payments');
     const since24h = new Date(Date.now() - DAY_MS);
 
-    const [revenueRubTotal, revenueRub24h, completedCount, pendingCount, failedCount, refundedCount] =
-      await Promise.all([
-        this.sum(payments, { status: 'completed' }),
-        this.sum(payments, { status: 'completed', createdAt: { $gte: since24h } }),
-        payments.countDocuments({ status: 'completed' }),
-        payments.countDocuments({ status: 'pending' }),
-        payments.countDocuments({ status: 'failed' }),
-        payments.countDocuments({ status: 'refunded' }),
-      ]);
+    const [
+      revenueRubTotal,
+      revenueRub24h,
+      completedCount,
+      pendingCount,
+      failedCount,
+      refundedCount,
+    ] = await Promise.all([
+      this.sum(payments, { status: 'completed' }),
+      this.sum(payments, { status: 'completed', createdAt: { $gte: since24h } }),
+      payments.countDocuments({ status: 'completed' }),
+      payments.countDocuments({ status: 'pending' }),
+      payments.countDocuments({ status: 'failed' }),
+      payments.countDocuments({ status: 'refunded' }),
+    ]);
 
     return {
       revenueRubTotal,
@@ -101,10 +107,9 @@ export class AdminPaymentsService {
     match: Record<string, unknown>,
   ): Promise<number> {
     const rows = await collection
-      .aggregate<{ total: number }>([
-        { $match: match },
-        { $group: { _id: null, total: { $sum: '$amount' } } },
-      ])
+      .aggregate<{
+        total: number;
+      }>([{ $match: match }, { $group: { _id: null, total: { $sum: '$amount' } } }])
       .toArray();
     return rows[0]?.total ?? 0;
   }

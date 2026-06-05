@@ -34,7 +34,9 @@ export class AdminAnalyticsController {
   constructor(private readonly analyticsService: AdminAnalyticsService) {}
 
   @Get('overview')
-  @ApiOperation({ summary: 'Headline KPIs (users/online/new/premium/banned, coins, revenue, calls, open reports)' })
+  @ApiOperation({
+    summary: 'Headline KPIs (users/online/new/premium/banned, coins, revenue, calls, open reports)',
+  })
   @ApiOkResponse({ description: 'The analytics overview' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
   async overview(): Promise<AdminAnalyticsOverview> {

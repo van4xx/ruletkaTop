@@ -59,7 +59,10 @@ function Toggle({
 export function SystemSettings({ role }: { role: Role }) {
   const isAdmin = role === 'admin';
   const qc = useQueryClient();
-  const settings = useQuery({ queryKey: ['system-settings'], queryFn: () => adminApi.settings.get() });
+  const settings = useQuery({
+    queryKey: ['system-settings'],
+    queryFn: () => adminApi.settings.get(),
+  });
   const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
 
   const patch = useMutation({
@@ -82,7 +85,9 @@ export function SystemSettings({ role }: { role: Role }) {
       <PageHeader title="Настройки" subtitle="Фиче-флаги и лимиты платформы." />
 
       {note && (
-        <Card className={`mb-4 text-sm ${note.ok ? 'text-success ring-success/30' : 'text-warning ring-warning/30'}`}>
+        <Card
+          className={`mb-4 text-sm ${note.ok ? 'text-success ring-success/30' : 'text-warning ring-warning/30'}`}
+        >
           {note.text}
         </Card>
       )}
@@ -154,7 +159,9 @@ export function SystemSettings({ role }: { role: Role }) {
                 <li key={f.key} className="flex items-center justify-between gap-3 px-5 py-3.5">
                   <div className="min-w-0">
                     <p className="font-medium">{f.label}</p>
-                    <p className="font-mono text-xs text-muted-foreground">{f.key} · только чтение</p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {f.key} · только чтение
+                    </p>
                   </div>
                   <FlagValue value={f.value} />
                 </li>

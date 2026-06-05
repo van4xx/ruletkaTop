@@ -32,24 +32,25 @@ export class AdminCallsService {
     const matches = this.connection.collection('matches');
     const since24h = new Date(Date.now() - DAY_MS);
 
-    const [totalCalls, calls24h, videoCalls, voiceCalls, liveCalls, durationAgg] = await Promise.all([
-      matches.countDocuments({}),
-      matches.countDocuments({ startedAt: { $gte: since24h } }),
-      matches.countDocuments({ type: 'video' }),
-      matches.countDocuments({ type: 'voice' }),
-      matches.countDocuments({ endedAt: null }),
-      matches
-        .aggregate<{ avgMs: number }>([
-          { $match: { endedAt: { $ne: null } } },
-          {
-            $group: {
-              _id: null,
-              avgMs: { $avg: { $subtract: ['$endedAt', '$startedAt'] } },
+    const [totalCalls, calls24h, videoCalls, voiceCalls, liveCalls, durationAgg] =
+      await Promise.all([
+        matches.countDocuments({}),
+        matches.countDocuments({ startedAt: { $gte: since24h } }),
+        matches.countDocuments({ type: 'video' }),
+        matches.countDocuments({ type: 'voice' }),
+        matches.countDocuments({ endedAt: null }),
+        matches
+          .aggregate<{ avgMs: number }>([
+            { $match: { endedAt: { $ne: null } } },
+            {
+              $group: {
+                _id: null,
+                avgMs: { $avg: { $subtract: ['$endedAt', '$startedAt'] } },
+              },
             },
-          },
-        ])
-        .toArray(),
-    ]);
+          ])
+          .toArray(),
+      ]);
 
     const avgMs = durationAgg[0]?.avgMs ?? 0;
     return {

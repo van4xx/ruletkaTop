@@ -4,12 +4,7 @@ import { HydratedDocument, Types } from 'mongoose';
 import type { AdminBroadcastSegment } from '@ruletka/shared-types';
 
 /** Audience segments a broadcast can target (mirrors the shared contract). */
-const BROADCAST_SEGMENTS: readonly AdminBroadcastSegment[] = [
-  'all',
-  'premium',
-  'active',
-  'banned',
-];
+const BROADCAST_SEGMENTS: readonly AdminBroadcastSegment[] = ['all', 'premium', 'active', 'banned'];
 
 /**
  * A persisted record of one sent BROADCAST.

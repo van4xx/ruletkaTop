@@ -47,7 +47,10 @@ export class AdminContentService {
 
     // One grouped aggregation over the unwound `ownedCovers` arrays → id → count.
     const ownedAgg = await profiles
-      .aggregate<{ _id: string; count: number }>([
+      .aggregate<{
+        _id: string;
+        count: number;
+      }>([
         { $project: { ownedCovers: 1 } },
         { $unwind: { path: '$ownedCovers', preserveNullAndEmptyArrays: false } },
         { $group: { _id: '$ownedCovers', count: { $sum: 1 } } },
@@ -85,8 +88,7 @@ export class AdminContentService {
       title: dto.title,
       body: dto.body,
       active: dto.active,
-      createdBy:
-        actorId && Types.ObjectId.isValid(actorId) ? new Types.ObjectId(actorId) : null,
+      createdBy: actorId && Types.ObjectId.isValid(actorId) ? new Types.ObjectId(actorId) : null,
     });
     return this.toAnnouncement(created.toObject());
   }

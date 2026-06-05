@@ -175,9 +175,7 @@ export class AdminService {
    * (`FINGERPRINT_BAN_ENABLED`), but historical rows still accumulate here, so
    * admins must be able to inspect and clear them.
    */
-  async listBannedFingerprints(
-    pagination: BanListQuery,
-  ): Promise<AdminPage<BannedFingerprintRow>> {
+  async listBannedFingerprints(pagination: BanListQuery): Promise<AdminPage<BannedFingerprintRow>> {
     const filter: Record<string, unknown> = {};
     if (pagination.cursor) {
       if (!Types.ObjectId.isValid(pagination.cursor)) {
@@ -242,9 +240,7 @@ export class AdminService {
    * Batch-load `userId → nickname` from `profiles` in ONE `$in` query. Missing
    * profiles fall back to an empty nickname in the caller.
    */
-  private async loadNicknames(
-    userIds: readonly Types.ObjectId[],
-  ): Promise<Map<string, string>> {
+  private async loadNicknames(userIds: readonly Types.ObjectId[]): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     if (userIds.length === 0) {
       return out;

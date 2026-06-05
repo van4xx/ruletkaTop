@@ -166,9 +166,22 @@ function OverviewTab() {
   return (
     <div>
       <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Всего пользователей" value={d ? fmtInt(d.totalUsers) : '—'} loading={loading} />
-        <MetricCard label="Premium" value={d ? fmtInt(d.premiumUsers) : '—'} loading={loading} accent />
-        <MetricCard label="Верифицировано" value={d ? fmtInt(d.verifiedUsers) : '—'} loading={loading} />
+        <MetricCard
+          label="Всего пользователей"
+          value={d ? fmtInt(d.totalUsers) : '—'}
+          loading={loading}
+        />
+        <MetricCard
+          label="Premium"
+          value={d ? fmtInt(d.premiumUsers) : '—'}
+          loading={loading}
+          accent
+        />
+        <MetricCard
+          label="Верифицировано"
+          value={d ? fmtInt(d.verifiedUsers) : '—'}
+          loading={loading}
+        />
         <MetricCard label="Забанено" value={d ? fmtInt(d.bannedUsers) : '—'} loading={loading} />
       </div>
 
@@ -183,7 +196,11 @@ function OverviewTab() {
           value={d ? <Coins amount={d.giftsValueCoins} /> : '—'}
           loading={loading}
         />
-        <MetricCard label="Активный Top" value={d ? fmtInt(d.activeTopPlacements) : '—'} loading={loading} />
+        <MetricCard
+          label="Активный Top"
+          value={d ? fmtInt(d.activeTopPlacements) : '—'}
+          loading={loading}
+        />
         <MetricCard
           label="Новые пользователи"
           value={d ? fmtInt(d.newUsers24h) : '—'}
@@ -195,7 +212,11 @@ function OverviewTab() {
       <section className="glass-strong overflow-hidden rounded-2xl ring-1 ring-border/50">
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
           <h2 className="font-display text-base font-semibold">Последние транзакции</h2>
-          {d && <span className="text-xs text-muted-foreground">{d.recentTransactions.length} записей</span>}
+          {d && (
+            <span className="text-xs text-muted-foreground">
+              {d.recentTransactions.length} записей
+            </span>
+          )}
         </div>
 
         {loading ? (
@@ -214,7 +235,10 @@ function OverviewTab() {
               return (
                 <li key={t.id} className="flex items-center gap-3 px-5 py-3">
                   <Badge variant={meta.variant}>{meta.label}</Badge>
-                  <span className="truncate font-mono text-xs text-muted-foreground" title={t.userId}>
+                  <span
+                    className="truncate font-mono text-xs text-muted-foreground"
+                    title={t.userId}
+                  >
                     {t.userId}
                   </span>
                   <span
@@ -258,7 +282,11 @@ function PackagesTab({ isAdmin }: { isAdmin: boolean }) {
   });
 
   const columns: Column<CoinPackageRow>[] = [
-    { key: 'code', header: 'Код', render: (r) => <span className="font-mono text-xs">{r.code}</span> },
+    {
+      key: 'code',
+      header: 'Код',
+      render: (r) => <span className="font-mono text-xs">{r.code}</span>,
+    },
     { key: 'coins', header: 'Монеты', align: 'right', render: (r) => <Coins amount={r.coins} /> },
     {
       key: 'bonus',
@@ -479,7 +507,10 @@ function CoinPackageModal({
 
 function GiftsTab({ isAdmin }: { isAdmin: boolean }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['economy-gifts'], queryFn: () => req<GiftRow[]>('/admin/economy/gifts') });
+  const q = useQuery({
+    queryKey: ['economy-gifts'],
+    queryFn: () => req<GiftRow[]>('/admin/economy/gifts'),
+  });
   const [editing, setEditing] = useState<GiftRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
@@ -488,7 +519,8 @@ function GiftsTab({ isAdmin }: { isAdmin: boolean }) {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['economy-gifts'] });
 
   const del = useMutation({
-    mutationFn: (id: string) => req<{ id: string }>(`/admin/economy/gifts/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) =>
+      req<{ id: string }>(`/admin/economy/gifts/${id}`, { method: 'DELETE' }),
     onSuccess: invalidate,
     onError: (e) => setActionError(errMsg(e, 'Не удалось удалить подарок')),
   });
@@ -513,7 +545,12 @@ function GiftsTab({ isAdmin }: { isAdmin: boolean }) {
         </div>
       ),
     },
-    { key: 'price', header: 'Цена', align: 'right', render: (r) => <Coins amount={r.priceCoins} /> },
+    {
+      key: 'price',
+      header: 'Цена',
+      align: 'right',
+      render: (r) => <Coins amount={r.priceCoins} />,
+    },
     {
       key: 'rarity',
       header: 'Редкость',
@@ -691,7 +728,12 @@ function GiftModal({
     >
       <div className="flex flex-col gap-3">
         <Field label="Код (public id)">
-          <Input placeholder="rose" value={code} disabled={isEdit} onChange={(e) => setCode(e.target.value)} />
+          <Input
+            placeholder="rose"
+            value={code}
+            disabled={isEdit}
+            onChange={(e) => setCode(e.target.value)}
+          />
           {isEdit && <p className="mt-1 text-xs text-muted-foreground">Код неизменяем.</p>}
         </Field>
         <Field label="Название">
@@ -743,11 +785,15 @@ function GiftModal({
 
 function TopTab({ isAdmin }: { isAdmin: boolean }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['economy-top'], queryFn: () => req<TopPlacementRow[]>('/admin/economy/top') });
+  const q = useQuery({
+    queryKey: ['economy-top'],
+    queryFn: () => req<TopPlacementRow[]>('/admin/economy/top'),
+  });
   const [actionError, setActionError] = useState<string | null>(null);
 
   const remove = useMutation({
-    mutationFn: (id: string) => req<{ id: string }>(`/admin/economy/top/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) =>
+      req<{ id: string }>(`/admin/economy/top/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['economy-top'] }),
     onError: (e) => setActionError(errMsg(e, 'Не удалось снять размещение')),
   });
@@ -778,12 +824,21 @@ function TopTab({ isAdmin }: { isAdmin: boolean }) {
       align: 'right',
       render: (r) => <span className="tabular-nums">{fmtInt(r.priority)}</span>,
     },
-    { key: 'spent', header: 'Потрачено', align: 'right', render: (r) => <Coins amount={r.coinsSpent} /> },
+    {
+      key: 'spent',
+      header: 'Потрачено',
+      align: 'right',
+      render: (r) => <Coins amount={r.coinsSpent} />,
+    },
     {
       key: 'status',
       header: 'Статус',
       render: (r) =>
-        r.active ? <Badge variant="success">Активно</Badge> : <Badge variant="muted">Истекло</Badge>,
+        r.active ? (
+          <Badge variant="success">Активно</Badge>
+        ) : (
+          <Badge variant="muted">Истекло</Badge>
+        ),
     },
     {
       key: 'expires',

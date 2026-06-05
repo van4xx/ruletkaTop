@@ -285,9 +285,7 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 export type RefreshFailureReason = 'unauthorized' | 'transient';
 
 /** Result of a refresh attempt: success carries no reason; failure carries one. */
-export type RefreshResult =
-  | { ok: true }
-  | { ok: false; reason: RefreshFailureReason };
+export type RefreshResult = { ok: true } | { ok: false; reason: RefreshFailureReason };
 
 /** In-flight refresh promise, so concurrent 401s share one refresh round-trip. */
 let refreshInFlight: Promise<RefreshResult> | null = null;
@@ -455,7 +453,10 @@ function scheduleProactiveRefresh(accessToken: string): void {
   const expMs = readJwtExpMs(accessToken);
   if (expMs === null) return;
 
-  const delayMs = Math.max(expMs - Date.now() - PROACTIVE_REFRESH_LEAD_MS, PROACTIVE_REFRESH_MIN_MS);
+  const delayMs = Math.max(
+    expMs - Date.now() - PROACTIVE_REFRESH_LEAD_MS,
+    PROACTIVE_REFRESH_MIN_MS,
+  );
   proactiveRefreshTimer = setTimeout(() => {
     proactiveRefreshTimer = null;
     // Fire and forget: success re-arms the timer via setAuthTokens; a transient

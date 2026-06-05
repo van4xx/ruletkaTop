@@ -45,7 +45,10 @@ export function Broadcast({ role }: { role: Role }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const history = useQuery({ queryKey: ['broadcast-history'], queryFn: () => adminApi.broadcast.history() });
+  const history = useQuery({
+    queryKey: ['broadcast-history'],
+    queryFn: () => adminApi.broadcast.history(),
+  });
 
   const send = useMutation({
     mutationFn: () => adminApi.broadcast.send({ title: title.trim(), body: body.trim(), segment }),
@@ -80,7 +83,12 @@ export function Broadcast({ role }: { role: Role }) {
       align: 'right',
       render: (b) => <span className="tabular-nums">{fmtInt(b.recipients)}</span>,
     },
-    { key: 'sent', header: 'Отправлено', align: 'right', render: (b) => <RelativeTime iso={b.createdAt} /> },
+    {
+      key: 'sent',
+      header: 'Отправлено',
+      align: 'right',
+      render: (b) => <RelativeTime iso={b.createdAt} />,
+    },
   ];
 
   return (
@@ -91,11 +99,22 @@ export function Broadcast({ role }: { role: Role }) {
         <Card>
           <h2 className="mb-4 font-display text-base font-semibold">Новая рассылка</h2>
           {!isAdmin ? (
-            <p className="text-sm text-muted-foreground">Отправка доступна только администраторам.</p>
+            <p className="text-sm text-muted-foreground">
+              Отправка доступна только администраторам.
+            </p>
           ) : (
             <div className="flex flex-col gap-3">
-              <Input placeholder="Заголовок" value={title} onChange={(e) => setTitle(e.target.value)} />
-              <Textarea placeholder="Текст уведомления" rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
+              <Input
+                placeholder="Заголовок"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <Textarea
+                placeholder="Текст уведомления"
+                rows={4}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+              />
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">Сегмент:</span>
                 <Select value={segment} onChange={(v) => setSegment(v as AdminBroadcastSegment)}>
@@ -132,7 +151,12 @@ export function Broadcast({ role }: { role: Role }) {
             rowKey={(b) => b.id}
             loading={history.isLoading}
             error={history.isError ? 'Не удалось загрузить историю.' : undefined}
-            empty={<EmptyState title="Рассылок не было" description="История появится после первой отправки." />}
+            empty={
+              <EmptyState
+                title="Рассылок не было"
+                description="История появится после первой отправки."
+              />
+            }
           />
         </div>
       </div>

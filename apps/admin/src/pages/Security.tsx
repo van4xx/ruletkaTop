@@ -28,17 +28,30 @@ const EVENT_META: Record<string, { variant: BadgeVariant; label: string }> = {
  * time-sorted). Admin-only.
  */
 export function Security() {
-  const sessions = useQuery({ queryKey: ['security-sessions'], queryFn: () => adminApi.security.sessions() });
-  const events = useQuery({ queryKey: ['security-events'], queryFn: () => adminApi.security.events() });
+  const sessions = useQuery({
+    queryKey: ['security-sessions'],
+    queryFn: () => adminApi.security.sessions(),
+  });
+  const events = useQuery({
+    queryKey: ['security-events'],
+    queryFn: () => adminApi.security.events(),
+  });
 
   const sessionColumns: Column<AdminSession>[] = [
-    { key: 'user', header: 'Пользователь', render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.userId}</span> },
+    {
+      key: 'user',
+      header: 'Пользователь',
+      render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.userId}</span>,
+    },
     { key: 'ip', header: 'IP', render: (r) => <span className="tabular-nums">{r.ip ?? '—'}</span> },
     {
       key: 'ua',
       header: 'Устройство',
       render: (r) => (
-        <span className="block max-w-[22rem] truncate text-xs text-muted-foreground" title={r.userAgent ?? undefined}>
+        <span
+          className="block max-w-[22rem] truncate text-xs text-muted-foreground"
+          title={r.userAgent ?? undefined}
+        >
           {r.device ?? r.userAgent ?? '—'}
         </span>
       ),
@@ -46,10 +59,25 @@ export function Security() {
     {
       key: 'state',
       header: 'Статус',
-      render: (r) => (r.revoked ? <Badge variant="danger">отозвана</Badge> : <Badge variant="success">активна</Badge>),
+      render: (r) =>
+        r.revoked ? (
+          <Badge variant="danger">отозвана</Badge>
+        ) : (
+          <Badge variant="success">активна</Badge>
+        ),
     },
-    { key: 'created', header: 'Создана', align: 'right', render: (r) => <RelativeTime iso={r.createdAt} /> },
-    { key: 'expires', header: 'Истекает', align: 'right', render: (r) => <RelativeTime iso={r.expiresAt} /> },
+    {
+      key: 'created',
+      header: 'Создана',
+      align: 'right',
+      render: (r) => <RelativeTime iso={r.createdAt} />,
+    },
+    {
+      key: 'expires',
+      header: 'Истекает',
+      align: 'right',
+      render: (r) => <RelativeTime iso={r.expiresAt} />,
+    },
   ];
 
   const eventColumns: Column<AdminSecurityEvent>[] = [
@@ -73,7 +101,12 @@ export function Security() {
         <span className="font-mono text-xs text-muted-foreground">{e.userId ?? '—'}</span>
       ),
     },
-    { key: 'at', header: 'Когда', align: 'right', render: (e) => <RelativeTime iso={e.createdAt} /> },
+    {
+      key: 'at',
+      header: 'Когда',
+      align: 'right',
+      render: (e) => <RelativeTime iso={e.createdAt} />,
+    },
   ];
 
   return (
@@ -81,9 +114,22 @@ export function Security() {
       <PageHeader title="Безопасность" subtitle="Сессии, устройства и события безопасности." />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Активных сессий" value={sessions.data ? fmtInt(sessions.data.activeCount) : '—'} loading={sessions.isLoading} accent />
-        <MetricCard label="Сессий показано" value={sessions.data ? fmtInt(sessions.data.items.length) : '—'} loading={sessions.isLoading} />
-        <MetricCard label="Событий" value={events.data ? fmtInt(events.data.items.length) : '—'} loading={events.isLoading} />
+        <MetricCard
+          label="Активных сессий"
+          value={sessions.data ? fmtInt(sessions.data.activeCount) : '—'}
+          loading={sessions.isLoading}
+          accent
+        />
+        <MetricCard
+          label="Сессий показано"
+          value={sessions.data ? fmtInt(sessions.data.items.length) : '—'}
+          loading={sessions.isLoading}
+        />
+        <MetricCard
+          label="Событий"
+          value={events.data ? fmtInt(events.data.items.length) : '—'}
+          loading={events.isLoading}
+        />
       </div>
 
       <h2 className="mb-3 font-display text-base font-semibold">Сессии</h2>

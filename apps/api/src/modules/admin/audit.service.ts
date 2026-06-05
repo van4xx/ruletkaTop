@@ -31,9 +31,7 @@ export interface AuditLogInput {
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(
-    @InjectModel(AuditLog.name) private readonly auditModel: Model<AuditLogDocument>,
-  ) {}
+  constructor(@InjectModel(AuditLog.name) private readonly auditModel: Model<AuditLogDocument>) {}
 
   /**
    * Append an audit record. Best-effort — swallows storage errors (logged) so a

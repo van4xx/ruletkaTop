@@ -57,13 +57,41 @@ export function Dashboard() {
         </Card>
       ) : (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Пользователей" value={d ? fmtInt(d.totalUsers) : '—'} loading={loading} hint={d ? `+${fmtInt(d.newUsers24h)} за 24ч` : undefined} />
-          <MetricCard label="Онлайн" value={d ? fmtInt(d.onlineUsers) : '—'} loading={loading} accent />
+          <MetricCard
+            label="Пользователей"
+            value={d ? fmtInt(d.totalUsers) : '—'}
+            loading={loading}
+            hint={d ? `+${fmtInt(d.newUsers24h)} за 24ч` : undefined}
+          />
+          <MetricCard
+            label="Онлайн"
+            value={d ? fmtInt(d.onlineUsers) : '—'}
+            loading={loading}
+            accent
+          />
           <MetricCard label="Premium" value={d ? fmtInt(d.premiumUsers) : '—'} loading={loading} />
-          <MetricCard label="Открытых жалоб" value={d ? fmtInt(d.openReports) : '—'} loading={loading} />
-          <MetricCard label="Монет в обороте" value={d ? fmtCoins(d.coinsInCirculation) : '—'} loading={loading} />
-          <MetricCard label="Выручка (всего)" value={d ? `${fmtInt(d.revenueRubTotal)} ₽` : '—'} loading={loading} hint={d ? `+${fmtInt(d.revenueRub24h)} ₽ за 24ч` : undefined} />
-          <MetricCard label="Звонков (всего)" value={d ? fmtInt(d.callsTotal) : '—'} loading={loading} hint={d ? `${fmtInt(d.calls24h)} за 24ч` : undefined} />
+          <MetricCard
+            label="Открытых жалоб"
+            value={d ? fmtInt(d.openReports) : '—'}
+            loading={loading}
+          />
+          <MetricCard
+            label="Монет в обороте"
+            value={d ? fmtCoins(d.coinsInCirculation) : '—'}
+            loading={loading}
+          />
+          <MetricCard
+            label="Выручка (всего)"
+            value={d ? `${fmtInt(d.revenueRubTotal)} ₽` : '—'}
+            loading={loading}
+            hint={d ? `+${fmtInt(d.revenueRub24h)} ₽ за 24ч` : undefined}
+          />
+          <MetricCard
+            label="Звонков (всего)"
+            value={d ? fmtInt(d.callsTotal) : '—'}
+            loading={loading}
+            hint={d ? `${fmtInt(d.calls24h)} за 24ч` : undefined}
+          />
           <MetricCard label="Забанено" value={d ? fmtInt(d.bannedUsers) : '—'} loading={loading} />
         </div>
       )}
@@ -71,7 +99,13 @@ export function Dashboard() {
       <Card padding="none" className="mb-8">
         <CardHeader
           title="Динамика за 30 дней"
-          action={<Tabs items={METRIC_TABS} value={metric} onChange={(k) => setMetric(k as AdminTimeseriesMetric)} />}
+          action={
+            <Tabs
+              items={METRIC_TABS}
+              value={metric}
+              onChange={(k) => setMetric(k as AdminTimeseriesMetric)}
+            />
+          }
         />
         <div className="p-5">
           {series.isLoading ? (
@@ -79,7 +113,10 @@ export function Dashboard() {
           ) : (
             <Chart
               kind="line"
-              data={(series.data?.points ?? []).map((p) => ({ label: p.date.slice(5), value: p.value }))}
+              data={(series.data?.points ?? []).map((p) => ({
+                label: p.date.slice(5),
+                value: p.value,
+              }))}
             />
           )}
         </div>

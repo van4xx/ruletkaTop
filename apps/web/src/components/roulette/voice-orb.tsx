@@ -201,11 +201,7 @@ export function VoiceOrb({
         <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 h-full w-full" />
         {/* orbRef carries the breathing scale (inline transform); the inner
             child owns the rotation so the two transforms don't collide. */}
-        <div
-          ref={orbRef}
-          aria-hidden="true"
-          className="relative h-9 w-9 will-change-transform"
-        >
+        <div ref={orbRef} aria-hidden="true" className="relative h-9 w-9 will-change-transform">
           <div
             className={cn(
               'h-full w-full overflow-hidden rounded-full',

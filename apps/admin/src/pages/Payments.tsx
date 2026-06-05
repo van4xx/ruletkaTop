@@ -41,12 +41,38 @@ export function Payments() {
   const s = stats.data;
 
   const columns: Column<AdminPayment>[] = [
-    { key: 'invoice', header: 'Инвойс', render: (r) => <span className="font-mono text-xs">{r.invoiceId || '—'}</span> },
-    { key: 'user', header: 'Пользователь', render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.userId}</span> },
-    { key: 'purpose', header: 'Назначение', render: (r) => <span className="text-muted-foreground">{r.purpose}</span> },
-    { key: 'amount', header: 'Сумма', align: 'right', render: (r) => <Money amount={r.amount} currency={r.currency || '₽'} /> },
-    { key: 'status', header: 'Статус', render: (r) => <Badge variant={STATUS_VARIANT[r.status] ?? 'muted'}>{r.status}</Badge> },
-    { key: 'when', header: 'Когда', align: 'right', render: (r) => <RelativeTime iso={r.createdAt} /> },
+    {
+      key: 'invoice',
+      header: 'Инвойс',
+      render: (r) => <span className="font-mono text-xs">{r.invoiceId || '—'}</span>,
+    },
+    {
+      key: 'user',
+      header: 'Пользователь',
+      render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.userId}</span>,
+    },
+    {
+      key: 'purpose',
+      header: 'Назначение',
+      render: (r) => <span className="text-muted-foreground">{r.purpose}</span>,
+    },
+    {
+      key: 'amount',
+      header: 'Сумма',
+      align: 'right',
+      render: (r) => <Money amount={r.amount} currency={r.currency || '₽'} />,
+    },
+    {
+      key: 'status',
+      header: 'Статус',
+      render: (r) => <Badge variant={STATUS_VARIANT[r.status] ?? 'muted'}>{r.status}</Badge>,
+    },
+    {
+      key: 'when',
+      header: 'Когда',
+      align: 'right',
+      render: (r) => <RelativeTime iso={r.createdAt} />,
+    },
   ];
 
   return (
@@ -54,10 +80,28 @@ export function Payments() {
       <PageHeader title="Платежи" subtitle="Выручка и история списаний CloudPayments." />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Выручка (всего)" value={s ? `${fmtInt(s.revenueRubTotal)} ₽` : '—'} loading={stats.isLoading} accent hint={s ? `+${fmtInt(s.revenueRub24h)} ₽ за 24ч` : undefined} />
-        <MetricCard label="Успешных" value={s ? fmtInt(s.completedCount) : '—'} loading={stats.isLoading} />
-        <MetricCard label="В ожидании" value={s ? fmtInt(s.pendingCount) : '—'} loading={stats.isLoading} />
-        <MetricCard label="Ошибок / возвратов" value={s ? `${fmtInt(s.failedCount)} / ${fmtInt(s.refundedCount)}` : '—'} loading={stats.isLoading} />
+        <MetricCard
+          label="Выручка (всего)"
+          value={s ? `${fmtInt(s.revenueRubTotal)} ₽` : '—'}
+          loading={stats.isLoading}
+          accent
+          hint={s ? `+${fmtInt(s.revenueRub24h)} ₽ за 24ч` : undefined}
+        />
+        <MetricCard
+          label="Успешных"
+          value={s ? fmtInt(s.completedCount) : '—'}
+          loading={stats.isLoading}
+        />
+        <MetricCard
+          label="В ожидании"
+          value={s ? fmtInt(s.pendingCount) : '—'}
+          loading={stats.isLoading}
+        />
+        <MetricCard
+          label="Ошибок / возвратов"
+          value={s ? `${fmtInt(s.failedCount)} / ${fmtInt(s.refundedCount)}` : '—'}
+          loading={stats.isLoading}
+        />
       </div>
 
       <DataTable

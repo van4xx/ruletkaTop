@@ -651,9 +651,7 @@ function VoiceLayoutOrb({
         </div>
 
         {/* The local "moon" — a tiny companion orb pulsing from the local mic. */}
-        {localStream && (
-          <VoiceOrb stream={localStream} name={selfLabel} tone="local" compact />
-        )}
+        {localStream && <VoiceOrb stream={localStream} name={selfLabel} tone="local" compact />}
       </div>
     </div>
   );
@@ -686,11 +684,7 @@ function StageFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        !fullscreen && 'mx-auto w-full max-w-6xl px-2 py-3 sm:px-4 sm:py-5',
-      )}
-    >
+    <div className={cn(!fullscreen && 'mx-auto w-full max-w-6xl px-2 py-3 sm:px-4 sm:py-5')}>
       <div
         ref={containerRef}
         className={cn(

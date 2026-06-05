@@ -26,7 +26,8 @@ export function Audit() {
   const list = useInfiniteQuery({
     queryKey: ['audit', action],
     initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => adminApi.audit.list({ action: action || undefined, cursor: pageParam, limit: 30 }),
+    queryFn: ({ pageParam }) =>
+      adminApi.audit.list({ action: action || undefined, cursor: pageParam, limit: 30 }),
     getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
   });
 
@@ -34,7 +35,15 @@ export function Audit() {
 
   const columns: Column<AdminAuditEntry>[] = [
     { key: 'action', header: 'Действие', render: (r) => <Badge variant="info">{r.action}</Badge> },
-    { key: 'actor', header: 'Кто', render: (r) => <span className="text-xs text-muted-foreground">{r.actorEmail ?? r.actorId ?? 'система'}</span> },
+    {
+      key: 'actor',
+      header: 'Кто',
+      render: (r) => (
+        <span className="text-xs text-muted-foreground">
+          {r.actorEmail ?? r.actorId ?? 'система'}
+        </span>
+      ),
+    },
     {
       key: 'target',
       header: 'Цель',
@@ -49,12 +58,20 @@ export function Audit() {
       key: 'meta',
       header: 'Детали',
       render: (r) => (
-        <span className="block max-w-[24rem] truncate text-xs text-muted-foreground" title={r.meta ? JSON.stringify(r.meta) : undefined}>
+        <span
+          className="block max-w-[24rem] truncate text-xs text-muted-foreground"
+          title={r.meta ? JSON.stringify(r.meta) : undefined}
+        >
           {r.meta ? JSON.stringify(r.meta) : '—'}
         </span>
       ),
     },
-    { key: 'when', header: 'Когда', align: 'right', render: (r) => <RelativeTime iso={r.createdAt} /> },
+    {
+      key: 'when',
+      header: 'Когда',
+      align: 'right',
+      render: (r) => <RelativeTime iso={r.createdAt} />,
+    },
   ];
 
   return (

@@ -46,11 +46,31 @@ export function Balances({ role }: { role: Role }) {
   }
 
   const ledgerColumns: Column<AdminLedgerEntry>[] = [
-    { key: 'type', header: 'Тип', render: (r) => <span className="text-muted-foreground">{r.type}</span> },
+    {
+      key: 'type',
+      header: 'Тип',
+      render: (r) => <span className="text-muted-foreground">{r.type}</span>,
+    },
     { key: 'delta', header: 'Δ', align: 'right', render: (r) => <Coins amount={r.delta} signed /> },
-    { key: 'balance', header: 'Баланс после', align: 'right', render: (r) => <Coins amount={r.balanceAfter} /> },
-    { key: 'ref', header: 'Ref', render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.refId ?? '—'}</span> },
-    { key: 'when', header: 'Когда', align: 'right', render: (r) => <RelativeTime iso={r.createdAt} /> },
+    {
+      key: 'balance',
+      header: 'Баланс после',
+      align: 'right',
+      render: (r) => <Coins amount={r.balanceAfter} />,
+    },
+    {
+      key: 'ref',
+      header: 'Ref',
+      render: (r) => (
+        <span className="font-mono text-xs text-muted-foreground">{r.refId ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'when',
+      header: 'Когда',
+      align: 'right',
+      render: (r) => <RelativeTime iso={r.createdAt} />,
+    },
   ];
 
   const s = stats.data;
@@ -60,10 +80,27 @@ export function Balances({ role }: { role: Role }) {
       <PageHeader title="Баланс" subtitle="Кошельки, монеты и ручные корректировки." />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Монет в обороте" value={s ? fmtInt(s.coinsInCirculation) : '—'} loading={stats.isLoading} accent />
-        <MetricCard label="Кошельков" value={s ? fmtInt(s.walletCount) : '—'} loading={stats.isLoading} />
-        <MetricCard label="Средний баланс" value={s ? fmtInt(Math.round(s.averageBalance)) : '—'} loading={stats.isLoading} />
-        <MetricCard label="Макс. баланс" value={s ? fmtInt(s.topBalance) : '—'} loading={stats.isLoading} />
+        <MetricCard
+          label="Монет в обороте"
+          value={s ? fmtInt(s.coinsInCirculation) : '—'}
+          loading={stats.isLoading}
+          accent
+        />
+        <MetricCard
+          label="Кошельков"
+          value={s ? fmtInt(s.walletCount) : '—'}
+          loading={stats.isLoading}
+        />
+        <MetricCard
+          label="Средний баланс"
+          value={s ? fmtInt(Math.round(s.averageBalance)) : '—'}
+          loading={stats.isLoading}
+        />
+        <MetricCard
+          label="Макс. баланс"
+          value={s ? fmtInt(s.topBalance) : '—'}
+          loading={stats.isLoading}
+        />
       </div>
 
       <Card className="mb-6">
@@ -103,7 +140,11 @@ export function Balances({ role }: { role: Role }) {
             rowKey={(r) => r.id}
             loading={detail.isLoading}
             error={detail.isError ? 'Не удалось загрузить кошелёк (проверьте ID).' : undefined}
-            empty={<p className="p-8 text-center text-sm text-muted-foreground">Операций по кошельку нет.</p>}
+            empty={
+              <p className="p-8 text-center text-sm text-muted-foreground">
+                Операций по кошельку нет.
+              </p>
+            }
           />
         </>
       )}
@@ -141,7 +182,8 @@ function AdjustModal({
   const [error, setError] = useState<string | null>(null);
 
   const adjust = useMutation({
-    mutationFn: () => adminApi.wallet.adjust(userId, { amount: Number(amount), reason: reason.trim() }),
+    mutationFn: () =>
+      adminApi.wallet.adjust(userId, { amount: Number(amount), reason: reason.trim() }),
     onSuccess: onDone,
     onError: (e) => setError(e instanceof AdminApiError ? e.message : 'Не удалось применить'),
   });

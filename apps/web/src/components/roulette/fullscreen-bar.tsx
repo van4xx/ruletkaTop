@@ -35,7 +35,10 @@ export function FullscreenBar({ isVideo, onExit, visible }: FullscreenBarProps) 
       {/* Brand emblem — purely decorative here (no navigation, to avoid tearing
           down the live call). Mirrors the SiteHeader mark. */}
       <div className="glass-panel pointer-events-auto flex items-center gap-2 rounded-xl px-2.5 py-1.5">
-        <span className="relative inline-flex h-6 w-6 items-center justify-center" aria-hidden="true">
+        <span
+          className="relative inline-flex h-6 w-6 items-center justify-center"
+          aria-hidden="true"
+        >
           <span className="absolute inset-0 rounded-full bg-[conic-gradient(from_140deg,var(--color-neon-violet),var(--color-neon-magenta),var(--color-neon-cyan),var(--color-neon-violet))] opacity-90 blur-[1px]" />
           <span className="absolute inset-[2px] rounded-full bg-background" />
           <span className="relative h-1.5 w-1.5 rounded-full bg-[var(--color-neon-cyan)] shadow-[0_0_8px_var(--color-neon-cyan)]" />
@@ -46,12 +49,7 @@ export function FullscreenBar({ isVideo, onExit, visible }: FullscreenBarProps) 
       </div>
 
       <div className="pointer-events-auto">
-        <VideoLayoutSwitcher
-          isVideo={isVideo}
-          fullscreen
-          onToggleFullscreen={onExit}
-          compact
-        />
+        <VideoLayoutSwitcher isVideo={isVideo} fullscreen onToggleFullscreen={onExit} compact />
       </div>
     </div>
   );

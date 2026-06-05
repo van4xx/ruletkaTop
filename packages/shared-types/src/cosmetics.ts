@@ -84,7 +84,13 @@ export const COVER_CATALOGUE: readonly ProfileCover[] = [
     priceCoins: 120,
     accent: 'var(--color-neon-magenta)',
   },
-  { id: 'mint', name: 'Mint Glass', tier: 'paid', priceCoins: 200, accent: 'var(--color-neon-cyan)' },
+  {
+    id: 'mint',
+    name: 'Mint Glass',
+    tier: 'paid',
+    priceCoins: 200,
+    accent: 'var(--color-neon-cyan)',
+  },
   {
     id: 'mesh',
     name: 'Liquid Mesh',

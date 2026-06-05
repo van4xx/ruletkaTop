@@ -17,13 +17,7 @@
  * live WebRTC session.
  */
 import { useTranslations } from 'next-intl';
-import {
-  IconButton,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@ruletka/ui';
+import { IconButton, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@ruletka/ui';
 import {
   VOICE_LAYOUTS,
   setVoiceLayout,
@@ -45,10 +39,7 @@ export function VoiceLayoutSwitcher({ className }: VoiceLayoutSwitcherProps) {
       <div
         role="radiogroup"
         aria-label={t('voiceLayout.switch')}
-        className={cn(
-          'glass-panel flex items-center gap-1 rounded-full p-1',
-          className,
-        )}
+        className={cn('glass-panel flex items-center gap-1 rounded-full p-1', className)}
       >
         {VOICE_LAYOUTS.map(({ id, icon: Icon, labelKey }) => {
           const selected = active === id;

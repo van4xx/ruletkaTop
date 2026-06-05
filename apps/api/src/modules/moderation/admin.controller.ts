@@ -90,7 +90,10 @@ export class AdminController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ): Promise<AdminPage<BannedUserRow>> {
-    return this.adminService.listBannedUsers({ cursor: cursor || undefined, limit: parseLimit(limit) });
+    return this.adminService.listBannedUsers({
+      cursor: cursor || undefined,
+      limit: parseLimit(limit),
+    });
   }
 
   @Get('banned-fingerprints')

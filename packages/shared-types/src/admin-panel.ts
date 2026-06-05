@@ -99,7 +99,10 @@ export type AdminWalletDetail = z.infer<typeof adminWalletDetailSchema>;
 /** `POST /admin/wallet/:userId/adjust` body — signed manual credit/debit. */
 export const adminWalletAdjustSchema = z.object({
   /** Non-zero signed coin delta (positive credits, negative debits). */
-  amount: z.coerce.number().int().refine((n) => n !== 0, 'Amount must be non-zero'),
+  amount: z.coerce
+    .number()
+    .int()
+    .refine((n) => n !== 0, 'Amount must be non-zero'),
   reason: z.string().trim().min(1).max(280),
 });
 export type AdminWalletAdjustDto = z.infer<typeof adminWalletAdjustSchema>;

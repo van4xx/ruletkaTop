@@ -40,10 +40,19 @@ const CRITICAL_SECRETS: readonly string[] = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_S
  * never block boot — the platform runs without them.
  */
 const RECOMMENDED_GROUPS: ReadonlyArray<{ label: string; vars: readonly string[] }> = [
-  { label: 'CloudPayments (coin top-ups)', vars: ['CLOUDPAYMENTS_PUBLIC_ID', 'CLOUDPAYMENTS_API_SECRET'] },
+  {
+    label: 'CloudPayments (coin top-ups)',
+    vars: ['CLOUDPAYMENTS_PUBLIC_ID', 'CLOUDPAYMENTS_API_SECRET'],
+  },
   { label: 'TURN relay auth (WebRTC behind strict NAT)', vars: ['TURN_STATIC_AUTH_SECRET'] },
-  { label: 'SMTP email delivery (verification / reset)', vars: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'] },
-  { label: 'Web Push / VAPID (browser notifications)', vars: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'] },
+  {
+    label: 'SMTP email delivery (verification / reset)',
+    vars: ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'],
+  },
+  {
+    label: 'Web Push / VAPID (browser notifications)',
+    vars: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'],
+  },
 ];
 
 /**
@@ -77,7 +86,9 @@ function isUnsetOrPlaceholder(value: string | undefined): boolean {
   if (KNOWN_PLACEHOLDERS.includes(v)) {
     return true;
   }
-  return v.startsWith('change-me') || v.startsWith('changeme') || v.startsWith('your-') || v === 'xxx';
+  return (
+    v.startsWith('change-me') || v.startsWith('changeme') || v.startsWith('your-') || v === 'xxx'
+  );
 }
 
 /**

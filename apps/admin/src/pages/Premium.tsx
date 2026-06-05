@@ -52,7 +52,8 @@ export function Premium({ role }: { role: Role }) {
   const revoke = useMutation({
     mutationFn: (userId: string) => adminApi.premium.revoke(userId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['premium-list'] }),
-    onError: (e) => setError(e instanceof AdminApiError ? e.message : 'Не удалось отозвать премиум'),
+    onError: (e) =>
+      setError(e instanceof AdminApiError ? e.message : 'Не удалось отозвать премиум'),
   });
 
   const columns: Column<AdminSubscriber>[] = [
@@ -78,7 +79,12 @@ export function Premium({ role }: { role: Role }) {
     {
       key: 'until',
       header: 'До',
-      render: (r) => (r.currentPeriodEnd ? <RelativeTime iso={r.currentPeriodEnd} /> : <span className="text-muted-foreground">—</span>),
+      render: (r) =>
+        r.currentPeriodEnd ? (
+          <RelativeTime iso={r.currentPeriodEnd} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     ...(isAdmin
       ? [
@@ -118,12 +124,23 @@ export function Premium({ role }: { role: Role }) {
       <PageHeader title="Премиум" subtitle="Подписчики, выдача и отзыв доступа." />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Активных подписок" value={fmtInt(activeCount)} loading={list.isLoading} accent />
-        <MetricCard label="Загружено записей" value={fmtInt(rows.length)} loading={list.isLoading} />
+        <MetricCard
+          label="Активных подписок"
+          value={fmtInt(activeCount)}
+          loading={list.isLoading}
+          accent
+        />
+        <MetricCard
+          label="Загружено записей"
+          value={fmtInt(rows.length)}
+          loading={list.isLoading}
+        />
       </div>
 
       {error && (
-        <p className="mb-4 rounded-xl glass-strong p-3 text-sm text-danger ring-1 ring-danger/30">{error}</p>
+        <p className="mb-4 rounded-xl glass-strong p-3 text-sm text-danger ring-1 ring-danger/30">
+          {error}
+        </p>
       )}
 
       <DataTable
@@ -132,7 +149,9 @@ export function Premium({ role }: { role: Role }) {
         rowKey={(r) => r.userId}
         loading={list.isLoading}
         error={list.isError ? 'Не удалось загрузить подписчиков.' : undefined}
-        empty={<p className="p-8 text-center text-sm text-muted-foreground">Подписчиков пока нет.</p>}
+        empty={
+          <p className="p-8 text-center text-sm text-muted-foreground">Подписчиков пока нет.</p>
+        }
         footer={
           rows.length > 0 ? (
             <Pagination

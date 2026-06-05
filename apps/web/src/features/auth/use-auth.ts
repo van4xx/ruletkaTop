@@ -167,10 +167,7 @@ export function useAuthBootstrap(): void {
           return;
         }
         // Transient (offline / 5xx): back off and retry. Keep the session.
-        const backoff = Math.min(
-          BOOT_REFRESH_MAX_MS,
-          BOOT_REFRESH_BASE_MS * 2 ** attempt,
-        );
+        const backoff = Math.min(BOOT_REFRESH_MAX_MS, BOOT_REFRESH_BASE_MS * 2 ** attempt);
         await sleep(backoff * (0.5 + Math.random() * 0.5));
         if (cancelled) return;
       }

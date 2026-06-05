@@ -9,13 +9,7 @@
  * Charts are hand-rolled SVG (line / bar / sparkline) — no chart dependency —
  * so the bundle stays lean and the visuals stay on-brand.
  */
-import {
-  Fragment,
-  useEffect,
-  useId,
-  useState,
-  type ReactNode,
-} from 'react';
+import { Fragment, useEffect, useId, useState, type ReactNode } from 'react';
 import { Button, Spinner } from '@ruletka/ui';
 
 import { fmtDate, fmtInt } from '../pages/ui';
@@ -127,15 +121,7 @@ export interface MetricCardProps {
 }
 
 /** A KPI tile: label, big value, optional delta chip + sparkline. */
-export function MetricCard({
-  label,
-  value,
-  delta,
-  spark,
-  hint,
-  loading,
-  accent,
-}: MetricCardProps) {
+export function MetricCard({ label, value, delta, spark, hint, loading, accent }: MetricCardProps) {
   const positive = (delta ?? 0) >= 0;
   return (
     <div
@@ -194,12 +180,7 @@ export function Money({ amount, currency = '₽' }: { amount: number; currency?:
 export function Coins({ amount, signed }: { amount: number; signed?: boolean }) {
   const sign = signed && amount > 0 ? '+' : '';
   return (
-    <span
-      className={cx(
-        'tabular-nums',
-        signed && (amount >= 0 ? 'text-success' : 'text-danger'),
-      )}
-    >
+    <span className={cx('tabular-nums', signed && (amount >= 0 ? 'text-success' : 'text-danger'))}>
       {sign}
       {fmtInt(amount)} мон.
     </span>
@@ -249,13 +230,16 @@ export function Avatar({
   label?: string;
   size?: 'sm' | 'md' | 'lg';
 }) {
-  const dim = size === 'sm' ? 'size-8 text-xs' : size === 'lg' ? 'size-12 text-base' : 'size-10 text-sm';
+  const dim =
+    size === 'sm' ? 'size-8 text-xs' : size === 'lg' ? 'size-12 text-base' : 'size-10 text-sm';
   const initial = (label ?? seed ?? '?').trim().charAt(0).toUpperCase() || '?';
   const hue = hashHue(seed ?? label ?? '?');
   return (
     <span
       className={cx('grid shrink-0 place-items-center rounded-full font-semibold text-white', dim)}
-      style={{ background: `linear-gradient(135deg, oklch(0.62 0.18 ${hue}), oklch(0.55 0.2 ${(hue + 40) % 360}))` }}
+      style={{
+        background: `linear-gradient(135deg, oklch(0.62 0.18 ${hue}), oklch(0.55 0.2 ${(hue + 40) % 360}))`,
+      }}
       aria-hidden
     >
       {initial}
@@ -407,7 +391,7 @@ export function DataTable<T>({
       ) : error ? (
         <p className="p-8 text-center text-sm text-danger">{error}</p>
       ) : rows.length === 0 ? (
-        empty ?? <EmptyState title="Ничего не найдено" />
+        (empty ?? <EmptyState title="Ничего не найдено" />)
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -550,7 +534,10 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
-        className={cx('w-full glass-strong rounded-2xl p-6 shadow-xl ring-1 ring-border/60', maxWidth)}
+        className={cx(
+          'w-full glass-strong rounded-2xl p-6 shadow-xl ring-1 ring-border/60',
+          maxWidth,
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {title && <h2 className="mb-4 font-display text-lg font-bold">{title}</h2>}
@@ -580,7 +567,10 @@ export function Drawer({
   useEscape(open, onClose);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-background-overlay/70 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-background-overlay/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <aside
         role="dialog"
         aria-modal="true"
@@ -597,7 +587,13 @@ export function Drawer({
             aria-label="Закрыть"
             className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-glass hover:text-foreground"
           >
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              viewBox="0 0 24 24"
+              className="size-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
             </svg>
           </button>
@@ -637,7 +633,13 @@ export function ConfirmButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant={variant} size={size} loading={loading} disabled={disabled} onClick={() => setOpen(true)}>
+      <Button
+        variant={variant}
+        size={size}
+        loading={loading}
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
         {children}
       </Button>
       <Modal
@@ -697,11 +699,23 @@ export function Sparkline({ data, className }: { data: number[]; className?: str
   const w = 120;
   const h = 32;
   const pts = project(data, w, h, 2);
-  const d = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const d = pts
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(' ');
   const last = pts.at(-1);
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={cx('h-full w-full', className)}>
-      <path d={d} fill="none" stroke="var(--accent)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className={cx('h-full w-full', className)}
+    >
+      <path
+        d={d}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth={1.5}
+        vectorEffect="non-scaling-stroke"
+      />
       {last && <circle cx={last[0]} cy={last[1]} r={1.8} fill="var(--accent)" />}
     </svg>
   );
@@ -716,15 +730,25 @@ export function LineChart({ data, height = 220 }: { data: ChartPoint[]; height?:
   const pad = 24;
   const values = data.map((d) => d.value);
   const pts = project(values, w, h, pad);
-  const line = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const line = pts
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(' ');
   const first = pts[0];
   const lastP = pts.at(-1);
-  const area = first && lastP ? `${line} L${lastP[0].toFixed(1)} ${h - pad} L${first[0].toFixed(1)} ${h - pad} Z` : '';
+  const area =
+    first && lastP
+      ? `${line} L${lastP[0].toFixed(1)} ${h - pad} L${first[0].toFixed(1)} ${h - pad} Z`
+      : '';
   const max = Math.max(1, ...values);
 
   return (
     <div className="w-full">
-      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-auto w-full" style={{ aspectRatio: `${w} / ${h}` }}>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        className="h-auto w-full"
+        style={{ aspectRatio: `${w} / ${h}` }}
+      >
         <defs>
           <linearGradient id={`la-${gid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28" />
@@ -744,7 +768,13 @@ export function LineChart({ data, height = 220 }: { data: ChartPoint[]; height?:
           />
         ))}
         {area && <path d={area} fill={`url(#la-${gid})`} />}
-        <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <path
+          d={line}
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
       <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
         <span>{data[0]?.label}</span>
@@ -763,7 +793,10 @@ export function BarChart({ data, height = 220 }: { data: ChartPoint[]; height?: 
     <div className="w-full">
       <div className="flex items-end gap-1.5" style={{ height }}>
         {data.map((d, i) => (
-          <div key={`${d.label}-${i}`} className="group flex flex-1 flex-col items-center justify-end">
+          <div
+            key={`${d.label}-${i}`}
+            className="group flex flex-1 flex-col items-center justify-end"
+          >
             <span className="mb-1 text-[10px] tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
               {fmtInt(d.value)}
             </span>
@@ -793,7 +826,11 @@ export function Chart({
   data: ChartPoint[];
   height?: number;
 }) {
-  return kind === 'bar' ? <BarChart data={data} height={height} /> : <LineChart data={data} height={height} />;
+  return kind === 'bar' ? (
+    <BarChart data={data} height={height} />
+  ) : (
+    <LineChart data={data} height={height} />
+  );
 }
 
 /* ─────────────────────────────── shared hooks ─────────────────────────────── */

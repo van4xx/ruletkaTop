@@ -39,15 +39,42 @@ export function Calls() {
       header: 'Тип',
       render: (r) => <Badge variant={r.type === 'video' ? 'accent' : 'info'}>{r.type}</Badge>,
     },
-    { key: 'a', header: 'Участник A', render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.participantA ?? '—'}</span> },
-    { key: 'b', header: 'Участник B', render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.participantB ?? '—'}</span> },
-    { key: 'dur', header: 'Длит.', align: 'right', render: (r) => <span className="tabular-nums">{fmtDuration(r.durationSec)}</span> },
+    {
+      key: 'a',
+      header: 'Участник A',
+      render: (r) => (
+        <span className="font-mono text-xs text-muted-foreground">{r.participantA ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'b',
+      header: 'Участник B',
+      render: (r) => (
+        <span className="font-mono text-xs text-muted-foreground">{r.participantB ?? '—'}</span>
+      ),
+    },
+    {
+      key: 'dur',
+      header: 'Длит.',
+      align: 'right',
+      render: (r) => <span className="tabular-nums">{fmtDuration(r.durationSec)}</span>,
+    },
     {
       key: 'state',
       header: 'Статус',
-      render: (r) => (r.endedAt ? <span className="text-muted-foreground">завершён</span> : <Badge variant="success">в эфире</Badge>),
+      render: (r) =>
+        r.endedAt ? (
+          <span className="text-muted-foreground">завершён</span>
+        ) : (
+          <Badge variant="success">в эфире</Badge>
+        ),
     },
-    { key: 'when', header: 'Начат', align: 'right', render: (r) => <RelativeTime iso={r.startedAt} /> },
+    {
+      key: 'when',
+      header: 'Начат',
+      align: 'right',
+      render: (r) => <RelativeTime iso={r.startedAt} />,
+    },
   ];
 
   return (
@@ -55,10 +82,27 @@ export function Calls() {
       <PageHeader title="Звонки" subtitle="Объём сессий рулетки, модальности и недавние звонки." />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Звонков (всего)" value={s ? fmtInt(s.totalCalls) : '—'} loading={stats.isLoading} />
-        <MetricCard label="За 24ч" value={s ? fmtInt(s.calls24h) : '—'} loading={stats.isLoading} accent />
-        <MetricCard label="В эфире" value={s ? fmtInt(s.liveCalls) : '—'} loading={stats.isLoading} />
-        <MetricCard label="Ср. длительность" value={s ? fmtDuration(s.averageDurationSec) : '—'} loading={stats.isLoading} />
+        <MetricCard
+          label="Звонков (всего)"
+          value={s ? fmtInt(s.totalCalls) : '—'}
+          loading={stats.isLoading}
+        />
+        <MetricCard
+          label="За 24ч"
+          value={s ? fmtInt(s.calls24h) : '—'}
+          loading={stats.isLoading}
+          accent
+        />
+        <MetricCard
+          label="В эфире"
+          value={s ? fmtInt(s.liveCalls) : '—'}
+          loading={stats.isLoading}
+        />
+        <MetricCard
+          label="Ср. длительность"
+          value={s ? fmtDuration(s.averageDurationSec) : '—'}
+          loading={stats.isLoading}
+        />
       </div>
 
       <Card padding="none" className="mb-8">

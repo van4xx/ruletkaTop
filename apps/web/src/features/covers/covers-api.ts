@@ -14,12 +14,7 @@
  * Every type is sourced from the `@ruletka/shared-types` contract.
  */
 import { api } from '@/lib/api';
-import type {
-  CoverId,
-  CoverInventory,
-  ProfileCover,
-  PublicProfile,
-} from '@ruletka/shared-types';
+import type { CoverId, CoverInventory, ProfileCover, PublicProfile } from '@ruletka/shared-types';
 
 export const coversApi = {
   /** Public cover catalogue (free first, then ascending price). */

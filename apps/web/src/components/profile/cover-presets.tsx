@@ -241,7 +241,10 @@ const NoirLayers: FC<CoverLayerProps> = ({ reduce }) => (
     {/* Vignette. */}
     <div
       className="absolute inset-0"
-      style={{ background: 'radial-gradient(120% 90% at 50% 30%, transparent 55%, black 130%)', opacity: 0.6 }}
+      style={{
+        background: 'radial-gradient(120% 90% at 50% 30%, transparent 55%, black 130%)',
+        opacity: 0.6,
+      }}
     />
     {/* Thin gold hairline along the bottom edge. */}
     <div
@@ -433,14 +436,18 @@ const PrismaticLayers: FC<CoverLayerProps> = ({ reduce }) => (
     {/* Frosted veil to tame the spectrum into an iridescent sheen. */}
     <div
       className="absolute inset-0"
-      style={{ background: 'color-mix(in oklch, var(--color-card) 28%, transparent)', backdropFilter: 'blur(4px)' }}
+      style={{
+        background: 'color-mix(in oklch, var(--color-card) 28%, transparent)',
+        backdropFilter: 'blur(4px)',
+      }}
     />
     {/* Fine specular highlight sweeping across, tracking the shimmer. */}
     <motion.div
       aria-hidden="true"
       className="absolute -inset-y-1/2 w-1/4 -skew-x-12"
       style={{
-        background: 'linear-gradient(90deg, transparent, color-mix(in oklch, white 35%, transparent), transparent)',
+        background:
+          'linear-gradient(90deg, transparent, color-mix(in oklch, white 35%, transparent), transparent)',
       }}
       animate={reduce ? undefined : { left: ['-25%', '125%'] }}
       transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
@@ -505,7 +512,8 @@ export function ProfileCover({
   /** When false, looping animation is disabled (the static gradient still shows). */
   animated: boolean;
 }) {
-  const preset = COVER_PRESETS[(coverId as CoverId) in COVER_PRESETS ? (coverId as CoverId) : 'aurora'];
+  const preset =
+    COVER_PRESETS[(coverId as CoverId) in COVER_PRESETS ? (coverId as CoverId) : 'aurora'];
   const { Layers } = preset;
   return <Layers reduce={!animated} />;
 }
