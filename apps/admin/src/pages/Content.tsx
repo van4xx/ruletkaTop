@@ -2,27 +2,31 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Input, Textarea } from '@ruletka/ui';
 
-import { adminApi, AdminApiError } from '../lib/api';
-import type { Role } from '../lib/types';
+import { adminApi, AdminApiError, req } from '../lib/api';
+import type { AdminAnnouncement, Role } from '../lib/types';
 import {
   Badge,
   Card,
-  CardHeader,
+  ConfirmButton,
+  DataTable,
   EmptyState,
   Modal,
   PageHeader,
   RelativeTime,
   fmtInt,
+  type Column,
 } from '../components/kit';
 
 /**
  * Контент — the cover cosmetic catalogue with live ownership counts (REAL) and
- * a platform-announcements panel (list is a Wave-2 stub; create flow is wired —
- * admin-only). Covers render as on-brand swatch cards using each cover's accent.
+ * a platform-announcements manager (REAL — Wave 2): list (newest first), create,
+ * edit, active-toggle and delete, all admin-only + audited server-side. Covers
+ * render as on-brand swatch cards using each cover's accent.
  */
 export function Content({ role }: { role: Role }) {
   const isAdmin = role === 'admin';
   const qc = useQueryClient();
+  const [editing, setEditing] = useState<AdminAnnouncement | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   const covers = useQuery({ queryKey: ['content-covers'], queryFn: () => adminApi.content.covers() });
@@ -30,6 +34,72 @@ export function Content({ role }: { role: Role }) {
     queryKey: ['content-announcements'],
     queryFn: () => adminApi.content.announcements(),
   });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['content-announcements'] });
+
+  // Toggle active (PATCH /admin/content/announcements/:id) — via the exported
+  // `req` (the typed adminApi.content has no patch method).
+  const toggle = useMutation({
+    mutationFn: (a: AdminAnnouncement) =>
+      req<AdminAnnouncement>(`/admin/content/announcements/${a.id}`, {
+        method: 'PATCH',
+        json: { active: !a.active },
+      }),
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) =>
+      req<void>(`/admin/content/announcements/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+
+  const columns: Column<AdminAnnouncement>[] = [
+    {
+      key: 'title',
+      header: 'Объявление',
+      render: (a) => (
+        <div className="min-w-0 max-w-md">
+          <p className="truncate font-medium">{a.title}</p>
+          <p className="truncate text-xs text-muted-foreground">{a.body}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'state',
+      header: 'Статус',
+      render: (a) => <Badge variant={a.active ? 'success' : 'muted'}>{a.active ? 'активно' : 'выкл'}</Badge>,
+    },
+    { key: 'created', header: 'Создано', align: 'right', render: (a) => <RelativeTime iso={a.createdAt} /> },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (a) =>
+        isAdmin ? (
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" loading={toggle.isPending} onClick={() => toggle.mutate(a)}>
+              {a.active ? 'Выключить' : 'Включить'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setEditing(a)}>
+              Изменить
+            </Button>
+            <ConfirmButton
+              size="sm"
+              loading={remove.isPending}
+              confirmTitle="Удалить объявление?"
+              confirmBody="Объявление будет удалено без возможности восстановления."
+              confirmLabel="Удалить"
+              onConfirm={() => remove.mutate(a.id)}
+            >
+              Удалить
+            </ConfirmButton>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">только просмотр</span>
+        ),
+    },
+  ];
 
   return (
     <div>
@@ -76,42 +146,32 @@ export function Content({ role }: { role: Role }) {
         )}
       </section>
 
-      <Card padding="none">
-        <CardHeader title="Объявления" />
-        {announcements.isLoading ? (
-          <div className="grid place-items-center py-12">
-            <div className="h-5 w-32 animate-pulse rounded bg-glass" />
-          </div>
-        ) : (announcements.data?.items.length ?? 0) === 0 ? (
+      <h2 className="mb-3 font-display text-base font-semibold">Объявления</h2>
+      <DataTable
+        columns={columns}
+        rows={announcements.data?.items ?? []}
+        rowKey={(a) => a.id}
+        loading={announcements.isLoading}
+        error={announcements.isError ? 'Не удалось загрузить объявления.' : undefined}
+        empty={
           <EmptyState
             title="Объявлений нет"
-            description="Создайте системное объявление — оно появится баннером у пользователей (Wave 2)."
+            description="Создайте системное объявление — оно станет доступно как баннер у пользователей."
           />
-        ) : (
-          <ul className="divide-y divide-border/60">
-            {announcements.data?.items.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{a.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{a.body}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant={a.active ? 'success' : 'muted'}>{a.active ? 'активно' : 'выкл'}</Badge>
-                  <RelativeTime iso={a.createdAt} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+        }
+      />
 
-      {isAdmin && (
-        <CreateAnnouncementModal
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
+      {isAdmin && (createOpen || editing) && (
+        <AnnouncementModal
+          announcement={editing}
+          onClose={() => {
+            setCreateOpen(false);
+            setEditing(null);
+          }}
           onDone={() => {
             setCreateOpen(false);
-            qc.invalidateQueries({ queryKey: ['content-announcements'] });
+            setEditing(null);
+            invalidate();
           }}
         />
       )}
@@ -119,31 +179,41 @@ export function Content({ role }: { role: Role }) {
   );
 }
 
-/** Create-announcement dialog (admin-only). Persistence lands in Wave 2. */
-function CreateAnnouncementModal({
-  open,
+/**
+ * Create/edit announcement dialog (admin-only). Create POSTs via
+ * `adminApi.content.createAnnouncement`; edit PATCHes title/body via `req`.
+ */
+function AnnouncementModal({
+  announcement,
   onClose,
   onDone,
 }: {
-  open: boolean;
+  announcement: AdminAnnouncement | null;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
+  const isEdit = announcement !== null;
+  const [title, setTitle] = useState(announcement?.title ?? '');
+  const [body, setBody] = useState(announcement?.body ?? '');
   const [error, setError] = useState<string | null>(null);
 
-  const create = useMutation({
-    mutationFn: () => adminApi.content.createAnnouncement({ title: title.trim(), body: body.trim(), active: true }),
+  const save = useMutation({
+    mutationFn: () =>
+      isEdit
+        ? req<AdminAnnouncement>(`/admin/content/announcements/${announcement.id}`, {
+            method: 'PATCH',
+            json: { title: title.trim(), body: body.trim() },
+          })
+        : adminApi.content.createAnnouncement({ title: title.trim(), body: body.trim(), active: true }),
     onSuccess: onDone,
-    onError: (e) => setError(e instanceof AdminApiError ? e.message : 'Не удалось создать'),
+    onError: (e) => setError(e instanceof AdminApiError ? e.message : 'Не удалось сохранить'),
   });
 
   return (
     <Modal
-      open={open}
+      open
       onClose={onClose}
-      title="Новое объявление"
+      title={isEdit ? 'Изменить объявление' : 'Новое объявление'}
       footer={
         <>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -152,21 +222,18 @@ function CreateAnnouncementModal({
           <Button
             variant="primary"
             size="sm"
-            loading={create.isPending}
+            loading={save.isPending}
             disabled={!title.trim() || !body.trim()}
             onClick={() => {
               setError(null);
-              create.mutate();
+              save.mutate();
             }}
           >
-            Создать
+            {isEdit ? 'Сохранить' : 'Создать'}
           </Button>
         </>
       }
     >
-      <p className="mb-3 text-sm text-muted-foreground">
-        Сохранение и доставка баннера — в Wave 2. Сейчас контракт и форма уже работают.
-      </p>
       <div className="flex flex-col gap-3">
         <Input placeholder="Заголовок" value={title} onChange={(e) => setTitle(e.target.value)} />
         <Textarea placeholder="Текст" rows={4} value={body} onChange={(e) => setBody(e.target.value)} />

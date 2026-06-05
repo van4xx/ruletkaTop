@@ -80,7 +80,13 @@ async function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-async function req<T>(
+/**
+ * Authenticated request to the API (Bearer access token in memory + httpOnly
+ * refresh cookie; auto-refreshes once on 401). EXPORTED so admin pages can call
+ * `/admin/...` endpoints that don't (yet) have a dedicated `adminApi.*` method,
+ * reusing the single shared token cache instead of minting their own.
+ */
+export async function req<T>(
   path: string,
   opts: {
     method?: string;

@@ -3,6 +3,7 @@ import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 
 import type {
+  AdminSecurityEvent,
   AdminSecurityEventList,
   AdminSession,
   AdminSessionList,
@@ -10,6 +11,12 @@ import type {
 
 /** How many recent sessions the security surface lists. */
 const SESSION_LIMIT = 50;
+
+/** How many rows to pull from EACH security-event source before merging. */
+const EVENT_SOURCE_LIMIT = 50;
+
+/** Final size of the merged, time-sorted security-events feed. */
+const EVENT_FEED_LIMIT = 80;
 
 /** A `sessions` row as read for the security surface. */
 interface SessionRow {
@@ -23,6 +30,32 @@ interface SessionRow {
   createdAt?: Date;
 }
 
+/** A `users` row as read for the (banned-user) events source. */
+interface BannedUserRow {
+  _id: Types.ObjectId;
+  email?: string | null;
+  role?: string | null;
+  updatedAt?: Date;
+}
+
+/** A `bannedfingerprints` row as read for the (fingerprint-ban) events source. */
+interface BannedFingerprintRow {
+  _id: Types.ObjectId;
+  fingerprint?: string | null;
+  userId?: Types.ObjectId | null;
+  expiresAt?: Date | null;
+  createdAt?: Date;
+}
+
+/** An internal, pre-serialisation event carrying its real sort timestamp. */
+interface InternalEvent {
+  id: string;
+  type: AdminSecurityEvent['type'];
+  userId: string | null;
+  detail: string;
+  at: Date;
+}
+
 /**
  * Admin security surface.
  *
@@ -31,9 +64,14 @@ interface SessionRow {
  * sessions with their client context (ip/ua/device) and a live-session count
  * (neither expired nor revoked). The token hash itself is never read.
  *
- * Events — STUB: there is no dedicated security-events collection; login locks
- * / reuse-detection are logged but not yet queried into one feed. Returns empty.
- * Wave-2 introduces a security-events stream. // TODO(wave2)
+ * Events — REAL (WAVE-2): a unified, time-sorted security feed aggregated from
+ * existing collections WITHOUT touching any other module. Three real signals:
+ *  - `user.banned`        — `users` where `isBanned`, by `updatedAt` desc;
+ *  - `fingerprint.banned` — `bannedfingerprints` (ban-evasion), by `createdAt`;
+ *  - `session.revoked`    — `sessions` where `revokedAt != null` (logout / token
+ *                           reuse-detection revocation), by `revokedAt` desc.
+ * Each source is bounded, then merged + sorted newest-first into the contract
+ * shape (`{ id, type, userId, detail, createdAt }`).
  */
 @Injectable()
 export class AdminSecurityService {
@@ -84,9 +122,96 @@ export class AdminSecurityService {
     return { items, activeCount };
   }
 
-  /** STUB — no security-events collection yet. Always empty. // TODO(wave2) */
+  /**
+   * A unified, newest-first security-events feed merged from three real sources
+   * (banned users, banned fingerprints, revoked sessions). Each source is read
+   * by name via the shared connection (no cross-module imports).
+   */
   async listEvents(): Promise<AdminSecurityEventList> {
-    // TODO(wave2): surface login-lock / reuse-detection / ban events as a feed.
-    return { items: [] };
+    const [bannedUsers, bannedFps, revokedSessions] = await Promise.all([
+      this.bannedUserEvents(),
+      this.bannedFingerprintEvents(),
+      this.revokedSessionEvents(),
+    ]);
+
+    const merged = [...bannedUsers, ...bannedFps, ...revokedSessions]
+      .sort((a, b) => b.at.getTime() - a.at.getTime())
+      .slice(0, EVENT_FEED_LIMIT);
+
+    const items: AdminSecurityEvent[] = merged.map((e) => ({
+      id: e.id,
+      type: e.type,
+      userId: e.userId,
+      detail: e.detail,
+      createdAt: e.at.toISOString(),
+    }));
+
+    return { items };
+  }
+
+  // ── event sources ──────────────────────────────────────────────────────────
+
+  /** Recently banned accounts (`users.isBanned = true`), by `updatedAt` desc. */
+  private async bannedUserEvents(): Promise<InternalEvent[]> {
+    const rows = (await this.connection
+      .collection('users')
+      .find({ isBanned: true }, { projection: { email: 1, role: 1, updatedAt: 1 } })
+      .sort({ updatedAt: -1 })
+      .limit(EVENT_SOURCE_LIMIT)
+      .toArray()) as unknown as BannedUserRow[];
+
+    return rows.map((r) => ({
+      id: r._id.toString(),
+      type: 'user.banned',
+      userId: r._id.toString(),
+      detail: `Аккаунт заблокирован${r.email ? ` — ${r.email}` : ''}${r.role ? ` (${r.role})` : ''}`,
+      at: r.updatedAt ?? new Date(0),
+    }));
+  }
+
+  /** Active banned fingerprints (ban-evasion), by `createdAt` desc. */
+  private async bannedFingerprintEvents(): Promise<InternalEvent[]> {
+    const rows = (await this.connection
+      .collection('bannedfingerprints')
+      .find({}, { projection: { fingerprint: 1, userId: 1, expiresAt: 1, createdAt: 1 } })
+      .sort({ createdAt: -1 })
+      .limit(EVENT_SOURCE_LIMIT)
+      .toArray()) as unknown as BannedFingerprintRow[];
+
+    return rows.map((r) => {
+      const short = (r.fingerprint ?? '').slice(0, 12);
+      const expiry = r.expiresAt ? `до ${r.expiresAt.toISOString().slice(0, 10)}` : 'бессрочно';
+      return {
+        id: r._id.toString(),
+        type: 'fingerprint.banned',
+        userId: r.userId ? r.userId.toString() : null,
+        detail: `Бан по отпечатку ${short}… (${expiry})`,
+        at: r.createdAt ?? new Date(0),
+      };
+    });
+  }
+
+  /** Revoked sessions (logout / reuse-detection), by `revokedAt` desc. */
+  private async revokedSessionEvents(): Promise<InternalEvent[]> {
+    const rows = (await this.connection
+      .collection('sessions')
+      .find(
+        { revokedAt: { $ne: null } },
+        { projection: { userId: 1, ip: 1, device: 1, userAgent: 1, revokedAt: 1 } },
+      )
+      .sort({ revokedAt: -1 })
+      .limit(EVENT_SOURCE_LIMIT)
+      .toArray()) as unknown as SessionRow[];
+
+    return rows.map((r) => {
+      const where = r.ip ?? r.device ?? r.userAgent ?? null;
+      return {
+        id: r._id.toString(),
+        type: 'session.revoked',
+        userId: r.userId ? r.userId.toString() : null,
+        detail: `Сессия отозвана${where ? ` — ${where}` : ''}`,
+        at: r.revokedAt ?? new Date(0),
+      };
+    });
   }
 }

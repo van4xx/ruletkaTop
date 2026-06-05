@@ -8,6 +8,8 @@ import type {
   AdminSettings,
 } from '@ruletka/shared-types';
 
+import { SettingsService } from './settings.service';
+
 /** Default per-IP throttle ceilings (mirror `throttler.constants`). */
 const DEFAULT_THROTTLE_LIMIT = 120;
 const DEFAULT_AUTH_THROTTLE_LIMIT = 10;
@@ -15,23 +17,31 @@ const DEFAULT_AUTH_THROTTLE_LIMIT = 10;
 /**
  * Admin settings surface.
  *
- * READ — REAL: presents the platform's env/config-derived feature flags +
- * throttle limits (e.g. FINGERPRINT_BAN_ENABLED, TURNSTILE_SECRET presence,
- * THROTTLE_LIMIT/AUTH_THROTTLE_LIMIT, moderation/push provider presence) as a
- * typed list. Values are read via {@link ConfigService}; secrets are reported as
- * a boolean "configured" flag only — never echoed.
+ * READ — REAL: presents BOTH layers as one typed list —
+ *  - env/config-derived flags + throttle limits (e.g. FINGERPRINT_BAN_ENABLED,
+ *    TURNSTILE_SECRET presence, THROTTLE_LIMIT/AUTH_THROTTLE_LIMIT, moderation/
+ *    push/payments provider presence). `source: 'env'`, `requiresRestart: true`
+ *    — changing them needs an API restart/rebuild. Secrets are reported as a
+ *    boolean "configured" flag only — never echoed.
+ *  - the LIVE, store-backed operational flags from {@link SettingsService}
+ *    (`source: 'runtime'`, `requiresRestart: false`) — toggleable at runtime.
  *
- * PATCH — STUB: the flags here are env-based, so changing them needs an API
- * restart. The patch endpoint validates + records intent and returns a note;
- * Wave-2 introduces a runtime feature-flag store for live toggles. // TODO(wave2)
+ * PATCH — REAL for live keys (WAVE-2): a key on the {@link SettingsService}
+ * allow-list is PERSISTED to the `app_settings` store and takes effect
+ * immediately. An env-baked key is refused with a "requires restart/rebuild"
+ * note (you can't flip an env var at runtime), so the response always says
+ * clearly whether the change is live now or needs a restart.
  */
 @Injectable()
 export class AdminSettingsService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly settingsStore: SettingsService,
+  ) {}
 
-  /** The feature-flag + throttle-limit snapshot. */
-  getSettings(): AdminSettings {
-    const flags: AdminSettingFlag[] = [
+  /** The feature-flag + throttle-limit snapshot (env layer ⊕ live store layer). */
+  async getSettings(): Promise<AdminSettings> {
+    const envFlags: AdminSettingFlag[] = [
       {
         key: 'FINGERPRINT_BAN_ENABLED',
         label: 'Бан по отпечатку устройства',
@@ -83,20 +93,35 @@ export class AdminSettingsService {
       },
     ];
 
-    return { flags };
+    // Live, store-backed operational flags (toggleable without a restart).
+    const liveFlags = await this.settingsStore.getAll();
+
+    // Live flags first so the toggleable controls lead the page.
+    return { flags: [...liveFlags, ...envFlags] };
   }
 
   /**
-   * STUB — env flags can't be flipped at runtime. Validates the key + returns a
-   * note that a restart is required. Does NOT mutate anything. // TODO(wave2)
+   * Persist a flag.
+   *  - LIVE (store-backed) key → upsert into `app_settings`, takes effect now.
+   *  - env-baked / unknown key → not applied; returns a "requires restart" note.
    */
-  patchSettings(dto: AdminPatchSettingsDto): AdminPatchSettingsResult {
-    // TODO(wave2): back runtime-toggleable flags with a persisted feature-flag
-    // store so a subset of these can change without a restart.
+  async patchSettings(
+    dto: AdminPatchSettingsDto,
+    actorId?: string | null,
+  ): Promise<AdminPatchSettingsResult> {
+    if (this.settingsStore.isLiveKey(dto.key)) {
+      await this.settingsStore.set(dto.key, dto.value, actorId);
+      return {
+        key: dto.key,
+        applied: true,
+        note: 'Флаг сохранён и применён сразу (рантайм-настройка, перезапуск не нужен).',
+      };
+    }
+
     return {
       key: dto.key,
       applied: false,
-      note: 'Флаг задаётся через переменные окружения — для применения нужен перезапуск API.',
+      note: 'Флаг задаётся через переменные окружения — для применения нужен перезапуск/пересборка API.',
     };
   }
 

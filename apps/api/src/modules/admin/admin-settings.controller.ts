@@ -28,8 +28,10 @@ import { AuditService } from './audit.service';
  * `moderator`/`admin`; the patch (changing platform config) is `admin`-only and
  * audited.
  *
- * READ is REAL (env/config-derived flags + limits); PATCH is a STUB (env flags
- * require a restart). // TODO(wave2)
+ * READ is REAL — env/config-derived flags + limits MERGED with the live,
+ * store-backed operational flags. PATCH is REAL for live (store-backed) keys
+ * (persisted to `app_settings`, takes effect immediately); env-baked keys are
+ * refused with a "requires restart/rebuild" note.
  */
 @ApiTags('admin')
 @ApiBearerAuth('access-token')
@@ -43,23 +45,26 @@ export class AdminSettingsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Feature flags + throttle limits (env/config-derived)' })
+  @ApiOperation({ summary: 'Feature flags + throttle limits (live store-backed ⊕ env/config-derived)' })
   @ApiOkResponse({ description: 'Settings snapshot' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
-  settings(): AdminSettings {
+  settings(): Promise<AdminSettings> {
     return this.settingsService.getSettings();
   }
 
   @Patch()
   @Roles('admin')
-  @ApiOperation({ summary: 'Patch a flag (STUB — env flags need a restart; admin-only; audited)' })
+  @ApiOperation({
+    summary:
+      'Patch a flag (live store-backed keys persist + apply now; env keys need a restart; admin-only; audited)',
+  })
   @ApiOkResponse({ description: 'Patch result + note' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
   async patch(
     @Body(createZodValidationPipe(adminPatchSettingsSchema)) body: AdminPatchSettingsDto,
     @CurrentUser() caller: JwtPayload,
   ): Promise<AdminPatchSettingsResult> {
-    const result = this.settingsService.patchSettings(body);
+    const result = await this.settingsService.patchSettings(body, caller.sub);
     await this.auditService.log({
       actorId: caller.sub,
       action: 'settings.patch',

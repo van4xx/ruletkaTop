@@ -3,15 +3,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Input, Textarea } from '@ruletka/ui';
 
 import { adminApi, AdminApiError } from '../lib/api';
-import type { AdminBroadcastSegment, Role } from '../lib/types';
+import type { AdminBroadcastRecord, AdminBroadcastSegment, Role } from '../lib/types';
 import {
+  Badge,
   Card,
-  CardHeader,
+  DataTable,
   EmptyState,
   PageHeader,
   RelativeTime,
   Select,
   fmtInt,
+  type Column,
 } from '../components/kit';
 
 const SEGMENTS: { value: AdminBroadcastSegment; label: string }[] = [
@@ -21,10 +23,17 @@ const SEGMENTS: { value: AdminBroadcastSegment; label: string }[] = [
   { value: 'banned', label: 'Забаненные' },
 ];
 
+const SEGMENT_LABEL: Record<AdminBroadcastSegment, string> = {
+  all: 'Все',
+  premium: 'Premium',
+  active: 'Активные',
+  banned: 'Забаненные',
+};
+
 /**
  * Рассылки — compose + fan out a system notification to a segment (admin-only;
- * REAL via NotificationsService) and review history (Wave-2 stub until a
- * broadcast-records collection lands).
+ * REAL via NotificationsService) and review history (REAL — each send persists a
+ * `broadcasts` record, listed newest-first).
  */
 export function Broadcast({ role }: { role: Role }) {
   const isAdmin = role === 'admin';
@@ -48,6 +57,31 @@ export function Broadcast({ role }: { role: Role }) {
     },
     onError: (e) => setError(e instanceof AdminApiError ? e.message : 'Не удалось отправить'),
   });
+
+  const columns: Column<AdminBroadcastRecord>[] = [
+    {
+      key: 'title',
+      header: 'Рассылка',
+      render: (b) => (
+        <div className="min-w-0 max-w-md">
+          <p className="truncate font-medium">{b.title}</p>
+          <p className="truncate text-xs text-muted-foreground">{b.body}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'segment',
+      header: 'Сегмент',
+      render: (b) => <Badge variant="info">{SEGMENT_LABEL[b.segment] ?? b.segment}</Badge>,
+    },
+    {
+      key: 'recipients',
+      header: 'Получателей',
+      align: 'right',
+      render: (b) => <span className="tabular-nums">{fmtInt(b.recipients)}</span>,
+    },
+    { key: 'sent', header: 'Отправлено', align: 'right', render: (b) => <RelativeTime iso={b.createdAt} /> },
+  ];
 
   return (
     <div>
@@ -90,30 +124,17 @@ export function Broadcast({ role }: { role: Role }) {
           )}
         </Card>
 
-        <Card padding="none">
-          <CardHeader title="История" />
-          {history.isLoading ? (
-            <div className="grid place-items-center py-12">
-              <div className="h-5 w-32 animate-pulse rounded bg-glass" />
-            </div>
-          ) : (history.data?.items.length ?? 0) === 0 ? (
-            <EmptyState title="Рассылок не было" description="История появится после первой отправки (Wave 2)." />
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {history.data?.items.map((b) => (
-                <li key={b.id} className="px-5 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate font-medium">{b.title}</p>
-                    <RelativeTime iso={b.createdAt} />
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {b.segment} · {fmtInt(b.recipients)} получателей
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        <div>
+          <h2 className="mb-3 font-display text-base font-semibold">История</h2>
+          <DataTable
+            columns={columns}
+            rows={history.data?.items ?? []}
+            rowKey={(b) => b.id}
+            loading={history.isLoading}
+            error={history.isError ? 'Не удалось загрузить историю.' : undefined}
+            empty={<EmptyState title="Рассылок не было" description="История появится после первой отправки." />}
+          />
+        </div>
       </div>
     </div>
   );

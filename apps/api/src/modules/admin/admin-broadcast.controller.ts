@@ -28,8 +28,8 @@ import { AuditService } from './audit.service';
  * `admin`-only (it messages many users at once) and audited; history is
  * `moderator`/`admin`.
  *
- * Send is REAL (fans out via NotificationsService); history is a STUB until a
- * broadcast-records collection lands. // TODO(wave2)
+ * Send is REAL (fans out via NotificationsService + persists a history record);
+ * history is REAL (reads the `broadcasts` collection, newest first).
  */
 @ApiTags('admin')
 @ApiBearerAuth('access-token')
@@ -52,7 +52,7 @@ export class AdminBroadcastController {
     @Body(createZodValidationPipe(adminBroadcastSchema)) body: AdminBroadcastDto,
     @CurrentUser() caller: JwtPayload,
   ): Promise<AdminBroadcastResult> {
-    const result = await this.broadcastService.send(body);
+    const result = await this.broadcastService.send(body, caller.sub);
     await this.auditService.log({
       actorId: caller.sub,
       action: 'broadcast.send',

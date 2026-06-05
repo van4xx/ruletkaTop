@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { InjectConnection } from '@nestjs/mongoose';
-import { Connection, Types } from 'mongoose';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 
 import type {
   AdminAnnouncement,
@@ -11,6 +11,15 @@ import type {
 } from '@ruletka/shared-types';
 import { COVER_CATALOGUE } from '@ruletka/shared-types';
 
+import { Announcement, AnnouncementDocument } from './schemas/announcement.schema';
+
+/** Fields an announcement PATCH may change (all optional). */
+export interface AnnouncementPatch {
+  title?: string;
+  body?: string;
+  active?: boolean;
+}
+
 /**
  * Admin content surface.
  *
@@ -20,13 +29,17 @@ import { COVER_CATALOGUE } from '@ruletka/shared-types';
  * collection's `ownedCovers` array (free covers are implicitly owned by
  * everyone, so their count reflects total profiles).
  *
- * Announcements — STUB: there is no announcements collection yet. The list
- * returns empty and create echoes a synthesized record. Wave-2 introduces an
- * `announcements` schema + system-banner delivery. // TODO(wave2)
+ * Announcements — REAL (WAVE-2): persisted in the `announcements` collection.
+ * Listed newest-first; created/toggled/edited/deleted from the admin panel
+ * (create + mutate are admin-only + audited at the controller).
  */
 @Injectable()
 export class AdminContentService {
-  constructor(@InjectConnection() private readonly connection: Connection) {}
+  constructor(
+    @InjectConnection() private readonly connection: Connection,
+    @InjectModel(Announcement.name)
+    private readonly announcementModel: Model<AnnouncementDocument>,
+  ) {}
 
   /** The cover catalogue with live ownership counts. */
   async listCovers(): Promise<AdminCoverList> {
@@ -57,26 +70,77 @@ export class AdminContentService {
     return { items };
   }
 
-  /**
-   * STUB — no announcements collection yet. Always empty. // TODO(wave2)
-   */
+  /** All announcements, newest first. */
   async listAnnouncements(): Promise<AdminAnnouncementList> {
-    // TODO(wave2): read from a real `announcements` collection.
-    return { items: [] };
+    const rows = await this.announcementModel.find().sort({ _id: -1 }).limit(200).lean().exec();
+    return { items: rows.map((r) => this.toAnnouncement(r)) };
   }
 
-  /**
-   * STUB — synthesizes (does NOT persist) an announcement record so the contract
-   * + UI flow exist. Wave-2 persists + delivers it. // TODO(wave2)
-   */
-  async createAnnouncement(dto: AdminCreateAnnouncementDto): Promise<AdminAnnouncement> {
-    // TODO(wave2): persist into the `announcements` collection + deliver banner.
-    return {
-      id: new Types.ObjectId().toString(),
+  /** Persist a new announcement (admin-only; audited at the controller). */
+  async createAnnouncement(
+    dto: AdminCreateAnnouncementDto,
+    actorId?: string | null,
+  ): Promise<AdminAnnouncement> {
+    const created = await this.announcementModel.create({
       title: dto.title,
       body: dto.body,
       active: dto.active,
-      createdAt: new Date().toISOString(),
+      createdBy:
+        actorId && Types.ObjectId.isValid(actorId) ? new Types.ObjectId(actorId) : null,
+    });
+    return this.toAnnouncement(created.toObject());
+  }
+
+  /**
+   * Patch an announcement (toggle active and/or edit title/body). Only the
+   * provided fields are changed. Throws 404 if the id is unknown.
+   */
+  async updateAnnouncement(id: string, patch: AnnouncementPatch): Promise<AdminAnnouncement> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Announcement not found');
+    }
+    const update: AnnouncementPatch = {};
+    if (patch.title !== undefined) update.title = patch.title;
+    if (patch.body !== undefined) update.body = patch.body;
+    if (patch.active !== undefined) update.active = patch.active;
+
+    const row = await this.announcementModel
+      .findByIdAndUpdate(id, { $set: update }, { new: true })
+      .lean()
+      .exec();
+    if (!row) {
+      throw new NotFoundException('Announcement not found');
+    }
+    return this.toAnnouncement(row);
+  }
+
+  /** Delete an announcement. Throws 404 if the id is unknown. */
+  async deleteAnnouncement(id: string): Promise<void> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Announcement not found');
+    }
+    const res = await this.announcementModel.deleteOne({ _id: new Types.ObjectId(id) }).exec();
+    if (res.deletedCount === 0) {
+      throw new NotFoundException('Announcement not found');
+    }
+  }
+
+  // ── internals ─────────────────────────────────────────────────────────────
+
+  /** Map a lean announcement document to the shared contract shape. */
+  private toAnnouncement(row: {
+    _id: Types.ObjectId;
+    title: string;
+    body: string;
+    active: boolean;
+    createdAt?: Date;
+  }): AdminAnnouncement {
+    return {
+      id: row._id.toString(),
+      title: row.title,
+      body: row.body,
+      active: row.active,
+      createdAt: (row.createdAt ?? new Date()).toISOString(),
     };
   }
 }

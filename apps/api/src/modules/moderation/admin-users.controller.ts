@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -92,5 +93,45 @@ export class AdminUsersController {
     @CurrentUser() caller: JwtPayload,
   ): Promise<AdminUserSummary> {
     return this.adminUsersService.setRole(id, body.role, caller.role, caller.sub);
+  }
+
+  @Post(':id/verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Force-confirm a user's email (admin override of the emailed link; idempotent)",
+  })
+  @ApiParam({ name: 'id', description: 'User id (Mongo ObjectId)' })
+  @ApiOkResponse({ description: 'The updated user summary (emailVerified=true)' })
+  @ApiNotFoundResponse({ description: 'No such user' })
+  @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
+  async verifyEmail(@Param('id') id: string): Promise<AdminUserSummary> {
+    return this.adminUsersService.verifyEmail(id);
+  }
+
+  @Post(':id/force-logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Force-logout: revoke ALL of the user's refresh sessions (logout-everywhere)",
+  })
+  @ApiParam({ name: 'id', description: 'User id (Mongo ObjectId)' })
+  @ApiOkResponse({ description: 'Acknowledgement that sessions were revoked' })
+  @ApiNotFoundResponse({ description: 'No such user' })
+  @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
+  async forceLogout(@Param('id') id: string): Promise<{ ok: true }> {
+    return this.adminUsersService.forceLogout(id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @Roles('admin') // narrows the class gate: account deletion is admin-ONLY
+  @ApiOperation({
+    summary: 'Delete (anonymize + tombstone) a user account, admin-only',
+  })
+  @ApiParam({ name: 'id', description: 'User id (Mongo ObjectId)' })
+  @ApiOkResponse({ description: 'Acknowledgement that the account was deleted' })
+  @ApiNotFoundResponse({ description: 'No such user (or already deleted)' })
+  @ApiForbiddenResponse({ description: 'Caller is not an admin' })
+  async deleteUser(@Param('id') id: string): Promise<{ ok: true }> {
+    return this.adminUsersService.deleteUser(id);
   }
 }

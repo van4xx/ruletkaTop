@@ -24,13 +24,18 @@ import { AdminSettingsService } from './admin-settings.service';
 import { AdminWalletController } from './admin-wallet.controller';
 import { AdminWalletService } from './admin-wallet.service';
 import { AuditService } from './audit.service';
+import { SettingsService } from './settings.service';
+import { Announcement, AnnouncementSchema } from './schemas/announcement.schema';
+import { AppSetting, AppSettingSchema } from './schemas/app-setting.schema';
 import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
+import { BroadcastRecord, BroadcastRecordSchema } from './schemas/broadcast-record.schema';
 
 /**
  * The expanded ADMIN-PANEL surface (admin.ruletka.top) — WAVE-1 scaffold.
  *
- * Owns the `admin_audit_logs` collection and the `/admin/{analytics,wallet,
- * premium,payments,calls,content,broadcast,security,settings,audit}` REST
+ * Owns the `admin_audit_logs` collection (plus the Wave-2 `announcements`,
+ * `broadcasts` and `app_settings` collections) and the `/admin/{analytics,
+ * wallet,premium,payments,calls,content,broadcast,security,settings,audit}` REST
  * surface. Every route reuses the SAME staff gate as the existing admin
  * controllers (class-level `JwtAuthGuard` + `RolesGuard` + `@Roles`); privileged
  * writes (wallet adjust, premium grant/revoke, broadcast, settings patch,
@@ -52,7 +57,13 @@ import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
  */
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: AuditLog.name, schema: AuditLogSchema }]),
+    MongooseModule.forFeature([
+      { name: AuditLog.name, schema: AuditLogSchema },
+      // Wave-2 persistence: announcements, broadcast history, runtime settings.
+      { name: Announcement.name, schema: AnnouncementSchema },
+      { name: BroadcastRecord.name, schema: BroadcastRecordSchema },
+      { name: AppSetting.name, schema: AppSettingSchema },
+    ]),
     WalletModule,
     PremiumModule,
     NotificationsModule,
@@ -71,6 +82,7 @@ import { AuditLog, AuditLogSchema } from './schemas/audit-log.schema';
   ],
   providers: [
     AuditService,
+    SettingsService,
     AdminAnalyticsService,
     AdminWalletService,
     AdminPremiumService,

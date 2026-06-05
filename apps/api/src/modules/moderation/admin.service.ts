@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import type { Redis } from 'ioredis';
-import { Model, Types } from 'mongoose';
+import { Connection, Model, Types } from 'mongoose';
 
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { AuthService } from '../auth/auth.service';
@@ -13,6 +13,45 @@ import { USER_DISCONNECT_CHANNEL } from './moderation.constants';
 export interface BanResult {
   userId: string;
   isBanned: boolean;
+}
+
+/** Cursor pagination input for the admin ban-list reads (bounded by the caller). */
+export interface BanListQuery {
+  cursor?: string;
+  limit: number;
+}
+
+/** One banned account as surfaced to the moderation console. */
+export interface BannedUserRow {
+  id: string;
+  email: string;
+  nickname: string;
+  /** When the account was banned, if known. We do not store an explicit ban
+   * timestamp on `User`, so this falls back to the row's `updatedAt` (the ban
+   * write is the most recent mutation in the overwhelming majority of cases). */
+  bannedAt: string | null;
+  /** Free-text ban reason, if the schema ever starts storing one (`null` today). */
+  reason: string | null;
+  createdAt: string;
+}
+
+/** One ban-evasion fingerprint row as surfaced to admins. */
+export interface BannedFingerprintRow {
+  id: string;
+  /** SHA-256 hex of (IP + '|' + User-Agent). Opaque — carries no raw PII. */
+  fingerprint: string;
+  /** The account whose ban created/last-touched this row. */
+  userId: string;
+  /** `null` = permanent (never auto-expires). */
+  expiresAt: string | null;
+  createdAt: string | null;
+}
+
+/** A generic cursor page (mirrors the shared `{ items, nextCursor, hasMore }`). */
+export interface AdminPage<T> {
+  items: T[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 /**
@@ -37,6 +76,7 @@ export class AdminService {
 
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectConnection() private readonly connection: Connection,
     @Inject(forwardRef(() => AuthService)) private readonly authService: AuthService,
     @Inject(forwardRef(() => FingerprintService))
     private readonly fingerprintService: FingerprintService,
@@ -65,6 +105,162 @@ export class AdminService {
   async unbanUser(userId: string): Promise<BanResult> {
     const updated = await this.setBanned(userId, false);
     return { userId: updated._id.toString(), isBanned: updated.isBanned };
+  }
+
+  // ── Ban-list reads (moderation console) ──────────────────────────────────────
+
+  /**
+   * Cursor-paginated list of currently-banned accounts (`isBanned === true`),
+   * newest first (`_id` desc). Reads the `users` collection (source of truth for
+   * ban state) and batch-joins `profiles` for the display `nickname` in ONE `$in`
+   * query — the same read-by-name + batched-join pattern {@link AdminUsersService}
+   * uses, so this stays free of a hard profiles-module dependency.
+   *
+   * `bannedAt` is best-effort: `User` has no dedicated ban timestamp, so we
+   * surface `updatedAt` (the ban write is normally the most recent mutation).
+   * `reason` is `null` until/unless the schema starts persisting one.
+   */
+  async listBannedUsers(pagination: BanListQuery): Promise<AdminPage<BannedUserRow>> {
+    const filter: Record<string, unknown> = { isBanned: true };
+    if (pagination.cursor) {
+      if (!Types.ObjectId.isValid(pagination.cursor)) {
+        return { items: [], nextCursor: null, hasMore: false };
+      }
+      filter._id = { $lt: new Types.ObjectId(pagination.cursor) };
+    }
+
+    const rows = (await this.userModel
+      .find(filter)
+      .sort({ _id: -1 })
+      .limit(pagination.limit + 1)
+      .select({ email: 1, createdAt: 1, updatedAt: 1 })
+      .lean()
+      .exec()) as unknown as Array<{
+      _id: Types.ObjectId;
+      email: string;
+      createdAt?: Date;
+      updatedAt?: Date;
+    }>;
+
+    const hasMore = rows.length > pagination.limit;
+    const page = hasMore ? rows.slice(0, pagination.limit) : rows;
+
+    const nicknames = await this.loadNicknames(page.map((r) => r._id));
+    const items: BannedUserRow[] = page.map((row) => ({
+      id: row._id.toString(),
+      email: row.email,
+      nickname: nicknames.get(row._id.toString()) ?? '',
+      bannedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
+      reason: null,
+      createdAt: row.createdAt ? row.createdAt.toISOString() : new Date(0).toISOString(),
+    }));
+
+    const last = page.at(-1);
+    return {
+      items,
+      nextCursor: hasMore && last ? last._id.toString() : null,
+      hasMore,
+    };
+  }
+
+  /**
+   * Cursor-paginated list of ban-evasion fingerprints (the `bannedfingerprints`
+   * collection), newest first. That collection's Mongoose model is owned by the
+   * `AuthModule` and is NOT in this module's injector, so we read it through the
+   * shared {@link Connection} by collection name (same escape hatch
+   * {@link AdminUsersService} uses for `profiles`). We only ever expose the hash,
+   * never any raw IP/UA (the collection stores none).
+   *
+   * NOTE: the register/login fingerprint gate is disabled by default
+   * (`FINGERPRINT_BAN_ENABLED`), but historical rows still accumulate here, so
+   * admins must be able to inspect and clear them.
+   */
+  async listBannedFingerprints(
+    pagination: BanListQuery,
+  ): Promise<AdminPage<BannedFingerprintRow>> {
+    const filter: Record<string, unknown> = {};
+    if (pagination.cursor) {
+      if (!Types.ObjectId.isValid(pagination.cursor)) {
+        return { items: [], nextCursor: null, hasMore: false };
+      }
+      filter._id = { $lt: new Types.ObjectId(pagination.cursor) };
+    }
+
+    const docs = (await this.connection
+      .collection('bannedfingerprints')
+      .find(filter, {
+        projection: { fingerprint: 1, userId: 1, expiresAt: 1, createdAt: 1 },
+      })
+      .sort({ _id: -1 })
+      .limit(pagination.limit + 1)
+      .toArray()) as unknown as Array<{
+      _id: Types.ObjectId;
+      fingerprint: string;
+      userId?: Types.ObjectId;
+      expiresAt?: Date | null;
+      createdAt?: Date;
+    }>;
+
+    const hasMore = docs.length > pagination.limit;
+    const page = hasMore ? docs.slice(0, pagination.limit) : docs;
+
+    const items: BannedFingerprintRow[] = page.map((doc) => ({
+      id: doc._id.toString(),
+      fingerprint: doc.fingerprint,
+      userId: doc.userId ? doc.userId.toString() : '',
+      expiresAt: doc.expiresAt ? doc.expiresAt.toISOString() : null,
+      createdAt: doc.createdAt ? doc.createdAt.toISOString() : null,
+    }));
+
+    const last = page.at(-1);
+    return {
+      items,
+      nextCursor: hasMore && last ? last._id.toString() : null,
+      hasMore,
+    };
+  }
+
+  /**
+   * Lift (delete) a single ban-evasion fingerprint row by its `_id`. Admin-only
+   * (gated in the controller). 404s an unknown/invalid id so the console can show
+   * a precise error rather than silently succeeding on a stale row.
+   */
+  async liftFingerprint(id: string): Promise<{ id: string; deleted: true }> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Fingerprint not found');
+    }
+    const result = await this.connection
+      .collection('bannedfingerprints')
+      .deleteOne({ _id: new Types.ObjectId(id) });
+    if (result.deletedCount === 0) {
+      throw new NotFoundException('Fingerprint not found');
+    }
+    return { id, deleted: true };
+  }
+
+  /**
+   * Batch-load `userId → nickname` from `profiles` in ONE `$in` query. Missing
+   * profiles fall back to an empty nickname in the caller.
+   */
+  private async loadNicknames(
+    userIds: readonly Types.ObjectId[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    if (userIds.length === 0) {
+      return out;
+    }
+    const docs = await this.connection
+      .collection('profiles')
+      .find(
+        { userId: { $in: userIds as Types.ObjectId[] } },
+        { projection: { userId: 1, nickname: 1 } },
+      )
+      .toArray();
+    for (const doc of docs) {
+      const p = doc as unknown as { userId: Types.ObjectId; nickname?: string };
+      out.set(p.userId.toString(), p.nickname ?? '');
+    }
+    return out;
   }
 
   /** Set the ban flag on a user or 404 if no such account. */

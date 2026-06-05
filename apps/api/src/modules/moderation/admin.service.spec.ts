@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { getModelToken } from '@nestjs/mongoose';
+import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
 import { REDIS_CLIENT } from '../../redis/redis.constants';
@@ -28,6 +28,10 @@ describe('AdminService — ban / unban', () => {
     authService = { revokeAllSessions: jest.fn().mockResolvedValue(undefined) };
     fingerprintService = { recordForUser: jest.fn().mockResolvedValue(undefined) };
     redis = { publish: jest.fn().mockResolvedValue(1) };
+    // AdminService now also injects the Mongoose Connection (for the banned-users /
+    // banned-fingerprints reads + the fingerprint lift). The ban/unban paths under
+    // test here never touch it, so a minimal collection stub satisfies DI.
+    const connection = { collection: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -36,6 +40,7 @@ describe('AdminService — ban / unban', () => {
         { provide: AuthService, useValue: authService },
         { provide: FingerprintService, useValue: fingerprintService },
         { provide: REDIS_CLIENT, useValue: redis },
+        { provide: getConnectionToken(), useValue: connection },
       ],
     }).compile();
 

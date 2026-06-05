@@ -1,8 +1,11 @@
+import { randomBytes, randomUUID } from 'node:crypto';
+
 import {
   BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   forwardRef,
 } from '@nestjs/common';
@@ -57,6 +60,8 @@ interface ProfileFields {
  */
 @Injectable()
 export class AdminUsersService {
+  private readonly logger = new Logger(AdminUsersService.name);
+
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectConnection() private readonly connection: Connection,
@@ -171,6 +176,137 @@ export class AdminUsersService {
 
     const profiles = await this.loadProfiles([updated._id]);
     return this.toSummary(updated as unknown as UserRow, profiles.get(updated._id.toString()));
+  }
+
+  /**
+   * Force-confirm a user's contact email (`emailVerified = true`) without the
+   * emailed link — the admin override for the normal token flow
+   * ({@link AuthService.verifyEmail}). Idempotent: re-running on an
+   * already-verified account simply re-asserts the flag. A tombstoned
+   * (`deletedAt`) account is treated as not-found. Returns the refreshed summary.
+   */
+  async verifyEmail(targetUserId: string): Promise<AdminUserSummary> {
+    if (!Types.ObjectId.isValid(targetUserId)) {
+      throw new NotFoundException('User not found');
+    }
+    const updated = await this.userModel
+      .findOneAndUpdate(
+        { _id: new Types.ObjectId(targetUserId), deletedAt: null },
+        { $set: { emailVerified: true } },
+        { new: true },
+      )
+      .select({ email: 1, role: 1, isBanned: 1, emailVerified: 1, createdAt: 1 })
+      .lean()
+      .exec();
+    if (!updated) {
+      throw new NotFoundException('User not found');
+    }
+    // TODO: audit once reachable (AuditService lives in AdminModule).
+    const profiles = await this.loadProfiles([updated._id]);
+    return this.toSummary(updated as unknown as UserRow, profiles.get(updated._id.toString()));
+  }
+
+  /**
+   * Force-logout: revoke ALL of the target's live refresh sessions via
+   * {@link AuthService.revokeAllSessions} (the same logout-everywhere primitive
+   * the ban + password-reset flows use), so any minted access token can't be
+   * refreshed and every device must re-authenticate. 404s an invalid id;
+   * otherwise idempotent (revoking already-revoked sessions is a no-op).
+   */
+  async forceLogout(targetUserId: string): Promise<{ ok: true }> {
+    if (!Types.ObjectId.isValid(targetUserId)) {
+      throw new NotFoundException('User not found');
+    }
+    const exists = await this.userModel.exists({ _id: new Types.ObjectId(targetUserId) });
+    if (!exists) {
+      throw new NotFoundException('User not found');
+    }
+    await this.authService.revokeAllSessions(targetUserId);
+    // TODO: audit once reachable (AuditService lives in AdminModule).
+    return { ok: true };
+  }
+
+  /**
+   * Admin account deletion (admin-only — gated by `@Roles('admin')` on the route).
+   *
+   * Implemented INLINE with the injected user model + {@link Connection} rather
+   * than delegating to `UsersService.eraseAccount` (importing UsersModule here is
+   * forbidden), but it mirrors the same erasure effect so an admin-initiated
+   * delete is indistinguishable from the user's own right-to-be-forgotten:
+   *   - anonymize the credential row (email → a unique non-routable tombstone,
+   *     strip nickname-bearing fields/phone, rotate the password to an unusable
+   *     hash, reset role, set `isBanned` + `deletedAt`);
+   *   - best-effort redact the `profiles` document (clear nickname/bio/avatar);
+   *   - hard-delete every refresh session (logout-everywhere).
+   *
+   * Guards against a double-delete (an already-tombstoned account 404s) so the
+   * console gets a precise error rather than silently re-scrubbing. Best-effort +
+   * non-transactional (honours the single-node dev-Mongo caveat): the profile
+   * scrub is independent and a failure is logged, never failing the delete.
+   */
+  async deleteUser(targetUserId: string): Promise<{ ok: true }> {
+    if (!Types.ObjectId.isValid(targetUserId)) {
+      throw new NotFoundException('User not found');
+    }
+    const objectId = new Types.ObjectId(targetUserId);
+
+    const user = await this.userModel.findById(objectId).exec();
+    if (!user || user.deletedAt) {
+      // Unknown OR already-erased → treat as not-found (guards double-delete).
+      throw new NotFoundException('User not found');
+    }
+
+    const now = new Date();
+    // A unique, non-routable tombstone email so the unique index is satisfied
+    // and the original address is unrecoverable / re-usable.
+    const tombstoneEmail = `deleted+${targetUserId}@removed.invalid`;
+    const unusablePasswordHash = `disabled:${randomBytes(24).toString('hex')}`;
+
+    // 1) Anonymize the credential row (retain as a tombstone, block login).
+    user.email = tombstoneEmail;
+    user.phone = null;
+    user.passwordHash = unusablePasswordHash;
+    user.role = 'user';
+    user.isBanned = true;
+    user.deletedAt = now;
+    await user.save();
+
+    // 2) Best-effort redact the profile (presentation PII). Independent of the
+    //    credential scrub — a failure here is logged, not fatal.
+    await this.connection
+      .collection('profiles')
+      .updateOne(
+        { userId: objectId },
+        {
+          $set: {
+            nickname: `deleted_${targetUserId.slice(-6)}_${randomUUID().slice(0, 6)}`,
+            bio: null,
+            status: null,
+            avatarUrl: null,
+            isPremium: false,
+            premiumUntil: null,
+          },
+        },
+      )
+      .catch((err: unknown) =>
+        this.logger.warn(
+          `deleteUser: failed to scrub profile for ${targetUserId}: ${(err as Error).message}`,
+        ),
+      );
+
+    // 3) Hard-delete every refresh session (logout-everywhere).
+    await this.connection
+      .collection('sessions')
+      .deleteMany({ userId: objectId })
+      .catch((err: unknown) =>
+        this.logger.warn(
+          `deleteUser: failed to delete sessions for ${targetUserId}: ${(err as Error).message}`,
+        ),
+      );
+
+    // TODO: audit once reachable (AuditService lives in AdminModule).
+    this.logger.log(`Admin-deleted account ${targetUserId}`);
+    return { ok: true };
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
