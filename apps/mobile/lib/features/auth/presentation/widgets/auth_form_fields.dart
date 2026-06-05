@@ -36,10 +36,12 @@ InputDecoration authInputDecoration(
     helperText: helperText,
     errorText: errorText,
     filled: true,
-    // A cool translucent glass fill over the card's frosted body.
-    fillColor: colors.glassFill.withValues(
-      alpha: context.isDark ? 0.55 : 0.85,
-    ),
+    // Dark: a DEEP recessed glass field (violet-black, not a pale white wash) so
+    // inputs read as crisp, defined fields against the frosted card. Light: near
+    // -opaque white. (The old white@55% made fields look washed-out / disabled.)
+    fillColor: context.isDark
+        ? const Color(0x590A0A14) // deep violet-black @ ~35%
+        : colors.glassFill.withValues(alpha: 0.9),
     isDense: false,
     contentPadding: const EdgeInsets.symmetric(
       horizontal: AppSpacing.lg,

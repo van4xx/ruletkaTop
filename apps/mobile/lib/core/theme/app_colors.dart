@@ -127,17 +127,17 @@ class AppColors extends ThemeExtension<AppColors> {
     neonMagenta: AppPalette.darkNeonMagenta,
     success: AppPalette.darkSuccess,
     warning: AppPalette.darkWarning,
-    // Liquid glass over the void: a cool white wash, denser at the top.
-    glassFill: Color(0x14FFFFFF), // white @ 8%
-    glassFillStrong: Color(0x29FFFFFF), // white @ ~16%
-    glassBorder: Color(0x2EFFFFFF), // white @ ~18%
-    glassHighlight: Color(0x66FFFFFF), // white @ 40% (top specular edge)
-    glassInnerGlow: Color(0x14B368FF), // neon-violet @ 8% (inner bloom)
+    // Liquid glass over the void: a clean frosted wash with a crisp lit rim.
+    glassFill: Color(0x1FFFFFFF), // white @ ~12% (more body, less mud)
+    glassFillStrong: Color(0x33FFFFFF), // white @ 20%
+    glassBorder: Color(0x47FFFFFF), // white @ ~28% (crisp wet rim)
+    glassHighlight: Color(0x99FFFFFF), // white @ 60% (bright top specular)
+    glassInnerGlow: Color(0x1FB368FF), // neon-violet @ ~12% (inner bloom)
     scrim: Color(0xB3000000), // black @ 70%
-    // Aurora blobs — vivid but low-alpha so they read as ambient light.
-    auroraViolet: Color(0x3DB368FF), // neon-violet @ ~24%
-    auroraCyan: Color(0x2900E0F5), // neon-cyan @ ~16%
-    auroraMagenta: Color(0x33FF4AC1), // neon-magenta @ ~20%
+    // Aurora blobs — vivid neon light so glass has rich color to refract.
+    auroraViolet: Color(0x7AB368FF), // neon-violet @ ~48%
+    auroraCyan: Color(0x4D00E0F5), // neon-cyan @ ~30%
+    auroraMagenta: Color(0x66FF4AC1), // neon-magenta @ ~40%
   );
 
   static const light = AppColors(
