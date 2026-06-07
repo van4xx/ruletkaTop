@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Manrope, Unbounded } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
+import { Preloader } from '@/components/preloader';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { VerifyEmailBanner } from '@/components/auth/verify-email-banner';
@@ -128,6 +129,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <Analytics />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers nonce={nonce}>
+            {/* First-visit neon intro; renders once per browser, then nothing. */}
+            <Preloader />
             {/* Skip link for keyboard / screen-reader users. */}
             <a
               href="#main"
