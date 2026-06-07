@@ -688,7 +688,7 @@ function StageFrame({
       <div
         ref={containerRef}
         className={cn(
-          'relative isolate overflow-hidden bg-[#07070b]',
+          'relative isolate overflow-hidden bg-background-base',
           fullscreen
             ? 'fixed inset-0 z-50 h-screen w-screen rounded-none border-0'
             : 'rounded-3xl border border-border/60 h-[calc(100dvh-5.5rem)] min-h-[30rem] sm:h-[calc(100dvh-7rem)]',

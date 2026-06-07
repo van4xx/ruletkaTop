@@ -73,7 +73,7 @@ export function SiteHeader() {
           className={cn(
             'border-x-0 border-t-0 transition-[background-color,backdrop-filter,box-shadow,border-color] duration-300',
             scrolled
-              ? 'border-b border-border/70 bg-card/55 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.45)] backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/45'
+              ? 'border-b border-border/70 bg-card/55 shadow-md backdrop-blur-xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/45'
               : 'border-b border-transparent bg-background/30 backdrop-blur-md',
           )}
         >

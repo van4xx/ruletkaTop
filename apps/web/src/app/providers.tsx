@@ -129,8 +129,9 @@ export function Providers({ children, nonce }: { children: ReactNode; nonce?: st
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
         attribute="class"
-        defaultTheme="system"
-        enableSystem
+        defaultTheme="dark"
+        forcedTheme="dark"
+        enableSystem={false}
         disableTransitionOnChange
         nonce={nonce}
       >

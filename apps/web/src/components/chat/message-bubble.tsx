@@ -60,7 +60,7 @@ export function MessageBubble({
           'rounded-2xl',
           mine
             ? cn(
-                'bg-gradient-to-br from-[var(--color-neon-violet)] to-[oklch(0.62_0.26_320)] text-white shadow-[0_4px_20px_-8px_var(--color-neon-violet)]',
+                'bg-gradient-to-br from-[var(--color-neon-violet)] to-[var(--color-neon-magenta)] text-white shadow-[0_4px_20px_-8px_var(--color-neon-violet)]',
                 showTail ? 'rounded-br-md' : 'rounded-br-2xl',
                 message.failed && 'opacity-80 ring-1 ring-destructive/60',
               )

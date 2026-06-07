@@ -166,7 +166,7 @@ export function LeaderboardClient() {
           </TabsList>
 
           {METRICS.map(({ value }) => (
-            <TabsContent key={value} value={value} className="space-y-8 focus-visible:outline-none">
+            <TabsContent key={value} value={value} className="space-y-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
               {/* Mount the active board only, so an inactive tab doesn't fetch. */}
               {metric === value && <MetricBoard metric={value} />}
             </TabsContent>

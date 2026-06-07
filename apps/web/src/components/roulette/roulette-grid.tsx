@@ -271,7 +271,7 @@ export function RouletteGrid({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-20 grid place-items-center bg-[#07070b]/80 backdrop-blur-sm"
+            className="absolute inset-0 z-20 grid place-items-center bg-background-base/80 backdrop-blur-sm"
           >
             {r.status === 'idle' || r.status === 'requesting' ? (
               <IdleScreen isVideo />

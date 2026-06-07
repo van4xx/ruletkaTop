@@ -106,7 +106,7 @@ export function SegmentedControl<T extends string>({
             onClick={() => onChange(opt.value)}
             className={cn(
               'relative inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
-              'transition-colors duration-200 focus-visible:outline-none',
+              'transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
               selected ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
