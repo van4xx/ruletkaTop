@@ -105,7 +105,7 @@ describe('AdminService — ban / unban', () => {
     expect(fingerprintService.recordForUser).not.toHaveBeenCalled();
   });
 
-  it('unban: clears isBanned and does NOT revoke sessions or publish', async () => {
+  it('unban: clears isBanned + banReason and does NOT revoke sessions or publish', async () => {
     userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: false }));
 
     const result = await service.unbanUser(userId);
@@ -115,8 +115,34 @@ describe('AdminService — ban / unban', () => {
       unknown,
       Record<string, unknown>,
     ];
-    expect(update).toEqual({ $set: { isBanned: false } });
+    // Unban also clears any stored reason so it never lingers on an active account.
+    expect(update).toEqual({ $set: { isBanned: false, banReason: null } });
     expect(authService.revokeAllSessions).not.toHaveBeenCalled();
     expect(redis.publish).not.toHaveBeenCalled();
+  });
+
+  it('ban: persists a banReason when one is supplied', async () => {
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: true }));
+
+    await service.banUser(userId, '  Upheld abuse report (spam)  ');
+
+    const [, update] = userModel.findByIdAndUpdate.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    // Reason is trimmed and written alongside the flag.
+    expect(update).toEqual({ $set: { isBanned: true, banReason: 'Upheld abuse report (spam)' } });
+  });
+
+  it('ban: omits banReason from the write when none is supplied (never blanks an existing reason)', async () => {
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: true }));
+
+    await service.banUser(userId);
+
+    const [, update] = userModel.findByIdAndUpdate.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(update).toEqual({ $set: { isBanned: true } });
   });
 });

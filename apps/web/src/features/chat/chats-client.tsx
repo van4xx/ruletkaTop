@@ -35,7 +35,7 @@ export function ChatsClient() {
   const selfId = user?.id ?? null;
 
   const conversationsQuery = useConversations();
-  const conversations = useMemo(() => conversationsQuery.data ?? [], [conversationsQuery.data]);
+  const conversations = useMemo(() => conversationsQuery.items, [conversationsQuery.items]);
 
   // Keep inbox previews/unread live.
   useConversationRealtime(null);
@@ -150,22 +150,37 @@ export function ChatsClient() {
           description={t('chatsClient.notFoundDescription')}
         />
       ) : (
-        <motion.ul layout className="space-y-1">
-          <AnimatePresence initial={false}>
-            {visible.map((c) => {
-              const pid = peerIdOf(c, selfId);
-              return (
-                <motion.li key={c.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <ConversationListItem
-                    conversation={c}
-                    peer={pid ? byId.get(pid) : undefined}
-                    status={statusOf(c)}
-                  />
-                </motion.li>
-              );
-            })}
-          </AnimatePresence>
-        </motion.ul>
+        <>
+          <motion.ul layout className="space-y-1">
+            <AnimatePresence initial={false}>
+              {visible.map((c) => {
+                const pid = peerIdOf(c, selfId);
+                return (
+                  <motion.li key={c.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    <ConversationListItem
+                      conversation={c}
+                      peer={pid ? byId.get(pid) : undefined}
+                      status={statusOf(c)}
+                    />
+                  </motion.li>
+                );
+              })}
+            </AnimatePresence>
+          </motion.ul>
+
+          {/* Cursor pagination — reach conversations past the first page. */}
+          {conversationsQuery.hasMore && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={conversationsQuery.fetchMore}
+                loading={conversationsQuery.isFetchingMore}
+              >
+                {t('chatsClient.showMore')}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

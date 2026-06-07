@@ -35,6 +35,27 @@ export const reportSchema = z.object({
 });
 export type Report = z.infer<typeof reportSchema>;
 
+/**
+ * Result of `POST /reports/:id/resolve-ban`: the now-`resolved` report plus the
+ * applied ban (`isBanned` reflects the post-write state of the reported user).
+ */
+export const resolvedWithBanSchema = z.object({
+  report: reportSchema,
+  ban: z.object({ userId: objectIdSchema, isBanned: z.boolean() }),
+});
+export type ResolvedWithBan = z.infer<typeof resolvedWithBanSchema>;
+
+/**
+ * One row of the per-target open-report aggregate (`GET /reports/open-counts`):
+ * a reported user and how many of their reports are still open/reviewing.
+ * Powers the "most-complained-about users" moderation view.
+ */
+export const openReportCountSchema = z.object({
+  againstUserId: objectIdSchema,
+  openReports: z.number().int().nonnegative(),
+});
+export type OpenReportCount = z.infer<typeof openReportCountSchema>;
+
 export const createBlockSchema = z.object({
   blockedUserId: objectIdSchema,
 });
@@ -106,3 +127,15 @@ export const reviewItemSchema = z.object({
   createdAt: isoDateSchema,
 });
 export type ReviewItem = z.infer<typeof reviewItemSchema>;
+
+/**
+ * Result of `POST /moderation/review/:id/resolve-ban`: the now-`resolved`
+ * review item plus the ban applied to the flagged user (`isBanned` reflects the
+ * post-write state). Lets a moderator confirm an AI-flagged violation AND
+ * sanction the offender in one action.
+ */
+export const resolvedReviewWithBanSchema = z.object({
+  item: reviewItemSchema,
+  ban: z.object({ userId: objectIdSchema, isBanned: z.boolean() }),
+});
+export type ResolvedReviewWithBan = z.infer<typeof resolvedReviewWithBanSchema>;

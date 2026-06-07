@@ -16,7 +16,15 @@
  * also arrive live over the socket as `notif:new` (kind: 'friend_request'),
  * which the page uses to invalidate the query so the list refreshes.
  */
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 import type {
   Block,
   CreateBlockDto,
@@ -34,22 +42,93 @@ export const friendsKeys = {
   requests: () => [...friendsKeys.all, 'requests'] as const,
 };
 
+/** Page size requested per `GET /friends` round-trip (matches the API default). */
+const PAGE_SIZE = 20;
+
+/** One cursor-paginated page of accepted friends (`GET /friends`). */
+interface FriendPage {
+  items: FriendSummary[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/** The cached infinite-query shape for the friends list. */
+type FriendsCache = InfiniteData<FriendPage, string | undefined>;
+
+/**
+ * The accepted-friends list, surfaced as a cursor-paginated infinite query
+ * (`GET /friends?cursor&limit` → `{ items, nextCursor, hasMore }`). Pages are
+ * flattened into a single `items` array for consumers; `fetchMore` loads the
+ * next page (no-op once exhausted / already loading).
+ *
+ * Mirrors the result-object convention used by {@link useNotifications} and
+ * {@link useProfileSearch} so a "Load more" affordance can be wired the same way.
+ */
+export interface UseFriendsResult {
+  /** All loaded friends, flattened across every fetched page. */
+  items: FriendSummary[];
+  isLoading: boolean;
+  isError: boolean;
+  /** Whether another page can be loaded. */
+  hasMore: boolean;
+  /** True while a follow-up page is in flight. */
+  isFetchingMore: boolean;
+  /** Load the next page (no-op when exhausted / already loading). */
+  fetchMore: () => void;
+  refetch: () => void;
+}
+
 // ─────────────────────────────── Queries ──────────────────────────────
-export function useFriends(): UseQueryResult<FriendSummary[]> {
-  return useQuery({
+export function useFriends(): UseFriendsResult {
+  const query = useInfiniteQuery<FriendPage>({
     queryKey: friendsKeys.list(),
-    // Backend paginates: { items, nextCursor, hasMore } — unwrap to the array
-    // the consumers expect.
-    queryFn: () =>
-      api
-        .request<{
-          items: FriendSummary[];
-          nextCursor: string | null;
-          hasMore: boolean;
-        }>('/friends')
-        .then((r) => r.items),
+    // Backend paginates: { items, nextCursor, hasMore }. Fetch page-by-page so
+    // friend lists past the first 20 stay reachable.
+    queryFn: ({ pageParam, signal }) =>
+      api.request<FriendPage>('/friends', {
+        query: { cursor: pageParam as string | undefined, limit: PAGE_SIZE },
+        signal,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
     staleTime: 30_000,
   });
+
+  const items = useMemo<FriendSummary[]>(
+    () => query.data?.pages.flatMap((p) => p.items) ?? [],
+    [query.data],
+  );
+
+  return {
+    items,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    hasMore: Boolean(query.hasNextPage),
+    isFetchingMore: query.isFetchingNextPage,
+    fetchMore: () => {
+      if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+    },
+    refetch: () => void query.refetch(),
+  };
+}
+
+/**
+ * Drop a friendship from every cached page of the infinite friends list,
+ * keyed by `friendshipId`. Pure cache transform reused by the optimistic
+ * remove/block mutations.
+ */
+function removeFromFriendsCache(
+  prev: FriendsCache | undefined,
+  friendshipId: string,
+): FriendsCache | undefined {
+  if (!prev) return prev;
+  return {
+    ...prev,
+    pages: prev.pages.map((page) => ({
+      ...page,
+      items: page.items.filter((f) => f.friendshipId !== friendshipId),
+    })),
+  };
 }
 
 /**
@@ -105,12 +184,12 @@ export function useRemoveFriendship() {
     onMutate: async (friendshipId: string) => {
       await qc.cancelQueries({ queryKey: friendsKeys.list() });
       await qc.cancelQueries({ queryKey: friendsKeys.requests() });
-      const previousList = qc.getQueryData<FriendSummary[]>(friendsKeys.list());
+      const previousList = qc.getQueryData<FriendsCache>(friendsKeys.list());
       const previousRequests = qc.getQueryData<FriendRequestsResponse>(friendsKeys.requests());
       if (previousList) {
-        qc.setQueryData<FriendSummary[]>(
+        qc.setQueryData<FriendsCache>(
           friendsKeys.list(),
-          previousList.filter((f) => f.friendshipId !== friendshipId),
+          removeFromFriendsCache(previousList, friendshipId),
         );
       }
       if (previousRequests) {

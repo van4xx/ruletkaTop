@@ -26,6 +26,10 @@ const GIFT_RARITIES: readonly Rarity[] = ['common', 'rare', 'epic', 'legendary']
 const CODE_RE = /^[a-z0-9][a-z0-9_-]{1,48}$/i;
 /** How many newest *expired* top placements the Top tab keeps for context. */
 const TOP_HISTORY_LIMIT = 50;
+/** Max number of marketing perks a premium plan may carry. */
+const PREMIUM_PERK_MAX = 20;
+/** Max length (chars) of a single premium-plan perk line. */
+const PREMIUM_PERK_LEN = 120;
 
 /** A `cointransactions` row as read for the recent-activity feed. */
 interface CoinTxRow {
@@ -102,6 +106,44 @@ export interface UpdateGiftDto {
   isPremiumOnly?: boolean;
 }
 
+/**
+ * One `premiumplans` catalogue row as surfaced to the admin console — the shared
+ * {@link PremiumPlanContract} fields plus the Mongo `id`/timestamps (which the
+ * pricing-facing contract omits, but the admin table wants).
+ */
+export interface AdminPremiumPlanRow {
+  id: string;
+  code: string;
+  title: string;
+  priceRub: number;
+  intervalDays: number;
+  perks: string[];
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** Create body for a premium plan (all required; `code` must be unique). */
+export interface CreatePremiumPlanDto {
+  code: string;
+  title: string;
+  priceRub: number;
+  intervalDays: number;
+  perks?: string[];
+}
+
+/**
+ * Partial update for a premium plan. `code` is intentionally NOT updatable: it
+ * is the stable public identifier `Subscription.plan` and the subscribe flow
+ * resolve a plan by, so re-keying it out from under an in-flight subscription is
+ * unsafe (mirrors {@link UpdateCoinPackageDto}).
+ */
+export interface UpdatePremiumPlanDto {
+  title?: string;
+  priceRub?: number;
+  intervalDays?: number;
+  perks?: string[];
+}
+
 /** One `topplacements` row, joined to the promoted account, for the Top tab. */
 export interface AdminTopPlacementRow {
   id: string;
@@ -141,6 +183,10 @@ export interface AdminTopPlacementRow {
  *  - gifts (`gifts`) — full CRUD; `code` immutable. Hard-delete is safe because
  *    `gifttransactions` denormalises `priceCoins` and is read by `giftId` only
  *    for history, so removing a catalogue row never corrupts past sends;
+ *  - premium plans (`premiumplans`) — full CRUD; `code` immutable (the subscribe
+ *    flow + `Subscription.plan` resolve a tier by it). These are the SAME
+ *    documents `PremiumService` seeds and the public pricing page reads, so
+ *    edits here are live; existing subscriptions keep their stored `plan`;
  *  - top placements (`topplacements`) — list (active + recent, joined to the
  *    promoted account) + remove. Placements are CREATED by users buying
  *    visibility, so there is no admin "create" — only takedown.
@@ -378,6 +424,81 @@ export class AdminEconomyService {
   }
 
   // ════════════════════════════════════════════════════════════════════════
+  // Premium plans (`premiumplans`) — full CRUD.
+  //
+  // Mirrors the coin-package catalogue: `code` is the unique, immutable public
+  // id the subscribe flow resolves a plan by (and `Subscription.plan` stores).
+  // The `premiumplans` collection is seeded on boot by `PremiumService`, which
+  // ALSO reads it by name; admin edits here land on the same documents, so the
+  // pricing page (`GET /premium/plans`) and the subscribe flow see them live.
+  // ════════════════════════════════════════════════════════════════════════
+
+  /** List the full premium-plan catalogue (cheapest first). */
+  async listPremiumPlans(): Promise<AdminPremiumPlanRow[]> {
+    const rows = await this.connection
+      .collection('premiumplans')
+      .find({})
+      .sort({ priceRub: 1 })
+      .toArray();
+    return rows.map((r) => this.toPremiumPlanRow(r));
+  }
+
+  /** Create a premium plan. 409 on duplicate `code`. */
+  async createPremiumPlan(dto: CreatePremiumPlanDto): Promise<AdminPremiumPlanRow> {
+    const code = this.requireCode(dto.code);
+    const title = this.requireString(dto.title, 'title', 64);
+    const priceRub = this.requireInt(dto.priceRub, 'priceRub', 1);
+    const intervalDays = this.requireInt(dto.intervalDays, 'intervalDays', 1);
+    const perks = this.requirePerks(dto.perks ?? []);
+
+    const coll = this.connection.collection('premiumplans');
+    if (await coll.findOne({ code })) {
+      throw new ConflictException(`Premium plan with code "${code}" already exists`);
+    }
+    const now = new Date();
+    const doc = { code, title, priceRub, intervalDays, perks, createdAt: now, updatedAt: now };
+    const { insertedId } = await coll.insertOne(doc);
+    return this.toPremiumPlanRow({ _id: insertedId, ...doc });
+  }
+
+  /**
+   * Patch a premium plan (title/price/interval/perks). `code` is immutable (the
+   * stable public id the subscribe flow resolves a plan by). 404 if absent.
+   */
+  async updatePremiumPlan(id: string, dto: UpdatePremiumPlanDto): Promise<AdminPremiumPlanRow> {
+    const _id = this.requireObjectId(id, 'Premium plan not found');
+    const set: Record<string, string | number | string[] | Date> = {};
+    if (dto.title !== undefined) set.title = this.requireString(dto.title, 'title', 64);
+    if (dto.priceRub !== undefined) set.priceRub = this.requireInt(dto.priceRub, 'priceRub', 1);
+    if (dto.intervalDays !== undefined)
+      set.intervalDays = this.requireInt(dto.intervalDays, 'intervalDays', 1);
+    if (dto.perks !== undefined) set.perks = this.requirePerks(dto.perks);
+    if (Object.keys(set).length === 0) {
+      throw new BadRequestException('No updatable fields provided');
+    }
+    set.updatedAt = new Date();
+
+    const updated = await this.connection
+      .collection('premiumplans')
+      .findOneAndUpdate({ _id }, { $set: set }, { returnDocument: 'after' });
+    const doc = this.unwrapFindAndModify(updated);
+    if (!doc) throw new NotFoundException('Premium plan not found');
+    return this.toPremiumPlanRow(doc);
+  }
+
+  /**
+   * Delete a premium plan by id. 404 if absent. Existing subscriptions keep
+   * their denormalised `plan` code and entitlement window, so removing a
+   * catalogue row only pulls the tier from the pricing page going forward.
+   */
+  async deletePremiumPlan(id: string): Promise<{ id: string }> {
+    const _id = this.requireObjectId(id, 'Premium plan not found');
+    const { deletedCount } = await this.connection.collection('premiumplans').deleteOne({ _id });
+    if (!deletedCount) throw new NotFoundException('Premium plan not found');
+    return { id };
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
   // Top placements (`topplacements`) — list (joined) + remove.
   // ════════════════════════════════════════════════════════════════════════
 
@@ -468,6 +589,23 @@ export class AdminEconomyService {
     };
   }
 
+  /** Project a raw `premiumplans` doc to the admin row shape. */
+  private toPremiumPlanRow(doc: Record<string, unknown>): AdminPremiumPlanRow {
+    const perks = Array.isArray(doc.perks)
+      ? doc.perks.filter((p): p is string => typeof p === 'string')
+      : [];
+    return {
+      id: (doc._id as Types.ObjectId).toString(),
+      code: typeof doc.code === 'string' ? doc.code : '',
+      title: typeof doc.title === 'string' ? doc.title : '',
+      priceRub: typeof doc.priceRub === 'number' ? doc.priceRub : 0,
+      intervalDays: typeof doc.intervalDays === 'number' ? doc.intervalDays : 0,
+      perks,
+      createdAt: this.maybeIso(doc.createdAt),
+      updatedAt: this.maybeIso(doc.updatedAt),
+    };
+  }
+
   /**
    * Batch-load `userId → {nickname, avatarUrl}` from `profiles` in ONE `$in`
    * query (mirrors {@link AdminService.loadNicknames}). Missing profiles are
@@ -540,6 +678,33 @@ export class AdminEconomyService {
       throw new BadRequestException(`rarity must be one of: ${GIFT_RARITIES.join(', ')}`);
     }
     return raw as Rarity;
+  }
+
+  /**
+   * Validate a premium-plan `perks` list: an array (≤ {@link PREMIUM_PERK_MAX})
+   * of non-empty trimmed strings (each ≤ {@link PREMIUM_PERK_LEN} chars). Blank
+   * entries are dropped; the empty list is allowed.
+   */
+  private requirePerks(raw: unknown): string[] {
+    if (!Array.isArray(raw)) {
+      throw new BadRequestException('perks must be an array of strings');
+    }
+    const perks: string[] = [];
+    for (const entry of raw) {
+      if (typeof entry !== 'string') {
+        throw new BadRequestException('perks must be an array of strings');
+      }
+      const trimmed = entry.trim();
+      if (trimmed.length === 0) continue;
+      if (trimmed.length > PREMIUM_PERK_LEN) {
+        throw new BadRequestException(`each perk must be ≤ ${PREMIUM_PERK_LEN} chars`);
+      }
+      perks.push(trimmed);
+    }
+    if (perks.length > PREMIUM_PERK_MAX) {
+      throw new BadRequestException(`at most ${PREMIUM_PERK_MAX} perks are allowed`);
+    }
+    return perks;
   }
 
   /** Validate a Mongo ObjectId string; throw 404 (resource-shaped) if malformed. */

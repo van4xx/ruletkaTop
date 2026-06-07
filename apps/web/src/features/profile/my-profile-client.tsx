@@ -158,7 +158,7 @@ export function MyProfileClient() {
         // The owner can always see their own view count.
         canSeeViews
         isOwnProfile
-        friendsCount={friendsQuery.data?.length ?? null}
+        friendsCount={friendsQuery.isLoading ? null : friendsQuery.items.length}
         friendsLoading={friendsQuery.isLoading}
         isTopPlaced={topPlacement.isPlaced}
         topLoading={topPlacement.isLoading}

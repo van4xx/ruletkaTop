@@ -43,3 +43,12 @@ export const resolveReviewSchema = z.object({
   status: resolveStatusSchema,
 });
 export type ResolveReviewDto = z.infer<typeof resolveReviewSchema>;
+
+/**
+ * Query of `GET /reports/open-counts`: how many most-reported users to return.
+ * Coerced from the query string and bounded, mirroring the pagination `limit`.
+ */
+export const openReportsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type OpenReportsQuery = z.infer<typeof openReportsQuerySchema>;

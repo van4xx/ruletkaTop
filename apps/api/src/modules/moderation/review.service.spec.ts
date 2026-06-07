@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
+import { AdminService } from './admin.service';
 import { ReviewService } from './review.service';
 import { ModerationEvent } from './schemas/moderation-event.schema';
 
@@ -37,21 +38,28 @@ function eventDoc(
     autoAction: 'warn',
     status: 'open',
     get: (_k: string) => new Date('2026-05-31T00:00:00.000Z'),
+    // `resolveWithBan` mutates `status` then persists via `save()`.
+    save: jest.fn().mockImplementation(function (this: Record<string, unknown>) {
+      return Promise.resolve(this);
+    }),
     ...over,
   };
 }
 
 describe('ReviewService — admin review queue', () => {
   let service: ReviewService;
-  let eventModel: { find: jest.Mock; findByIdAndUpdate: jest.Mock };
+  let eventModel: { find: jest.Mock; findById: jest.Mock; findByIdAndUpdate: jest.Mock };
+  let adminService: { banUser: jest.Mock };
 
   beforeEach(async () => {
-    eventModel = { find: jest.fn(), findByIdAndUpdate: jest.fn() };
+    eventModel = { find: jest.fn(), findById: jest.fn(), findByIdAndUpdate: jest.fn() };
+    adminService = { banUser: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ReviewService,
         { provide: getModelToken(ModerationEvent.name), useValue: eventModel },
+        { provide: AdminService, useValue: adminService },
       ],
     }).compile();
 
@@ -120,5 +128,50 @@ describe('ReviewService — admin review queue', () => {
   it('resolve: 404s an invalid (non-ObjectId) id without hitting the DB', async () => {
     await expect(service.resolve('nope', 'resolved')).rejects.toBeInstanceOf(NotFoundException);
     expect(eventModel.findByIdAndUpdate).not.toHaveBeenCalled();
+  });
+
+  describe('resolveWithBan', () => {
+    it('404s an invalid id without banning', async () => {
+      await expect(service.resolveWithBan('nope')).rejects.toBeInstanceOf(NotFoundException);
+      expect(eventModel.findById).not.toHaveBeenCalled();
+      expect(adminService.banUser).not.toHaveBeenCalled();
+    });
+
+    it('404s an unknown item without banning', async () => {
+      eventModel.findById.mockReturnValue(queryReturning(null));
+      await expect(service.resolveWithBan('507f1f77bcf86cd799439012')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(adminService.banUser).not.toHaveBeenCalled();
+    });
+
+    it('bans the flagged user (with a reason) THEN resolves the item', async () => {
+      const doc = eventDoc('507f1f77bcf86cd799439012');
+      eventModel.findById.mockReturnValue(queryReturning(doc));
+      adminService.banUser.mockResolvedValue({ userId: USER, isBanned: true });
+
+      const result = await service.resolveWithBan('507f1f77bcf86cd799439012');
+
+      expect(adminService.banUser).toHaveBeenCalledTimes(1);
+      const [bannedId, reason] = adminService.banUser.mock.calls[0] as [string, string];
+      expect(bannedId).toBe(USER);
+      expect(reason).toContain('nudity');
+      expect(doc.status).toBe('resolved');
+      expect(doc.save).toHaveBeenCalledTimes(1);
+      expect(result.item.status).toBe('resolved');
+      expect(result.ban).toEqual({ userId: USER, isBanned: true });
+    });
+
+    it('does NOT resolve the item if the ban write fails', async () => {
+      const doc = eventDoc('507f1f77bcf86cd799439012');
+      eventModel.findById.mockReturnValue(queryReturning(doc));
+      adminService.banUser.mockRejectedValue(new Error('ban failed'));
+
+      await expect(service.resolveWithBan('507f1f77bcf86cd799439012')).rejects.toThrow(
+        'ban failed',
+      );
+      expect(doc.save).not.toHaveBeenCalled();
+      expect(doc.status).toBe('open');
+    });
   });
 });

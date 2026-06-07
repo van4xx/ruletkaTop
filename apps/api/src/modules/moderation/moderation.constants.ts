@@ -38,6 +38,34 @@ export interface ModerationActionMessage {
   payload: ModerationActionPayload;
 }
 
+/**
+ * Cross-instance channel on which {@link BlocksService} PUBLISHES a freshly
+ * created block so the realtime gateway can FORCE-END any active call between
+ * the two users immediately (a block must sever a call in progress, not just
+ * prevent future matches).
+ *
+ * WIRE CONTRACT: the message body is JSON `{ userId, blockedUserId }` (the
+ * blocker and the blocked, both Mongo ObjectId hex). The matchmaking gateway
+ * subscribes (a small hook in `matchmaking.gateway.ts`) and tears down the room
+ * ONLY if those two users are currently matched together — so an unrelated call
+ * either user happens to be in is never disturbed. Best-effort: a publish
+ * failure just means the (already-effective) block won't retroactively end a
+ * live call; the bidirectional `isBlocked` gate still prevents re-matching.
+ *
+ * Decoupled via Redis (not a direct gateway dependency) to keep the moderation
+ * module free of a `MatchmakingModule` cycle, exactly like
+ * {@link MODERATION_ACTION_CHANNEL}.
+ */
+export const BLOCK_ENFORCE_CHANNEL = 'block:enforce';
+
+/** Shape published on {@link BLOCK_ENFORCE_CHANNEL} (JSON-encoded). */
+export interface BlockEnforceMessage {
+  /** The user who created the block. */
+  userId: string;
+  /** The user who was blocked. */
+  blockedUserId: string;
+}
+
 // ── Escalation policy tunables ───────────────────────────────────────────────
 
 /**

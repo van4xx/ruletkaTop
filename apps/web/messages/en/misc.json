@@ -283,6 +283,8 @@
     "match": "Match:",
     "confirm": "Uphold",
     "dismiss": "Dismiss",
+    "confirmAndBan": "Confirm & ban",
+    "bannedToast": "Violation upheld — user banned",
     "accessDeniedTitle": "Access denied",
     "accessDeniedDesc": "This section is available to moderators and administrators only.",
     "actionToastWarnTitle": "Moderation warning",

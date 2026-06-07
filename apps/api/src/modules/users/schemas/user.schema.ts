@@ -40,6 +40,16 @@ export class User {
   isBanned!: boolean;
 
   /**
+   * Free-text reason the account was banned (set alongside `isBanned` by the
+   * moderation surface — e.g. "Upheld abuse report" or "Confirmed AI-flagged
+   * violation"). Surfaced read-only in the admin ban list. `null` for accounts
+   * that were never banned, or banned before reasons were captured. Additive —
+   * nothing reads this to authenticate.
+   */
+  @Prop({ required: false, default: null, type: String })
+  banReason!: string | null;
+
+  /**
    * Whether the contact email has been confirmed via the emailed verification
    * link. Defaults to `false` at registration; flipped to `true` once the user
    * consumes a valid `email_verify` token. Additive — login does NOT require a

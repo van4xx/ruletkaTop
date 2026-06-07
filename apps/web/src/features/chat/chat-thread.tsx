@@ -60,7 +60,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
 
   // Resolve the peer via the conversations cache (cheap if the inbox is warm).
   const conversationsQuery = useConversations();
-  const conversation = conversationsQuery.data?.find((c) => c.id === conversationId);
+  const conversation = conversationsQuery.items.find((c) => c.id === conversationId);
   const peerId = conversation ? peerIdOf(conversation, selfId) : undefined;
   const { byId } = usePeerProfiles(peerId ? [peerId] : []);
   const peer: PublicProfile | undefined = peerId ? byId.get(peerId) : undefined;

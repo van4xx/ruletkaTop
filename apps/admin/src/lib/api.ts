@@ -131,6 +131,42 @@ interface ReviewPage {
   hasMore: boolean;
 }
 
+/* ───────────────────────────── Economy CRUD types ─────────────────────────────
+ * The economy/premium-plan CRUD endpoints are NOT in `@ruletka/shared-types`
+ * (they're local to `admin-economy.controller`), so the row/DTO shapes are
+ * mirrored here. They track `apps/api/src/modules/moderation/admin-economy.service`
+ * 1:1 — the same convention `pages/Economy.tsx` uses for coin packages + gifts.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** One premium-plan catalogue row, as the admin economy controller returns it. */
+export interface AdminPremiumPlan {
+  id: string;
+  code: string;
+  title: string;
+  priceRub: number;
+  intervalDays: number;
+  perks: string[];
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** Create body for a premium plan (`code` is the unique, immutable public id). */
+export interface CreatePremiumPlanDto {
+  code: string;
+  title: string;
+  priceRub: number;
+  intervalDays: number;
+  perks?: string[];
+}
+
+/** Partial update for a premium plan. `code` is immutable, so it's not here. */
+export interface UpdatePremiumPlanDto {
+  title?: string;
+  priceRub?: number;
+  intervalDays?: number;
+  perks?: string[];
+}
+
 export const adminApi = {
   bootstrap: async (): Promise<AuthUser | null> => {
     if (!(await refresh())) return null;
@@ -208,13 +244,31 @@ export const adminApi = {
     stats: () => req<AdminWalletStats>('/admin/wallet/stats'),
   },
 
-  /** Премиум — subscribers list, grant/revoke (admin). */
+  /** Премиум — subscribers list, grant/revoke (admin), and plan-catalogue CRUD. */
   premium: {
     list: (cursor?: string) => req<AdminPremiumList>('/admin/premium', { query: { cursor } }),
     grant: (userId: string, body: AdminGrantPremiumDto) =>
       req<{ ok: true }>(`/admin/premium/${userId}/grant`, { method: 'POST', json: body }),
     revoke: (userId: string) =>
       req<{ ok: true }>(`/admin/premium/${userId}/revoke`, { method: 'POST' }),
+
+    /**
+     * Plan-tier catalogue (`premiumplans`) — list is moderator-visible; writes
+     * are admin-only and the API re-checks the role (→ 403). Lives under
+     * `/admin/economy/premium-plans` alongside the coin-package + gift CRUD.
+     */
+    plans: {
+      list: () => req<AdminPremiumPlan[]>('/admin/economy/premium-plans'),
+      create: (body: CreatePremiumPlanDto) =>
+        req<AdminPremiumPlan>('/admin/economy/premium-plans', { method: 'POST', json: body }),
+      update: (id: string, body: UpdatePremiumPlanDto) =>
+        req<AdminPremiumPlan>(`/admin/economy/premium-plans/${id}`, {
+          method: 'PATCH',
+          json: body,
+        }),
+      remove: (id: string) =>
+        req<{ id: string }>(`/admin/economy/premium-plans/${id}`, { method: 'DELETE' }),
+    },
   },
 
   /** Платежи — charges list + funnel stats. */

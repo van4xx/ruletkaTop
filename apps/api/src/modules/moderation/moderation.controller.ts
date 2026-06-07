@@ -31,7 +31,10 @@ import {
   type ModerationActionPayload,
   type ModerationViolationDto,
   moderationViolationSchema,
+  type OpenReportCount,
   type Report,
+  type ResolvedReviewWithBan,
+  type ResolvedWithBan,
   type ReviewItem,
 } from '@ruletka/shared-types';
 
@@ -46,6 +49,8 @@ import {
   listReportsQuerySchema,
   type ListReviewQuery,
   listReviewQuerySchema,
+  type OpenReportsQuery,
+  openReportsQuerySchema,
   type ResolveReportDto,
   resolveReportSchema,
   type ResolveReviewDto,
@@ -121,6 +126,19 @@ export class ModerationController {
     return this.reviewService.resolve(id, dto.status);
   }
 
+  @Post('moderation/review/:id/resolve-ban')
+  @UseGuards(RolesGuard)
+  @Roles('moderator', 'admin')
+  @ApiOperation({
+    summary: 'Uphold a review item AND ban the flagged user (moderator/admin)',
+  })
+  @ApiParam({ name: 'id', description: 'Moderation event id (Mongo ObjectId)' })
+  @ApiOkResponse({ description: 'The resolved review item + the applied ban' })
+  @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
+  async resolveReviewWithBan(@Param('id') id: string): Promise<ResolvedReviewWithBan> {
+    return this.reviewService.resolveWithBan(id);
+  }
+
   // ── Moderator triage (role-guarded) ─────────────────────────────────────────
 
   @Get('reports')
@@ -138,6 +156,20 @@ export class ModerationController {
     );
   }
 
+  @Get('reports/open-counts')
+  @UseGuards(RolesGuard)
+  @Roles('moderator', 'admin')
+  @ApiOperation({
+    summary: 'Most-reported users: count of open reports per target (moderator/admin)',
+  })
+  @ApiOkResponse({ description: 'Per-target open-report counts, most-reported first' })
+  @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
+  async openReportCounts(
+    @Query(createZodValidationPipe(openReportsQuerySchema)) query: OpenReportsQuery,
+  ): Promise<OpenReportCount[]> {
+    return this.reportsService.countOpenReportsByTarget(query.limit);
+  }
+
   @Post('reports/:id/resolve')
   @UseGuards(RolesGuard)
   @Roles('moderator', 'admin')
@@ -150,6 +182,19 @@ export class ModerationController {
     @Body(createZodValidationPipe(resolveReportSchema)) dto: ResolveReportDto,
   ): Promise<Report> {
     return this.reportsService.resolveReport(id, dto.status);
+  }
+
+  @Post('reports/:id/resolve-ban')
+  @UseGuards(RolesGuard)
+  @Roles('moderator', 'admin')
+  @ApiOperation({
+    summary: 'Uphold a report AND ban the reported user (moderator/admin)',
+  })
+  @ApiParam({ name: 'id', description: 'Report id (Mongo ObjectId)' })
+  @ApiOkResponse({ description: 'The resolved report + the applied ban' })
+  @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
+  async resolveReportWithBan(@Param('id') id: string): Promise<ResolvedWithBan> {
+    return this.reportsService.resolveReportWithBan(id);
   }
 
   // ── User surface ─────────────────────────────────────────────────────────────

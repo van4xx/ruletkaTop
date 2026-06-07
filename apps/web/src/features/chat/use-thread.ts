@@ -21,7 +21,7 @@ import type { Message } from '@ruletka/shared-types';
 
 import { api } from '@/lib/api';
 import { emitSocket, useSocket, useSocketEvent } from './lib/use-socket';
-import { chatKeys } from './use-conversations';
+import { chatKeys, type ConversationsCache } from './use-conversations';
 
 interface MessagePage {
   items: Message[];
@@ -151,12 +151,20 @@ export function useThread(conversationId: string, selfId: string | null): UseThr
     if (lastInbound && lastInbound.id !== lastReadId.current && !lastInbound.readAt) {
       lastReadId.current = lastInbound.id;
       emitSocket('chat:read', { conversationId, messageId: lastInbound.id });
-      // Optimistically zero the unread badge in the inbox.
-      qc.setQueryData<import('@ruletka/shared-types').Conversation[]>(
-        chatKeys.conversations(),
-        (prev) =>
-          prev?.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)) ?? prev,
-      );
+      // Optimistically zero the unread badge in the inbox. The inbox is a
+      // cursor-paginated infinite query, so patch the matching row across pages.
+      qc.setQueryData<ConversationsCache>(chatKeys.conversations(), (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          pages: prev.pages.map((page) => ({
+            ...page,
+            items: page.items.map((c) =>
+              c.id === conversationId ? { ...c, unreadCount: 0 } : c,
+            ),
+          })),
+        };
+      });
     }
   }, [messages, selfId, conversationId, qc]);
 

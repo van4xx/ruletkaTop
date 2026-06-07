@@ -30,12 +30,15 @@ import { RolesGuard } from '../../common/roles.guard';
 import {
   type AdminCoinPackageRow,
   type AdminGiftRow,
+  type AdminPremiumPlanRow,
   type AdminTopPlacementRow,
   AdminEconomyService,
   type CreateCoinPackageDto,
   type CreateGiftDto,
+  type CreatePremiumPlanDto,
   type UpdateCoinPackageDto,
   type UpdateGiftDto,
+  type UpdatePremiumPlanDto,
 } from './admin-economy.service';
 
 /**
@@ -161,6 +164,55 @@ export class AdminEconomyController {
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
   async deleteGift(@Param('id') id: string): Promise<{ id: string }> {
     return this.adminEconomyService.deleteGift(id);
+  }
+
+  // ── Premium plans (`premiumplans`) ────────────────────────────────────────
+
+  @Get('premium-plans')
+  @ApiOperation({ summary: 'List the premium-plan catalogue (cheapest first)' })
+  @ApiOkResponse({ description: 'All premium plans' })
+  @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
+  async listPremiumPlans(): Promise<AdminPremiumPlanRow[]> {
+    return this.adminEconomyService.listPremiumPlans();
+  }
+
+  @Post('premium-plans')
+  @Roles('admin') // narrows the class gate: catalogue writes are admin-ONLY
+  @ApiOperation({ summary: 'Create a premium plan (admin-only)' })
+  @ApiOkResponse({ description: 'The created plan' })
+  @ApiBadRequestResponse({ description: 'Invalid body' })
+  @ApiConflictResponse({ description: 'A plan with that code already exists' })
+  @ApiForbiddenResponse({ description: 'Caller is not an admin' })
+  async createPremiumPlan(@Body() body: CreatePremiumPlanDto): Promise<AdminPremiumPlanRow> {
+    return this.adminEconomyService.createPremiumPlan(body);
+  }
+
+  @Patch('premium-plans/:id')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Update a premium plan (title/price/interval/perks; admin-only)' })
+  @ApiParam({ name: 'id', description: 'Premium-plan id (Mongo ObjectId)' })
+  @ApiOkResponse({ description: 'The updated plan' })
+  @ApiBadRequestResponse({ description: 'Invalid body' })
+  @ApiNotFoundResponse({ description: 'No such plan' })
+  @ApiForbiddenResponse({ description: 'Caller is not an admin' })
+  async updatePremiumPlan(
+    @Param('id') id: string,
+    @Body() body: UpdatePremiumPlanDto,
+  ): Promise<AdminPremiumPlanRow> {
+    return this.adminEconomyService.updatePremiumPlan(id, body);
+  }
+
+  @Delete('premium-plans/:id')
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'Delete a premium plan (admin-only; active subscriptions keep their stored plan)',
+  })
+  @ApiParam({ name: 'id', description: 'Premium-plan id (Mongo ObjectId)' })
+  @ApiOkResponse({ description: 'The deleted plan id' })
+  @ApiNotFoundResponse({ description: 'No such plan' })
+  @ApiForbiddenResponse({ description: 'Caller is not an admin' })
+  async deletePremiumPlan(@Param('id') id: string): Promise<{ id: string }> {
+    return this.adminEconomyService.deletePremiumPlan(id);
   }
 
   // ── Top placements (`topplacements`) ──────────────────────────────────────

@@ -30,7 +30,7 @@ export interface BannedUserRow {
    * timestamp on `User`, so this falls back to the row's `updatedAt` (the ban
    * write is the most recent mutation in the overwhelming majority of cases). */
   bannedAt: string | null;
-  /** Free-text ban reason, if the schema ever starts storing one (`null` today). */
+  /** Free-text ban reason captured at ban time (`null` if none was recorded). */
   reason: string | null;
   createdAt: string;
 }
@@ -84,17 +84,23 @@ export class AdminService {
   ) {}
 
   /**
-   * Ban a user: flip `isBanned`, record their device/IP fingerprints for
-   * ban-evasion, revoke every refresh session, then best-effort force-disconnect
-   * their live sockets. Idempotent — re-banning an already banned user re-runs
-   * each step (defensive) and still succeeds.
+   * Ban a user: flip `isBanned` (recording an optional `reason`), record their
+   * device/IP fingerprints for ban-evasion, revoke every refresh session, then
+   * best-effort force-disconnect their live sockets. Idempotent — re-banning an
+   * already banned user re-runs each step (defensive) and still succeeds.
+   *
+   * `reason` (when provided) is persisted to `user.banReason` so the moderation
+   * console can show WHY an account was banned (e.g. "Upheld abuse report"); a
+   * re-ban with a new reason overwrites the prior one, and an omitted reason
+   * leaves any existing reason untouched (so the AI-escalation ban path, which
+   * passes none, doesn't blank a reason a moderator set).
    *
    * Fingerprints are harvested from the user's refresh sessions, so this MUST
    * run before any session teardown (the current `revokeAllSessions` only soft-
    * revokes rows, but recording first keeps us correct if that ever hard-deletes).
    */
-  async banUser(userId: string): Promise<BanResult> {
-    const updated = await this.setBanned(userId, true);
+  async banUser(userId: string, reason?: string): Promise<BanResult> {
+    const updated = await this.setBanned(userId, true, reason);
     await this.fingerprintService.recordForUser(userId);
     await this.authService.revokeAllSessions(userId);
     await this.forceDisconnect(userId);
@@ -118,7 +124,8 @@ export class AdminService {
    *
    * `bannedAt` is best-effort: `User` has no dedicated ban timestamp, so we
    * surface `updatedAt` (the ban write is normally the most recent mutation).
-   * `reason` is `null` until/unless the schema starts persisting one.
+   * `reason` reflects `user.banReason` (the free-text reason captured at ban
+   * time), or `null` when none was recorded.
    */
   async listBannedUsers(pagination: BanListQuery): Promise<AdminPage<BannedUserRow>> {
     const filter: Record<string, unknown> = { isBanned: true };
@@ -133,11 +140,12 @@ export class AdminService {
       .find(filter)
       .sort({ _id: -1 })
       .limit(pagination.limit + 1)
-      .select({ email: 1, createdAt: 1, updatedAt: 1 })
+      .select({ email: 1, banReason: 1, createdAt: 1, updatedAt: 1 })
       .lean()
       .exec()) as unknown as Array<{
       _id: Types.ObjectId;
       email: string;
+      banReason?: string | null;
       createdAt?: Date;
       updatedAt?: Date;
     }>;
@@ -151,7 +159,7 @@ export class AdminService {
       email: row.email,
       nickname: nicknames.get(row._id.toString()) ?? '',
       bannedAt: row.updatedAt ? row.updatedAt.toISOString() : null,
-      reason: null,
+      reason: row.banReason ?? null,
       createdAt: row.createdAt ? row.createdAt.toISOString() : new Date(0).toISOString(),
     }));
 
@@ -259,13 +267,29 @@ export class AdminService {
     return out;
   }
 
-  /** Set the ban flag on a user or 404 if no such account. */
-  private async setBanned(userId: string, isBanned: boolean): Promise<UserDocument> {
+  /**
+   * Set the ban flag on a user or 404 if no such account. When banning, an
+   * optional `reason` is persisted to `banReason`; unbanning clears the reason.
+   * A ban with no `reason` leaves any existing reason untouched (the field is
+   * only written when we have something to write or are clearing it on unban).
+   */
+  private async setBanned(
+    userId: string,
+    isBanned: boolean,
+    reason?: string,
+  ): Promise<UserDocument> {
     if (!Types.ObjectId.isValid(userId)) {
       throw new NotFoundException('User not found');
     }
+    const update: Record<string, unknown> = { isBanned };
+    if (!isBanned) {
+      // Clear the reason on unban so a stale reason never lingers on an active account.
+      update.banReason = null;
+    } else if (reason && reason.trim().length > 0) {
+      update.banReason = reason.trim();
+    }
     const updated = await this.userModel
-      .findByIdAndUpdate(new Types.ObjectId(userId), { $set: { isBanned } }, { new: true })
+      .findByIdAndUpdate(new Types.ObjectId(userId), { $set: update }, { new: true })
       .exec();
     if (!updated) {
       throw new NotFoundException('User not found');

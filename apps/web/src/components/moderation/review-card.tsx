@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
-import { Check, Eye, EyeOff, ShieldAlert, VideoOff, X } from 'lucide-react';
+import { Ban, Check, Eye, EyeOff, ShieldAlert, VideoOff, X } from 'lucide-react';
 import { Badge, Button } from '@ruletka/ui';
 import type { ModerationAction, ModerationLabel, ReviewItem } from '@ruletka/shared-types';
 import { formatRelativeTime } from '@/features/chat/lib/format';
@@ -41,11 +41,13 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 export interface ReviewCardProps {
   item: ReviewItem;
   onResolve: (id: string, resolution: 'uphold' | 'dismiss') => void;
-  /** True while a resolve mutation for this card is in flight. */
+  /** Uphold the violation AND ban the flagged user (`item.userId`) in one action. */
+  onResolveAndBan: (id: string) => void;
+  /** True while a resolve/ban mutation for this card is in flight. */
   pending?: boolean;
 }
 
-export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps) {
+export function ReviewCard({ item, onResolve, onResolveAndBan, pending = false }: ReviewCardProps) {
   const t = useTranslations('misc');
   // Evidence is NSFW — keep it blurred until the moderator opts to view it.
   const [revealed, setRevealed] = useState(false);
@@ -141,26 +143,40 @@ export function ReviewCard({ item, onResolve, pending = false }: ReviewCardProps
           )}
         </dl>
 
-        <div className="mt-auto flex items-center gap-2 pt-1">
+        <div className="mt-auto flex flex-col gap-2 pt-1">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1 gap-1.5"
+              disabled={pending}
+              onClick={() => onResolve(item.id, 'uphold')}
+            >
+              <Check className="h-4 w-4" aria-hidden="true" />
+              {t('moderation.confirm')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-1.5"
+              disabled={pending}
+              onClick={() => onResolve(item.id, 'dismiss')}
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+              {t('moderation.dismiss')}
+            </Button>
+          </div>
+          {/* Strongest action: uphold AND ban the flagged user. Danger-styled,
+              full-width so it reads as the escalation, not a peer of uphold. */}
           <Button
             variant="danger"
             size="sm"
-            className="flex-1 gap-1.5"
+            className="w-full gap-1.5"
             loading={pending}
-            onClick={() => onResolve(item.id, 'uphold')}
+            onClick={() => onResolveAndBan(item.id)}
           >
-            <Check className="h-4 w-4" aria-hidden="true" />
-            {t('moderation.confirm')}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 gap-1.5"
-            disabled={pending}
-            onClick={() => onResolve(item.id, 'dismiss')}
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-            {t('moderation.dismiss')}
+            <Ban className="h-4 w-4" aria-hidden="true" />
+            {t('moderation.confirmAndBan')}
           </Button>
         </div>
       </div>

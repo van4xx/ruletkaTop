@@ -47,6 +47,10 @@ import { Report, ReportSchema } from './schemas/report.schema';
  *
  * Exports {@link BlocksService} so chat / matchmaking / calls can gate
  * interactions via `isBlocked` and prune candidate lists via `listBlockedIds`.
+ * On block creation {@link BlocksService} also PUBLISHES to the `block:enforce`
+ * Redis channel (see `moderation.constants.ts`); the matchmaking gateway
+ * subscribes and force-ends any call in progress between the two users — again
+ * via pub/sub so this module stays free of a `MatchmakingModule` cycle.
  * {@link ReportsService} / {@link AdminService} / {@link ModerationService} /
  * {@link ReviewService} are internal and not exported.
  */

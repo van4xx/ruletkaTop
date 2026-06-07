@@ -4,6 +4,7 @@ import { Model, type QueryFilter, Types } from 'mongoose';
 
 import type { PaginationQuery, ReportStatus, ReviewItem } from '@ruletka/shared-types';
 
+import { AdminService } from './admin.service';
 import { ModerationEvent, ModerationEventDocument } from './schemas/moderation-event.schema';
 
 /** A page of review items (newest-first) with an opaque cursor for the next page. */
@@ -11,6 +12,12 @@ export interface ReviewPage {
   items: ReviewItem[];
   nextCursor: string | null;
   hasMore: boolean;
+}
+
+/** The review item + the resulting ban, returned by {@link ReviewService.resolveWithBan}. */
+export interface ReviewResolvedWithBan {
+  item: ReviewItem;
+  ban: { userId: string; isBanned: boolean };
 }
 
 /** Terminal statuses a moderator may set when triaging a review item. */
@@ -21,15 +28,17 @@ const RESOLVABLE_STATUSES: readonly ReportStatus[] = ['resolved', 'dismissed'];
  * on top of the automated escalation engine ({@link ModerationService}).
  *
  * Moderator surface (role-guarded in the controller): {@link listQueue}
- * (cursor-paginated, optional status filter; defaults to still-open items) and
- * {@link resolve} (uphold ⇒ `resolved`, dismiss ⇒ `dismissed`). Both ride the
- * `status + _id` index on the schema.
+ * (cursor-paginated, optional status filter; defaults to still-open items),
+ * {@link resolve} (uphold ⇒ `resolved`, dismiss ⇒ `dismissed`) and
+ * {@link resolveWithBan} (uphold AND ban the flagged user in one action). All
+ * ride the `status + _id` index on the schema.
  */
 @Injectable()
 export class ReviewService {
   constructor(
     @InjectModel(ModerationEvent.name)
     private readonly eventModel: Model<ModerationEventDocument>,
+    private readonly adminService: AdminService,
   ) {}
 
   /**
@@ -88,6 +97,38 @@ export class ReviewService {
       throw new NotFoundException('Review item not found');
     }
     return this.toContract(updated);
+  }
+
+  /**
+   * Uphold a flagged event AND ban the offending user in one action: apply a
+   * real ban to the event's `userId` via {@link AdminService.banUser} (flips
+   * `isBanned` + records a `banReason`, revokes sessions, force-disconnects
+   * sockets), then close the event as `resolved`. Moderator-only. 404s an
+   * unknown id.
+   *
+   * Like {@link ReportsService.resolveReportWithBan}, the ban runs FIRST so a
+   * resolved item always implies a real sanction; the ban is idempotent, so a
+   * retry after a transient failure is safe. Reversal stays explicit via
+   * `POST /admin/users/:id/unban` so the two actions remain auditable.
+   */
+  async resolveWithBan(eventId: string): Promise<ReviewResolvedWithBan> {
+    if (!Types.ObjectId.isValid(eventId)) {
+      throw new NotFoundException('Review item not found');
+    }
+    const event = await this.eventModel.findById(new Types.ObjectId(eventId)).exec();
+    if (!event) {
+      throw new NotFoundException('Review item not found');
+    }
+
+    const ban = await this.adminService.banUser(
+      event.userId.toString(),
+      `Confirmed AI-flagged violation (${event.label}) #${event._id.toString()}`,
+    );
+
+    event.status = 'resolved';
+    await event.save();
+
+    return { item: this.toContract(event), ban };
   }
 
   /** Map a hydrated moderation-event document to the shared `ReviewItem` shape. */

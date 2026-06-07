@@ -73,6 +73,20 @@ const MODERATION_ACTION_CHANNEL = 'moderation:action';
  * gateway emits `notif:new` to `mm:user:<userId>`.
  */
 const NOTIFICATION_NEW_CHANNEL = 'notif:new';
+
+/**
+ * Cross-instance channel on which the moderation module publishes a freshly
+ * created block so the gateway force-ends any call in progress between the two
+ * users. MUST stay identical to `BLOCK_ENFORCE_CHANNEL` in
+ * `modules/moderation/moderation.constants.ts` (the string is duplicated rather
+ * than imported, mirroring the `moderation:action` / `notif:new` /
+ * `user:disconnect` channels, to keep the gateway free of a value-import
+ * dependency on the moderation module).
+ *
+ * Wire contract: JSON `{ userId: string, blockedUserId: string }`. The gateway
+ * tears down the room ONLY if those two users are currently matched together.
+ */
+const BLOCK_ENFORCE_CHANNEL = 'block:enforce';
 import { WsRateLimiterService } from '../realtime-security/ws-rate-limiter.service';
 import { CallService } from './call.service';
 import { callRoom } from './matchmaking.constants';
@@ -181,6 +195,9 @@ export class MatchmakingGateway
   /** Dedicated SUBSCRIBE connection for the notification-delivery channel. */
   private notifSub?: Redis;
 
+  /** Dedicated SUBSCRIBE connection for the block-enforce channel. */
+  private blockSub?: Redis;
+
   /** Unsubscribe handle for the cluster-wide presence-transition relay. */
   private presenceUnsub?: () => void;
 
@@ -209,6 +226,7 @@ export class MatchmakingGateway
     });
     void this.subscribeModerationActions();
     void this.subscribeNotifications();
+    void this.subscribeBlockEnforce();
     // Relay cluster-wide presence transitions to the sockets watching that user
     // (`presence:watch:<id>` rooms). The Redis adapter fans the emit out, so a
     // transition published on ANY replica reaches watchers on every replica.
@@ -225,15 +243,16 @@ export class MatchmakingGateway
   }
 
   /**
-   * Close the dedicated moderation-action + notification subscribers, drop the
-   * presence relay subscription and stop the presence heartbeat on shutdown.
+   * Close the dedicated moderation-action + notification + block-enforce
+   * subscribers, drop the presence relay subscription and stop the presence
+   * heartbeat on shutdown.
    */
   async onModuleDestroy(): Promise<void> {
     this.presenceUnsub?.();
     if (this.presenceHeartbeat) {
       clearInterval(this.presenceHeartbeat);
     }
-    for (const sub of [this.modActionSub, this.notifSub]) {
+    for (const sub of [this.modActionSub, this.notifSub, this.blockSub]) {
       if (!sub) {
         continue;
       }
@@ -846,6 +865,79 @@ export class MatchmakingGateway
   }
 
   /**
+   * Open the dedicated subscriber on {@link BLOCK_ENFORCE_CHANNEL} and force-end
+   * any call in progress between the two users of each block. Same
+   * subscribe-on-a-duplicated-connection pattern as the moderation/notification
+   * channels; the moderation module is the publisher (it has no gateway
+   * dependency, avoiding a `MatchmakingModule` cycle).
+   */
+  private async subscribeBlockEnforce(): Promise<void> {
+    if (this.blockSub) {
+      return;
+    }
+    // A subscriber connection cannot issue normal commands, so duplicate.
+    const sub = this.redis.duplicate();
+    this.blockSub = sub;
+    sub.on('error', (err: Error) =>
+      this.logger.error(`block-enforce subscriber error: ${err.message}`),
+    );
+    sub.on('message', (channel: string, message: string) => {
+      if (channel !== BLOCK_ENFORCE_CHANNEL) {
+        return;
+      }
+      const parsed = parseBlockEnforceMessage(message);
+      if (!parsed) {
+        return;
+      }
+      void this.endRoomBetween(parsed.userId, parsed.blockedUserId);
+    });
+    try {
+      await sub.subscribe(BLOCK_ENFORCE_CHANNEL);
+    } catch (err) {
+      this.logger.error(`failed to subscribe to block-enforce channel: ${asMessage(err)}`);
+    }
+  }
+
+  /**
+   * Force-end the active matchmaking room between `userA` and `userB` IFF they
+   * are currently each other's peer — so a block instantly cuts a call in
+   * progress between the two, while never disturbing an unrelated call either of
+   * them happens to be in. Both sides get `rtc:hangup` (reason `reported`) and
+   * the durable {@link Match} is closed.
+   *
+   * Idempotent + best-effort: if they aren't matched together (the common case)
+   * this is a cheap no-op. A no-op also covers the cross-replica case where
+   * neither holds a socket here — the authoritative room state lives in Redis,
+   * so `teardownRoom` works regardless of which node the sockets are on, and the
+   * `rtc:hangup` emits are fanned out cluster-wide by the Redis adapter.
+   */
+  private async endRoomBetween(userA: string, userB: string): Promise<void> {
+    try {
+      const pointer = await this.matchmaking.getUserRoom(userA);
+      if (!pointer) {
+        return;
+      }
+      const peer = await this.matchmaking.getPeerOf(pointer.roomId, userA);
+      if (peer !== userB) {
+        // userA is not in a room, or is matched with someone else — leave it.
+        return;
+      }
+      // They ARE matched together: tear the room down and hang up both sides.
+      // `teardownRoom` returns the peer so we notify them; userA is notified
+      // explicitly since they initiated the block (their call UI must also drop).
+      const teardown = await this.matchmaking.teardownRoom(userA, 'reported');
+      if (!teardown) {
+        return;
+      }
+      this.notifyPeerHangup(teardown.peerUserId, teardown.roomId, 'reported');
+      this.notifyPeerHangup(userA, teardown.roomId, 'reported');
+      this.logger.debug(`block force-ended room ${teardown.roomId} between ${userA} and ${userB}`);
+    } catch (err) {
+      this.logger.debug(`endRoomBetween(${userA},${userB}) failed: ${asMessage(err)}`);
+    }
+  }
+
+  /**
    * Deliver a forced moderation action to a user's live sockets on THIS node and
    * enforce the call-level side-effects:
    *  - always emit `mod:action` to the user's room (the client blurs/cuts and
@@ -1081,6 +1173,37 @@ function parseNotificationMessage(
     return null;
   }
   return { userId, notification: notification.data };
+}
+
+/**
+ * Parse + validate a {@link BLOCK_ENFORCE_CHANNEL} message. The wire format is
+ * JSON `{ userId, blockedUserId }`; both must be non-empty strings. Returns
+ * `null` on any parse/shape failure so a malformed publish can never drive a
+ * teardown.
+ */
+function parseBlockEnforceMessage(
+  raw: string,
+): { userId: string; blockedUserId: string } | null {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof json !== 'object' || json === null) {
+    return null;
+  }
+  const userId = (json as { userId?: unknown }).userId;
+  const blockedUserId = (json as { blockedUserId?: unknown }).blockedUserId;
+  if (
+    typeof userId !== 'string' ||
+    userId.length === 0 ||
+    typeof blockedUserId !== 'string' ||
+    blockedUserId.length === 0
+  ) {
+    return null;
+  }
+  return { userId, blockedUserId };
 }
 
 /** Narrows an unknown thrown value to a printable message. */

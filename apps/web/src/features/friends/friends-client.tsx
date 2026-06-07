@@ -57,7 +57,7 @@ export function FriendsClient() {
     | null
   >(null);
 
-  const friends = friendsQuery.data ?? [];
+  const friends = friendsQuery.items;
 
   // Seed presence from the server-provided statuses, then keep it live.
   const friendIds = useMemo(() => friends.map((f) => f.profile.id), [friends]);
@@ -189,33 +189,48 @@ export function FriendsClient() {
           }
         />
       ) : (
-        <motion.ul layout className="space-y-3">
-          <AnimatePresence mode="popLayout">
-            {visible.map((friend) => (
-              <FriendCard
-                key={friend.friendshipId}
-                friend={friend}
-                status={statusOf(friend)}
-                busy={
-                  (removeFriendship.isPending &&
-                    removeFriendship.variables === friend.friendshipId) ||
-                  undefined
-                }
-                onRemove={(friendshipId) =>
-                  setPending({ kind: 'remove', friendshipId, name: friend.profile.nickname })
-                }
-                onBlock={(userId) =>
-                  setPending({
-                    kind: 'block',
-                    userId,
-                    friendshipId: friend.friendshipId,
-                    name: friend.profile.nickname,
-                  })
-                }
-              />
-            ))}
-          </AnimatePresence>
-        </motion.ul>
+        <>
+          <motion.ul layout className="space-y-3">
+            <AnimatePresence mode="popLayout">
+              {visible.map((friend) => (
+                <FriendCard
+                  key={friend.friendshipId}
+                  friend={friend}
+                  status={statusOf(friend)}
+                  busy={
+                    (removeFriendship.isPending &&
+                      removeFriendship.variables === friend.friendshipId) ||
+                    undefined
+                  }
+                  onRemove={(friendshipId) =>
+                    setPending({ kind: 'remove', friendshipId, name: friend.profile.nickname })
+                  }
+                  onBlock={(userId) =>
+                    setPending({
+                      kind: 'block',
+                      userId,
+                      friendshipId: friend.friendshipId,
+                      name: friend.profile.nickname,
+                    })
+                  }
+                />
+              ))}
+            </AnimatePresence>
+          </motion.ul>
+
+          {/* Cursor pagination — reach friends past the first page. */}
+          {friendsQuery.hasMore && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                variant="outline"
+                onClick={friendsQuery.fetchMore}
+                loading={friendsQuery.isFetchingMore}
+              >
+                {t('friendsClient.showMore')}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Confirmation dialog (shared for remove + block) */}

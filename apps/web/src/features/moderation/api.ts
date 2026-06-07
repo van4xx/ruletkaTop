@@ -11,7 +11,12 @@
  * Request/response shapes come straight from the `@ruletka/shared-types`
  * contract so the wire format stays in lockstep with the backend.
  */
-import type { ModerationViolationDto, ReportStatus, ReviewItem } from '@ruletka/shared-types';
+import type {
+  ModerationViolationDto,
+  ReportStatus,
+  ResolvedReviewWithBan,
+  ReviewItem,
+} from '@ruletka/shared-types';
 import { api } from '@/lib/api';
 
 /** A human review decision. `uphold` confirms the violation; `dismiss` clears it. */
@@ -51,6 +56,18 @@ export const moderationApi = {
     api.request<void>(`/moderation/review/${id}/resolve`, {
       method: 'POST',
       json: { status: resolution === 'uphold' ? 'resolved' : 'dismissed' },
+      noRetry: true,
+    }),
+
+  /**
+   * Uphold a queued item AND ban the flagged user in one moderator action
+   * (`POST /moderation/review/:id/resolve-ban`). The server resolves the item
+   * and applies a real ban (flips `isBanned`, revokes sessions, force-disconnects
+   * the offender). Non-idempotent (it mutates ban state), so we opt out of retries.
+   */
+  resolveAndBan: (id: string): Promise<ResolvedReviewWithBan> =>
+    api.request<ResolvedReviewWithBan>(`/moderation/review/${id}/resolve-ban`, {
+      method: 'POST',
       noRetry: true,
     }),
 } as const;

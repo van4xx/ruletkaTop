@@ -14,7 +14,7 @@ import { useTranslations } from 'next-intl';
 import { ShieldCheck } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, toast } from '@ruletka/ui';
 import type { ReportStatus } from '@ruletka/shared-types';
-import { useReviewQueue, useResolveReview } from '@/features/moderation';
+import { useReviewQueue, useResolveReview, useResolveReviewAndBan } from '@/features/moderation';
 import { CardGridSkeleton, EmptyState, ErrorState } from '@/components/economy/states';
 import { ReviewCard } from './review-card';
 
@@ -30,9 +30,12 @@ export function ModerationQueue() {
   const [status, setStatus] = useState<ReportStatus>('open');
   const queue = useReviewQueue(status);
   const resolve = useResolveReview();
+  const resolveAndBan = useResolveReviewAndBan();
 
-  // Track which card is being resolved so only its buttons spin.
-  const pendingId = resolve.isPending ? resolve.variables?.id : undefined;
+  // Track which card has an action in flight so only its buttons spin.
+  const pendingId =
+    (resolve.isPending ? resolve.variables?.id : undefined) ??
+    (resolveAndBan.isPending ? resolveAndBan.variables?.id : undefined);
 
   function handleResolve(id: string, resolution: 'uphold' | 'dismiss') {
     resolve.mutate(
@@ -42,6 +45,17 @@ export function ModerationQueue() {
           toast.success(
             resolution === 'uphold' ? t('moderation.upheld') : t('moderation.dismissed'),
           ),
+        onError: (err: unknown) =>
+          toast.error(err instanceof Error ? err.message : t('moderation.resolveError')),
+      },
+    );
+  }
+
+  function handleResolveAndBan(id: string) {
+    resolveAndBan.mutate(
+      { id },
+      {
+        onSuccess: () => toast.success(t('moderation.bannedToast')),
         onError: (err: unknown) =>
           toast.error(err instanceof Error ? err.message : t('moderation.resolveError')),
       },
@@ -88,6 +102,7 @@ export function ModerationQueue() {
                 key={item.id}
                 item={item}
                 onResolve={handleResolve}
+                onResolveAndBan={handleResolveAndBan}
                 pending={pendingId === item.id}
               />
             ))}

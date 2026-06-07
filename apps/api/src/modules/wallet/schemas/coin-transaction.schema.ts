@@ -1,17 +1,19 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-import type { CoinTxType } from '@ruletka/shared-types';
+import { coinTxTypeSchema, type CoinTxType } from '@ruletka/shared-types';
 
-/** Ledger entry kinds (kept in sync with `coinTxTypeSchema` in shared-types). */
-const COIN_TX_TYPES: readonly CoinTxType[] = [
-  'purchase',
-  'gift_out',
-  'gift_in',
-  'top',
-  'bonus',
-  'refund',
-];
+/**
+ * Ledger entry kinds — the SINGLE SOURCE OF TRUTH is the zod `coinTxTypeSchema`
+ * in shared-types. We derive the Mongoose `enum` from `coinTxTypeSchema.options`
+ * (rather than re-typing the literals) so the contract and the persistence
+ * validator can NEVER drift: adding a new ledger kind to the zod enum (e.g.
+ * `'cover'`) is automatically honoured by the `type` column's enum validation.
+ *
+ * Drifting these previously caused a P0 money bug: a `'cover'` row missing here
+ * failed enum validation AFTER the balance was already debited.
+ */
+const COIN_TX_TYPES: readonly CoinTxType[] = coinTxTypeSchema.options;
 
 /**
  * Append-only ledger row recording a single coin balance mutation.

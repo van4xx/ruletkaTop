@@ -21,4 +21,9 @@ export {
   type LocalScreeningResult,
 } from './use-local-screening';
 export { useModerationAction, type UseModerationActionOptions } from './use-moderation-action';
-export { useReviewQueue, useResolveReview, type ResolveVars } from './use-review-queue';
+export {
+  useReviewQueue,
+  useResolveReview,
+  useResolveReviewAndBan,
+  type ResolveVars,
+} from './use-review-queue';

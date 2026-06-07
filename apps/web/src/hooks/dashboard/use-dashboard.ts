@@ -43,7 +43,7 @@ export interface OnlineFriendsResult {
  */
 export function useOnlineFriends(): OnlineFriendsResult {
   const friendsQuery = useFriends();
-  const friends = useMemo(() => friendsQuery.data ?? [], [friendsQuery.data]);
+  const friends = useMemo(() => friendsQuery.items, [friendsQuery.items]);
 
   const ids = useMemo(() => friends.map((f) => f.profile.id), [friends]);
   const seed = useMemo<PresenceMap>(() => {
@@ -89,7 +89,7 @@ export interface RecentChatsResult {
  */
 export function useRecentChats(limit = 4): RecentChatsResult {
   const query = useConversations();
-  const all = useMemo(() => query.data ?? [], [query.data]);
+  const all = useMemo(() => query.items, [query.items]);
 
   const conversations = useMemo(() => all.slice(0, limit), [all, limit]);
   const unreadTotal = useMemo(() => all.reduce((sum, c) => sum + (c.unreadCount ?? 0), 0), [all]);

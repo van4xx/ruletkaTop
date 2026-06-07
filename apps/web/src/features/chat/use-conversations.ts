@@ -13,7 +13,12 @@
  * {@link useConversationRealtime}).
  */
 import { useCallback, useMemo } from 'react';
-import { useQuery, useQueries, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useQueries,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import type { Conversation, Message, PublicProfile } from '@ruletka/shared-types';
 
 import { api } from '@/lib/api';
@@ -26,20 +31,73 @@ export const chatKeys = {
   peer: (userId: string) => [...chatKeys.all, 'peer', userId] as const,
 };
 
-export function useConversations(): UseQueryResult<Conversation[]> {
-  return useQuery({
+/** Page size requested per `GET /conversations` round-trip (API default). */
+const PAGE_SIZE = 20;
+
+/** One cursor-paginated page of conversations (`GET /conversations`). */
+interface ConversationPage {
+  items: Conversation[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/** The cached infinite-query shape for the conversation inbox. */
+export type ConversationsCache = InfiniteData<ConversationPage, string | undefined>;
+
+/**
+ * The conversation inbox, surfaced as a cursor-paginated infinite query
+ * (`GET /conversations?cursor&limit` → `{ items, nextCursor, hasMore }`, most
+ * recently active first). Pages are flattened into a single `items` array;
+ * `fetchMore` loads the next page so threads past the first 20 stay reachable.
+ *
+ * Live previews/unread are folded into the same cache by
+ * {@link useConversationRealtime}.
+ */
+export interface UseConversationsResult {
+  /** All loaded conversations, flattened across every fetched page. */
+  items: Conversation[];
+  isLoading: boolean;
+  isError: boolean;
+  /** Whether another page can be loaded. */
+  hasMore: boolean;
+  /** True while a follow-up page is in flight. */
+  isFetchingMore: boolean;
+  /** Load the next page (no-op when exhausted / already loading). */
+  fetchMore: () => void;
+  refetch: () => void;
+}
+
+export function useConversations(): UseConversationsResult {
+  const query = useInfiniteQuery<ConversationPage>({
     queryKey: chatKeys.conversations(),
-    // Backend paginates: { items, nextCursor, hasMore } — unwrap to the array.
-    queryFn: () =>
-      api
-        .request<{
-          items: Conversation[];
-          nextCursor: string | null;
-          hasMore: boolean;
-        }>('/conversations')
-        .then((r) => r.items),
+    // Backend paginates: { items, nextCursor, hasMore }. Page through so the
+    // inbox isn't capped at the first 20 conversations.
+    queryFn: ({ pageParam, signal }) =>
+      api.request<ConversationPage>('/conversations', {
+        query: { cursor: pageParam as string | undefined, limit: PAGE_SIZE },
+        signal,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
     staleTime: 15_000,
   });
+
+  const items = useMemo<Conversation[]>(
+    () => query.data?.pages.flatMap((p) => p.items) ?? [],
+    [query.data],
+  );
+
+  return {
+    items,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    hasMore: Boolean(query.hasNextPage),
+    isFetchingMore: query.isFetchingNextPage,
+    fetchMore: () => {
+      if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+    },
+    refetch: () => void query.refetch(),
+  };
 }
 
 /** Resolve the "other" participant id for a conversation given the viewer. */
@@ -91,15 +149,18 @@ export function useConversationRealtime(activeConversationId?: string | null): v
 
   const onMessage = useCallback(
     (m: Message) => {
-      qc.setQueryData<Conversation[]>(chatKeys.conversations(), (prev) => {
-        if (!prev) return prev;
-        const idx = prev.findIndex((c) => c.id === m.conversationId);
-        if (idx === -1) {
+      qc.setQueryData<ConversationsCache>(chatKeys.conversations(), (prev) => {
+        if (!prev || prev.pages.length === 0) return prev;
+
+        // Locate the conversation across every loaded page.
+        const flat = prev.pages.flatMap((p) => p.items);
+        const existing = flat.find((c) => c.id === m.conversationId);
+        if (!existing) {
           // Unknown conversation (first contact): refetch the inbox.
           void qc.invalidateQueries({ queryKey: chatKeys.conversations() });
           return prev;
         }
-        const existing = prev[idx]!;
+
         const isActive = m.conversationId === activeConversationId;
         const updated: Conversation = {
           ...existing,
@@ -107,9 +168,19 @@ export function useConversationRealtime(activeConversationId?: string | null): v
           lastMessagePreview: m.content,
           unreadCount: isActive ? 0 : existing.unreadCount + 1,
         };
-        const next = [...prev];
-        next.splice(idx, 1);
-        return [updated, ...next];
+
+        // Drop the stale copy from wherever it lives, then re-insert it at the
+        // very top of the first page so the inbox stays most-recent-first.
+        const prunedPages = prev.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((c) => c.id !== m.conversationId),
+        }));
+        const [first, ...rest] = prunedPages;
+        if (!first) return prev;
+        return {
+          ...prev,
+          pages: [{ ...first, items: [updated, ...first.items] }, ...rest],
+        };
       });
     },
     [qc, activeConversationId],

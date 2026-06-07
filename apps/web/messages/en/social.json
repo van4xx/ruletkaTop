@@ -125,7 +125,8 @@
     "emptyDescription": "Start chatting with friends or people you meet in the roulette — your conversations will show up here.",
     "toFriends": "Go to friends",
     "notFoundTitle": "Nothing found",
-    "notFoundDescription": "Try a different search."
+    "notFoundDescription": "Try a different search.",
+    "showMore": "Show more"
   },
 
   "chatThread": {
@@ -167,6 +168,7 @@
     "blockDialogDescription": "<name></name> will no longer be able to message or call you. The friendship will be ended.",
     "removeDialogDescription": "Are you sure you want to remove <name></name> from your friends?",
     "blockConfirm": "Block",
-    "removeConfirm": "Remove"
+    "removeConfirm": "Remove",
+    "showMore": "Show more"
   }
 }

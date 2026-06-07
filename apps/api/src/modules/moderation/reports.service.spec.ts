@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
 import { UsersService } from '../users/users.service';
+import { AdminService } from './admin.service';
 import { ReportsService } from './reports.service';
 import { Report } from './schemas/report.schema';
 
@@ -22,6 +23,10 @@ function reportDoc(over: Partial<Record<string, unknown>> = {}): Record<string, 
     details: null,
     status: 'open',
     get: (_k: string) => new Date('2026-05-31T00:00:00.000Z'),
+    // `resolveReportWithBan` mutates `status` then persists via `save()`.
+    save: jest.fn().mockImplementation(function (this: Record<string, unknown>) {
+      return Promise.resolve(this);
+    }),
     ...over,
   };
 }
@@ -35,24 +40,31 @@ describe('ReportsService', () => {
     exists: jest.Mock;
     create: jest.Mock;
     find: jest.Mock;
+    findById: jest.Mock;
     findByIdAndUpdate: jest.Mock;
+    aggregate: jest.Mock;
   };
   let usersService: { findById: jest.Mock };
+  let adminService: { banUser: jest.Mock };
 
   beforeEach(async () => {
     reportModel = {
       exists: jest.fn(),
       create: jest.fn(),
       find: jest.fn(),
+      findById: jest.fn(),
       findByIdAndUpdate: jest.fn(),
+      aggregate: jest.fn(),
     };
     usersService = { findById: jest.fn() };
+    adminService = { banUser: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ReportsService,
         { provide: getModelToken(Report.name), useValue: reportModel },
         { provide: UsersService, useValue: usersService },
+        { provide: AdminService, useValue: adminService },
       ],
     }).compile();
 
@@ -149,6 +161,78 @@ describe('ReportsService', () => {
       expect(update).toEqual({ $set: { status: 'resolved' } });
       expect(options).toMatchObject({ new: true });
       expect(result.status).toBe('resolved');
+    });
+  });
+
+  describe('resolveReportWithBan', () => {
+    it('404s an invalid id without banning', async () => {
+      await expect(service.resolveReportWithBan('not-an-id')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(reportModel.findById).not.toHaveBeenCalled();
+      expect(adminService.banUser).not.toHaveBeenCalled();
+    });
+
+    it('404s an unknown report without banning', async () => {
+      reportModel.findById.mockReturnValue(queryReturning(null));
+      await expect(
+        service.resolveReportWithBan('507f1f77bcf86cd799439013'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(adminService.banUser).not.toHaveBeenCalled();
+    });
+
+    it('bans the reported user (with a reason) THEN resolves the report', async () => {
+      const doc = reportDoc();
+      reportModel.findById.mockReturnValue(queryReturning(doc));
+      adminService.banUser.mockResolvedValue({ userId: AGAINST, isBanned: true });
+
+      const result = await service.resolveReportWithBan('507f1f77bcf86cd799439013');
+
+      // Ban applied to the REPORTED user, with a reason embedding the report id.
+      expect(adminService.banUser).toHaveBeenCalledTimes(1);
+      const [bannedId, reason] = adminService.banUser.mock.calls[0] as [string, string];
+      expect(bannedId).toBe(AGAINST);
+      expect(reason).toContain('report-1');
+      // Report flipped to resolved + persisted.
+      expect(doc.status).toBe('resolved');
+      expect(doc.save).toHaveBeenCalledTimes(1);
+      expect(result.report.status).toBe('resolved');
+      expect(result.ban).toEqual({ userId: AGAINST, isBanned: true });
+    });
+
+    it('does NOT resolve the report if the ban write fails', async () => {
+      const doc = reportDoc();
+      reportModel.findById.mockReturnValue(queryReturning(doc));
+      adminService.banUser.mockRejectedValue(new Error('ban failed'));
+
+      await expect(
+        service.resolveReportWithBan('507f1f77bcf86cd799439013'),
+      ).rejects.toThrow('ban failed');
+      // Ban-first ordering: a failed ban must leave the report unresolved.
+      expect(doc.save).not.toHaveBeenCalled();
+      expect(doc.status).toBe('open');
+    });
+  });
+
+  describe('countOpenReportsByTarget', () => {
+    it('aggregates open/reviewing reports per target, most-reported first', async () => {
+      reportModel.aggregate.mockReturnValue(
+        queryReturning([
+          { _id: { toString: () => AGAINST }, count: 5 },
+          { _id: { toString: () => FROM }, count: 2 },
+        ]),
+      );
+
+      const result = await service.countOpenReportsByTarget(50);
+
+      // The $match restricts to still-open statuses; $limit honours the cap.
+      const [pipeline] = reportModel.aggregate.mock.calls[0] as [Array<Record<string, unknown>>];
+      expect(pipeline[0]).toEqual({ $match: { status: { $in: ['open', 'reviewing'] } } });
+      expect(pipeline).toContainEqual({ $limit: 50 });
+      expect(result).toEqual([
+        { againstUserId: AGAINST, openReports: 5 },
+        { againstUserId: FROM, openReports: 2 },
+      ]);
     });
   });
 

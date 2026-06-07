@@ -1,7 +1,9 @@
 import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
+import { coinTxTypeSchema } from '@ruletka/shared-types';
+import { model, Types } from 'mongoose';
 
-import { CoinTransaction } from './schemas/coin-transaction.schema';
+import { CoinTransaction, CoinTransactionSchema } from './schemas/coin-transaction.schema';
 import { Wallet } from './schemas/wallet.schema';
 import { InsufficientFundsException } from './insufficient-funds.exception';
 import { WalletService } from './wallet.service';
@@ -260,5 +262,48 @@ describe('WalletService — transactional (replica-set) write path', () => {
     expect(coinTxModel.create).not.toHaveBeenCalled();
     // Exactly one guarded update attempt — no second (fallback) attempt.
     expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CoinTransaction ledger — type enum is the zod single source of truth', () => {
+  /**
+   * Regression guard for a P0 money bug: the Mongoose `type` enum had drifted
+   * from `coinTxTypeSchema`, omitting `'cover'`. A paid profile-cover purchase
+   * then debited the balance and 500'd on the ledger insert (coin theft on a
+   * standalone Mongo). We now derive the enum from `coinTxTypeSchema.options`,
+   * so this asserts the persisted enum EXACTLY mirrors the contract and that
+   * `'cover'` in particular is accepted.
+   */
+  function ledgerTypeEnum(): readonly string[] {
+    // SchemaFactory stores the enum on the `type` path's `enumValues`.
+    return CoinTransactionSchema.path('type').options.enum as string[];
+  }
+
+  it("includes 'cover' (the value the cover-purchase path writes)", () => {
+    expect(ledgerTypeEnum()).toContain('cover');
+  });
+
+  it('mirrors coinTxTypeSchema.options exactly (no drift, same order)', () => {
+    expect(ledgerTypeEnum()).toEqual([...coinTxTypeSchema.options]);
+  });
+
+  it('accepts a `cover` row and rejects an unknown type under enum validation', () => {
+    // Build a real (connection-less) model purely to run `validateSync`, which
+    // exercises the actual `type` enum validator without touching a database.
+    const LedgerModel = model('CoinTransactionEnumTest', CoinTransactionSchema);
+    const base = {
+      userId: new Types.ObjectId('507f1f77bcf86cd799439011'),
+      delta: -120,
+      refId: 'sunset',
+      balanceAfter: 0,
+    };
+
+    // `validateSync` returns undefined when every validator (incl. the enum)
+    // passes — i.e. a `cover` ledger row is no longer rejected.
+    expect(new LedgerModel({ ...base, type: 'cover' }).validateSync()).toBeUndefined();
+
+    // An out-of-contract value still fails, proving the enum is enforced.
+    const bad = new LedgerModel({ ...base, type: 'not_a_real_type' }).validateSync();
+    expect(bad?.errors?.type).toBeDefined();
   });
 });

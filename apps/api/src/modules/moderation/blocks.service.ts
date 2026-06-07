@@ -1,10 +1,13 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import type { Redis } from 'ioredis';
 import { Model, Types } from 'mongoose';
 
 import type { Block as BlockContract, CreateBlockDto } from '@ruletka/shared-types';
 
+import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { UsersService } from '../users/users.service';
+import { BLOCK_ENFORCE_CHANNEL, type BlockEnforceMessage } from './moderation.constants';
 import { Block, BlockDocument } from './schemas/block.schema';
 
 /** MongoDB duplicate-key error code. */
@@ -28,12 +31,19 @@ function isDuplicateKeyError(err: unknown): boolean {
  *
  * Exported cross-module (consumed by chat / matchmaking / calls):
  * {@link isBlocked} and {@link listBlockedIds}.
+ *
+ * On block creation it also PUBLISHES to {@link BLOCK_ENFORCE_CHANNEL} so the
+ * realtime gateway force-ends any call currently in progress between the two
+ * users (a block must cut a live call, not merely block future matches).
  */
 @Injectable()
 export class BlocksService {
+  private readonly logger = new Logger(BlocksService.name);
+
   constructor(
     @InjectModel(Block.name) private readonly blockModel: Model<BlockDocument>,
     private readonly usersService: UsersService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /**
@@ -55,12 +65,34 @@ export class BlocksService {
         userId: new Types.ObjectId(userId),
         blockedUserId: new Types.ObjectId(dto.blockedUserId),
       });
+      // Best-effort: force-end any call currently in progress between the two.
+      // A failure here must never fail the block (the row is already written and
+      // the bidirectional gate prevents re-matching), so we don't await/throw.
+      void this.publishBlockEnforce(userId, dto.blockedUserId);
       return this.toContract(created);
     } catch (err) {
       if (isDuplicateKeyError(err)) {
         throw new ConflictException('User already blocked');
       }
       throw err;
+    }
+  }
+
+  /**
+   * Publish the new block on {@link BLOCK_ENFORCE_CHANNEL} so the realtime
+   * gateway tears down any active call between the two users. Best-effort: a
+   * coordination failure is logged, never thrown (the block itself is already
+   * effective).
+   */
+  private async publishBlockEnforce(userId: string, blockedUserId: string): Promise<void> {
+    const message: BlockEnforceMessage = { userId, blockedUserId };
+    try {
+      await this.redis.publish(BLOCK_ENFORCE_CHANNEL, JSON.stringify(message));
+    } catch (err) {
+      this.logger.warn(
+        `Failed to publish block-enforce for ${userId}→${blockedUserId}: ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
