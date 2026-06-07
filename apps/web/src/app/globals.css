@@ -44,6 +44,25 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
+ * Brand unification — re-point the @ruletka/ui aurora gradient stops.
+ *
+ * The package's signature gradient (`--accent-from/via/to`, consumed by every
+ * Button/Card and the `bg-aurora`/`text-aurora`/`border-aurora` utilities)
+ * ships as a violet→blue→cyan sweep, but the web's hero CTAs are hand-built
+ * from the richer violet→magenta→cyan NEON stops. Align them so the whole
+ * app's primary gradient matches the landing hero everywhere a design-system
+ * component renders. Declared UNLAYERED on purpose: the package tokens are
+ * unlayered too, and a web `@layer base` block LOSES the cascade to them
+ * (verified in-browser). Placed after the package @import so source order wins.
+ * ------------------------------------------------------------------------- */
+:root,
+.dark {
+  --accent-from: oklch(0.7 0.27 296); /* neon violet */
+  --accent-via: oklch(0.74 0.26 350); /* neon magenta */
+  --accent-to: oklch(0.82 0.16 205); /* neon cyan */
+}
+
+/* ---------------------------------------------------------------------------
  * Token contract (fallbacks). Colors are authored in OKLCH for perceptual
  * uniformity. The palette: near-black "void" surfaces + an electric
  * violet→cyan→magenta neon accent system. Dark is the hero theme.
