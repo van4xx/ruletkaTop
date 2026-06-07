@@ -243,12 +243,18 @@
  * Reusable atmospheric utilities used by the landing page & header.
  * ------------------------------------------------------------------------- */
 @layer components {
-  /* Frosted-glass panel. */
+  /* Frosted-glass panel — aligned with the @ruletka/ui `glass` utility so every
+     frosted surface (web-local panels AND design-system Cards) shares one
+     material: same blur/saturate, the shared --glass tint + --glass-border, and
+     the signature inset top sheen for a lit "wet" edge. The drop shadow that
+     `glass` carries is intentionally omitted here — `.glass-panel` is also used
+     on small chips/pills where an ambient shadow would read as heavy. */
   .glass-panel {
-    background-color: color-mix(in oklch, var(--color-card) 60%, transparent);
-    backdrop-filter: blur(16px) saturate(140%);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
-    border: 1px solid color-mix(in oklch, var(--color-border) 100%, transparent);
+    background-color: var(--glass);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 0 var(--glass-highlight);
   }
 
   /* Subtle grain overlay for depth (applied via ::before on the page). */
