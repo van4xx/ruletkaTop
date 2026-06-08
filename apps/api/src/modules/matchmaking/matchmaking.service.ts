@@ -40,8 +40,18 @@ import {
 } from './matchmaking.constants';
 import type { RoomState, UserRoomPointer, WaiterEntry } from './matchmaking.types';
 
-/** Predicate the gateway supplies so the matcher can skip dead candidate sockets. */
-export type ConnectionVerifier = (socketId: string) => Promise<boolean>;
+/**
+ * Liveness oracle the gateway supplies so the matcher can skip stale waiters.
+ *
+ * Batched + presence-based: given the candidate user ids of one match pass it
+ * resolves the SUBSET that still hold a live, cluster-wide connection (a single
+ * Redis MGET via {@link PresenceService}), rather than one cross-node
+ * `fetchSockets` adapter round-trip per candidate. A user with zero live
+ * connections is a stale waiter (their socket is gone) and is omitted from the
+ * returned set so the matcher skips + evicts them — preserving the exact "a
+ * stale waiter must still be skipped" semantic of the prior per-socket check.
+ */
+export type ConnectionVerifier = (userIds: readonly string[]) => Promise<Set<string>>;
 
 /** Result of a successful pairing — everything the gateway needs to wire the room. */
 export interface MatchResult {
@@ -114,7 +124,12 @@ export class MatchmakingService {
     filters: MatchFilters,
     socketId: string,
   ): Promise<WaiterEntry | null> {
-    let demographics: { age: number; gender: PeerInfo['gender']; interests: string[] };
+    let demographics: {
+      age: number;
+      gender: PeerInfo['gender'];
+      country: string;
+      interests: string[];
+    };
     try {
       demographics = await this.profiles.getAgeAndGender(userId);
     } catch (err) {
@@ -129,7 +144,9 @@ export class MatchmakingService {
       filters,
       age: demographics.age,
       gender: demographics.gender,
-      country: await this.resolveCountry(userId),
+      // Country comes from the SAME single profile read above — no second
+      // `getPublicProfile` round-trip just to resolve it.
+      country: demographics.country,
       // Stored normalised by the profiles layer; default to [] for safety.
       interests: demographics.interests ?? [],
       isPremium,
@@ -185,28 +202,46 @@ export class MatchmakingService {
 
     // Per-pass cache of each user's `whoCanCall` privacy so a scan over many
     // candidates loads any given user's setting at most once (the joiner's is
-    // read once and reused against every candidate).
-    const whoCanCallCache = new Map<string, Visibility>();
+    // read once and reused against every candidate). Caches the in-flight PROMISE
+    // (not just the resolved value) so the parallel gate evaluation below — which
+    // can check several candidates against the same user concurrently — still
+    // issues exactly one settings read per user.
+    const whoCanCallCache = new Map<string, Promise<Visibility>>();
 
     // Whether this joiner demands shared interests (backward-compatible: an
     // entry persisted before the field existed has `sharedInterestsOnly`
     // undefined → treated as false, i.e. interests only prioritise).
     const requireShared = joiner.filters.sharedInterestsOnly === true;
 
-    // Gather eligible candidates (passing every gate) tagged with their batch
-    // index (= pool priority) and their shared-interest count, so we can rank
-    // by overlap while keeping priority/FIFO as the tiebreak.
-    const eligible: Array<{ candidate: WaiterEntry; priority: number; shared: number }> = [];
-
+    // ── Phase 1: load all candidate waiter hashes in ONE Redis MGET ───────────
+    // (instead of N serial GETs). Skip self / undefined up front; the surviving
+    // ids are fetched as a batch and re-aligned to their pool-priority index so
+    // ranking + stale-ZSET pruning are unchanged.
+    const scanIds: Array<{ id: string; priority: number }> = [];
     for (let i = 0; i < candidateIds.length; i++) {
       const candidateId = candidateIds[i];
       if (candidateId === undefined || candidateId === joiner.userId) {
         continue;
       }
-      const candidate = await this.getWaiter(candidateId);
+      scanIds.push({ id: candidateId, priority: i });
+    }
+    const waiters = await this.getWaiters(scanIds.map((c) => c.id));
+
+    // ── Phase 2: cheap synchronous gates (no I/O) + collect liveness targets ──
+    // Prune stale ZSET members (no hash) immediately. For the rest apply the
+    // type / mutual-compatibility / sharedInterestsOnly gates exactly as before;
+    // survivors await a single batched liveness check next.
+    const prePassed: Array<{ candidate: WaiterEntry; priority: number; shared: number }> = [];
+    const pruneStale: string[] = [];
+    for (let i = 0; i < scanIds.length; i++) {
+      const entry = scanIds[i];
+      if (entry === undefined) {
+        continue;
+      }
+      const candidate = waiters[i];
       if (!candidate) {
         // Stale ZSET member with no hash — prune it.
-        await this.redis.zrem(pool, candidateId);
+        pruneStale.push(entry.id);
         continue;
       }
       if (candidate.type !== joiner.type) {
@@ -221,21 +256,60 @@ export class MatchmakingService {
       if (requireShared && shared === 0) {
         continue;
       }
-      if (!(await isConnected(candidate.socketId))) {
-        // Candidate's socket is gone — evict and keep scanning.
-        await this.removeWaiter(candidateId, candidate.type);
-        continue;
-      }
-      if (await this.blocks.isBlocked(joiner.userId, candidate.userId)) {
-        continue;
-      }
-      // Privacy gate, mirroring chat's `canMessage`: BOTH sides must permit the
-      // other to call them (`whoCanCall` of 'everyone' | 'friends' | 'nobody').
-      if (!(await this.mutualCanCall(joiner.userId, candidate.userId, whoCanCallCache))) {
-        continue;
-      }
+      prePassed.push({ candidate, priority: entry.priority, shared });
+    }
+    // Evict every phantom ZSET member found above (each unchanged from the prior
+    // per-candidate `ZREM`); independent, so fire together.
+    if (pruneStale.length > 0) {
+      await Promise.all(pruneStale.map((id) => this.redis.zrem(pool, id)));
+    }
 
-      eligible.push({ candidate, priority: i, shared });
+    // ── Phase 3: batched liveness — ONE presence MGET for the whole pass ──────
+    // (instead of a cross-node `fetchSockets` per candidate). Candidates whose
+    // user has no live connection are stale waiters: evict + skip, exactly as the
+    // prior per-socket check did.
+    const live = await isConnected(prePassed.map((c) => c.candidate.userId));
+    const connected: typeof prePassed = [];
+    const evictDead: WaiterEntry[] = [];
+    for (const c of prePassed) {
+      if (live.has(c.candidate.userId)) {
+        connected.push(c);
+      } else {
+        evictDead.push(c.candidate);
+      }
+    }
+    if (evictDead.length > 0) {
+      await Promise.all(evictDead.map((c) => this.removeWaiter(c.userId, c.type)));
+    }
+
+    // ── Phase 4: independent block + privacy gates in PARALLEL ────────────────
+    // `isBlocked` and `mutualCanCall` have no side effects (beyond populating the
+    // memoising whoCanCall cache) and are independent across candidates, so they
+    // run concurrently — collapsing what were ~2–3 serial awaits per candidate
+    // into one `Promise.all`. The set of survivors (and thus who matches whom) is
+    // identical to the prior serial gate; only the await topology changed.
+    const gated = await Promise.all(
+      connected.map(async (c) => {
+        if (await this.blocks.isBlocked(joiner.userId, c.candidate.userId)) {
+          return null;
+        }
+        // Privacy gate, mirroring chat's `canMessage`: BOTH sides must permit the
+        // other to call them (`whoCanCall` of 'everyone' | 'friends' | 'nobody').
+        if (!(await this.mutualCanCall(joiner.userId, c.candidate.userId, whoCanCallCache))) {
+          return null;
+        }
+        return c;
+      }),
+    );
+
+    // Gather eligible candidates (passing every gate) tagged with their batch
+    // index (= pool priority) and their shared-interest count, so we can rank
+    // by overlap while keeping priority/FIFO as the tiebreak.
+    const eligible: Array<{ candidate: WaiterEntry; priority: number; shared: number }> = [];
+    for (const c of gated) {
+      if (c) {
+        eligible.push(c);
+      }
     }
 
     // Rank: most shared interests first, then original pool priority (premium,
@@ -446,7 +520,7 @@ export class MatchmakingService {
   private async mutualCanCall(
     a: string,
     b: string,
-    cache: Map<string, Visibility>,
+    cache: Map<string, Promise<Visibility>>,
   ): Promise<boolean> {
     return (await this.canCall(a, b, cache)) && (await this.canCall(b, a, cache));
   }
@@ -459,7 +533,7 @@ export class MatchmakingService {
   private async canCall(
     caller: string,
     target: string,
-    cache: Map<string, Visibility>,
+    cache: Map<string, Promise<Visibility>>,
   ): Promise<boolean> {
     const visibility = await this.cachedWhoCanCall(target, cache);
     if (visibility === 'nobody') {
@@ -471,16 +545,21 @@ export class MatchmakingService {
     return true; // 'everyone'
   }
 
-  /** Read `whoCanCall` for a user, memoising the result in `cache`. */
-  private async cachedWhoCanCall(
+  /**
+   * Read `whoCanCall` for a user, memoising the in-flight PROMISE in `cache`.
+   * Caching the promise (not just the resolved value) dedups concurrent reads of
+   * the same user within one match pass — so the parallel block/privacy gate in
+   * {@link tryMatch} still issues at most one settings read per user.
+   */
+  private cachedWhoCanCall(
     userId: string,
-    cache: Map<string, Visibility>,
+    cache: Map<string, Promise<Visibility>>,
   ): Promise<Visibility> {
     const cached = cache.get(userId);
     if (cached) {
       return cached;
     }
-    const visibility = await this.getWhoCanCall(userId);
+    const visibility = this.getWhoCanCall(userId);
     cache.set(userId, visibility);
     return visibility;
   }
@@ -511,6 +590,20 @@ export class MatchmakingService {
   private async getWaiter(userId: string): Promise<WaiterEntry | null> {
     const raw = await this.redis.get(waiterKey(userId));
     return raw ? (safeParse<WaiterEntry>(raw) ?? null) : null;
+  }
+
+  /**
+   * Batch-load waiter hashes for a whole match pass in ONE Redis `MGET`,
+   * preserving input order: `out[i]` is the parsed {@link WaiterEntry} for
+   * `userIds[i]`, or `null` if its hash is missing / corrupt (a stale ZSET
+   * member). Replaces N serial {@link getWaiter} GETs on the hot path.
+   */
+  private async getWaiters(userIds: readonly string[]): Promise<Array<WaiterEntry | null>> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    const raws = await this.redis.mget(userIds.map((id) => waiterKey(id)));
+    return raws.map((raw) => (raw ? (safeParse<WaiterEntry>(raw) ?? null) : null));
   }
 
   /** Remove a waiter's hash and pool membership (single type). */
@@ -594,16 +687,6 @@ export class MatchmakingService {
     } catch (err) {
       this.logger.debug(`isPremium failed for ${userId}: ${asMessage(err)}`);
       return false;
-    }
-  }
-
-  /** Resolve a waiter's country from their public profile (best-effort). */
-  private async resolveCountry(userId: string): Promise<string> {
-    try {
-      const profile = await this.profiles.getPublicProfile(userId);
-      return profile.country;
-    } catch {
-      return '';
     }
   }
 }

@@ -9,21 +9,23 @@ import '../router/router.dart';
 import 'push_service.dart';
 
 /// The active [PushService]. Defaults to the keyless [NoopPushService] so the
-/// app boots and runs WITHOUT Firebase config.
+/// app boots and runs WITHOUT Firebase config — and so the FIRST FRAME never
+/// waits on a native Firebase round-trip.
 ///
-/// To enable real push, the integrator overrides this in `main.dart`'s
-/// [ProviderScope] (after `Firebase.initializeApp()`), e.g.:
-///
-/// ```dart
-/// ProviderScope(
-///   overrides: [
-///     pushServiceProvider.overrideWithValue(FirebasePushService()),
-///   ],
-///   child: const RuletkaApp(),
-/// )
-/// ```
+/// Push is resolved AFTER the first frame (see `main.dart`), then published here
+/// via [setActivePushService]. The provider reads the late-bound holder, so a
+/// consumer that resolves it before resolution settles briefly sees the no-op
+/// (acceptable — push only starts post-authentication, long after boot).
+PushService _activePushService = const NoopPushService();
+
+/// Publish the resolved [PushService] (called once after the first frame, after
+/// the guarded `Firebase.initializeApp()`). Idempotent and synchronous.
+void setActivePushService(PushService service) {
+  _activePushService = service;
+}
+
 final pushServiceProvider = Provider<PushService>((ref) {
-  return const NoopPushService();
+  return _activePushService;
 });
 
 /// Drives push registration for the signed-in device.

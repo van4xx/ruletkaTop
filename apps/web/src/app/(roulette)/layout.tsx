@@ -10,7 +10,25 @@
  * duplicate toast stack while keeping /video and /voice toasts working.
  */
 import type { ReactNode } from 'react';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
+import { scopedMessages } from '@/i18n/client-scope';
 
-export default function RouletteLayout({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+/**
+ * Scopes the `roulette` namespace (~11 KB ru) to /video + /voice only. The root
+ * client provider withholds it; this nested provider re-attaches it on top of
+ * the global set. `components/roulette/*` + `features/roulette/*` are the sole
+ * consumers (grep-verified) and are imported only by the two pages in this
+ * group, so no other route ships these strings. Globally-mounted modals (gift /
+ * report / block, in `components/modals/*`) use `chrome`/`economy`, which remain
+ * in the root scope, so the app-wide `ModalHost` keeps working unchanged.
+ */
+export default async function RouletteLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+  return (
+    <NextIntlClientProvider locale={locale} messages={scopedMessages(messages, ['roulette'])}>
+      {children}
+    </NextIntlClientProvider>
+  );
 }

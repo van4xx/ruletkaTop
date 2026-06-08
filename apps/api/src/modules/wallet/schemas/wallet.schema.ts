@@ -32,3 +32,7 @@ export const WalletSchema = SchemaFactory.createForClass(Wallet);
 // ── Indexes (PROJECT_SPEC §6) ──────────────────────────────────────────────
 // One wallet per account, and the primary lookup / atomic-update key.
 WalletSchema.index({ userId: 1 }, { unique: true });
+// Leaderboard "coins" board ranks/counts by descending balance; without this
+// the sort/count is a COLLSCAN + in-memory sort over every wallet. The index
+// order serves `sort({ balanceCoins: -1 })` directly.
+WalletSchema.index({ balanceCoins: -1 });

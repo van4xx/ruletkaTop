@@ -47,7 +47,11 @@ dependencies:
   # Remote image caching (avatars, gifts, top feed).
   cached_network_image: ^3.4.1
 
-  # Display + body typefaces (Unbounded + Manrope), fetched at runtime.
+  # Display + body typefaces (Unbounded + Manrope). The .ttf weights are BUNDLED
+  # under assets/fonts/ and runtime fetching is disabled in main.dart
+  # (GoogleFonts.config.allowRuntimeFetching = false), so type resolves from the
+  # binary — no fonts.gstatic.com round-trip, no fallback-font flash/reflow, and
+  # no cold-launch network dependency. See assets/fonts/README.md.
   google_fonts: ^8.1.0
 
   # CloudPayments widget fallback (hosted checkout) + any embedded web content.
@@ -98,8 +102,22 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Local image assets (logos, illustrations) live here. Fonts are loaded via
-  # google_fonts at runtime, so no font files are bundled.
+  # ── Bundled typefaces (Unbounded + Manrope) ────────────────────────────────
+  # google_fonts resolves these from the bundle (allowRuntimeFetching=false in
+  # main.dart) by matching the family name it generates (`Unbounded`/`Manrope`).
+  # Both are single VARIABLE .ttf files (a `wght` axis); Flutter applies the
+  # requested FontWeight to the axis, so one file covers every weight the type
+  # system uses (Unbounded w600/700/800, Manrope w400/600/700/800). The license
+  # (SIL OFL 1.1) ships alongside as OFL-*.txt. See assets/fonts/README.md.
+  fonts:
+    - family: Unbounded
+      fonts:
+        - asset: assets/fonts/Unbounded-VariableFont_wght.ttf
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope-VariableFont_wght.ttf
+
+  # Local image assets (logos, illustrations) live here.
   assets:
     - assets/images/
     # On-device NSFW model. The directory is declared so an operator-provisioned

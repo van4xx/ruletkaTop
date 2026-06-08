@@ -50,6 +50,11 @@
      `db.payments.aggregate([{$match:{transactionId:{$ne:null}}},{$group:{_id:"$transactionId",n:{$sum:1}}},{$match:{n:{$gt:1}}}])`
    - **Appeals** — new partial-unique `{userId}` over `status:"pending"`. Resolve any user with two open appeals first:
      `db.moderation_appeals.aggregate([{$match:{status:"pending"}},{$group:{_id:"$userId",n:{$sum:1}}},{$match:{n:{$gt:1}}}])`
+   - **Friends + Matches (perf-only, NO dedup needed)** — the same boot reconciles two index reshuffles that are all **non-unique**, so there is nothing to de-dup first: `syncIndexes()` simply CREATES the new compounds and DROPS the now-orphaned old/redundant ones in one pass.
+     - `friendships`: `{requesterId,status}`/`{recipientId,status}` → `{requesterId,status,createdAt:-1}`/`{recipientId,status,createdAt:-1}` (carry `createdAt` so the newest-first list sort is index-served; old 2-key indexes dropped as redundant prefixes).
+     - `cointransactions`: pure-add `{userId,_id:-1}` for the `_id`-keyset transactions pager (existing `{userId,createdAt:-1}` kept).
+     - `wallets`: pure-add `{balanceCoins:-1}` for the leaderboard coins board.
+     - `matches`: drop the redundant single-field indexes on `userA`/`userB`/`startedAt` (dead prefixes of the `{userA,startedAt}`/`{userB,startedAt}`/`{type,startedAt}` compounds; trims write amplification on the highest-write collection).
    - Then boot once with `RUN_INDEX_SYNC=true` (it AWAITS + throws loudly on any remaining conflict — boot aborts rather than shipping green-but-unprotected), confirm "Mongo index sync complete." in logs, and unset the flag for normal boots.
 5. Run the §2 checks on production with a small allow-list / soft launch.
 6. Open to people.

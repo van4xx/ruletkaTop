@@ -273,11 +273,37 @@ export class MatchmakingGateway
     }
   }
 
-  /** Cluster-wide check that a socket id still has a live connection. */
+  /**
+   * Batched, cluster-wide liveness oracle for one match pass: returns the subset
+   * of `userIds` that still hold a live connection anywhere in the cluster. Backed
+   * by a single presence MGET ({@link PresenceService.getStatuses}) on the per-user
+   * connection-refcount-driven status keys — one Redis round-trip for the whole
+   * pass — replacing the prior per-candidate `fetchSockets` adapter fan-out. A
+   * user with no live connection is `offline` and omitted, so a stale waiter is
+   * skipped + evicted exactly as before. A presence read failure fails OPEN
+   * (treat every candidate as live) so a transient Redis blip can't empty the pool.
+   */
   private get isConnected(): ConnectionVerifier {
-    return async (socketId: string): Promise<boolean> => {
-      const sockets = await this.server.in(socketId).fetchSockets();
-      return sockets.length > 0;
+    return async (userIds: readonly string[]): Promise<Set<string>> => {
+      if (userIds.length === 0) {
+        return new Set();
+      }
+      try {
+        const statuses = await this.presence.getStatuses([...userIds]);
+        const live = new Set<string>();
+        for (const id of userIds) {
+          // Any non-`offline` status means the user has a live connection
+          // (the 0→1 connect edge flips them online; the →0 disconnect edge
+          // back to offline) — the exact liveness signal a stale waiter lacks.
+          if ((statuses[id] ?? 'offline') !== 'offline') {
+            live.add(id);
+          }
+        }
+        return live;
+      } catch (err) {
+        this.logger.debug(`presence liveness lookup failed: ${asMessage(err)}`);
+        return new Set(userIds);
+      }
     };
   }
 

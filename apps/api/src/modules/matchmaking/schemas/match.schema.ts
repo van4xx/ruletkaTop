@@ -43,11 +43,11 @@ export type MatchDocument = HydratedDocument<Match>;
 @Schema({ collection: 'matches', timestamps: false })
 export class Match {
   /** First participant (the one already waiting when the pair was formed). */
-  @Prop({ type: String, required: true, index: true })
+  @Prop({ type: String, required: true })
   userA!: string;
 
   /** Second participant (the joiner who triggered the match). */
-  @Prop({ type: String, required: true, index: true })
+  @Prop({ type: String, required: true })
   userB!: string;
 
   /** Media modality of the session. */
@@ -55,7 +55,7 @@ export class Match {
   type!: MatchType;
 
   /** When the pairing was created (server clock). */
-  @Prop({ type: Date, required: true, default: (): Date => new Date(), index: true })
+  @Prop({ type: Date, required: true, default: (): Date => new Date() })
   startedAt!: Date;
 
   /** When the session ended; `null` while the call is still live. */
@@ -83,6 +83,12 @@ export class Match {
 export const MatchSchema = SchemaFactory.createForClass(Match);
 
 // ── Analytics indexes ──────────────────────────────────────────────────────
+// `matches` is the highest-WRITE collection (one row per pairing), so we keep
+// only the indexes that earn their write cost. The single-field index:true on
+// `userA`/`userB`/`startedAt` were removed: the first two are dead prefixes of
+// the {participant, startedAt} compounds below, and a lone `startedAt` sort is
+// only ever issued by cold admin reads (covered by {type, startedAt} + collscan
+// on those infrequent paths).
 // Per-user history (either side), newest first — powers "my recent matches".
 MatchSchema.index({ userA: 1, startedAt: -1 });
 MatchSchema.index({ userB: 1, startedAt: -1 });

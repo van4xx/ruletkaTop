@@ -183,6 +183,7 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
     zrem: jest.Mock;
     zscore: jest.Mock;
     get: jest.Mock;
+    mget: jest.Mock;
     set: jest.Mock;
     incr: jest.Mock;
     expire: jest.Mock;
@@ -202,8 +203,11 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
   let waiterStore: Map<string, WaiterEntry>;
   // Pool membership: candidate ids returned by zrange in priority order.
   let poolOrder: string[];
-  // Connection verifier the gateway passes in; default: everyone connected.
-  const alwaysConnected = jest.fn().mockResolvedValue(true);
+  // Batched liveness oracle the gateway passes in; default: everyone the matcher
+  // asks about is live (returns the full requested id set).
+  const alwaysConnected = jest
+    .fn<Promise<Set<string>>, [readonly string[]]>()
+    .mockImplementation((ids: readonly string[]) => Promise.resolve(new Set(ids)));
 
   beforeEach(async () => {
     waiterStore = new Map();
@@ -235,6 +239,21 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
         }
         return Promise.resolve(null);
       }),
+      // Batched waiter-hash load (one MGET per match pass). Resolves each key
+      // against the same store as `get`, preserving input order with null gaps
+      // for missing (stale) waiters.
+      mget: jest.fn().mockImplementation((keys: string[]) =>
+        Promise.resolve(
+          keys.map((key) => {
+            for (const [uid, entry] of waiterStore) {
+              if (key === waiterKey(uid)) {
+                return JSON.stringify(entry);
+              }
+            }
+            return null;
+          }),
+        ),
+      ),
       set: jest.fn().mockResolvedValue('OK'),
       incr: jest.fn(),
       expire: jest.fn().mockResolvedValue(1),
@@ -514,11 +533,12 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
     const joiner = waiter({ userId: 'joiner', socketId: 'sock-joiner' });
     seat(joiner);
 
-    // Only the live peer's socket is connected.
+    // Batched liveness: only the live peer holds a connection (the joiner is
+    // never asked about — the matcher only checks candidates).
     const verifier = jest
-      .fn()
-      .mockImplementation((sockId: string) =>
-        Promise.resolve(sockId === 'sock-live' || sockId === 'sock-joiner'),
+      .fn<Promise<Set<string>>, [readonly string[]]>()
+      .mockImplementation((ids: readonly string[]) =>
+        Promise.resolve(new Set(ids.filter((id) => id === 'live'))),
       );
 
     const result = await service.tryMatch(joiner, verifier);
@@ -556,6 +576,68 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
     expect(result).toBeNull();
     // The phantom member is ZREM'd directly off the pool.
     expect(redis.zrem).toHaveBeenCalledWith(poolKey('video'), 'phantom');
+  });
+
+  // ── Batched hot-path topology (speed-only refactor) ────────────────────────
+  // These pin the new await topology: one MGET for every candidate hash and a
+  // single batched liveness call per pass, instead of N serial GETs + N
+  // per-candidate fetchSockets round-trips. Behaviour is unchanged — they assert
+  // the BATCHING, not new matching semantics.
+
+  it('loads all candidate waiter hashes in a single MGET (no per-candidate GET)', async () => {
+    seat(waiter({ userId: 'peer-a', socketId: 'sock-a' }));
+    seat(waiter({ userId: 'peer-b', socketId: 'sock-b' }));
+    const joiner = waiter({ userId: 'joiner', socketId: 'sock-joiner' });
+    seat(joiner);
+
+    await service.tryMatch(joiner, alwaysConnected);
+
+    // One batched read covers the whole candidate set (self filtered out before
+    // the MGET, so the joiner's own key is not fetched).
+    expect(redis.mget).toHaveBeenCalledTimes(1);
+    const requestedKeys = redis.mget.mock.calls[0]?.[0] as string[];
+    expect(requestedKeys).toEqual([waiterKey('peer-a'), waiterKey('peer-b')]);
+    expect(requestedKeys).not.toContain(waiterKey('joiner'));
+  });
+
+  it('checks liveness in ONE batched call carrying every scanned candidate id', async () => {
+    seat(waiter({ userId: 'peer-a', socketId: 'sock-a' }));
+    seat(waiter({ userId: 'peer-b', socketId: 'sock-b' }));
+    const joiner = waiter({ userId: 'joiner', socketId: 'sock-joiner' });
+    seat(joiner);
+
+    const verifier = jest
+      .fn<Promise<Set<string>>, [readonly string[]]>()
+      .mockImplementation((ids: readonly string[]) => Promise.resolve(new Set(ids)));
+
+    await service.tryMatch(joiner, verifier);
+
+    // Liveness is resolved once for the whole pass, not per candidate.
+    expect(verifier).toHaveBeenCalledTimes(1);
+    const askedIds = verifier.mock.calls[0]?.[0] as readonly string[];
+    // Both compatible candidates are asked about; the joiner is never asked
+    // (the matcher only checks candidates, not itself).
+    expect([...askedIds].sort()).toEqual(['peer-a', 'peer-b']);
+    expect(askedIds).not.toContain('joiner');
+  });
+
+  it('still reads each whoCanCall at most once even with parallel gate evaluation', async () => {
+    // Two privacy-incompatible candidates; the parallel block/privacy gate could
+    // race two reads of the JOINER's setting, but the promise-memoising cache
+    // collapses them to exactly one settings read.
+    seat(waiter({ userId: PEER_OID }));
+    seat(waiter({ userId: PEER_B_OID }));
+    const joiner = waiter({ userId: JOINER_OID });
+    seat(joiner);
+    whoCanCallBy({ [PEER_OID]: 'nobody', [PEER_B_OID]: 'nobody', [JOINER_OID]: 'everyone' });
+
+    await service.tryMatch(joiner, alwaysConnected);
+
+    const queriedIds = settingsFindOne.mock.calls.map((c) =>
+      (c[0] as { userId: { toString(): string } }).userId.toString(),
+    );
+    const joinerReads = queriedIds.filter((id) => id === JOINER_OID).length;
+    expect(joinerReads).toBeLessThanOrEqual(1);
   });
 
   // ── Interest-aware matching (the differentiator) ───────────────────────────
@@ -708,7 +790,11 @@ describe('MatchmakingService.enqueue — premium priority scoring', () => {
     };
     const redis = { multi: jest.fn().mockReturnValue(pipeline) };
     const profiles = {
-      getAgeAndGender: jest.fn().mockResolvedValue({ age: 28, gender: 'female', interests: [] }),
+      // The enqueue path now resolves country from THIS single read (no second
+      // getPublicProfile round-trip), so the mock returns country too.
+      getAgeAndGender: jest
+        .fn()
+        .mockResolvedValue({ age: 28, gender: 'female', country: 'RU', interests: [] }),
       getPublicProfile: jest.fn().mockResolvedValue({
         id: 'u',
         nickname: 'n',
@@ -790,6 +876,41 @@ describe('MatchmakingService.enqueue — premium priority scoring', () => {
     expect(regularScore).toBe(joinedAt);
 
     nowSpy.mockRestore();
+  });
+
+  it('resolves country from the single getAgeAndGender read (no second profile lookup)', async () => {
+    premium = { isPremium: jest.fn().mockResolvedValue(false) };
+    const svc = buildService();
+    const profiles = (
+      svc as unknown as {
+        profiles: { getAgeAndGender: jest.Mock; getPublicProfile: jest.Mock };
+      }
+    ).profiles;
+    profiles.getAgeAndGender.mockResolvedValue({
+      age: 28,
+      gender: 'female',
+      country: 'BY',
+      interests: [],
+    });
+
+    const entry = await svc.enqueue(
+      'u-country',
+      'video' as MatchType,
+      {
+        gender: 'any',
+        ageMin: 18,
+        ageMax: 120,
+        countries: [],
+        sharedInterestsOnly: false,
+      },
+      'sock',
+    );
+
+    // Country comes from the demographics read…
+    expect(entry?.country).toBe('BY');
+    // …and the enqueue path no longer issues a second getPublicProfile just for it.
+    expect(profiles.getPublicProfile).not.toHaveBeenCalled();
+    expect(profiles.getAgeAndGender).toHaveBeenCalledTimes(1);
   });
 
   it('returns null and does not enqueue a user with no profile', async () => {

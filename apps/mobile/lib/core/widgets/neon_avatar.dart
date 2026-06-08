@@ -51,6 +51,14 @@ class NeonAvatar extends StatelessWidget {
     // absolutize them against the API origin before the loader fetches them.
     final resolvedUrl = ApiConfig.resolveMediaUrl(imageUrl);
 
+    // Decode the source bitmap to the painted box (in physical pixels) instead
+    // of its native size: a 512px avatar would otherwise decode to a ~1MB+ ARGB
+    // bitmap for a tiny circle. `BoxFit.cover` makes this visually identical
+    // (the cap matches what's actually rasterized at this DPR), but keeps the
+    // image cache + per-frame GPU upload small.
+    final cacheSide =
+        (inner * MediaQuery.devicePixelRatioOf(context)).round();
+
     Widget avatar = ClipOval(
       child: SizedBox(
         width: inner,
@@ -59,6 +67,8 @@ class NeonAvatar extends StatelessWidget {
             ? CachedNetworkImage(
                 imageUrl: resolvedUrl,
                 fit: BoxFit.cover,
+                memCacheWidth: cacheSide,
+                memCacheHeight: cacheSide,
                 placeholder: (_, _) => _Fallback(name: name, size: inner),
                 errorWidget: (_, _, _) => _Fallback(name: name, size: inner),
               )

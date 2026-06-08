@@ -169,9 +169,18 @@ class _GiftMedia extends StatelessWidget {
         child: Icon(Icons.card_giftcard_rounded, size: 40, color: tint),
       );
     }
+    // Cap the decode to the painted box in physical pixels so a large source
+    // PNG/WEBP isn't decoded to a full-res ARGB bitmap for a small grid tile.
+    // The tile is bounded by an AspectRatio(1) cell; 200dp is a safe ceiling for
+    // any realistic catalog/picker column. `BoxFit.contain` is visually
+    // identical at this cap.
+    final cacheSide =
+        (200 * MediaQuery.devicePixelRatioOf(context)).round();
     return CachedNetworkImage(
       imageUrl: gift.animationUrl,
       fit: BoxFit.contain,
+      memCacheWidth: cacheSide,
+      memCacheHeight: cacheSide,
       placeholder: (_, _) => Center(
         child: Icon(
           Icons.card_giftcard_outlined,

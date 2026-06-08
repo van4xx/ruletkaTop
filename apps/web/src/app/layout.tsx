@@ -13,6 +13,7 @@ import { organizationLd, websiteLd } from '@/lib/json-ld';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import { headers } from 'next/headers';
+import { rootClientMessages } from '@/i18n/client-scope';
 
 /**
  * Typography:
@@ -107,10 +108,15 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // Resolve the active locale (cookie-based) + its merged messages on the server,
-  // then hand them to the client provider so `useTranslations` works everywhere.
+  // Resolve the active locale (cookie-based) + its merged messages on the server.
+  // The full dictionary stays available to Server Components / `getTranslations` /
+  // `generateMetadata`; only the GLOBAL subset crosses into the root client tree.
+  // Large, single-route-group namespaces (legal / roulette / settings) are
+  // withheld here and re-attached by a nested provider in their owning group —
+  // see `@/i18n/client-scope`.
   const locale = await getLocale();
   const messages = await getMessages();
+  const clientMessages = rootClientMessages(messages);
   const t = await getTranslations('common');
   const tm = await getTranslations('metadata');
   // Per-request CSP nonce (set by the middleware in prod) — passed to next-themes
@@ -136,7 +142,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <JsonLdScript data={structuredData} />
         {/* Privacy-first analytics loader — renders nothing unless configured. */}
         <Analytics />
-        <NextIntlClientProvider locale={locale} messages={messages}>
+        <NextIntlClientProvider locale={locale} messages={clientMessages}>
           <Providers nonce={nonce}>
             {/* First-visit neon intro; renders once per browser, then nothing. */}
             <Preloader />

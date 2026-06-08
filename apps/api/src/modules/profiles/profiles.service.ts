@@ -427,19 +427,27 @@ export class ProfilesService {
   }
 
   /**
-   * Lightweight `{ age, gender, interests }` lookup used by matchmaking when
-   * enqueuing a waiter (cheaper than a full public-profile build). `interests`
-   * is already normalised at write time; defaults to `[]` for profiles that
-   * predate the field. Throws `404` if the profile does not exist.
+   * Lightweight `{ age, gender, country, interests }` lookup used by matchmaking
+   * when enqueuing a waiter (cheaper than a full public-profile build, and a
+   * SINGLE profile read — the country is returned here so the enqueue path no
+   * longer needs a second `getPublicProfile` round-trip just for it). `interests`
+   * is already normalised at write time; both `interests` and `country` default
+   * to their empty value for profiles that predate the field. Throws `404` if the
+   * profile does not exist.
    */
   async getAgeAndGender(
     userId: string,
-  ): Promise<{ age: number; gender: Gender; interests: string[] }> {
+  ): Promise<{ age: number; gender: Gender; country: string; interests: string[] }> {
     const doc = await this.findByUserId(userId);
     if (!doc) {
       throw new NotFoundException('Profile not found');
     }
-    return { age: computeAge(doc.birthDate), gender: doc.gender, interests: doc.interests ?? [] };
+    return {
+      age: computeAge(doc.birthDate),
+      gender: doc.gender,
+      country: doc.country ?? '',
+      interests: doc.interests ?? [],
+    };
   }
 
   /**

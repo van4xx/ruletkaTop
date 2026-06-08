@@ -59,6 +59,10 @@ FriendshipSchema.pre('validate', async function syncPairKey(this: FriendshipDocu
 // ── Indexes (PROJECT_SPEC §6) ──────────────────────────────────────────────
 // At most one friendship per unordered pair (regardless of who requested).
 FriendshipSchema.index({ pairKey: 1 }, { unique: true });
-// "My friends / my incoming-outgoing requests" lookups by participant + status.
-FriendshipSchema.index({ requesterId: 1, status: 1 });
-FriendshipSchema.index({ recipientId: 1, status: 1 });
+// "My friends / my incoming-outgoing requests" lookups by participant + status,
+// served newest-first. `createdAt` is carried as the index suffix so the
+// `sort({ createdAt: -1, _id: -1 })` in listFriends/listRequests is satisfied by
+// the index order (no blocking in-memory sort). The leading {participant,status}
+// prefix still serves the equality filter, so the old 2-key indexes are dropped.
+FriendshipSchema.index({ requesterId: 1, status: 1, createdAt: -1 });
+FriendshipSchema.index({ recipientId: 1, status: 1, createdAt: -1 });

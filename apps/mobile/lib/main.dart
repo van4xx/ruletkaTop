@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'core/di/di.dart';
 import 'core/push/push.dart';
@@ -15,11 +18,15 @@ import 'features/roulette/data/nsfw_classifier.dart';
 
 /// App entry point.
 ///
-/// Wraps the app in a [ProviderScope] (Riverpod root), restores any persisted
-/// session from secure storage BEFORE the first frame's routing decision, then
-/// builds [MaterialApp.router] with the dark-first theme and the guarded
-/// [routerProvider].
-Future<void> main() async {
+/// Wraps the app in a [ProviderScope] (Riverpod root) and builds
+/// [MaterialApp.router] with the dark-first theme and the guarded
+/// [routerProvider]. To minimise time-to-first-frame, NOTHING that isn't needed
+/// for the first paint runs before [runApp]:
+///   * Firebase + push initialise AFTER the first frame (see [RuletkaApp]); push
+///     only starts post-authentication anyway, so the brief no-op window is moot.
+///   * The on-device NSFW classifier is NOT pre-probed here — it lazy-loads on
+///     the first `/video` session, so the model load never sits on the boot path.
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   // Keep portrait-first; the roulette feature can opt into landscape locally.
   SystemChrome.setPreferredOrientations([
@@ -27,29 +34,31 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Best-effort native push: initialize Firebase + register the background
-  // handler, then activate the real [FirebasePushService]. If the platform
-  // config files (google-services.json / GoogleService-Info.plist) are absent —
-  // or anything else fails — we swallow it and keep the keyless no-op, so the
-  // app boots + runs fine without push configured.
-  final pushService = await _resolvePushService();
+  // Resolve the Unbounded/Manrope typefaces from the BUNDLED assets (declared in
+  // pubspec) rather than fetching .ttf from fonts.gstatic.com at runtime — no
+  // fallback-font flash/reflow and no cold-launch network dependency.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
-  // Best-effort on-device NSFW screening (web parity): activate the TFLite
-  // classifier ONLY if the model asset (assets/models/nsfw.tflite) is loadable.
-  // Without the operator-provisioned binary this is a no-op and the screening
-  // pipeline stays inert (never falsely cuts) — exactly today's behaviour.
-  await installTfliteNsfwClassifier();
+  // Register the on-device NSFW backend WITHOUT a boot-time probe (web parity).
+  // This is a cheap synchronous function-pointer swap — no asset I/O happens
+  // here. The actual model load is deferred to the first `/video` session's
+  // `_ensureInterpreter()` (the single load). [TfliteNsfwClassifier] self-guards:
+  // when the operator-provisioned `assets/models/nsfw.tflite` is absent the first
+  // classify logs once and every frame short-circuits to `safe`, so screening
+  // stays inert and NEVER falsely cuts — exactly the prior boot-probe behaviour,
+  // minus the native round-trip on time-to-first-frame.
+  setNsfwClassifierFactory(tfliteNsfwClassifierFactory);
 
   runApp(
-    ProviderScope(
-      overrides: [pushServiceProvider.overrideWithValue(pushService)],
-      child: const RuletkaApp(),
+    const ProviderScope(
+      child: RuletkaApp(),
     ),
   );
 }
 
 /// Attempt to bring real FCM push online. Returns the [FirebasePushService] when
-/// Firebase initializes, else the keyless [NoopPushService]. Never throws.
+/// Firebase initializes, else the keyless [NoopPushService]. Never throws. Runs
+/// AFTER the first frame so the native Firebase round-trip is off the boot path.
 Future<PushService> _resolvePushService() async {
   try {
     await Firebase.initializeApp();
@@ -85,8 +94,12 @@ class _RuletkaAppState extends ConsumerState<RuletkaApp> {
     super.initState();
     // Restore the session (refresh-token → access-token → /auth/me) after the
     // first frame so providers are ready; the guard shows the splash until it
-    // resolves to authenticated/unauthenticated.
+    // resolves to authenticated/unauthenticated. We ALSO bring push online here
+    // — AFTER the first frame — so the native Firebase round-trip never sits on
+    // time-to-first-frame. Push only starts post-authentication (well after this
+    // resolves), so publishing the service here is always in time.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_resolvePushService().then(setActivePushService));
       ref.read(authControllerProvider.notifier).bootstrap();
     });
     // Decide whether to play the first-launch intro (persisted once per install).

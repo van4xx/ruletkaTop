@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Landing / home page for ruletka.top.
  *
@@ -7,38 +5,23 @@
  * gradient headline, primary CTA to the video roulette, a live-feel teaser of
  * the two-direction Top marquee, a trust/stats strip and feature cards.
  *
- * Motion: a single, well-orchestrated staggered entrance (framer-motion). All
- * looping/long animations are neutralised under `prefers-reduced-motion` via
- * globals.css. All copy is localized via next-intl (`landing` + `common`).
+ * SERVER COMPONENT: the whole marketing tree is static server HTML — the LCP
+ * headline (`landing.headline1/2`), subheading, CTAs and trust row paint at
+ * their final visible state with NO client JS and NO opacity:0-until-hydration
+ * delay. The former framer-motion staggered entrance is replaced by the CSS
+ * `.landing-rise` utility (globals.css), which respects `prefers-reduced-motion`
+ * via the global reduced-motion rule. The only client island is `TopMarquee`
+ * (its own `'use client'`). All copy is localized via next-intl (`landing` +
+ * `common`) using the server `getTranslations` API.
  */
 import Link from 'next/link';
-import { motion, type Variants } from 'framer-motion';
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 import { ArrowRight, Globe2, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import { FEATURE_HIGHLIGHTS, ROUTES } from '@/config/nav';
 import { TopMarquee } from '@/components/top-marquee';
 import { JsonLdScript } from '@/components/json-ld';
 import { webApplicationLd } from '@/lib/json-ld';
 import { cn } from '@/lib/cn';
-
-/** Shared "ease-out expo" curve as a typed bezier tuple (not widened to number[]). */
-const EASE_OUT = [0.16, 1, 0.3, 1] as const;
-
-const container: Variants = {
-  hidden: {},
-  show: {
-    transition: { staggerChildren: 0.08, delayChildren: 0.05 },
-  },
-};
-
-const rise: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, ease: EASE_OUT },
-  },
-};
 
 /** Stat keys — values + labels live in the `landing.stats.*` messages. */
 const STAT_KEYS = ['countries', 'connect', 'live'] as const;
@@ -50,9 +33,9 @@ const TRUST = [
   { icon: Globe2, key: 'global' },
 ] as const;
 
-export default function HomePage() {
-  const t = useTranslations('landing');
-  const tc = useTranslations('common');
+export default async function HomePage() {
+  const t = await getTranslations('landing');
+  const tc = await getTranslations('common');
 
   return (
     <div className="grain relative overflow-hidden">
@@ -73,8 +56,8 @@ export default function HomePage() {
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section className="mx-auto max-w-7xl px-4 pb-12 pt-16 sm:px-6 sm:pt-24 lg:px-8">
         <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
-          <motion.div variants={container} initial="hidden" animate="show">
-            <motion.div variants={rise}>
+          <div>
+            <div className="landing-rise">
               <span className="glass-panel inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-neon-cyan)] opacity-75" />
@@ -82,25 +65,27 @@ export default function HomePage() {
                 </span>
                 {t('liveBadge')}
               </span>
-            </motion.div>
+            </div>
 
-            <motion.h1
-              variants={rise}
-              className="mt-6 font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl"
-            >
+            {/* LCP headline — painted at its final visible state (no entrance
+                animation) so it never waits on hydration. */}
+            <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
               {t('headline1')}
               <br />
               <span className="text-gradient-neon">{t('headline2')}</span>
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              variants={rise}
-              className="mt-6 max-w-xl text-balance text-lg text-muted-foreground"
+            <p
+              className="landing-rise mt-6 max-w-xl text-balance text-lg text-muted-foreground"
+              style={{ '--rise-delay': '80ms' } as React.CSSProperties}
             >
               {t('subheading')}
-            </motion.p>
+            </p>
 
-            <motion.div variants={rise} className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <div
+              className="landing-rise mt-9 flex flex-col gap-3 sm:flex-row"
+              style={{ '--rise-delay': '160ms' } as React.CSSProperties}
+            >
               <Link
                 href={ROUTES.video}
                 className={cn(
@@ -124,12 +109,12 @@ export default function HomePage() {
                 <Sparkles className="h-5 w-5 text-[var(--color-neon-cyan)]" />
                 {t('ctaVoice')}
               </Link>
-            </motion.div>
+            </div>
 
             {/* Trust row */}
-            <motion.ul
-              variants={rise}
-              className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground"
+            <ul
+              className="landing-rise mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground"
+              style={{ '--rise-delay': '240ms' } as React.CSSProperties}
             >
               {TRUST.map(({ icon: Icon, key }) => (
                 <li key={key} className="inline-flex items-center gap-2">
@@ -137,15 +122,13 @@ export default function HomePage() {
                   {t(`trust.${key}`)}
                 </li>
               ))}
-            </motion.ul>
-          </motion.div>
+            </ul>
+          </div>
 
           {/* Top marquee teaser */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, ease: EASE_OUT, delay: 0.2 }}
-            className="relative"
+          <div
+            className="landing-rise relative"
+            style={{ '--rise-delay': '200ms' } as React.CSSProperties}
           >
             <div className="glass-panel overflow-hidden rounded-3xl p-4">
               <div className="mb-3 flex items-center justify-between px-1">
@@ -164,17 +147,11 @@ export default function HomePage() {
               aria-hidden="true"
               className="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-br from-[var(--color-neon-violet)]/20 via-transparent to-[var(--color-neon-cyan)]/20 blur-2xl"
             />
-          </motion.div>
+          </div>
         </div>
 
         {/* Stats strip */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.6, ease: EASE_OUT }}
-          className="glass-panel mt-16 grid grid-cols-1 divide-y divide-border/60 rounded-2xl sm:grid-cols-3 sm:divide-x sm:divide-y-0"
-        >
+        <div className="landing-rise glass-panel mt-16 grid grid-cols-1 divide-y divide-border/60 rounded-2xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {STAT_KEYS.map((key) => (
             <div key={key} className="flex flex-col items-center gap-1 px-6 py-6">
               <span className="font-display text-3xl font-bold text-gradient-neon">
@@ -183,7 +160,7 @@ export default function HomePage() {
               <span className="text-sm text-muted-foreground">{t(`stats.${key}.label`)}</span>
             </div>
           ))}
-        </motion.div>
+        </div>
       </section>
 
       {/* ── Features ─────────────────────────────────────────────────── */}
@@ -195,22 +172,18 @@ export default function HomePage() {
           <p className="mt-4 text-muted-foreground">{t('features.subtitle')}</p>
         </div>
 
-        <motion.ul
-          variants={container}
-          initial="hidden"
-          // Animate the staggered reveal on mount rather than on scroll-into-view.
-          // The previous `whileInView` left the grid stuck at opacity:0 whenever
-          // its IntersectionObserver didn't fire (e.g. the section was already
-          // on-screen at load) — which read as an empty gap, most visibly in the
-          // light theme where the faint accent glow behind the cards is barely
-          // perceptible. `animate="show"` guarantees the cards are always shown.
-          animate="show"
-          className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {FEATURE_HIGHLIGHTS.map((feature) => {
+        {/* The cards are always visible: each plays a one-shot CSS fade-up on
+            load (staggered), and `prefers-reduced-motion` snaps them to their
+            final state. Replaces the prior `animate="show"` framer-motion grid. */}
+        <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURE_HIGHLIGHTS.map((feature, i) => {
             const Icon = feature.icon;
             return (
-              <motion.li key={feature.key} variants={rise}>
+              <li
+                key={feature.key}
+                className="landing-rise"
+                style={{ '--rise-delay': `${i * 80}ms` } as React.CSSProperties}
+              >
                 <Link
                   href={feature.href}
                   className="group relative block h-full overflow-hidden rounded-2xl"
@@ -241,21 +214,15 @@ export default function HomePage() {
                     </span>
                   </div>
                 </Link>
-              </motion.li>
+              </li>
             );
           })}
-        </motion.ul>
+        </ul>
       </section>
 
       {/* ── Final CTA ────────────────────────────────────────────────── */}
       <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
-          transition={{ duration: 0.6, ease: EASE_OUT }}
-          className="relative overflow-hidden rounded-3xl px-6 py-14 text-center sm:px-12"
-        >
+        <div className="landing-rise relative overflow-hidden rounded-3xl px-6 py-14 text-center sm:px-12">
           <div
             aria-hidden="true"
             className="absolute inset-0 -z-10 bg-gradient-to-br from-[var(--color-neon-violet)]/25 via-card to-[var(--color-neon-cyan)]/20"
@@ -278,7 +245,7 @@ export default function HomePage() {
             {t('finalCta.button')}
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
           </Link>
-        </motion.div>
+        </div>
       </section>
     </div>
   );

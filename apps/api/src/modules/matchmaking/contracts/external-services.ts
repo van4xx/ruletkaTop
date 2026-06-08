@@ -20,13 +20,18 @@ export interface ProfilesServiceContract {
   /** Public profile used to build {@link PeerInfo} for the call overlay. */
   getPublicProfile(userId: string): Promise<PublicProfile>;
   /**
-   * Age + gender + interests for filter compatibility / interest-aware ranking
-   * (cheaper than a full profile build). `interests` is normalised and defaults
-   * to `[]` for profiles with none.
+   * Age + gender + country + interests for filter compatibility / interest-aware
+   * ranking (cheaper than a full profile build, and a SINGLE profile read — the
+   * country is returned here so the enqueue path needs no second profile lookup
+   * for it). `interests` is normalised and defaults to `[]` for profiles with
+   * none; `country` defaults to `''` for profiles that predate the field.
    */
-  getAgeAndGender(
-    userId: string,
-  ): Promise<{ age: number; gender: PublicProfile['gender']; interests: string[] }>;
+  getAgeAndGender(userId: string): Promise<{
+    age: number;
+    gender: PublicProfile['gender'];
+    country: string;
+    interests: string[];
+  }>;
 }
 export const PROFILES_SERVICE = Symbol('PROFILES_SERVICE');
 

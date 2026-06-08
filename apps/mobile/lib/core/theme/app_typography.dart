@@ -3,8 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// Type system mirroring the web: **Unbounded** for display/headings (a bold,
 /// geometric display face — web `--font-display`) and **Manrope** for
-/// body/labels (a clean grotesque — web `--font-sans`). Fonts are fetched +
-/// cached at runtime by `google_fonts`, so nothing is bundled in the binary.
+/// body/labels (a clean grotesque — web `--font-sans`). The .ttf weights are
+/// BUNDLED under `assets/fonts/` and declared in pubspec; with
+/// `GoogleFonts.config.allowRuntimeFetching = false` (set in `main.dart`)
+/// `google_fonts` resolves them from the binary — no fonts.gstatic.com fetch,
+/// no fallback-font flash, no cold-launch network dependency.
 abstract final class AppTypography {
   /// Build the [TextTheme] for a given [brightness]. Manrope is the base for
   /// every slot; the display/headline slots are then overridden with Unbounded

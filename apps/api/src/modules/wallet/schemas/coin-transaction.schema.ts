@@ -59,8 +59,13 @@ export type CoinTransactionDocument = HydratedDocument<CoinTransaction>;
 export const CoinTransactionSchema = SchemaFactory.createForClass(CoinTransaction);
 
 // ── Indexes (PROJECT_SPEC §6) ──────────────────────────────────────────────
-// Per-user ledger reads, newest first (history endpoint + reconciliation).
+// Per-user ledger reads, newest first (reconciliation + createdAt-ordered scans).
 CoinTransactionSchema.index({ userId: 1, createdAt: -1 });
+// GET /wallet/transactions paginates by `_id` keyset (sort {_id:-1}, range
+// {_id:{$lt}}), so the per-user newest-first cursor walk needs `_id` as the
+// index suffix — the createdAt-suffixed index above cannot serve the `_id`
+// range/sort. Pure add (leaves the createdAt index intact for time scans).
+CoinTransactionSchema.index({ userId: 1, _id: -1 });
 
 /**
  * IDEMPOTENCY GUARD (P0 money bug): at most ONE ledger row per

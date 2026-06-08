@@ -206,6 +206,18 @@ class _GiftTile extends StatelessWidget {
                           ? CachedNetworkImage(
                               imageUrl: gift.animationUrl,
                               fit: BoxFit.contain,
+                              // Cap the decode to the painted box in physical
+                              // pixels: the tile is a fixed 116dp-wide card with
+                              // sm padding, so ~100dp is a safe ceiling for this
+                              // AspectRatio(1) media box. `BoxFit.contain` is
+                              // visually identical, but a large source PNG no
+                              // longer decodes to a full-res ARGB bitmap.
+                              memCacheWidth: (100 *
+                                      MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
+                              memCacheHeight: (100 *
+                                      MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
                               placeholder: (_, _) => Center(
                                 child: Icon(Icons.card_giftcard_outlined,
                                     size: 26,
