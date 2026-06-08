@@ -14,7 +14,7 @@
 | 🔑 `CLOUDPAYMENTS_PUBLIC_ID` + `CLOUDPAYMENTS_API_SECRET` | **Premium + coin revenue** (wave 2 builds the server checkout/cancel/refund; it needs these to actually charge) | **MISSING** → premium is uncollectable until set | CloudPayments dashboard → Site settings → API |
 | 🔑 `NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID` | web payment widget | **MISSING** | same Public ID (safe to expose) |
 | 🔑 `SIGHTENGINE_API_USER` + `MODERATION_PROVIDER_API_KEY` | **server-side NSFW screening** of call frames (today it fails-open → trusts the client) | **MISSING** → no real AI moderation | sightengine.com (or chosen provider) |
-| 🔑 Turnstile/CAPTCHA keys | anti-abuse on signup/login (ships disabled) | **MISSING** (optional but recommended) | Cloudflare Turnstile |
+| 🔑 `TURNSTILE_SECRET` (+ public site key) | anti-bot on signup/login | **MISSING → now REQUIRED in prod** (the API boot now fails-fast without it — security hardening) | Cloudflare Turnstile (free) |
 | `SMTP_*` (host/user/pass) | email verify / password reset | **SET** (server `.env`) | — verify deliverability |
 | `TURN_STATIC_AUTH_SECRET` + `TURN_REALM` | WebRTC relay (calls behind NAT) | **SET** (coturn) | — |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | auth | **SET** (generated) | — |
