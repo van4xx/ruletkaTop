@@ -1,5 +1,6 @@
 import type { Connection, Model } from 'mongoose';
 
+import type { CloudPaymentsClient } from '../payments/cloudpayments.client';
 import { PremiumService } from './premium.service';
 import type { PremiumPlanDocument } from './schemas/premium-plan.schema';
 import type { SubscriptionDocument } from './schemas/subscription.schema';
@@ -38,9 +39,16 @@ function updateOneReturning(): { exec: jest.Mock } {
 interface Mocks {
   service: PremiumService;
   planModel: { findOne: jest.Mock; find: jest.Mock; updateOne: jest.Mock };
-  subscriptionModel: { findOne: jest.Mock; findOneAndUpdate: jest.Mock; updateOne: jest.Mock };
+  subscriptionModel: {
+    findOne: jest.Mock;
+    findOneAndUpdate: jest.Mock;
+    updateOne: jest.Mock;
+    updateMany: jest.Mock;
+    find: jest.Mock;
+  };
   profilesCollection: { updateOne: jest.Mock };
   connection: { collection: jest.Mock };
+  cloudPayments: { isConfigured: jest.Mock; cancelSubscription: jest.Mock };
 }
 
 function makeService(): Mocks {
@@ -53,16 +61,23 @@ function makeService(): Mocks {
     findOne: jest.fn(),
     findOneAndUpdate: jest.fn(),
     updateOne: jest.fn().mockReturnValue(updateOneReturning()),
+    updateMany: jest.fn().mockReturnValue(updateOneReturning()),
+    find: jest.fn(),
   };
   const profilesCollection = { updateOne: jest.fn().mockResolvedValue({ matchedCount: 1 }) };
   const connection = { collection: jest.fn().mockReturnValue(profilesCollection) };
+  const cloudPayments = {
+    isConfigured: jest.fn().mockReturnValue(false),
+    cancelSubscription: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new PremiumService(
     planModel as unknown as Model<PremiumPlanDocument>,
     subscriptionModel as unknown as Model<SubscriptionDocument>,
     connection as unknown as Connection,
+    cloudPayments as unknown as CloudPaymentsClient,
   );
-  return { service, planModel, subscriptionModel, profilesCollection, connection };
+  return { service, planModel, subscriptionModel, profilesCollection, connection, cloudPayments };
 }
 
 describe('PremiumService.isPremium', () => {
@@ -242,6 +257,150 @@ describe('PremiumService.cancel', () => {
   it('is a no-op (no DB call) for an invalid userId', async () => {
     await m.service.cancel('bad-id');
     expect(m.subscriptionModel.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(m.profilesCollection.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('PremiumService.cancelAtPeriodEnd', () => {
+  let m: Mocks;
+  beforeEach(() => {
+    m = makeService();
+  });
+
+  it('cancels the upstream CloudPayments subscription when configured + id present', async () => {
+    const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    // findOne(...).select('+subscriptionId').lean().exec() → stored sub id.
+    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning({ subscriptionId: 'sc_42' }));
+    // cancel() then re-reads via findOneAndUpdate(...).select().exec().
+    m.subscriptionModel.findOneAndUpdate.mockReturnValue(
+      findOneAndUpdateSelectReturning({ currentPeriodEnd: future }),
+    );
+    m.cloudPayments.isConfigured.mockReturnValue(true);
+
+    await m.service.cancelAtPeriodEnd(userId);
+
+    expect(m.cloudPayments.cancelSubscription).toHaveBeenCalledWith('sc_42');
+    // Local state still flipped to canceled (delegates to cancel()).
+    const [, update] = m.subscriptionModel.findOneAndUpdate.mock.calls[0] as [
+      unknown,
+      Record<string, any>,
+    ];
+    expect(update.$set).toMatchObject({ status: 'canceled', cancelAtPeriodEnd: true });
+  });
+
+  it('still records local cancellation when the upstream cancel throws', async () => {
+    const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
+    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning({ subscriptionId: 'sc_42' }));
+    m.subscriptionModel.findOneAndUpdate.mockReturnValue(
+      findOneAndUpdateSelectReturning({ currentPeriodEnd: future }),
+    );
+    m.cloudPayments.isConfigured.mockReturnValue(true);
+    m.cloudPayments.cancelSubscription.mockRejectedValue(new Error('provider down'));
+
+    await expect(m.service.cancelAtPeriodEnd(userId)).resolves.toBeUndefined();
+    expect(m.subscriptionModel.findOneAndUpdate).toHaveBeenCalled(); // local cancel ran
+  });
+
+  it('skips the upstream call when no subscriptionId is stored', async () => {
+    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning({ subscriptionId: null }));
+    m.subscriptionModel.findOneAndUpdate.mockReturnValue(
+      findOneAndUpdateSelectReturning({ currentPeriodEnd: null }),
+    );
+    m.cloudPayments.isConfigured.mockReturnValue(true);
+
+    await m.service.cancelAtPeriodEnd(userId);
+    expect(m.cloudPayments.cancelSubscription).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op for an invalid userId', async () => {
+    await m.service.cancelAtPeriodEnd('bad-id');
+    expect(m.subscriptionModel.findOne).not.toHaveBeenCalled();
+    expect(m.cloudPayments.cancelSubscription).not.toHaveBeenCalled();
+  });
+});
+
+describe('PremiumService.hasCanceledRenewal', () => {
+  let m: Mocks;
+  beforeEach(() => {
+    m = makeService();
+  });
+
+  it('is TRUE when cancelAtPeriodEnd is set', async () => {
+    m.subscriptionModel.findOne.mockReturnValue(
+      selectLeanReturning({ status: 'active', cancelAtPeriodEnd: true }),
+    );
+    await expect(m.service.hasCanceledRenewal(userId)).resolves.toBe(true);
+  });
+
+  it('is TRUE when status is canceled', async () => {
+    m.subscriptionModel.findOne.mockReturnValue(
+      selectLeanReturning({ status: 'canceled', cancelAtPeriodEnd: false }),
+    );
+    await expect(m.service.hasCanceledRenewal(userId)).resolves.toBe(true);
+  });
+
+  it('is FALSE for an active, non-cancelled subscription', async () => {
+    m.subscriptionModel.findOne.mockReturnValue(
+      selectLeanReturning({ status: 'active', cancelAtPeriodEnd: false }),
+    );
+    await expect(m.service.hasCanceledRenewal(userId)).resolves.toBe(false);
+  });
+
+  it('is FALSE when no record exists', async () => {
+    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning(null));
+    await expect(m.service.hasCanceledRenewal(userId)).resolves.toBe(false);
+  });
+});
+
+describe('PremiumService.sweepExpired', () => {
+  let m: Mocks;
+  beforeEach(() => {
+    m = makeService();
+  });
+
+  /** find(...).select(...).lean().exec() chain resolving to `docs`. */
+  function findSelectLeanReturning(docs: unknown): {
+    select: jest.Mock;
+    lean: jest.Mock;
+    exec: jest.Mock;
+  } {
+    return {
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(docs),
+    };
+  }
+
+  it('expires lapsed subscriptions → none and revokes the profile mirror', async () => {
+    const uid = { toString: () => userId };
+    m.subscriptionModel.find.mockReturnValue(
+      findSelectLeanReturning([{ _id: 'sub1', userId: uid }]),
+    );
+
+    const count = await m.service.sweepExpired(new Date());
+
+    expect(count).toBe(1);
+    // Transitioned to the non-entitled state.
+    const [filter, update] = m.subscriptionModel.updateMany.mock.calls[0] as [
+      Record<string, any>,
+      Record<string, any>,
+    ];
+    expect(filter._id.$in).toEqual(['sub1']);
+    expect(update.$set).toMatchObject({ status: 'none', cancelAtPeriodEnd: false });
+    // Profile premium revoked.
+    const [, profileUpdate] = m.profilesCollection.updateOne.mock.calls[0] as [
+      unknown,
+      Record<string, any>,
+    ];
+    expect(profileUpdate.$set).toMatchObject({ isPremium: false, premiumUntil: null });
+    expect(profileUpdate.$pull).toEqual({ badges: 'premium' });
+  });
+
+  it('is a no-op when nothing has lapsed', async () => {
+    m.subscriptionModel.find.mockReturnValue(findSelectLeanReturning([]));
+    const count = await m.service.sweepExpired(new Date());
+    expect(count).toBe(0);
+    expect(m.subscriptionModel.updateMany).not.toHaveBeenCalled();
     expect(m.profilesCollection.updateOne).not.toHaveBeenCalled();
   });
 });

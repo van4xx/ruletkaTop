@@ -1,14 +1,24 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import type { Redis } from 'ioredis';
-import { Model, Types } from 'mongoose';
+import { Connection, Model, Types } from 'mongoose';
 
-import type { Block as BlockContract, CreateBlockDto } from '@ruletka/shared-types';
+import type {
+  Block as BlockContract,
+  BlockedUser as BlockedUserContract,
+  CreateBlockDto,
+} from '@ruletka/shared-types';
 
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { UsersService } from '../users/users.service';
 import { BLOCK_ENFORCE_CHANNEL, type BlockEnforceMessage } from './moderation.constants';
 import { Block, BlockDocument } from './schemas/block.schema';
+
+/** Minimal public identity batch-joined onto a blocklist row. */
+interface ProfileIdentity {
+  nickname: string;
+  avatarUrl: string | null;
+}
 
 /** MongoDB duplicate-key error code. */
 const DUPLICATE_KEY_CODE = 11000;
@@ -42,6 +52,7 @@ export class BlocksService {
 
   constructor(
     @InjectModel(Block.name) private readonly blockModel: Model<BlockDocument>,
+    @InjectConnection() private readonly connection: Connection,
     private readonly usersService: UsersService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
@@ -109,13 +120,60 @@ export class BlocksService {
       .exec();
   }
 
-  /** List blocks created BY `userId` (the rows this user owns), newest first. */
-  async listOwnBlocks(userId: string): Promise<BlockContract[]> {
+  /**
+   * List blocks created BY `userId` (the rows this user owns), newest first,
+   * EACH enriched with the blocked user's minimal public identity (nickname +
+   * avatar) so the blocklist UI is readable rather than showing a raw hex id.
+   *
+   * The profile join is a single batched `$in` over the `profiles` collection
+   * (read through the shared {@link Connection} by collection name — the same
+   * escape hatch {@link AdminService} uses — so this stays free of a hard
+   * ProfilesModule dependency and adds no N+1). A blocked user whose profile is
+   * missing/deleted falls back to an empty `nickname` + `null` `avatarUrl`; the
+   * block row itself is always returned.
+   */
+  async listOwnBlocks(userId: string): Promise<BlockedUserContract[]> {
     const rows = await this.blockModel
       .find({ userId: new Types.ObjectId(userId) })
       .sort({ createdAt: -1 })
       .exec();
-    return rows.map((row) => this.toContract(row));
+
+    const identities = await this.loadIdentities(rows.map((row) => row.blockedUserId));
+    return rows.map((row) =>
+      this.toBlockedUser(row, identities.get(row.blockedUserId.toString())),
+    );
+  }
+
+  /**
+   * Batch-load `userId → { nickname, avatarUrl }` from `profiles` in ONE `$in`
+   * query. Missing profiles are simply absent from the map (caller falls back).
+   */
+  private async loadIdentities(
+    userIds: readonly Types.ObjectId[],
+  ): Promise<Map<string, ProfileIdentity>> {
+    const out = new Map<string, ProfileIdentity>();
+    if (userIds.length === 0) {
+      return out;
+    }
+    const docs = await this.connection
+      .collection('profiles')
+      .find(
+        { userId: { $in: userIds as Types.ObjectId[] } },
+        { projection: { userId: 1, nickname: 1, avatarUrl: 1 } },
+      )
+      .toArray();
+    for (const doc of docs) {
+      const p = doc as unknown as {
+        userId: Types.ObjectId;
+        nickname?: string;
+        avatarUrl?: string | null;
+      };
+      out.set(p.userId.toString(), {
+        nickname: p.nickname ?? '',
+        avatarUrl: p.avatarUrl ?? null,
+      });
+    }
+    return out;
   }
 
   /**
@@ -173,6 +231,19 @@ export class BlocksService {
       userId: doc.userId.toString(),
       blockedUserId: doc.blockedUserId.toString(),
       createdAt: doc.get('createdAt').toISOString(),
+    };
+  }
+
+  /**
+   * Map a hydrated block + its (optional) joined identity to the enriched
+   * {@link BlockedUserContract}. A missing identity degrades to an empty
+   * nickname + null avatar, never a throw.
+   */
+  private toBlockedUser(doc: BlockDocument, identity?: ProfileIdentity): BlockedUserContract {
+    return {
+      ...this.toContract(doc),
+      nickname: identity?.nickname ?? '',
+      avatarUrl: identity?.avatarUrl ?? null,
     };
   }
 }

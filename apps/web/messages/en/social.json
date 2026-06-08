@@ -80,6 +80,12 @@
   "messageRead": "Read",
   "messageSent": "Sent",
   "retrySend": "Retry sending",
+  "messageRejectedBlocked": "Can't send — this user is blocked",
+  "messageRejectedPrivacy": "Can't send — this user doesn't accept messages from you",
+  "messageRejectedNotFound": "Can't send — conversation not found",
+  "messageRejectedInvalid": "Can't send — message is empty or too long",
+  "messageRejectedRateLimited": "Slow down — too many messages",
+  "messageRejectedError": "Couldn't send. Tap to retry",
 
   "isTyping": "{name} is typing",
   "typing": "Typing",

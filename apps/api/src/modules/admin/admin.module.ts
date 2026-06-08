@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { PremiumModule } from '../premium/premium.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { AdminAnalyticsController } from './admin-analytics.controller';
@@ -67,6 +68,8 @@ import { BroadcastRecord, BroadcastRecordSchema } from './schemas/broadcast-reco
     WalletModule,
     PremiumModule,
     NotificationsModule,
+    // Authoritative refund path (CloudPayments call + ledger reversal).
+    PaymentsModule,
   ],
   controllers: [
     AdminAnalyticsController,

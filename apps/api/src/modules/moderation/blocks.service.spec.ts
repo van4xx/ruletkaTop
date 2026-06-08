@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { getModelToken } from '@nestjs/mongoose';
+import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
 import { REDIS_CLIENT } from '../../redis/redis.constants';
@@ -31,11 +31,15 @@ describe('BlocksService — createBlock target validation', () => {
     blockModel = { create: jest.fn() };
     usersService = { findById: jest.fn() };
     redis = { publish: jest.fn().mockResolvedValue(1) };
+    // createBlock never touches the Connection (only listOwnBlocks joins
+    // profiles), so a bare collection stub satisfies DI here.
+    const connection = { collection: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         BlocksService,
         { provide: getModelToken(Block.name), useValue: blockModel },
+        { provide: getConnectionToken(), useValue: connection },
         { provide: UsersService, useValue: usersService },
         { provide: REDIS_CLIENT, useValue: redis },
       ],
@@ -94,5 +98,81 @@ describe('BlocksService — createBlock target validation', () => {
     // A publish failure must NOT fail the block creation.
     const result = await service.createBlock(USER, { blockedUserId: TARGET });
     expect(result.id).toBe('block-1');
+  });
+});
+
+describe('BlocksService — listOwnBlocks identity join', () => {
+  let service: BlocksService;
+  let blockModel: { find: jest.Mock };
+  let profilesCollection: { find: jest.Mock };
+  let connection: { collection: jest.Mock };
+
+  /** A hydrated block row whose `blockedUserId` is a real-looking ObjectId. */
+  function ownBlockRow(blockedHex: string): Record<string, unknown> {
+    return {
+      _id: { toString: () => `block-${blockedHex}` },
+      userId: { toString: () => USER },
+      blockedUserId: { toString: () => blockedHex },
+      get: (_k: string) => new Date('2026-05-31T00:00:00.000Z'),
+    };
+  }
+
+  beforeEach(async () => {
+    blockModel = {
+      find: jest.fn().mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([ownBlockRow(TARGET)]),
+        }),
+      }),
+    };
+    // The profiles collection is read via connection.collection('profiles').find(...).toArray().
+    profilesCollection = {
+      find: jest.fn().mockReturnValue({
+        toArray: jest.fn().mockResolvedValue([
+          { userId: { toString: () => TARGET }, nickname: 'NeonFox', avatarUrl: 'https://x/y.png' },
+        ]),
+      }),
+    };
+    connection = { collection: jest.fn().mockReturnValue(profilesCollection) };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        BlocksService,
+        { provide: getModelToken(Block.name), useValue: blockModel },
+        { provide: getConnectionToken(), useValue: connection },
+        { provide: UsersService, useValue: { findById: jest.fn() } },
+        { provide: REDIS_CLIENT, useValue: { publish: jest.fn() } },
+      ],
+    }).compile();
+
+    service = moduleRef.get(BlocksService);
+  });
+
+  it('enriches each block with the blocked user nickname + avatar (one batched $in)', async () => {
+    const result = await service.listOwnBlocks(USER);
+
+    expect(connection.collection).toHaveBeenCalledWith('profiles');
+    // Single batched join, not an N+1.
+    expect(profilesCollection.find).toHaveBeenCalledTimes(1);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      blockedUserId: TARGET,
+      nickname: 'NeonFox',
+      avatarUrl: 'https://x/y.png',
+    });
+  });
+
+  it('falls back to empty nickname + null avatar when the profile is missing', async () => {
+    // No profile row joined for the blocked user.
+    profilesCollection.find.mockReturnValue({ toArray: jest.fn().mockResolvedValue([]) });
+
+    const result = await service.listOwnBlocks(USER);
+
+    expect(result[0]).toMatchObject({
+      blockedUserId: TARGET,
+      nickname: '',
+      avatarUrl: null,
+    });
   });
 });

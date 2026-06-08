@@ -17,6 +17,7 @@ import { Button, toast } from '@ruletka/ui';
 import { useDevices } from '@/features/settings/use-devices';
 import { useUpdateSettings } from '@/features/settings/use-settings';
 import { SettingRow, SettingsSection, Select, type SelectOption } from '../primitives';
+import { ActiveSessionsSection } from '../active-sessions-section';
 
 export function DevicesTab({ settings }: { settings: Settings }) {
   const t = useTranslations('settings');
@@ -55,10 +56,11 @@ export function DevicesTab({ settings }: { settings: Settings }) {
   ];
 
   return (
-    <SettingsSection
-      title={t('devices.title')}
-      description={t('devices.description')}
-      icon={<MonitorSmartphone />}
+    <div className="space-y-6">
+      <SettingsSection
+        title={t('devices.title')}
+        description={t('devices.description')}
+        icon={<MonitorSmartphone />}
       footer={
         supported && !labelsHidden ? (
           <>
@@ -140,6 +142,9 @@ export function DevicesTab({ settings }: { settings: Settings }) {
           {error && <p className="pt-3 text-xs text-destructive">{error}</p>}
         </div>
       )}
-    </SettingsSection>
+      </SettingsSection>
+
+      <ActiveSessionsSection />
+    </div>
   );
 }

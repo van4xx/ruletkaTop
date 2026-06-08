@@ -16,6 +16,7 @@ import { ClientSession, Connection, Model, Types } from 'mongoose';
 
 import type {
   AuthResponse,
+  AuthSession,
   AuthUser,
   ChangePasswordDto,
   JwtPayload,
@@ -463,7 +464,17 @@ export class AuthService {
     }
 
     if (user.isBanned) {
-      throw new UnauthorizedException('Account is banned');
+      // 403 (not 401) carrying the ban REASON so the client can explain WHY the
+      // account is blocked and offer the appeal flow. The body is a structured
+      // object (`{ statusCode, message, error, banReason }`); `banReason` is
+      // `null` for legacy bans recorded before reasons were captured. Surfaced
+      // only here (the user-facing login), not on the background refresh paths.
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Account is banned',
+        banReason: user.banReason ?? null,
+      });
     }
 
     this.clearFailedAttempts(email);
@@ -686,6 +697,181 @@ export class AuthService {
         { $set: { revokedAt: new Date() } },
       )
       .exec();
+  }
+
+  // ── Active sessions / devices (self-service review + revoke) ───────────────
+
+  /**
+   * List the caller's ACTIVE logins for the settings "devices" surface.
+   *
+   * Each issued refresh token is its own row, but rotation keeps every row of
+   * one login under a shared `family`; from the user's perspective that family
+   * IS one device/login. We therefore collapse the live (un-revoked, unexpired)
+   * rows by `family`, exposing per-family: the FIRST sign-in (`createdAt`, oldest
+   * row) and the LAST activity (`lastActiveAt`, newest rotation), plus the
+   * best-effort `ip`/`userAgent`/`device` captured at sign-in.
+   *
+   * `currentRefreshToken` (read from the caller's refresh COOKIE) is used only
+   * to flag which family is the requesting device — never logged or returned.
+   * Results are newest-active first so the current device tends to sort to top.
+   */
+  async listSessions(userId: string, currentRefreshToken?: string): Promise<AuthSession[]> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return [];
+    }
+
+    const currentFamily = await this.resolveCurrentFamily(userId, currentRefreshToken);
+
+    const rows = await this.sessionModel
+      .find({
+        userId: new Types.ObjectId(userId),
+        revokedAt: null,
+        expiresAt: { $gt: new Date() },
+      })
+      .select('family ip userAgent device createdAt updatedAt')
+      .lean()
+      .exec();
+
+    // Collapse rotation rows into one entry per family (one logical login).
+    const byFamily = new Map<
+      string,
+      {
+        ip: string | null;
+        userAgent: string | null;
+        device: string | null;
+        createdAt: Date;
+        lastActiveAt: Date;
+      }
+    >();
+
+    for (const row of rows) {
+      const family = row.family;
+      // `timestamps: true` guarantees createdAt/updatedAt; fall back defensively.
+      const createdAt = (row as { createdAt?: Date }).createdAt ?? new Date();
+      const updatedAt = (row as { updatedAt?: Date }).updatedAt ?? createdAt;
+      const existing = byFamily.get(family);
+      if (!existing) {
+        byFamily.set(family, {
+          ip: row.ip ?? null,
+          userAgent: row.userAgent ?? null,
+          device: row.device ?? null,
+          createdAt,
+          lastActiveAt: updatedAt,
+        });
+        continue;
+      }
+      // Oldest row wins for first-seen context + createdAt; newest for activity.
+      if (createdAt.getTime() < existing.createdAt.getTime()) {
+        existing.createdAt = createdAt;
+        existing.ip = row.ip ?? existing.ip;
+        existing.userAgent = row.userAgent ?? existing.userAgent;
+        existing.device = row.device ?? existing.device;
+      }
+      if (updatedAt.getTime() > existing.lastActiveAt.getTime()) {
+        existing.lastActiveAt = updatedAt;
+      }
+    }
+
+    return Array.from(byFamily.entries())
+      .map(([family, agg]) => ({
+        id: family,
+        ip: agg.ip,
+        userAgent: agg.userAgent,
+        device: agg.device,
+        createdAt: agg.createdAt.toISOString(),
+        lastActiveAt: agg.lastActiveAt.toISOString(),
+        current: currentFamily !== null && family === currentFamily,
+      }))
+      .sort((a, b) => {
+        // Current device first, then most-recently-active.
+        if (a.current !== b.current) return a.current ? -1 : 1;
+        return b.lastActiveAt.localeCompare(a.lastActiveAt);
+      });
+  }
+
+  /**
+   * Revoke ONE of the caller's logins by its `sessionId` (a rotation-family id
+   * from {@link listSessions}). Scoped to the owner: the userId is part of the
+   * filter, so a forged/foreign family id revokes nothing. Idempotent — a stale
+   * or already-revoked id simply matches no live rows. Returns whether anything
+   * was revoked so the controller can 404 a stranger/unknown id.
+   */
+  async revokeSession(userId: string, sessionId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(userId) || !sessionId) {
+      return false;
+    }
+    const result = await this.sessionModel
+      .updateMany(
+        { userId: new Types.ObjectId(userId), family: sessionId, revokedAt: null },
+        { $set: { revokedAt: new Date() } },
+      )
+      .exec();
+    return result.modifiedCount > 0;
+  }
+
+  /**
+   * Revoke every OTHER live login of the caller, keeping only the family of the
+   * presented `currentRefreshToken` (the requesting device's cookie) alive —
+   * "sign out everywhere else". If the current family can't be resolved (no/stale
+   * cookie) we still revoke nothing belonging to it (the filter excludes whatever
+   * family resolved, or none), so we never accidentally log the caller out of the
+   * device performing the action when the cookie is present. Idempotent.
+   */
+  async revokeOtherSessions(userId: string, currentRefreshToken?: string): Promise<void> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return;
+    }
+    const currentFamily = await this.resolveCurrentFamily(userId, currentRefreshToken);
+    const filter: Record<string, unknown> = {
+      userId: new Types.ObjectId(userId),
+      revokedAt: null,
+    };
+    if (currentFamily !== null) {
+      filter.family = { $ne: currentFamily };
+    }
+    await this.sessionModel.updateMany(filter, { $set: { revokedAt: new Date() } }).exec();
+  }
+
+  /**
+   * True when `sessionId` (a rotation-family id) is the family of the caller's
+   * presented `currentRefreshToken` — i.e. the caller is revoking their OWN
+   * current device. Lets the controller clear the refresh cookie in that case.
+   */
+  async isCurrentSession(
+    userId: string,
+    sessionId: string,
+    currentRefreshToken: string,
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(userId) || !sessionId) {
+      return false;
+    }
+    const currentFamily = await this.resolveCurrentFamily(userId, currentRefreshToken);
+    return currentFamily !== null && currentFamily === sessionId;
+  }
+
+  /**
+   * Resolve the rotation `family` of the caller's CURRENT refresh token (from
+   * the cookie), or `null` when no token is supplied or it maps to no live row
+   * owned by the user. Used to flag/protect the requesting device. Verifying the
+   * signature is unnecessary here — we only ever match the hash against the
+   * user's own live rows, so a garbage value simply resolves to `null`.
+   */
+  private async resolveCurrentFamily(
+    userId: string,
+    currentRefreshToken?: string,
+  ): Promise<string | null> {
+    if (!currentRefreshToken) {
+      return null;
+    }
+    const row = await this.sessionModel
+      .findOne({
+        userId: new Types.ObjectId(userId),
+        tokenHash: this.hashToken(currentRefreshToken),
+      })
+      .select('family')
+      .lean()
+      .exec();
+    return row?.family ?? null;
   }
 
   // ── /me ─────────────────────────────────────────────────────────────────

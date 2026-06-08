@@ -35,6 +35,21 @@ export const publicProfileSchema = z.object({
 });
 export type PublicProfile = z.infer<typeof publicProfileSchema>;
 
+/**
+ * The MINIMAL identity projection of a profile — just enough to render a user
+ * (nickname + avatar) without exposing any private detail. Returned for a user
+ * you are already entitled to see by another relationship (e.g. an existing
+ * chat partner) even when their full `whoCanViewProfile` privacy would 404 the
+ * full {@link PublicProfile}. A strict subset of `publicProfileSchema`'s fields
+ * so a `PublicProfile` is always assignable where a `MinimalProfile` is wanted.
+ */
+export const minimalProfileSchema = z.object({
+  id: objectIdSchema,
+  nickname: nicknameSchema,
+  avatarUrl: z.string().url().nullable(),
+});
+export type MinimalProfile = z.infer<typeof minimalProfileSchema>;
+
 export const updateProfileSchema = z
   .object({
     nickname: nicknameSchema,

@@ -5,12 +5,13 @@
  * with an unblock action (DELETE /moderation/blocks/:id, optimistic). Covers
  * loading (skeletons), empty (friendly illustration) and error states.
  *
- * The blocks endpoint returns ids + timestamps only (no profile), so each row
- * shows a neutral avatar, a shortened id and the date it was blocked.
+ * The blocks endpoint now returns each blocked user's minimal public identity
+ * (nickname + avatar), so each row shows the real person. If a profile is
+ * missing (deleted account), the row gracefully falls back to a shortened id.
  */
 import { useTranslations } from 'next-intl';
 import { Ban, UserRoundX } from 'lucide-react';
-import type { Block } from '@ruletka/shared-types';
+import type { BlockedUser } from '@ruletka/shared-types';
 import { Avatar, Button, Skeleton, toast } from '@ruletka/ui';
 import { useBlocks, useUnblock } from '@/features/settings/use-settings';
 import { SettingsSection } from '../primitives';
@@ -25,13 +26,18 @@ function shortId(id: string): string {
   return id.length > 10 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id;
 }
 
+/** Display label for a blocked user: their nickname, or a short id fallback. */
+function blockedLabel(block: BlockedUser): string {
+  return block.nickname.trim() ? block.nickname : shortId(block.blockedUserId);
+}
+
 export function BlocklistTab() {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
   const { data: blocks, isLoading, isError, error, refetch } = useBlocks();
   const unblock = useUnblock();
 
-  const handleUnblock = (block: Block) => {
+  const handleUnblock = (block: BlockedUser) => {
     unblock.mutate(block.blockedUserId, {
       onSuccess: () => toast.success(t('blocklist.unblocked')),
       onError: (e) => toast.error(t('blocklist.unblockError'), { description: e.message }),
@@ -80,12 +86,26 @@ export function BlocklistTab() {
         </div>
       ) : (
         <ul className="divide-y divide-border/50">
-          {blocks.map((block) => (
+          {blocks.map((block) => {
+            const label = blockedLabel(block);
+            const named = block.nickname.trim().length > 0;
+            return (
             <li key={block.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-              <Avatar size="md" alt={block.blockedUserId} fallback={<Ban className="h-4 w-4" />} />
+              <Avatar
+                size="md"
+                src={block.avatarUrl ?? undefined}
+                alt={label}
+                fallback={<Ban className="h-4 w-4" />}
+              />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-sm text-foreground">
-                  {shortId(block.blockedUserId)}
+                <p
+                  className={
+                    named
+                      ? 'truncate text-sm font-medium text-foreground'
+                      : 'truncate font-mono text-sm text-foreground'
+                  }
+                >
+                  {label}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {t('blocklist.blockedOn', { date: formatDate(block.createdAt) })}
@@ -100,7 +120,8 @@ export function BlocklistTab() {
                 {t('blocklist.unblock')}
               </Button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </SettingsSection>

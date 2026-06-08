@@ -111,6 +111,8 @@ export class ReportsService {
       matchId: dto.matchId ? new Types.ObjectId(dto.matchId) : null,
       reason: dto.reason,
       details: dto.details ?? null,
+      // Retain the optional in-call evidence frame for moderator review.
+      evidenceUrl: dto.evidence ?? null,
       status: 'open',
     });
     return this.toContract(created);
@@ -245,6 +247,7 @@ export class ReportsService {
       matchId: doc.matchId ? doc.matchId.toString() : null,
       reason: doc.reason,
       details: doc.details,
+      evidenceUrl: doc.evidenceUrl ?? null,
       status: doc.status,
       createdAt: doc.get('createdAt').toISOString(),
     };

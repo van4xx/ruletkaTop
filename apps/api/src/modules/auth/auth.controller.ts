@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
+  Param,
   Post,
   Req,
   Res,
@@ -16,8 +19,10 @@ import {
   ApiBadRequestResponse,
   ApiCreatedResponse,
   ApiNoContentResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -26,6 +31,7 @@ import type { CookieOptions, Request, Response } from 'express';
 
 import {
   type AuthResponse,
+  type AuthSession,
   type AuthUser,
   type ChangePasswordDto,
   changePasswordSchema,
@@ -172,6 +178,67 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
   async me(@CurrentUser() user: JwtPayload): Promise<AuthUser> {
     return this.authService.getAuthUser(user);
+  }
+
+  // ── Active sessions / devices ───────────────────────────────────────────────
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: "List the current user's active sessions (devices)" })
+  @ApiOkResponse({ description: 'Active sessions, the requesting device flagged `current`' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  async listSessions(
+    @CurrentUser() user: JwtPayload,
+    @Req() req: Request,
+  ): Promise<AuthSession[]> {
+    // The refresh cookie identifies which session is the requesting device so we
+    // can flag it `current` (and protect it from "sign out everywhere").
+    const currentToken = this.readRefreshToken(req, {});
+    return this.authService.listSessions(user.sub, currentToken ?? undefined);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiParam({ name: 'id', description: 'Session id from GET /auth/sessions' })
+  @ApiOperation({ summary: 'Revoke one session (sign out that device)' })
+  @ApiNoContentResponse({ description: 'Session revoked (no content)' })
+  @ApiNotFoundResponse({ description: 'No such session for the current user' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  async revokeSession(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    const revoked = await this.authService.revokeSession(user.sub, id);
+    if (!revoked) {
+      // Unknown / already-gone / not-owned id → 404 (never reveals other users').
+      throw new NotFoundException('Session not found');
+    }
+    // If the caller revoked their OWN current session, clear its cookie too so
+    // the next request doesn't ride a now-dead refresh token.
+    const currentToken = this.readRefreshToken(req, {});
+    if (currentToken && (await this.authService.isCurrentSession(user.sub, id, currentToken))) {
+      this.clearRefreshCookie(res);
+    }
+  }
+
+  @Delete('sessions')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Revoke all other sessions (keep the current device)' })
+  @ApiNoContentResponse({ description: 'Other sessions revoked (no content)' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  async revokeOtherSessions(
+    @CurrentUser() user: JwtPayload,
+    @Req() req: Request,
+  ): Promise<void> {
+    const currentToken = this.readRefreshToken(req, {});
+    await this.authService.revokeOtherSessions(user.sub, currentToken ?? undefined);
   }
 
   // ── Email verification ──────────────────────────────────────────────────────

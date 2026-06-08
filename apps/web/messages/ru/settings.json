@@ -121,6 +121,25 @@
       "accessFailed": "Не удалось получить доступ к устройствам"
     }
   },
+  "sessions": {
+    "title": "Активные сеансы",
+    "description": "Устройства, на которых сейчас выполнен вход в твой аккаунт.",
+    "loadError": "Не удалось загрузить сеансы.",
+    "empty": "Активных сеансов нет.",
+    "currentBadge": "Это устройство",
+    "thisDevice": "Текущий сеанс",
+    "unknownDevice": "Неизвестное устройство",
+    "meta": "Активность {lastActive}",
+    "metaWithIp": "Активность {lastActive} · {ip}",
+    "signOut": "Выйти",
+    "revokedOne": "Выход с этого устройства выполнен",
+    "revokeError": "Не удалось выйти",
+    "signOutEverywhere": "Выйти на других устройствах",
+    "signOutEverywhereTitle": "Выйти со всех других устройств?",
+    "signOutEverywhereDescription": "Будет завершено {count, plural, one {# другой сеанс} few {# других сеанса} many {# других сеансов} other {# других сеансов}}. На этом устройстве вход сохранится.",
+    "signOutEverywhereConfirm": "Выйти везде",
+    "revokedOthers": "Выход со всех других устройств выполнен"
+  },
   "appearance": {
     "title": "Оформление",
     "description": "Тема и язык интерфейса. Тема применяется сразу.",

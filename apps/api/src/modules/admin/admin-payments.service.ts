@@ -4,6 +4,8 @@ import { Connection, Types } from 'mongoose';
 
 import type { AdminPayment, AdminPaymentList, AdminPaymentStats } from '@ruletka/shared-types';
 
+import { PaymentsService } from '../payments/payments.service';
+
 /** Charges per page. */
 const PAGE = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,7 +31,20 @@ interface PaymentRow {
  */
 @Injectable()
 export class AdminPaymentsService {
-  constructor(@InjectConnection() private readonly connection: Connection) {}
+  constructor(
+    @InjectConnection() private readonly connection: Connection,
+    private readonly paymentsService: PaymentsService,
+  ) {}
+
+  /**
+   * Refund a completed charge by Payment id. Delegates to the authoritative
+   * {@link PaymentsService.refundByAdmin}, which calls CloudPayments to refund
+   * the money AND reverses fulfilment (debit coins / cancel premium). Returns
+   * the refunded amount + provider transaction id for the audit trail.
+   */
+  async refund(paymentId: string): Promise<{ amount: number; transactionId: number | null }> {
+    return this.paymentsService.refundByAdmin(paymentId);
+  }
 
   /** A page of charges, newest first. Keyset-paginated on `_id`. */
   async list(cursor?: string): Promise<AdminPaymentList> {

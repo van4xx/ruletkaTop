@@ -8,6 +8,7 @@
  * States: per-field validation errors, a top-level error banner for the API
  * rejection (e.g. bad credentials), and a loading button.
  */
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -19,8 +20,10 @@ import { Button, Input, toast } from '@ruletka/ui';
 import { loginFormSchema, type LoginFormValues } from '@/features/auth/schemas';
 import { useFieldError } from '@/features/auth/use-field-error';
 import { useLogin } from '@/features/auth/use-auth-mutations';
+import { banReasonOf, isBannedError } from '@/features/auth/use-appeal';
 import { track } from '@/lib/analytics';
 import { useErrorMessage } from '@/lib/error-message';
+import { AppealDialog } from './appeal-dialog';
 import { FormField } from './form-field';
 import { PasswordField } from './password-field';
 
@@ -38,6 +41,12 @@ export function LoginForm() {
   const params = useSearchParams();
   const login = useLogin();
 
+  // Remember the LAST submitted credentials so the appeal flow (for a banned
+  // account) can re-use the email + password the user just typed without asking
+  // again. Held only in memory for this screen; cleared when the dialog closes.
+  const [lastCredentials, setLastCredentials] = useState<LoginFormValues | null>(null);
+  const [appealOpen, setAppealOpen] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -49,6 +58,7 @@ export function LoginForm() {
   });
 
   const onSubmit = handleSubmit((values) => {
+    setLastCredentials(values);
     login.mutate(values, {
       onSuccess: () => {
         toast.success(t('login.successToast'));
@@ -61,6 +71,12 @@ export function LoginForm() {
       },
     });
   });
+
+  // A banned account is rejected with a 403 carrying the ban reason. We surface a
+  // dedicated, explanatory banner + an appeal CTA for it (distinct from the 401
+  // bad-credentials case).
+  const banned = isBannedError(login.error);
+  const banReason = banReasonOf(login.error);
 
   // 401 = bad credentials (the expected rejection). Everything else (network
   // outage, 5xx, unexpected 4xx) routes through the localized error helper so we
@@ -78,7 +94,35 @@ export function LoginForm() {
       </header>
 
       <AnimatePresence>
-        {login.isError && (
+        {login.isError && banned && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            role="alert"
+            className="overflow-hidden rounded-xl border border-warning/40 bg-warning/10 px-3.5 py-3 text-sm"
+          >
+            <div className="flex items-start gap-2.5 text-warning">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div className="space-y-1">
+                <p className="font-semibold">{t('login.bannedTitle')}</p>
+                <p className="text-foreground/80">
+                  {banReason ? t('login.bannedReason', { reason: banReason }) : t('login.bannedGeneric')}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => setAppealOpen(true)}
+            >
+              {t('login.appealCta')}
+            </Button>
+          </motion.div>
+        )}
+        {login.isError && !banned && (
           <motion.div
             initial={{ opacity: 0, height: 0, marginBottom: 0 }}
             animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
@@ -146,6 +190,18 @@ export function LoginForm() {
           {t('login.createAccount')}
         </Link>
       </p>
+
+      {/* Ban-appeal flow — re-uses the credentials the user just typed. Only
+          mounted once a banned-login error has captured them. */}
+      {lastCredentials && (
+        <AppealDialog
+          open={appealOpen}
+          onOpenChange={setAppealOpen}
+          email={lastCredentials.email}
+          password={lastCredentials.password}
+          banReason={banReason}
+        />
+      )}
     </div>
   );
 }

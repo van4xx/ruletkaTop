@@ -109,6 +109,7 @@ interface Mocks {
   fingerprintService: { isBanned: jest.Mock; recordForUser: jest.Mock };
   sessionModel: {
     create: jest.Mock;
+    find: jest.Mock;
     findOne: jest.Mock;
     updateOne: jest.Mock;
     updateMany: jest.Mock;
@@ -189,9 +190,15 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
 
   const sessionModel = {
     create: jest.fn().mockResolvedValue([{ _id: 'session-row' }]),
+    // listSessions → .find().select().lean().exec(); default to an empty list.
+    find: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    }),
     findOne: jest.fn(),
     updateOne: jest.fn().mockReturnValue(findOneReturning({ modifiedCount: 1 })),
-    updateMany: jest.fn().mockReturnValue(findOneReturning({})),
+    updateMany: jest.fn().mockReturnValue(findOneReturning({ modifiedCount: 1 })),
   };
 
   const profileModel = {
@@ -625,17 +632,40 @@ describe('AuthService.login', () => {
     expect((err as UnauthorizedException).message).toBe('Invalid email or password');
   });
 
-  it('rejects a banned account even with correct credentials', async () => {
+  it('rejects a banned account with 403 carrying the ban reason, and issues no tokens', async () => {
     const m = buildMocks('commit');
     m.usersService.findByEmailWithSecret.mockResolvedValue(
-      (await userWithRealHash(PLAINTEXT_PASSWORD, { isBanned: true })) as never,
+      (await userWithRealHash(PLAINTEXT_PASSWORD, {
+        isBanned: true,
+        banReason: 'Upheld abuse report',
+      })) as never,
     );
     const service = makeService(m);
 
     const err = await service.login(loginDto).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(UnauthorizedException);
-    expect((err as UnauthorizedException).message).toBe('Account is banned');
+    // A banned login is a 403 (not 401) whose body carries the reason so the
+    // client can explain WHY and offer the appeal flow.
+    expect(err).toBeInstanceOf(ForbiddenException);
+    const body = (err as ForbiddenException).getResponse() as {
+      message: string;
+      banReason: string | null;
+    };
+    expect(body.message).toBe('Account is banned');
+    expect(body.banReason).toBe('Upheld abuse report');
     expect(m.sessionModel.create).not.toHaveBeenCalled();
+  });
+
+  it('a banned account with no recorded reason still 403s with banReason null', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByEmailWithSecret.mockResolvedValue(
+      (await userWithRealHash(PLAINTEXT_PASSWORD, { isBanned: true, banReason: null })) as never,
+    );
+    const service = makeService(m);
+
+    const err = await service.login(loginDto).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+    const body = (err as ForbiddenException).getResponse() as { banReason: string | null };
+    expect(body.banReason).toBeNull();
   });
 
   it('rejects login from a banned-fingerprint device/IP (ban evasion) before any credential lookup', async () => {
@@ -1428,5 +1458,227 @@ describe('AuthService.changePassword', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(m.usersService.updatePasswordHash).not.toHaveBeenCalled();
     expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// ── listSessions / revokeSession / revokeOtherSessions (devices surface) ──────
+
+describe('AuthService session management (devices surface)', () => {
+  const CURRENT_TOKEN = 'refresh.token.current';
+  const FAM_CURRENT = 'fam-current';
+  const FAM_OTHER = 'fam-other';
+
+  /** A lean session row as returned by `.find().select().lean().exec()`. */
+  function leanRow(overrides: Record<string, unknown> = {}) {
+    const now = Date.now();
+    return {
+      family: FAM_OTHER,
+      ip: '1.2.3.4',
+      userAgent: 'Mozilla/5.0',
+      device: null,
+      createdAt: new Date(now - 60_000),
+      updatedAt: new Date(now - 60_000),
+      ...overrides,
+    };
+  }
+
+  /** Stub `sessionModel.find(...)` to resolve `rows` through the lean chain. */
+  function stubFind(m: Mocks, rows: unknown[]): void {
+    m.sessionModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(rows),
+    });
+  }
+
+  /**
+   * Stub the current-family resolution: `resolveCurrentFamily` calls
+   * `findOne({ userId, tokenHash }).select('family').lean().exec()`. Resolve it
+   * to a row carrying `family`, or `null` when no current session matches.
+   */
+  function stubCurrentFamily(m: Mocks, family: string | null): void {
+    m.sessionModel.findOne.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(family === null ? null : { family }),
+    });
+  }
+
+  describe('listSessions', () => {
+    it('collapses rotation rows by family and flags the current device', async () => {
+      const m = buildMocks('commit');
+      stubCurrentFamily(m, FAM_CURRENT);
+      const now = Date.now();
+      stubFind(m, [
+        // Current family: two rotation rows → one entry; lastActive = newest.
+        leanRow({
+          family: FAM_CURRENT,
+          createdAt: new Date(now - 120_000),
+          updatedAt: new Date(now - 120_000),
+          ip: '9.9.9.9',
+        }),
+        leanRow({
+          family: FAM_CURRENT,
+          createdAt: new Date(now - 30_000),
+          updatedAt: new Date(now - 5_000),
+          ip: '9.9.9.9',
+        }),
+        // A second, different login.
+        leanRow({ family: FAM_OTHER, createdAt: new Date(now - 90_000) }),
+      ]);
+      const service = makeService(m);
+
+      const sessions = await service.listSessions(USER_ID, CURRENT_TOKEN);
+
+      // Two logical sessions (one per family), current sorted first.
+      expect(sessions).toHaveLength(2);
+      expect(sessions[0]?.id).toBe(FAM_CURRENT);
+      expect(sessions[0]?.current).toBe(true);
+      expect(sessions[1]?.id).toBe(FAM_OTHER);
+      expect(sessions[1]?.current).toBe(false);
+
+      // The current entry's lastActiveAt reflects the NEWEST rotation (~5s ago),
+      // while createdAt reflects the OLDEST row (~120s ago).
+      expect(new Date(sessions[0]!.lastActiveAt).getTime()).toBe(now - 5_000);
+      expect(new Date(sessions[0]!.createdAt).getTime()).toBe(now - 120_000);
+
+      // Only live (un-revoked, unexpired) rows for THIS user are queried.
+      const [findFilter] = m.sessionModel.find.mock.calls[0] as [Record<string, unknown>];
+      expect(findFilter).toMatchObject({ revokedAt: null });
+      expect(findFilter).toHaveProperty('userId');
+      expect(findFilter.expiresAt).toMatchObject({ $gt: expect.any(Date) });
+    });
+
+    it('returns no current flag when the refresh token maps to no live row', async () => {
+      const m = buildMocks('commit');
+      stubCurrentFamily(m, null); // cookie token resolves to nothing
+      stubFind(m, [leanRow({ family: FAM_OTHER })]);
+      const service = makeService(m);
+
+      const sessions = await service.listSessions(USER_ID, 'stale-or-foreign-token');
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]?.current).toBe(false);
+    });
+
+    it('does not resolve a current family when no token is supplied (never queries findOne)', async () => {
+      const m = buildMocks('commit');
+      stubFind(m, [leanRow({ family: FAM_OTHER })]);
+      const service = makeService(m);
+
+      const sessions = await service.listSessions(USER_ID);
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]?.current).toBe(false);
+      // No current-token → the family lookup is skipped entirely.
+      expect(m.sessionModel.findOne).not.toHaveBeenCalled();
+    });
+
+    it('returns [] for an invalid user id without touching the store', async () => {
+      const m = buildMocks('commit');
+      const service = makeService(m);
+
+      await expect(service.listSessions('not-an-objectid')).resolves.toEqual([]);
+      expect(m.sessionModel.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revokeSession', () => {
+    it('revokes the family scoped to the owner and reports success', async () => {
+      const m = buildMocks('commit');
+      m.sessionModel.updateMany.mockReturnValue(findOneReturning({ modifiedCount: 2 }));
+      const service = makeService(m);
+
+      const ok = await service.revokeSession(USER_ID, FAM_OTHER);
+
+      expect(ok).toBe(true);
+      const [filter, update] = m.sessionModel.updateMany.mock.calls[0] as [
+        Record<string, unknown>,
+        { $set: { revokedAt: Date } },
+      ];
+      // Owner-scoped: userId AND family AND only-live rows.
+      expect(filter).toMatchObject({ family: FAM_OTHER, revokedAt: null });
+      expect(filter).toHaveProperty('userId');
+      expect(update.$set.revokedAt).toBeInstanceOf(Date);
+    });
+
+    it('returns false when nothing matched (unknown / foreign / already-revoked id)', async () => {
+      const m = buildMocks('commit');
+      m.sessionModel.updateMany.mockReturnValue(findOneReturning({ modifiedCount: 0 }));
+      const service = makeService(m);
+
+      await expect(service.revokeSession(USER_ID, 'fam-nope')).resolves.toBe(false);
+    });
+
+    it('is a no-op (false) for an invalid user id or empty session id', async () => {
+      const m = buildMocks('commit');
+      const service = makeService(m);
+
+      await expect(service.revokeSession('not-an-objectid', FAM_OTHER)).resolves.toBe(false);
+      await expect(service.revokeSession(USER_ID, '')).resolves.toBe(false);
+      expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('revokeOtherSessions', () => {
+    it('revokes every live family EXCEPT the current one', async () => {
+      const m = buildMocks('commit');
+      stubCurrentFamily(m, FAM_CURRENT);
+      const service = makeService(m);
+
+      await service.revokeOtherSessions(USER_ID, CURRENT_TOKEN);
+
+      expect(m.sessionModel.updateMany).toHaveBeenCalledTimes(1);
+      const [filter, update] = m.sessionModel.updateMany.mock.calls[0] as [
+        Record<string, unknown>,
+        { $set: { revokedAt: Date } },
+      ];
+      expect(filter).toMatchObject({ revokedAt: null, family: { $ne: FAM_CURRENT } });
+      expect(filter).toHaveProperty('userId');
+      expect(update.$set.revokedAt).toBeInstanceOf(Date);
+    });
+
+    it('revokes ALL live sessions when the current family cannot be resolved (no cookie)', async () => {
+      const m = buildMocks('commit');
+      const service = makeService(m);
+
+      // No token → no family exclusion; behaves like revokeAllSessions.
+      await service.revokeOtherSessions(USER_ID);
+
+      const [filter] = m.sessionModel.updateMany.mock.calls[0] as [Record<string, unknown>];
+      expect(filter).toMatchObject({ revokedAt: null });
+      expect(filter).not.toHaveProperty('family');
+      expect(m.sessionModel.findOne).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op for an invalid user id', async () => {
+      const m = buildMocks('commit');
+      const service = makeService(m);
+
+      await service.revokeOtherSessions('not-an-objectid', CURRENT_TOKEN);
+      expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isCurrentSession', () => {
+    it('is true only when the family matches the presented token’s family', async () => {
+      const m = buildMocks('commit');
+      stubCurrentFamily(m, FAM_CURRENT);
+      const service = makeService(m);
+
+      await expect(service.isCurrentSession(USER_ID, FAM_CURRENT, CURRENT_TOKEN)).resolves.toBe(
+        true,
+      );
+    });
+
+    it('is false when the family differs from the presented token’s family', async () => {
+      const m = buildMocks('commit');
+      stubCurrentFamily(m, FAM_CURRENT);
+      const service = makeService(m);
+
+      await expect(service.isCurrentSession(USER_ID, FAM_OTHER, CURRENT_TOKEN)).resolves.toBe(
+        false,
+      );
+    });
   });
 });

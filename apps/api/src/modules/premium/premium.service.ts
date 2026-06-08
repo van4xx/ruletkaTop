@@ -7,6 +7,7 @@ import type {
   Subscription as SubscriptionContract,
 } from '@ruletka/shared-types';
 
+import { CloudPaymentsClient } from '../payments/cloudpayments.client';
 import { PremiumPlan, PremiumPlanDocument } from './schemas/premium-plan.schema';
 import { Subscription, SubscriptionDocument } from './schemas/subscription.schema';
 
@@ -64,6 +65,7 @@ export class PremiumService implements OnModuleInit {
     @InjectModel(Subscription.name)
     private readonly subscriptionModel: Model<SubscriptionDocument>,
     @InjectConnection() private readonly connection: Connection,
+    private readonly cloudPayments: CloudPaymentsClient,
   ) {}
 
   /** Idempotently seed the default plans (upsert by unique `code`). */
@@ -107,6 +109,26 @@ export class PremiumService implements OnModuleInit {
   }
 
   /**
+   * Whether the user has flagged their subscription to NOT renew. The payments
+   * Recurrent webhook consults this so a renewal charge can never silently
+   * re-activate a subscription the user already cancelled.
+   */
+  async hasCanceledRenewal(userId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return false;
+    }
+    const doc = await this.subscriptionModel
+      .findOne({ userId: new Types.ObjectId(userId) })
+      .select('status cancelAtPeriodEnd')
+      .lean()
+      .exec();
+    if (!doc) {
+      return false;
+    }
+    return doc.cancelAtPeriodEnd === true || doc.status === 'canceled';
+  }
+
+  /**
    * Activate (or extend) premium for a user through to `currentPeriodEnd`.
    *
    * Upserts the subscription to `active`, records `startedAt` on first
@@ -116,12 +138,15 @@ export class PremiumService implements OnModuleInit {
    * @param plan plan code (e.g. `monthly`).
    * @param currentPeriodEnd end of the paid period (entitlement window).
    * @param token optional CloudPayments recurring-charge token.
+   * @param subscriptionId optional CloudPayments subscription id (persisted so a
+   *        later user cancellation can stop billing upstream).
    */
   async activate(
     userId: string,
     plan: string,
     currentPeriodEnd: Date,
     token?: string,
+    subscriptionId?: string,
   ): Promise<void> {
     const _id = new Types.ObjectId(userId);
 
@@ -133,6 +158,9 @@ export class PremiumService implements OnModuleInit {
     };
     if (token !== undefined) {
       set.token = token;
+    }
+    if (subscriptionId !== undefined) {
+      set.subscriptionId = subscriptionId;
     }
 
     await this.subscriptionModel
@@ -184,6 +212,131 @@ export class PremiumService implements OnModuleInit {
     const periodEnd = doc?.currentPeriodEnd ?? null;
     const stillEntitled = periodEnd !== null && periodEnd.getTime() > Date.now();
     await this.syncProfilePremium(_id, stillEntitled, stillEntitled ? periodEnd : null);
+  }
+
+  /**
+   * User-initiated cancellation: actually STOP future billing at CloudPayments
+   * (so no further recurring charge is attempted), then flip local state via
+   * {@link cancel}. Access is retained until `currentPeriodEnd` (standard SaaS).
+   *
+   * This is distinct from {@link cancel}, which only mutates local state and is
+   * used by the webhook/refund paths (where the provider already stopped
+   * billing). Here WE are the initiator, so we must reach out to the provider.
+   *
+   * The upstream cancel is best-effort: if it fails (e.g. keys unset, or a
+   * transient provider error) we still record the local cancellation so the UI
+   * reflects intent — but we LOG the failure loudly, because a silent failure
+   * would mean the card keeps getting charged. The defence-in-depth backstop is
+   * {@link PaymentsService.handleRecurrent}, which refuses to re-activate a
+   * subscription the user has flagged `cancelAtPeriodEnd`.
+   */
+  async cancelAtPeriodEnd(userId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return;
+    }
+    const _id = new Types.ObjectId(userId);
+
+    // Pull the (server-only) CloudPayments subscription id to cancel upstream.
+    const doc = await this.subscriptionModel
+      .findOne({ userId: _id })
+      .select('+subscriptionId')
+      .lean()
+      .exec();
+
+    const subscriptionId = (doc as { subscriptionId?: string | null } | null)?.subscriptionId;
+    if (subscriptionId && this.cloudPayments.isConfigured()) {
+      try {
+        await this.cloudPayments.cancelSubscription(subscriptionId);
+        this.logger.log(`Cancelled CloudPayments subscription ${subscriptionId} for user ${userId}`);
+      } catch (err) {
+        // Do NOT swallow silently into success — billing may continue. Surface
+        // it in logs; local state is still flipped below so the user sees intent.
+        this.logger.error(
+          `Failed to cancel CloudPayments subscription ${subscriptionId} for user ${userId}: ${
+            (err as Error).message
+          }. Local cancellation recorded; recurrent webhook is the backstop.`,
+        );
+      }
+    } else if (subscriptionId) {
+      this.logger.warn(
+        `User ${userId} cancelled but CloudPayments is not configured — cannot stop upstream billing for subscription ${subscriptionId}`,
+      );
+    }
+
+    // Flip local state + recompute the profile mirror (retains access to period end).
+    await this.cancel(userId);
+  }
+
+  /**
+   * EXPIRY SWEEP (called by the repeatable BullMQ job): terminate every
+   * subscription whose paid period has elapsed — both lapsed-but-active records
+   * (a renewal that never came) and `canceled` ones that have now reached period
+   * end. Moves them to the non-entitled `none` state, stamps `cancelAtPeriodEnd`
+   * off, and revokes the profile premium mirror.
+   *
+   * Idempotent + safe to run on any cadence: it only matches rows that are still
+   * entitlement-bearing yet past their `currentPeriodEnd`, so a second pass is a
+   * no-op. Returns the number of subscriptions expired (for logging/metrics).
+   */
+  async sweepExpired(now: Date = new Date()): Promise<number> {
+    // Candidates: still in an entitlement-bearing state but past period end.
+    const expiring = await this.subscriptionModel
+      .find({
+        status: { $in: ['active', 'canceled', 'past_due'] },
+        currentPeriodEnd: { $ne: null, $lte: now },
+      })
+      .select('userId')
+      .lean()
+      .exec();
+
+    if (expiring.length === 0) {
+      return 0;
+    }
+
+    const ids = expiring.map((d) => d._id);
+    await this.subscriptionModel
+      .updateMany(
+        { _id: { $in: ids } },
+        { $set: { status: 'none', cancelAtPeriodEnd: false } },
+      )
+      .exec();
+
+    // Revoke the profile premium mirror for each expired subscriber.
+    await Promise.all(
+      expiring.map((d) =>
+        this.syncProfilePremium(d.userId as Types.ObjectId, false, null),
+      ),
+    );
+
+    this.logger.log(`Expiry sweep: marked ${expiring.length} subscription(s) expired`);
+    return expiring.length;
+  }
+
+  /**
+   * READ-ONLY fetch of a user's subscription in the shared contract shape. Never
+   * writes: if no record exists yet, a synthetic `none` subscription is returned
+   * so `GET /premium/subscription` is a pure read (unlike {@link getSubscription},
+   * which lazily upserts). Returns `null` for an invalid id.
+   */
+  async getSubscriptionState(userId: string): Promise<SubscriptionContract | null> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return null;
+    }
+    const _id = new Types.ObjectId(userId);
+    const doc = await this.subscriptionModel.findOne({ userId: _id }).exec();
+    if (doc) {
+      return this.toSubscriptionContract(doc);
+    }
+    // No record yet — return a synthetic, un-persisted `none` subscription.
+    return {
+      id: _id.toString(),
+      userId: _id.toString(),
+      plan: 'none',
+      status: 'none',
+      startedAt: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    };
   }
 
   /**

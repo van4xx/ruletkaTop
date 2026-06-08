@@ -13,7 +13,7 @@ export {
   type NsfwClassName,
 } from './classifier';
 export { THRESHOLDS, SAMPLE_INTERVAL_MS, VIOLATION_COOLDOWN_MS, evaluate } from './policy';
-export { drawDownscaledFrame, canvasToEvidence } from './capture';
+export { drawDownscaledFrame, canvasToEvidence, captureStreamFrame } from './capture';
 export { moderationApi, moderationKeys, type ReviewResolution } from './api';
 export {
   useLocalScreening,

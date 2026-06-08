@@ -41,6 +41,7 @@ import { MetricsService } from '../../observability/metrics.service';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import type { AppIoServer } from '../../realtime/redis-io.adapter';
 import { PresenceService } from '../presence/presence.service';
+import { SettingsService } from '../settings/settings.service';
 import {
   CALL_INVITE_LIMIT,
   MM_JOIN_LIMIT,
@@ -208,6 +209,7 @@ export class MatchmakingGateway
     private readonly matchmaking: MatchmakingService,
     private readonly calls: CallService,
     private readonly presence: PresenceService,
+    private readonly settings: SettingsService,
     private readonly wsAuth: WsAuthService,
     private readonly rateLimiter: WsRateLimiterService,
     private readonly metrics: MetricsService,
@@ -231,7 +233,7 @@ export class MatchmakingGateway
     // (`presence:watch:<id>` rooms). The Redis adapter fans the emit out, so a
     // transition published on ANY replica reaches watchers on every replica.
     this.presenceUnsub = this.presence.onPresenceEvent((payload) => {
-      this.relayPresence(payload);
+      void this.relayPresence(payload);
     });
     // Re-arm presence TTLs for this node's connected users so an active user
     // never lapses offline mid-session (a crashed replica still self-heals).
@@ -449,8 +451,11 @@ export class MatchmakingGateway
       this.logger.debug(`presence:subscribe lookup failed for ${watcher}: ${asMessage(err)}`);
       return;
     }
+    // The watcher is some OTHER user, so honour each subject's `showOnlineStatus`
+    // — a subject who hides it is reported offline in the initial snapshot too.
     for (const id of ids) {
-      this.emitPresenceTo(client, { userId: id, status: statuses[id] ?? 'offline' });
+      const masked = await this.maskHiddenPresence({ userId: id, status: statuses[id] ?? 'offline' });
+      this.emitPresenceTo(client, masked);
     }
   }
 
@@ -1028,23 +1033,53 @@ export class MatchmakingGateway
    * (`presence:watch:<id>` rooms). Online-ish statuses map to `presence:online`
    * (carrying the precise status, e.g. `in_call`/`away`); `offline` maps to
    * `presence:offline`. The Redis adapter fans the emit out to every replica.
+   *
+   * Watchers are always OTHER users (a client never subscribes to its own id),
+   * so a subject who disabled `showOnlineStatus` is masked to `offline` here —
+   * their own session still sees their true state, since it never rides a watch
+   * room. Best-effort: a settings-lookup failure relays the real transition.
    */
-  private relayPresence(payload: PresencePayload): void {
-    const room = this.server.to(presenceWatchRoom(payload.userId));
-    if (payload.status === 'offline') {
-      room.emit('presence:offline', payload);
+  private async relayPresence(payload: PresencePayload): Promise<void> {
+    const masked = await this.maskHiddenPresence(payload);
+    const room = this.server.to(presenceWatchRoom(masked.userId));
+    if (masked.status === 'offline') {
+      room.emit('presence:offline', masked);
     } else {
-      room.emit('presence:online', payload);
+      room.emit('presence:online', masked);
     }
   }
 
-  /** Emit a single user's current presence to ONE socket (the `presence:subscribe` reply). */
+  /**
+   * Emit a single user's current presence to ONE socket (the `presence:subscribe`
+   * reply). The subscriber is the OTHER user, so a subject who hides their online
+   * status is masked to `offline`.
+   */
   private emitPresenceTo(client: MmSocket, payload: PresencePayload): void {
     if (payload.status === 'offline') {
       client.emit('presence:offline', payload);
     } else {
       client.emit('presence:online', payload);
     }
+  }
+
+  /**
+   * Coerce a presence transition/reply to `offline` when its subject disabled
+   * `showOnlineStatus`, so the user appears offline to everyone watching them.
+   * Already-offline payloads short-circuit (nothing to hide). On a settings read
+   * failure we fail OPEN (return the real payload) rather than blackhole presence.
+   */
+  private async maskHiddenPresence(payload: PresencePayload): Promise<PresencePayload> {
+    if (payload.status === 'offline') {
+      return payload;
+    }
+    try {
+      if (!(await this.settings.getShowOnlineStatus(payload.userId))) {
+        return { userId: payload.userId, status: 'offline' };
+      }
+    } catch (err) {
+      this.logger.debug(`showOnlineStatus lookup failed for ${payload.userId}: ${asMessage(err)}`);
+    }
+    return payload;
   }
 
   /**

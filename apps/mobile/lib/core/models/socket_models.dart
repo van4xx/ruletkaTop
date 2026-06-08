@@ -42,6 +42,9 @@ abstract final class SocketEvents {
   // notifications
   static const String notifNew = 'notif:new';
 
+  // moderation (server→client): a forced action on the current call session.
+  static const String modAction = 'mod:action';
+
   // errors
   static const String wsError = 'ws:error';
 }

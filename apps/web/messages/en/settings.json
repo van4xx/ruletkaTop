@@ -121,6 +121,25 @@
       "accessFailed": "Couldn't access the devices"
     }
   },
+  "sessions": {
+    "title": "Active sessions",
+    "description": "Devices that are currently signed in to your account.",
+    "loadError": "Couldn't load your sessions.",
+    "empty": "No active sessions.",
+    "currentBadge": "This device",
+    "thisDevice": "Current session",
+    "unknownDevice": "Unknown device",
+    "meta": "Last active {lastActive}",
+    "metaWithIp": "Last active {lastActive} · {ip}",
+    "signOut": "Sign out",
+    "revokedOne": "Signed out of that device",
+    "revokeError": "Couldn't sign out",
+    "signOutEverywhere": "Sign out everywhere else",
+    "signOutEverywhereTitle": "Sign out of all other devices?",
+    "signOutEverywhereDescription": "This will end {count, plural, one {# other session} other {# other sessions}}. This device stays signed in.",
+    "signOutEverywhereConfirm": "Sign out everywhere",
+    "revokedOthers": "Signed out of all other devices"
+  },
   "appearance": {
     "title": "Appearance",
     "description": "Interface theme and language. The theme applies instantly.",

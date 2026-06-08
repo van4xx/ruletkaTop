@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import '../../../core/api/api.dart';
 import '../../../core/di/di.dart';
 import '../../../core/models/models.dart';
 import '../../../core/socket/socket.dart';
+import '../data/local_screening.dart';
 import '../data/media_permissions.dart';
 import '../data/turn_repository.dart';
 import '../data/webrtc_service.dart';
@@ -99,6 +101,21 @@ class RouletteController extends Notifier<RouletteState> {
   /// Last observed socket status, to detect connected→disconnected edges.
   SocketStatus _lastSocketStatus = SocketStatus.disconnected;
 
+  /// On-device NSFW screening of the LOCAL camera (video calls only). Drives
+  /// [RouletteState.flagged]; gated to a no-op classifier by default (see
+  /// `local_screening.dart` + `nsfw_classifier.dart`).
+  LocalScreeningController? _screening;
+
+  /// True when the local feed is currently cut by screening AND we disabled the
+  /// outbound video track, so we know to re-enable it on un-flag (unless the
+  /// user separately turned their camera off).
+  bool _videoCutByScreening = false;
+
+  /// Host hook for server-forced moderation actions (`mod:action`). The screen
+  /// sets this to surface the warn/kick/ban UX; the controller still performs
+  /// the teardown (kick/ban end the call) regardless of whether it's set.
+  void Function(ModerationActionPayload payload)? onModeration;
+
   SocketService get _socket => ref.read(socketServiceProvider);
   TurnRepository get _turn => TurnRepository(ref.read(apiClientProvider));
 
@@ -168,6 +185,8 @@ class RouletteController extends Notifier<RouletteState> {
     _subs.add(_socket.onRtcAnswer(_onAnswer));
     _subs.add(_socket.onRtcIce(_onIce));
     _subs.add(_socket.onRtcHangup((_) => _handlePeerGone()));
+    // Server-forced moderation (warn / kick / ban) for THIS session.
+    _subs.add(_socket.onModAction(_onModeration));
 
     // Drive (re)connect / disconnect off the service's status notifier (the
     // foundation exposes connection lifecycle this way, not as raw socket
@@ -193,6 +212,33 @@ class RouletteController extends Notifier<RouletteState> {
       // and the reconnect (peer == null) requeues.
       if (_started && _peer != null) _handlePeerGone();
     }
+  }
+
+  /// Handle a server-forced `mod:action` on the current session (mirrors the
+  /// web `useModerationAction`):
+  ///   warn → advisory; the call continues (host shows a warning toast).
+  ///   kick → end the current call + return to idle (host shows a toast).
+  ///   ban  → end the call; host shows a blocking acknowledgement that signs the
+  ///          user out (their session is now invalid server-side).
+  /// blur/none are advisory (the local screening loop already cut the preview),
+  /// so they only surface a host toast.
+  ///
+  /// The teardown is performed HERE so the call always ends on kick/ban even if
+  /// no host UX is attached; the host hook handles the user-facing messaging.
+  void _onModeration(ModerationActionPayload payload) {
+    switch (payload.action) {
+      case ModerationAction.kick:
+      case ModerationAction.ban:
+        // Tear the call down immediately; the host hook drives the toast/modal
+        // (and, for a ban, the sign-out).
+        unawaited(stop());
+        break;
+      case ModerationAction.warn:
+      case ModerationAction.blur:
+      case ModerationAction.none:
+        break;
+    }
+    onModeration?.call(payload);
   }
 
   void _emitJoin() {
@@ -314,6 +360,9 @@ class RouletteController extends Notifier<RouletteState> {
       if (room != null && _started) _socket.rtcOffer(room, sdp);
     }
     // Non-initiator waits for `rtc:offer` (handled in [_onOffer]).
+
+    // Begin on-device local-camera screening for this (video) match.
+    _syncScreening();
   }
 
   // ───────────────────── Reconnection + quality engine ────────────────────
@@ -505,7 +554,72 @@ class RouletteController extends Notifier<RouletteState> {
     _isInitiator = false;
     // Stop all reconnect/quality timers so they never fire against a dead peer.
     _resetCallHealth();
+    // Screening is per-call; stop sampling when the peer goes away.
+    _stopScreening();
     await peer?.close();
+  }
+
+  // ──────────────────── On-device NSFW screening (local) ───────────────────
+  /// Lazily build the screening controller + bind its `flagged` changes once.
+  LocalScreeningController _ensureScreening() {
+    final existing = _screening;
+    if (existing != null) return existing;
+    final controller = LocalScreeningController(
+      reportFrame: (dto) => ref.read(apiClientProvider).reportModerationFrame(dto),
+    );
+    controller.addListener(_onScreeningChanged);
+    _screening = controller;
+    return controller;
+  }
+
+  /// (Re)bind screening to the current local stream for the active video match.
+  /// No-op for voice (no video to screen). Safe to call repeatedly.
+  void _syncScreening() {
+    if (!_isVideo) return;
+    final live = _peer != null &&
+        (state.status == RouletteStatus.connecting ||
+            state.status == RouletteStatus.connected);
+    _ensureScreening().update(
+      stream: live ? _localStream : null,
+      matchId: _roomId,
+      enabled: live,
+      onViolation: (_) {
+        // The screen surfaces a gentle "your video was hidden" toast off the
+        // `flagged` state flip; nothing else needed here.
+      },
+    );
+  }
+
+  void _stopScreening() {
+    _videoCutByScreening = false;
+    _screening?.update(stream: null, matchId: null, enabled: false);
+  }
+
+  /// React to a screening flag change: mirror it into [RouletteState.flagged]
+  /// and disable/enable the OUTBOUND local video track so offending frames
+  /// never reach the peer (mirrors the web stage's track-disable effect).
+  void _onScreeningChanged() {
+    final flagged = _screening?.flagged ?? false;
+    if (flagged == state.flagged) return;
+
+    final videoTracks = _localStream?.getVideoTracks() ?? const [];
+    if (flagged) {
+      if (videoTracks.isNotEmpty) {
+        for (final t in videoTracks) {
+          t.enabled = false;
+        }
+        _videoCutByScreening = true;
+      }
+    } else {
+      // Un-flag (cooldown elapsed) → restore video UNLESS the user muted it.
+      if (_videoCutByScreening && !state.cameraOff) {
+        for (final t in videoTracks) {
+          t.enabled = true;
+        }
+      }
+      _videoCutByScreening = false;
+    }
+    state = state.copyWith(flagged: flagged);
   }
 
   // ──────────────────────── ICE servers (cached) ──────────────────────────
@@ -606,7 +720,13 @@ class RouletteController extends Notifier<RouletteState> {
     _armMatchTimeout();
   }
 
-  /// End the session entirely: hang up, leave the queue, stop media + socket.
+  /// End the session entirely: hang up, leave the queue, stop local media.
+  ///
+  /// IMPORTANT: this leaves the matchmaking queue with `mm:leave` but does NOT
+  /// disconnect the socket. The `/mm` socket is SHARED app-wide (presence,
+  /// notifications, incoming friend-calls) and owned by the auth lifecycle
+  /// (connected on login, disconnected on logout) — exactly like the web client.
+  /// Tearing it down here would kill app-wide realtime until the next login.
   Future<void> stop() async {
     final room = _roomId;
     if (room != null) _socket.rtcHangup(room, reason: MatchEndReason.stop);
@@ -621,7 +741,6 @@ class RouletteController extends Notifier<RouletteState> {
     _localStream = null;
     _iceServers = null;
 
-    _socket.disconnect();
     // Reset to idle, preserving filters so a re-Start keeps the user's choices.
     state = RouletteState(filters: state.filters);
   }
@@ -700,6 +819,9 @@ class RouletteController extends Notifier<RouletteState> {
     _clearMatchTimer();
     _clearRequeueTimer();
     _resetCallHealth();
+    _screening?.removeListener(_onScreeningChanged);
+    _screening?.dispose();
+    _screening = null;
     for (final off in _subs) {
       off();
     }
@@ -715,7 +837,10 @@ class RouletteController extends Notifier<RouletteState> {
     unawaited(_closePeer());
     unawaited(stopStream(_localStream));
     _localStream = null;
-    _socket.disconnect();
+    // Do NOT disconnect the socket here: it is the SHARED app-wide `/mm` +
+    // `/chat` connection (presence, notifications, incoming calls) owned by the
+    // auth lifecycle. We only left the queue (`mm:leave`) above; the socket
+    // stays live so leaving the roulette never kills app-wide realtime.
   }
 }
 

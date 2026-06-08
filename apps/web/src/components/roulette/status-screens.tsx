@@ -18,7 +18,8 @@ import {
   Sparkles,
   WifiOff,
 } from 'lucide-react';
-import { Button, Spinner } from '@ruletka/ui';
+import { Avatar, Button, Spinner } from '@ruletka/ui';
+import type { PeerInfo } from '@ruletka/shared-types';
 import type { RouletteError } from '@/features/roulette/types';
 import { cn } from '@/lib/cn';
 
@@ -88,6 +89,35 @@ export function SearchingScreen({
               ? t('status.searching.position', { position: positionHint })
               : t('status.searching.default')}
         </p>
+      </div>
+    </Shell>
+  );
+}
+
+/**
+ * Outgoing direct (friend) call — "ringing" the callee, waiting for them to
+ * accept. Mirrors the incoming-call modal's pulsing-avatar treatment so the two
+ * ends of a call feel like one product. Shown only in direct-call mode while
+ * status === 'calling'.
+ */
+export function CallingScreen({ peer }: { peer: PeerInfo | null }) {
+  const t = useTranslations('roulette');
+  return (
+    <Shell>
+      <span className="relative inline-flex" aria-hidden="true">
+        <span className="absolute -inset-2 rounded-full bg-[var(--color-neon-violet)]/30 blur-md motion-safe:animate-ping" />
+        <Avatar
+          size="xl"
+          src={peer?.avatarUrl || undefined}
+          alt={peer?.nickname ?? ''}
+          ring="aurora"
+        />
+      </span>
+      <div className="space-y-1" role="status" aria-live="polite">
+        <h2 className="font-display text-xl font-bold drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
+          {peer?.nickname || t('peerFallback')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('status.calling.subtitle')}</p>
       </div>
     </Shell>
   );

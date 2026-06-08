@@ -71,6 +71,7 @@ class RouletteState {
     this.isStarting = false,
     this.quality = ConnectionQuality.unknown,
     this.reconnecting = false,
+    this.flagged = false,
   });
 
   final RouletteStatus status;
@@ -107,6 +108,11 @@ class RouletteState {
   /// "reconnecting…" treatment over the live call.
   final bool reconnecting;
 
+  /// On-device NSFW screening tripped on the LOCAL camera: the local preview is
+  /// blurred/cut and the outbound video track is disabled until it self-heals.
+  /// Mirrors the web's `screening.flagged`.
+  final bool flagged;
+
   /// A peer is matched and we are connecting or connected.
   bool get hasPeer =>
       peer != null && (status == RouletteStatus.connecting || status == RouletteStatus.connected);
@@ -141,6 +147,7 @@ class RouletteState {
     bool? isStarting,
     ConnectionQuality? quality,
     bool? reconnecting,
+    bool? flagged,
   }) {
     return RouletteState(
       status: status ?? this.status,
@@ -159,6 +166,7 @@ class RouletteState {
       isStarting: isStarting ?? this.isStarting,
       quality: quality ?? this.quality,
       reconnecting: reconnecting ?? this.reconnecting,
+      flagged: flagged ?? this.flagged,
     );
   }
 }

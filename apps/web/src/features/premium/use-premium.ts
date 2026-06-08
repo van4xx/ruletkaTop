@@ -20,7 +20,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PremiumPlan, Subscription } from '@ruletka/shared-types';
 
 import { economyApi, economyKeys } from '@/features/economy/api';
-import { openCloudPaymentsWidget, type CloudPaymentsRecurrent } from '@/lib/cloudpayments';
+import {
+  openCloudPaymentsWidget,
+  type CloudPaymentsData,
+  type CloudPaymentsRecurrent,
+} from '@/lib/cloudpayments';
 import { useMe, meKey } from '@/features/economy/use-me';
 
 /** Public id for the CloudPayments widget (premium recurrent charge). */
@@ -36,31 +40,14 @@ export function usePremiumPlans() {
 
 /**
  * Current subscription. Requires auth; returns `null` for signed-out viewers so
- * the pricing page still renders.
+ * the pricing page still renders. Clean READ via `GET /premium/subscription`
+ * (no side effects — distinct from the intent-registering POST /premium/subscribe).
  */
 export function useSubscription() {
   const me = useMe();
-  const qc = useQueryClient();
   return useQuery<Subscription | null>({
     queryKey: economyKeys.subscription(),
-    // Reading the live subscription via the available endpoints: POST
-    // /premium/subscribe validates the plan and RETURNS the current record
-    // without granting anything (entitlement only comes from the webhook). We
-    // reuse the cached plan catalogue to avoid a duplicate fetch.
-    // NOTE for integrator: a dedicated `GET /premium/subscription` would make
-    // this a clean read instead of a (side-effect-free) POST.
-    queryFn: async () => {
-      const cached = qc.getQueryData<PremiumPlan[]>(economyKeys.premiumPlans());
-      const plans: PremiumPlan[] =
-        cached ??
-        (await qc.fetchQuery({
-          queryKey: economyKeys.premiumPlans(),
-          queryFn: economyApi.premiumPlans,
-        }));
-      const probe = plans[0]?.code;
-      if (!probe) return null;
-      return economyApi.subscribe({ plan: probe });
-    },
+    queryFn: () => economyApi.subscription(),
     enabled: !!me.data, // only when authenticated
   });
 }
@@ -81,9 +68,11 @@ export function useSubscribe() {
   const [phase, setPhase] = useState<SubscribePhase>('idle');
   const [activePlan, setActivePlan] = useState<PremiumPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const me = useMe();
 
-  const intent = useMutation({ mutationFn: economyApi.subscribe });
+  // Server-minted checkout: returns the PENDING-payment invoiceId + the widget
+  // params (price, accountId, recurrent descriptor) so the browser never fakes
+  // the invoice or the amount. Entitlement is still granted only by the webhook.
+  const checkout = useMutation({ mutationFn: economyApi.premiumCheckout });
 
   const reset = () => {
     setPhase('idle');
@@ -92,6 +81,9 @@ export function useSubscribe() {
   };
 
   const subscribe = (plan: PremiumPlan) => {
+    // The widget bundle still needs a public id to load; the server also returns
+    // one in the checkout params (preferred), but if neither is present we can't
+    // open the widget at all, so fail fast with a clear message.
     if (!CP_PUBLIC_ID) {
       setActivePlan(plan);
       setError(t('premiumHook.widgetNotConfigured'));
@@ -102,29 +94,24 @@ export function useSubscribe() {
     setError(null);
     setPhase('starting');
 
-    // 1) Register intent (backend validates the plan + returns the record).
-    intent.mutate(
+    // 1) Ask the server to mint a PENDING premium payment + widget params.
+    checkout.mutate(
       { plan: plan.code },
       {
-        onSuccess: async () => {
+        onSuccess: async (params) => {
           setPhase('widget');
-          const accountId = me.data?.id;
-          const invoiceId = `prem_${plan.code}_${Date.now()}`;
           try {
             await openCloudPaymentsWidget(
               {
-                publicId: CP_PUBLIC_ID,
-                description: t('premiumHook.widgetDescription', { plan: plan.title }),
-                amount: plan.priceRub,
-                currency: 'RUB',
-                accountId, // REQUIRED for a subscription
-                invoiceId,
-                data: {
-                  purpose: 'premium',
-                  plan: plan.code,
-                  userId: accountId,
-                  cloudPayments: { recurrent: planToRecurrent(plan) },
-                },
+                // Trust the SERVER-minted params: real invoiceId, server-fixed
+                // amount, and the recurrent descriptor under `data`.
+                publicId: params.publicId || CP_PUBLIC_ID,
+                description: params.description,
+                amount: params.amount,
+                currency: params.currency,
+                accountId: params.accountId, // REQUIRED for a subscription
+                invoiceId: params.invoiceId,
+                data: params.data as CloudPaymentsData,
               },
               {
                 onSuccess: () => setPhase('pending'),

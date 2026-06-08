@@ -52,3 +52,21 @@ export const openReportsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type OpenReportsQuery = z.infer<typeof openReportsQuerySchema>;
+
+/**
+ * Query of `GET /moderation/appeals`: cursor pagination plus an optional appeal
+ * `status` filter (mirrors {@link listReportsQuerySchema} but over the appeal
+ * lifecycle enum). Kept API-local for the same reason as the report queries.
+ */
+export const listAppealsQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(['pending', 'accepted', 'rejected']).optional(),
+});
+export type ListAppealsQuery = z.infer<typeof listAppealsQuerySchema>;
+
+/** Body of `POST /moderation/appeals/:id/resolve` — accept (⇒ unban) or reject. */
+export const resolveAppealSchema = z.object({
+  status: z.enum(['accepted', 'rejected']),
+});
+export type ResolveAppealDto = z.infer<typeof resolveAppealSchema>;

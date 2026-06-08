@@ -11,6 +11,7 @@ import { PresenceModule } from '../presence/presence.module';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { ProfilesService } from '../profiles/profiles.service';
 import { RealtimeSecurityModule } from '../realtime-security/realtime-security.module';
+import { SettingsModule } from '../settings/settings.module';
 import { CallService } from './call.service';
 import {
   BLOCKS_SERVICE,
@@ -38,8 +39,10 @@ import { Match, MatchSchema } from './schemas/match.schema';
  * - {@link FRIENDS_SERVICE} → {@link FriendsService} (whoCanCall 'friends' gate).
  *
  * Recipient `whoCanCall` privacy is read straight from the `settings`
- * collection (mirroring how chat reads `whoCanMessage`), so no settings module
- * dependency is taken.
+ * collection (mirroring how chat reads `whoCanMessage`). {@link SettingsModule}
+ * (a leaf, so no cycle) is imported only so the gateway can honour a user's
+ * `showOnlineStatus` when relaying presence transitions / subscribe replies —
+ * a user who hides it appears offline to everyone watching them.
  *
  * The owning feature modules are imported so those services are in scope; each
  * re-exports its service. `JwtService` (handshake auth) and the shared ioredis
@@ -56,6 +59,7 @@ import { Match, MatchSchema } from './schemas/match.schema';
     FriendsModule,
     PresenceModule,
     RealtimeSecurityModule,
+    SettingsModule,
   ],
   providers: [
     MatchService,

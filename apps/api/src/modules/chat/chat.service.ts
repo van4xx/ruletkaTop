@@ -3,9 +3,11 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, type QueryFilter, Types } from 'mongoose';
 
 import type {
+  ChatRejectReason,
   Conversation as ConversationContract,
   Message as MessageContract,
   MessageType,
+  MinimalProfile,
   PaginationQuery,
   Visibility,
 } from '@ruletka/shared-types';
@@ -353,6 +355,50 @@ export class ChatService {
   }
 
   /**
+   * MINIMAL identity (nickname + avatar) of a user the caller ALREADY shares a
+   * conversation with — even when that user's `whoCanViewProfile` privacy would
+   * 404 their full public profile. The shared-conversation check is the
+   * entitlement: you have already been talking, so a nameless, faceless thread
+   * (the previous behaviour, where `GET /profiles/:id` 404'd) is the wrong
+   * trade-off. Throws `404` only when no shared conversation exists or the
+   * target's profile row is genuinely missing.
+   *
+   * Reads the `profiles` collection directly (projected to the minimal fields),
+   * mirroring how {@link nicknameOf} and the friends module read it — so no
+   * profiles-module dependency or visibility gate is involved.
+   */
+  async getConversationPeerIdentity(userId: string, peerId: string): Promise<MinimalProfile> {
+    if (!Types.ObjectId.isValid(userId) || !Types.ObjectId.isValid(peerId)) {
+      throw new NotFoundException('Profile not found');
+    }
+    const pairKey = buildConversationPairKey(userId, peerId);
+    const shared = await this.conversationModel.exists({ pairKey }).exec();
+    if (!shared) {
+      // No established conversation → no entitlement to even the minimal identity.
+      throw new NotFoundException('Profile not found');
+    }
+    const doc = await this.connection
+      .collection('profiles')
+      .findOne(
+        { userId: new Types.ObjectId(peerId) },
+        { projection: { userId: 1, nickname: 1, avatarUrl: 1 } },
+      );
+    if (!doc) {
+      throw new NotFoundException('Profile not found');
+    }
+    const profile = doc as unknown as {
+      userId: Types.ObjectId;
+      nickname?: string;
+      avatarUrl?: string | null;
+    };
+    return {
+      id: profile.userId.toString(),
+      nickname: profile.nickname ?? '',
+      avatarUrl: profile.avatarUrl ?? null,
+    };
+  }
+
+  /**
    * Whether `senderId` is currently allowed to message `recipientId`. Combines
    * the block gate and the recipient's `whoCanMessage` privacy. Exposed for the
    * gateway to pre-check before persisting.
@@ -369,6 +415,67 @@ export class ChatService {
       return this.friendsService.areFriends(senderId, recipientId);
     }
     return true; // 'everyone'
+  }
+
+  /**
+   * Best-effort classification of WHY a `chat:message` send failed, for the
+   * realtime `chat:rejected` ack. Re-derives the precise reason from the same
+   * block / privacy / resolution checks `sendMessage` runs, WITHOUT throwing:
+   *
+   *  - `not_found`  — the conversation / recipient can't be resolved (or is self);
+   *  - `blocked`    — a block exists in either direction;
+   *  - `privacy`    — the recipient's `whoCanMessage` forbids it;
+   *  - `error`      — none of the above matched (an unexpected failure).
+   *
+   * Runs ONLY on the already-failed path, so the extra resolution round-trip
+   * never touches a successful send. It never mutates state (resolution here is
+   * read-only: it looks the conversation up but, unlike {@link sendMessage},
+   * does not create one).
+   */
+  async classifyRejection(senderId: string, input: SendMessageInput): Promise<ChatRejectReason> {
+    const recipientId = await this.resolveRecipientReadOnly(senderId, input);
+    if (!recipientId) {
+      return 'not_found';
+    }
+    if (await this.blocksService.isBlocked(senderId, recipientId)) {
+      return 'blocked';
+    }
+    const visibility = await this.getWhoCanMessage(recipientId);
+    if (visibility === 'nobody') {
+      return 'privacy';
+    }
+    if (visibility === 'friends' && !(await this.friendsService.areFriends(senderId, recipientId))) {
+      return 'privacy';
+    }
+    return 'error';
+  }
+
+  /**
+   * Resolve the recipient id for an outgoing message WITHOUT creating a
+   * conversation (the read-only counterpart of {@link resolveConversation},
+   * used by {@link classifyRejection}). Returns `null` when the recipient can't
+   * be determined: an unknown / non-participant conversation, a missing/invalid
+   * `recipientId`, or a self-send.
+   */
+  private async resolveRecipientReadOnly(
+    senderId: string,
+    input: SendMessageInput,
+  ): Promise<string | null> {
+    if (input.conversationId) {
+      if (!Types.ObjectId.isValid(input.conversationId)) {
+        return null;
+      }
+      const conversation = await this.conversationModel.findById(input.conversationId).exec();
+      if (!conversation || !conversation.participants.some((p) => p.toString() === senderId)) {
+        return null;
+      }
+      return this.otherParticipant(conversation, senderId);
+    }
+    const recipientId = input.recipientId;
+    if (!recipientId || !Types.ObjectId.isValid(recipientId) || recipientId === senderId) {
+      return null;
+    }
+    return recipientId;
   }
 
   // ── internals ────────────────────────────────────────────────────────────

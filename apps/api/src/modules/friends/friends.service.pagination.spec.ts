@@ -37,13 +37,17 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
   let friendshipModel: { find: jest.Mock };
   let presence: { getStatuses: jest.Mock };
   let profilesFind: jest.Mock;
+  let settingsFind: jest.Mock;
   let connection: { collection: jest.Mock };
   let lastFindFilter: unknown;
   let profilesInClause: Types.ObjectId[] | undefined;
+  /** User ids the `settings` read should report as hiding their online status. */
+  let hiddenStatusIds: string[];
 
   beforeEach(() => {
     lastFindFilter = undefined;
     profilesInClause = undefined;
+    hiddenStatusIds = [];
 
     friendshipModel = { find: jest.fn() };
     presence = { getStatuses: jest.fn().mockResolvedValue({}) };
@@ -70,7 +74,18 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
         ]),
       };
     });
-    connection = { collection: jest.fn().mockReturnValue({ find: profilesFind }) };
+    // Batched `settings` read for `showOnlineStatus: false`: returns only the ids
+    // the current test marked hidden (default none).
+    settingsFind = jest.fn().mockImplementation(() => ({
+      toArray: jest
+        .fn()
+        .mockResolvedValue(hiddenStatusIds.map((id) => ({ userId: new Types.ObjectId(id) }))),
+    }));
+    connection = {
+      collection: jest.fn().mockImplementation((name: string) => ({
+        find: name === 'settings' ? settingsFind : profilesFind,
+      })),
+    };
 
     // listFriends never raises a notification, so a bare stub suffices.
     const notifications = { create: jest.fn().mockResolvedValue(null) };
@@ -143,6 +158,33 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
     const page = await service.listFriends(userId, pagination());
 
     expect(page.items[0]?.status).toBe('offline');
+  });
+
+  it('masks a friend who disabled showOnlineStatus to offline even when online', async () => {
+    primeFind([
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439301',
+        requesterId: userId,
+        recipientId: friendA,
+        createdAt: new Date(3000),
+      }),
+      friendshipDoc({
+        id: '507f1f77bcf86cd799439302',
+        requesterId: friendB,
+        recipientId: userId,
+        createdAt: new Date(2000),
+      }),
+    ]);
+    // Both friends are live online…
+    presence.getStatuses.mockResolvedValue({ [friendA]: 'online', [friendB]: 'online' });
+    // …but friendA hides their presence, so they must read as offline to others.
+    hiddenStatusIds = [friendA];
+
+    const page = await service.listFriends(userId, pagination());
+
+    expect(page.items.find((f) => f.profile.id === friendA)?.status).toBe('offline');
+    // friendB does not hide it, so their true online status is preserved.
+    expect(page.items.find((f) => f.profile.id === friendB)?.status).toBe('online');
   });
 
   it('skips a friend whose profile no longer resolves', async () => {

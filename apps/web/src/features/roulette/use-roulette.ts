@@ -29,8 +29,11 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type {
+  CallResponsePayload,
   MatchFilters,
   MmMatchedPayload,
+  PeerInfo,
+  PublicProfile,
   RtcIcePayload,
   RtcOfferPayload,
 } from '@ruletka/shared-types';
@@ -52,6 +55,7 @@ import { track } from '@/lib/analytics';
 import {
   DEFAULT_FILTERS,
   type ChatLine,
+  type DirectCallStart,
   type RouletteState,
   type UseRouletteOptions,
   type UseRouletteResult,
@@ -65,6 +69,11 @@ type Action =
   | { type: 'SEARCHING' }
   | { type: 'WAITING'; positionHint: number | null }
   | { type: 'MATCHED'; roomId: string; peer: MmMatchedPayload['peer'] }
+  // Direct (friend) call: 'CALLING' = invite sent, ringing the callee (peer is
+  // the person we're calling). 'CONNECTING_DIRECT' = accepted/answering; moves
+  // to 'connecting' and (for the callee) pins the peer we resolved up front.
+  | { type: 'CALLING'; peer: PeerInfo }
+  | { type: 'CONNECTING_DIRECT'; peer?: PeerInfo }
   | { type: 'REMOTE_STREAM'; stream: MediaStream }
   | { type: 'CONNECTED' }
   | { type: 'RECONNECTING'; attempt: number }
@@ -94,6 +103,7 @@ const initialState: RouletteState = {
   error: null,
   chatMessages: [],
   chatOpen: false,
+  isDirectCall: false,
 };
 
 function reducer(state: RouletteState, action: Action): RouletteState {
@@ -121,6 +131,7 @@ function reducer(state: RouletteState, action: Action): RouletteState {
         error: null,
         chatMessages: [],
         chatOpen: false,
+        isDirectCall: false,
       };
     case 'WAITING':
       return { ...state, status: 'searching', positionHint: action.positionHint };
@@ -135,6 +146,34 @@ function reducer(state: RouletteState, action: Action): RouletteState {
         reconnectAttempt: 0,
         chatMessages: [],
         chatOpen: false,
+        isDirectCall: false,
+      };
+    case 'CALLING':
+      return {
+        ...state,
+        status: 'calling',
+        roomId: null,
+        peer: action.peer,
+        remoteStream: null,
+        positionHint: null,
+        quality: null,
+        reconnectAttempt: 0,
+        error: null,
+        chatMessages: [],
+        chatOpen: false,
+        isDirectCall: true,
+      };
+    case 'CONNECTING_DIRECT':
+      return {
+        ...state,
+        status: 'connecting',
+        peer: action.peer ?? state.peer,
+        remoteStream: null,
+        quality: null,
+        reconnectAttempt: 0,
+        chatMessages: [],
+        chatOpen: false,
+        isDirectCall: true,
       };
     case 'REMOTE_STREAM':
       return { ...state, remoteStream: action.stream };
@@ -165,6 +204,42 @@ function reducer(state: RouletteState, action: Action): RouletteState {
       return { ...state, status: 'error', error: action.error };
     default:
       return state;
+  }
+}
+
+/**
+ * Resolve a peer's {@link PeerInfo} (for the call overlay) from their public
+ * profile, for a DIRECT call where there is no `mm:matched` payload to carry it.
+ * Best-effort: a hidden / missing / un-fetchable profile yields a minimal,
+ * safe placeholder so the call still proceeds (media is what matters; the card
+ * just degrades to "Собеседник"). `PublicProfile` is a structural superset of
+ * `PeerInfo` for the fields the overlay reads, so the adaptation is a projection.
+ */
+async function fetchPeerInfo(userId: string): Promise<PeerInfo> {
+  const fallback: PeerInfo = {
+    userId,
+    nickname: '',
+    age: 0,
+    gender: 'other',
+    country: 'US',
+    avatarUrl: null,
+    badges: [],
+    isPremium: false,
+  };
+  try {
+    const p: PublicProfile = await api.profile.byId(userId);
+    return {
+      userId: p.id,
+      nickname: p.nickname,
+      age: p.age,
+      gender: p.gender,
+      country: p.country,
+      avatarUrl: p.avatarUrl,
+      badges: p.badges,
+      isPremium: p.isPremium,
+    };
+  } catch {
+    return fallback;
   }
 }
 
@@ -205,6 +280,16 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   const iceServersRef = useRef<IceServerConfig[] | null>(null);
   const startedRef = useRef(false); // session active (between start and stop)
   const joinedRef = useRef(false); // an initial mm:join has been emitted
+  const mountedRef = useRef(true); // false after unmount — guards async entries
+  // ── Direct (friend) call state ──
+  // Non-null while THIS session is a direct 1:1 friend call (not the random
+  // queue). A direct call never requeues: a peer hangup / `next` ends it. For a
+  // caller, `callId` is filled in when the server relays `call:accept`.
+  const directCallRef = useRef<{
+    role: 'caller' | 'callee';
+    peerUserId: string;
+    callId: string | null;
+  } | null>(null);
   const filtersRef = useRef<MatchFilters>(filters);
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requeueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -271,8 +356,13 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   }, [clearReconnectTimers, stopQualityPolling]);
 
   // ── Build a peer connection for the current match and kick off negotiation ─
+  // Generalised over BOTH a matchmaking match (`mm:matched`) and a direct friend
+  // call (`call:*`): both reduce to "we have a roomId/callId + a peer + who
+  // offers first", and the ensuing `rtc:*` signaling is identical (the server
+  // relays it for a `call:<callId>` room exactly like a matchmaking room). The
+  // caller has already set roomIdRef/isInitiatorRef before invoking this.
   const beginNegotiation = useCallback(
-    async (matched: MmMatchedPayload) => {
+    async (matched: { isInitiator: boolean }) => {
       const socket = getSocket('/mm');
       const local = localStreamRef.current;
       const iceServers = iceServersRef.current ?? FALLBACK_ICE_SERVERS;
@@ -342,6 +432,10 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   // once can always call the latest implementation without re-binding.
   const handlePeerGoneRef = useRef<() => void>(() => undefined);
   const nextRef = useRef<() => void>(() => undefined);
+  const stopRef = useRef<() => void>(() => undefined);
+  // End a direct (friend) call: tear down the peer + reflect 'ended', and drop
+  // the direct-call marker. No requeue (a friend call has no fallback queue).
+  const handleDirectEndedRef = useRef<() => void>(() => undefined);
   // Reconnection handlers (defined below; referenced from the connection-state
   // callback wired inside beginNegotiation via these stable refs).
   const onIceTroubleRef = useRef<(state: RTCIceConnectionState) => void>(() => undefined);
@@ -351,6 +445,13 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     if (!startedRef.current) return;
     closePeer();
     dispatch({ type: 'ENDED' });
+    // A DIRECT (friend) call has no queue to fall back to: the peer left, so the
+    // call is simply over. Surface 'ended' and stop — do NOT requeue into the
+    // random pool (that would silently drop the user into strangers).
+    if (directCallRef.current) {
+      directCallRef.current = null;
+      return;
+    }
     // Auto-requeue after a short beat so the user sees "собеседник отключился".
     clearRequeueTimeout();
     requeueTimeoutRef.current = setTimeout(() => {
@@ -362,6 +463,22 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   useEffect(() => {
     handlePeerGoneRef.current = handlePeerGone;
   }, [handlePeerGone]);
+
+  // End a direct (friend) call (peer hung up, declined, cancelled, or the ring
+  // timed out). Like handlePeerGone but never requeues: a friend call has no
+  // fallback pool, so we surface 'ended' and leave the marker cleared. The
+  // user's controls (Stop / navigating away) then fully tear the session down.
+  const handleDirectEnded = useCallback(() => {
+    if (!startedRef.current) return;
+    clearMatchTimeout();
+    clearRequeueTimeout();
+    directCallRef.current = null;
+    closePeer();
+    dispatch({ type: 'ENDED' });
+  }, [clearMatchTimeout, clearRequeueTimeout, closePeer]);
+  useEffect(() => {
+    handleDirectEndedRef.current = handleDirectEnded;
+  }, [handleDirectEnded]);
 
   // ── ICE-restart reconnection ────────────────────────────────────────────
   // Perform ONE ICE-restart attempt. Only the initiator drives renegotiation
@@ -534,7 +651,9 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       // join AND recovers our slot after a reconnect that happened while
       // searching (the server drops queue entries on disconnect). Mid-match
       // reconnects are skipped here — the peer-gone path requeues those.
-      if (startedRef.current && !peerRef.current && !roomIdRef.current) {
+      // A DIRECT (friend) call is NEVER a queue join: skip it entirely so a
+      // (re)connect mid-ring can't dump the caller into the random pool.
+      if (!directCallRef.current && startedRef.current && !peerRef.current && !roomIdRef.current) {
         joinedRef.current = true;
         dispatch({ type: 'SEARCHING' });
         clearMatchTimeout();
@@ -546,6 +665,13 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     };
     const onDisconnect = () => {
       dispatch({ type: 'SOCKET', connected: false });
+      // A DIRECT call can't survive a socket drop: the pending invite (ringing,
+      // pre-accept) is lost server-side, and a mid-call drop has no queue to fall
+      // back to. End it (no requeue) the moment the socket goes down.
+      if (startedRef.current && directCallRef.current) {
+        handleDirectEndedRef.current();
+        return;
+      }
       // A mid-call disconnect ends the current match; the socket singleton
       // auto-reconnects and we requeue (handlePeerGone schedules an mm:join).
       if (startedRef.current && peerRef.current) {
@@ -633,6 +759,49 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       handlePeerGoneRef.current();
     };
 
+    // ── Direct (friend) call signaling ──────────────────────────────────────
+    // The server relays `call:accept` to the CALLER once the callee answers,
+    // carrying the `callId` (which is also the `call:<callId>` signaling room).
+    // This is the caller's cue to become the WebRTC initiator: pin the room id,
+    // build the peer connection and send the first offer. The callee already
+    // built its (answerer) peer connection when it accepted, so its existing
+    // `rtc:offer` handler answers this. Ignored unless we're the caller of THIS
+    // pending direct call and have no peer yet (defends against a stray relay).
+    const onCallAccept = (p: CallResponsePayload) => {
+      const direct = directCallRef.current;
+      if (!startedRef.current || !direct || direct.role !== 'caller') return;
+      if (peerRef.current || roomIdRef.current) return;
+      clearMatchTimeout();
+      direct.callId = p.callId;
+      roomIdRef.current = p.callId;
+      isInitiatorRef.current = true;
+      // Negotiation watchdog: if media never connects, end the direct call
+      // cleanly rather than hanging on a half-open room.
+      matchTimeoutRef.current = setTimeout(() => {
+        if (peerRef.current && peerRef.current.connectionState !== 'connected') {
+          stopRef.current();
+        }
+      }, MATCH_TIMEOUT_MS);
+      dispatch({ type: 'CONNECTING_DIRECT' });
+      track('match_started');
+      void beginNegotiation({ isInitiator: true });
+    };
+
+    // The callee declined (or the ring timed out / was cancelled): the caller's
+    // "calling…" UI must resolve. Only meaningful pre-connect for the caller.
+    const onCallDecline = () => {
+      const direct = directCallRef.current;
+      if (!direct || peerRef.current) return;
+      handleDirectEndedRef.current();
+    };
+
+    // Either party hung up an (accepted) direct call, OR the caller's invite was
+    // cancelled before accept. Tear down like any peer-gone, without requeueing.
+    const onCallEnd = () => {
+      if (!directCallRef.current) return;
+      handleDirectEndedRef.current();
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('mm:waiting', onWaiting);
@@ -641,6 +810,9 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     socket.on('rtc:answer', onAnswer);
     socket.on('rtc:ice-candidate', onIce);
     socket.on('rtc:hangup', onHangup);
+    socket.on('call:accept', onCallAccept);
+    socket.on('call:decline', onCallDecline);
+    socket.on('call:end', onCallEnd);
 
     return () => {
       socket.off('connect', onConnect);
@@ -651,6 +823,9 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       socket.off('rtc:answer', onAnswer);
       socket.off('rtc:ice-candidate', onIce);
       socket.off('rtc:hangup', onHangup);
+      socket.off('call:accept', onCallAccept);
+      socket.off('call:decline', onCallDecline);
+      socket.off('call:end', onCallEnd);
     };
   }, [type, beginNegotiation, clearMatchTimeout, clearRequeueTimeout]);
 
@@ -753,8 +928,131 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     }
   }, [token, isStarting, acquireLocalStream, ensureIceServers, clearMatchTimeout, type, t]);
 
+  // ── Direct (friend) call entry ──────────────────────────────────────────
+  // Bypasses the matchmaking queue and runs a 1:1 call over the existing
+  // `call:*` + `rtc:*` contract (server relays `rtc:*` for a `call:<callId>`
+  // room exactly like a matchmaking room, so the SAME PeerConnectionManager +
+  // signaling handlers drive it). Shape:
+  //   caller — acquire media/ICE/socket → emit `call:invite` → status 'calling';
+  //            the `call:accept` relay then triggers the offer (see onCallAccept).
+  //   callee — the modal already emitted `call:accept` (so it holds `callId`):
+  //            acquire media/ICE/socket → become the answerer NOW (pin the call
+  //            room, build the PC) and wait for the caller's `rtc:offer`.
+  const startDirectCall = useCallback(
+    async (intent: DirectCallStart) => {
+      if (startedRef.current || isStarting) return;
+      if (!token) {
+        dispatch({ type: 'ERROR', error: { kind: 'socket', message: t('errors.signInToStart') } });
+        return;
+      }
+
+      setIsStarting(true);
+      dispatch({ type: 'REQUESTING' });
+      try {
+        // 1) Local media + 2) ICE servers — same pre-flight as a queue start.
+        await acquireLocalStream();
+        await ensureIceServers();
+
+        // 3) Resolve the peer's public profile for the call overlay (best-effort
+        //    — a hidden/missing profile still allows the call; we show a minimal
+        //    card). Adapted to the PeerInfo the overlay/grid already render.
+        const peer = await fetchPeerInfo(intent.peerUserId);
+
+        // The component may have unmounted while we awaited media/ICE/profile
+        // (e.g. the user navigated away, or a dev StrictMode remount). Bail
+        // without emitting any signaling — unmount cleanup already stopped media.
+        if (!mountedRef.current) {
+          setIsStarting(false);
+          return;
+        }
+
+        startedRef.current = true;
+        directCallRef.current = {
+          role: intent.role,
+          peerUserId: intent.peerUserId,
+          callId: intent.callId ?? null,
+        };
+        // 4) Ensure the socket is connected (the connect handler will NOT auto
+        //    `mm:join` here because a direct call sets roomId/peer state below,
+        //    keeping us out of the queue path).
+        connectSocket(token);
+        const socket = getSocket('/mm');
+
+        if (intent.role === 'caller') {
+          // Ring the callee. The server mints the callId and, on accept, relays
+          // `call:accept { callId }` back to us → onCallAccept starts the offer.
+          dispatch({ type: 'CALLING', peer });
+          clearMatchTimeout();
+          // Ring timeout: if no accept arrives, end the (still-ringing) call.
+          matchTimeoutRef.current = setTimeout(() => {
+            if (!peerRef.current) handleDirectEndedRef.current();
+          }, MATCH_TIMEOUT_MS);
+          socket.emit('call:invite', { toUserId: intent.peerUserId, type });
+        } else {
+          // Callee: we hold the callId (the invite carried it) but DELIBERATELY
+          // have not emitted `call:accept` yet. Build our (answerer) peer
+          // connection FIRST, then emit `call:accept` — this closes a race: the
+          // server tells the CALLER to offer the instant we accept, and the
+          // offer must not arrive before our `rtc:offer` handler + PC exist.
+          const callId = intent.callId;
+          if (!callId) throw new Error('direct call (callee) requires a callId');
+          roomIdRef.current = callId;
+          isInitiatorRef.current = false;
+          dispatch({ type: 'CONNECTING_DIRECT', peer });
+          track('match_started');
+          clearMatchTimeout();
+          matchTimeoutRef.current = setTimeout(() => {
+            if (peerRef.current && peerRef.current.connectionState !== 'connected') {
+              handleDirectEndedRef.current();
+            }
+          }, MATCH_TIMEOUT_MS);
+          await beginNegotiation({ isInitiator: false });
+          // PC + offer handler are now live → accept so the caller may offer.
+          socket.emit('call:accept', { callId });
+        }
+      } catch (err) {
+        startedRef.current = false;
+        directCallRef.current = null;
+        // If WE are the callee and failed BEFORE accepting (e.g. media denied),
+        // decline so the caller's "calling…" UI resolves immediately instead of
+        // ringing out on the server TTL. (A caller-side failure has no callId to
+        // act on; the invite simply never goes out / rings out.)
+        if (intent.role === 'callee' && intent.callId) {
+          try {
+            getSocket('/mm').emit('call:decline', { callId: intent.callId });
+          } catch {
+            /* socket may be down; the ring TTL still resolves it */
+          }
+        }
+        if (err instanceof MediaError) {
+          dispatch({ type: 'ERROR', error: { kind: err.kind, message: t(`mediaError.${err.kind}`) } });
+        } else {
+          dispatch({ type: 'ERROR', error: { kind: 'unknown', message: t('errors.startFailed') } });
+        }
+      } finally {
+        setIsStarting(false);
+      }
+    },
+    [
+      token,
+      isStarting,
+      acquireLocalStream,
+      ensureIceServers,
+      beginNegotiation,
+      clearMatchTimeout,
+      type,
+      t,
+    ],
+  );
+
   const next = useCallback(() => {
     if (!startedRef.current) return;
+    // A DIRECT (friend) call has no "next peer" — Next acts as End for it (the
+    // CallControls already relabel Next→Stop in direct mode, but guard here too).
+    if (directCallRef.current) {
+      stopRef.current();
+      return;
+    }
     track('match_skipped');
     const socket = getSocket('/mm');
     clearRequeueTimeout();
@@ -784,6 +1082,17 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     if (roomIdRef.current) {
       socket.emit('rtc:hangup', { roomId: roomIdRef.current, reason: 'stop' });
     }
+    // DIRECT (friend) call teardown: `call:end { callId }` cancels a still-
+    // ringing invite (pre-accept) AND, post-accept, tells the other party to
+    // close + tears the `call:<callId>` room down server-side. (The `rtc:hangup`
+    // above already covers the in-room case; `call:end` additionally handles the
+    // pre-accept ring where no `roomId`/PC exists yet.) We only know the callId
+    // for the callee, or for the caller once `call:accept` arrived.
+    const direct = directCallRef.current;
+    if (direct?.callId) {
+      socket.emit('call:end', { callId: direct.callId });
+    }
+    directCallRef.current = null;
     startedRef.current = false;
     joinedRef.current = false;
     clearMatchTimeout();
@@ -808,6 +1117,9 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     // The connection stays live so the bell and chat keep working.
     dispatch({ type: 'RESET' });
   }, [closePeer, clearMatchTimeout, clearRequeueTimeout]);
+  useEffect(() => {
+    stopRef.current = stop;
+  }, [stop]);
 
   const toggleMic = useCallback(() => {
     const stream = localStreamRef.current;
@@ -852,6 +1164,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   // ── Unmount cleanup: never leak a camera light or socket room ──
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       startedRef.current = false;
       joinedRef.current = false;
       if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
@@ -864,10 +1177,17 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
         if (roomIdRef.current) {
           socket.emit('rtc:hangup', { roomId: roomIdRef.current, reason: 'stop' });
         }
+        // End a direct (friend) call cleanly on unmount too (cancel a ring /
+        // tear down the call room), mirroring stop().
+        const direct = directCallRef.current;
+        if (direct?.callId) {
+          socket.emit('call:end', { callId: direct.callId });
+        }
         socket.emit('mm:leave');
       } catch {
         /* socket may already be down */
       }
+      directCallRef.current = null;
       peerRef.current?.close();
       peerRef.current = null;
       stopStream(localStreamRef.current);
@@ -890,6 +1210,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     setFilters,
     prewarm,
     start,
+    startDirectCall,
     next,
     stop,
     toggleMic,

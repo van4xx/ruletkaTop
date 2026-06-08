@@ -70,6 +70,15 @@ export class SettingsService {
     return (await this.getPrivacy(userId)).whoCanViewProfile;
   }
 
+  /**
+   * Convenience: whether a user exposes their live online status to OTHERS
+   * (read-only, defaulting to `true`). When `false`, callers must present that
+   * user as offline to anyone but themselves.
+   */
+  async getShowOnlineStatus(userId: string): Promise<boolean> {
+    return (await this.getPrivacy(userId)).showOnlineStatus;
+  }
+
   /** Fetch (creating defaults on first access) the user's settings. */
   async getOrCreate(userId: string): Promise<SettingsContract> {
     const doc = await this.settingsModel

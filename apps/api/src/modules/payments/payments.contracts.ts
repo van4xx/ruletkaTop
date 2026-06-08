@@ -1,4 +1,4 @@
-import type { CoinPackage } from '@ruletka/shared-types';
+import type { CoinPackage, PremiumPlan } from '@ruletka/shared-types';
 
 /**
  * Cross-module service contracts consumed by the payments domain.
@@ -42,9 +42,27 @@ export interface PremiumServiceContract {
    * @param token optional CloudPayments recurring-charge token to persist for
    *        subscription renewals.
    */
-  activate(userId: string, plan: string, currentPeriodEnd: Date, token?: string): Promise<void>;
+  activate(
+    userId: string,
+    plan: string,
+    currentPeriodEnd: Date,
+    token?: string,
+    subscriptionId?: string,
+  ): Promise<void>;
   /** Cancel premium (e.g. on a Recurrent `Cancelled` notification or refund). */
   cancel(userId: string): Promise<void>;
+  /**
+   * Whether the user has flagged the subscription to NOT renew
+   * (`cancelAtPeriodEnd`). The payments webhook honours this: a recurring
+   * renewal must not re-activate a subscription the user already cancelled.
+   */
+  hasCanceledRenewal(userId: string): Promise<boolean>;
+  /**
+   * Resolve a premium plan by its public `code`, or `null` when unknown. Used by
+   * the premium checkout (server-fixed price) and the renewal ledger / period
+   * computation. Returns the shared {@link PremiumPlan} contract shape.
+   */
+  findPlanByCode(code: string): Promise<PremiumPlan | null>;
 }
 
 /** Coin package catalogue. Implemented by economy `CoinPackagesService`. */

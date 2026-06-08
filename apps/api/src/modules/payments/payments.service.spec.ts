@@ -6,6 +6,7 @@ import { Test } from '@nestjs/testing';
 import type { ExecutionContext } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
 
+import { CloudPaymentsClient } from './cloudpayments.client';
 import { CloudPaymentsSignatureGuard } from './cloudpayments-signature.guard';
 import { COIN_PACKAGES_SERVICE, PREMIUM_SERVICE, WALLET_SERVICE } from './payments.contracts';
 import { PaymentsService } from './payments.service';
@@ -108,13 +109,21 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
   let service: PaymentsService;
   let paymentModel: {
     findOne: jest.Mock;
+    findById: jest.Mock;
     findOneAndUpdate: jest.Mock;
     updateOne: jest.Mock;
     create: jest.Mock;
   };
   let wallet: { credit: jest.Mock; debit: jest.Mock; getBalance: jest.Mock };
-  let premium: { activate: jest.Mock; cancel: jest.Mock; isPremium: jest.Mock };
+  let premium: {
+    activate: jest.Mock;
+    cancel: jest.Mock;
+    isPremium: jest.Mock;
+    hasCanceledRenewal: jest.Mock;
+    findPlanByCode: jest.Mock;
+  };
   let coinPackages: { findByCode: jest.Mock };
+  let cloudPayments: { isConfigured: jest.Mock; cancelSubscription: jest.Mock; refundPayment: jest.Mock };
 
   beforeEach(async () => {
     wallet = {
@@ -126,6 +135,14 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
       activate: jest.fn().mockResolvedValue(undefined),
       cancel: jest.fn().mockResolvedValue(undefined),
       isPremium: jest.fn().mockResolvedValue(false),
+      hasCanceledRenewal: jest.fn().mockResolvedValue(false),
+      findPlanByCode: jest.fn().mockResolvedValue({
+        code: 'monthly',
+        title: 'Premium Monthly',
+        priceRub: 399,
+        intervalDays: 30,
+        perks: [],
+      }),
     };
     coinPackages = {
       // 500 + 100 bonus = 600 coins, priced at 449 RUB.
@@ -136,12 +153,18 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
         priceRub: 449,
       }),
     };
+    cloudPayments = {
+      isConfigured: jest.fn().mockReturnValue(false),
+      cancelSubscription: jest.fn().mockResolvedValue(undefined),
+      refundPayment: jest.fn().mockResolvedValue(undefined),
+    };
 
     paymentModel = {
       findOne: jest.fn(),
+      findById: jest.fn(),
       findOneAndUpdate: jest.fn(),
       updateOne: jest.fn().mockReturnValue(queryReturning({ acknowledged: true })),
-      create: jest.fn(),
+      create: jest.fn().mockResolvedValue({ _id: 'created' }),
     };
 
     const config = {
@@ -158,6 +181,7 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
         { provide: WALLET_SERVICE, useValue: wallet },
         { provide: PREMIUM_SERVICE, useValue: premium },
         { provide: COIN_PACKAGES_SERVICE, useValue: coinPackages },
+        { provide: CloudPaymentsClient, useValue: cloudPayments },
       ],
     }).compile();
 
@@ -344,5 +368,104 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     paymentModel.findOne.mockReturnValue(queryReturning(null));
     const ack = await service.handleCheck({ InvoiceId: 'nope', Amount: 449 });
     expect(ack).toEqual({ code: 11 });
+  });
+
+  it('REFUSES a Recurrent "Active" renewal when the user has cancelled', async () => {
+    premium.hasCanceledRenewal.mockResolvedValue(true);
+    cloudPayments.isConfigured.mockReturnValue(true);
+
+    const ack = await service.handleRecurrent({
+      SubscriptionId: 'sc_9',
+      AccountId: userId,
+      Status: 'Active',
+      Token: 'tok',
+      Data: JSON.stringify({ purpose: 'premium', plan: 'monthly', userId }),
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    // No re-activation; we cancel locally + ask CloudPayments to stop billing.
+    expect(premium.activate).not.toHaveBeenCalled();
+    expect(premium.cancel).toHaveBeenCalledWith(userId);
+    expect(cloudPayments.cancelSubscription).toHaveBeenCalledWith('sc_9');
+  });
+
+  it('records a renewal as a completed Payment on Recurrent "Active"', async () => {
+    // planFromRecurrent lookup (sortable) + dedupe lookup (select/exec) both null.
+    paymentModel.findOne
+      .mockReturnValueOnce(sortableQueryReturning(null)) // planFromRecurrent
+      .mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(null),
+      }); // dedupe by transactionId
+
+    await service.handleRecurrent({
+      SubscriptionId: 'sc_1',
+      TransactionId: 555,
+      Amount: 399,
+      AccountId: userId,
+      Status: 'Active',
+      Token: 'tok',
+      Data: JSON.stringify({ purpose: 'premium', plan: 'monthly', userId }),
+    });
+
+    // A completed premium Payment row was written for the renewal.
+    expect(paymentModel.create).toHaveBeenCalledTimes(1);
+    const [row] = paymentModel.create.mock.calls[0] as [Record<string, unknown>];
+    expect(row).toMatchObject({
+      status: 'completed',
+      purpose: 'premium',
+      plan: 'monthly',
+      amount: 399,
+      transactionId: 555,
+    });
+  });
+
+  it('admin refund: calls CloudPayments, marks refunded, reverses fulfilment', async () => {
+    paymentModel.findById.mockReturnValue(
+      queryReturning({
+        _id: 'pay-r',
+        invoiceId: 'inv-r',
+        status: 'completed',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        transactionId: 9001,
+        userId: { toString: () => userId },
+      }),
+    );
+    paymentModel.findOneAndUpdate.mockReturnValue(
+      queryReturning({
+        _id: 'pay-r',
+        invoiceId: 'inv-r',
+        status: 'refunded',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    const result = await service.refundByAdmin('507f1f77bcf86cd799439011');
+
+    expect(cloudPayments.refundPayment).toHaveBeenCalledWith(9001, 449);
+    expect(result).toEqual({ amount: 449, transactionId: 9001 });
+    // Coins reversal debits the credited total back out.
+    expect(wallet.debit).toHaveBeenCalledWith(userId, 600, 'refund', 'refund:inv-r');
+  });
+
+  it('admin refund: rejects a non-completed payment and never calls the provider', async () => {
+    paymentModel.findById.mockReturnValue(
+      queryReturning({
+        _id: 'pay-p',
+        status: 'pending',
+        purpose: 'coins',
+        amount: 449,
+        transactionId: 1,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    await expect(service.refundByAdmin('507f1f77bcf86cd799439011')).rejects.toThrow();
+    expect(cloudPayments.refundPayment).not.toHaveBeenCalled();
   });
 });

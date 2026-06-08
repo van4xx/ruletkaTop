@@ -80,6 +80,12 @@
   "messageRead": "Прочитано",
   "messageSent": "Отправлено",
   "retrySend": "Повторить отправку",
+  "messageRejectedBlocked": "Не отправлено — пользователь заблокирован",
+  "messageRejectedPrivacy": "Не отправлено — пользователь не принимает от вас сообщения",
+  "messageRejectedNotFound": "Не отправлено — диалог не найден",
+  "messageRejectedInvalid": "Не отправлено — сообщение пустое или слишком длинное",
+  "messageRejectedRateLimited": "Слишком много сообщений, подождите",
+  "messageRejectedError": "Не удалось отправить. Нажмите, чтобы повторить",
 
   "isTyping": "{name} печатает",
   "typing": "Печатает",

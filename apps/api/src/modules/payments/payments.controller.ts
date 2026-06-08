@@ -16,6 +16,8 @@ import {
   type CoinsCheckoutDto,
   coinsCheckoutSchema,
   type JwtPayload,
+  type SubscribeDto,
+  subscribeSchema,
 } from '@ruletka/shared-types';
 
 import { CurrentUser } from '../../common/current-user.decorator';
@@ -68,6 +70,26 @@ export class PaymentsController {
     @Body(createZodValidationPipe(coinsCheckoutSchema)) dto: CoinsCheckoutDto,
   ): Promise<CheckoutWidgetParams> {
     return this.paymentsService.createCoinsCheckout(user.sub, dto);
+  }
+
+  @Post('premium/checkout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Start a premium subscription purchase and get CloudPayments widget params',
+    description:
+      'Resolves the premium plan server-side, creates a PENDING premium payment ' +
+      'with a unique invoiceId, and returns the params to open the CloudPayments ' +
+      'widget — including the recurrent descriptor so the first charge creates ' +
+      'the subscription. The amount is fixed from the plan price; entitlement is ' +
+      'still granted only by the Pay webhook (this grants nothing for free).',
+  })
+  @ApiCreatedResponse({ description: 'Widget params for the CloudPayments SDK (recurrent)' })
+  async premiumCheckout(
+    @CurrentUser() user: JwtPayload,
+    @Body(createZodValidationPipe(subscribeSchema)) dto: SubscribeDto,
+  ): Promise<CheckoutWidgetParams> {
+    return this.paymentsService.createPremiumCheckout(user.sub, dto.plan);
   }
 
   // ── Webhooks (public; HMAC-verified) ────────────────────────────────────────

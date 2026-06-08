@@ -25,7 +25,8 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type {
-  Block,
+  AuthSession,
+  BlockedUser,
   PublicProfile,
   Settings,
   UpdateProfileDto,
@@ -37,6 +38,7 @@ import { CURRENT_USER_KEY } from '@/features/auth/use-auth';
 export const SETTINGS_KEY = ['settings'] as const;
 export const BLOCKS_KEY = ['moderation', 'blocks'] as const;
 export const PROFILE_ME_KEY = ['profile', 'me'] as const;
+export const SESSIONS_KEY = ['auth', 'sessions'] as const;
 
 // ─────────────────────────────── Settings ─────────────────────────────────
 export function useSettings(): UseQueryResult<Settings, ApiClientError> {
@@ -103,11 +105,75 @@ export function useChangePassword(): UseMutationResult<
   });
 }
 
+// ──────────────────────── Active sessions / devices ────────────────────────
+/**
+ * The current user's active logins (`GET /auth/sessions`). Each entry is one
+ * device/login; the requesting device is flagged `current`. Kept fresh on
+ * focus/mount so a revoke elsewhere reflects quickly.
+ */
+export function useSessions(): UseQueryResult<AuthSession[], ApiClientError> {
+  return useQuery<AuthSession[], ApiClientError>({
+    queryKey: SESSIONS_KEY,
+    queryFn: () => api.request<AuthSession[]>('/auth/sessions'),
+    staleTime: 15_000,
+  });
+}
+
+/** Revoke ONE session (`DELETE /auth/sessions/:id`) with optimistic removal. */
+export function useRevokeSession(): UseMutationResult<void, ApiClientError, string> {
+  const queryClient = useQueryClient();
+  return useMutation<void, ApiClientError, string, { previous?: AuthSession[] }>({
+    mutationFn: (id) => api.request<void>(`/auth/sessions/${id}`, { method: 'DELETE' }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: SESSIONS_KEY });
+      const previous = queryClient.getQueryData<AuthSession[]>(SESSIONS_KEY);
+      queryClient.setQueryData<AuthSession[]>(SESSIONS_KEY, (old) =>
+        (old ?? []).filter((s) => s.id !== id),
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(SESSIONS_KEY, context.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+    },
+  });
+}
+
+/**
+ * Revoke ALL other sessions (`DELETE /auth/sessions`), keeping the current
+ * device. Optimistically drops every non-current entry.
+ */
+export function useRevokeOtherSessions(): UseMutationResult<void, ApiClientError, void> {
+  const queryClient = useQueryClient();
+  return useMutation<void, ApiClientError, void, { previous?: AuthSession[] }>({
+    mutationFn: () => api.request<void>('/auth/sessions', { method: 'DELETE' }),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: SESSIONS_KEY });
+      const previous = queryClient.getQueryData<AuthSession[]>(SESSIONS_KEY);
+      queryClient.setQueryData<AuthSession[]>(SESSIONS_KEY, (old) =>
+        (old ?? []).filter((s) => s.current),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(SESSIONS_KEY, context.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+    },
+  });
+}
+
 // ───────────────────────────────── Blocks ─────────────────────────────────
-export function useBlocks(): UseQueryResult<Block[], ApiClientError> {
-  return useQuery<Block[], ApiClientError>({
+// `GET /blocks` now returns each blocked user enriched with their minimal public
+// identity (nickname + avatar), so the blocklist UI is readable rather than
+// showing a raw hex id.
+export function useBlocks(): UseQueryResult<BlockedUser[], ApiClientError> {
+  return useQuery<BlockedUser[], ApiClientError>({
     queryKey: BLOCKS_KEY,
-    queryFn: () => api.request<Block[]>('/blocks'),
+    queryFn: () => api.request<BlockedUser[]>('/blocks'),
     staleTime: 30_000,
   });
 }
@@ -119,14 +185,14 @@ export function useUnblock(): UseMutationResult<void, ApiClientError, string> {
       api.request<void>(`/blocks/${blockedUserId}`, { method: 'DELETE' }),
     onMutate: async (blockedUserId) => {
       await queryClient.cancelQueries({ queryKey: BLOCKS_KEY });
-      const previous = queryClient.getQueryData<Block[]>(BLOCKS_KEY);
-      queryClient.setQueryData<Block[]>(BLOCKS_KEY, (old) =>
+      const previous = queryClient.getQueryData<BlockedUser[]>(BLOCKS_KEY);
+      queryClient.setQueryData<BlockedUser[]>(BLOCKS_KEY, (old) =>
         (old ?? []).filter((b) => b.blockedUserId !== blockedUserId),
       );
       return { previous };
     },
     onError: (_err, _id, context) => {
-      const ctx = context as { previous?: Block[] } | undefined;
+      const ctx = context as { previous?: BlockedUser[] } | undefined;
       if (ctx?.previous) queryClient.setQueryData(BLOCKS_KEY, ctx.previous);
     },
     onSettled: () => {

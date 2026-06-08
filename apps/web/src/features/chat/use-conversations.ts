@@ -19,9 +19,15 @@ import {
   useQueryClient,
   type InfiniteData,
 } from '@tanstack/react-query';
-import type { Conversation, Message, PublicProfile } from '@ruletka/shared-types';
+import { DEFAULT_COVER_ID } from '@ruletka/shared-types';
+import type {
+  Conversation,
+  Message,
+  MinimalProfile,
+  PublicProfile,
+} from '@ruletka/shared-types';
 
-import { api } from '@/lib/api';
+import { api, ApiClientError } from '@/lib/api';
 import { useSocketEvent } from './lib/use-socket';
 
 export const chatKeys = {
@@ -106,8 +112,60 @@ export function peerIdOf(conversation: Conversation, selfId: string | null): str
 }
 
 /**
+ * Widen a {@link MinimalProfile} (id + nickname + avatar) into the
+ * `PublicProfile` shape the chat UI renders, filling the fields a minimal
+ * identity doesn't carry with neutral defaults (no badges, not premium, default
+ * cover). Used as the fallback for a private chat partner whose full profile is
+ * 404-gated — so an existing conversation still shows a name + avatar instead of
+ * a nameless, faceless thread.
+ */
+function widenMinimalProfile(min: MinimalProfile): PublicProfile {
+  return {
+    id: min.id,
+    nickname: min.nickname,
+    avatarUrl: min.avatarUrl,
+    status: null,
+    gender: 'other',
+    age: 18,
+    country: '',
+    languages: [],
+    interests: [],
+    badges: [],
+    isPremium: false,
+    activeCover: DEFAULT_COVER_ID,
+    profileViews: 0,
+    createdAt: new Date(0).toISOString(),
+  };
+}
+
+/**
+ * Resolve a peer's display profile: the FULL public profile when visible, else
+ * — when that 404s because of the peer's `whoCanViewProfile` privacy — the
+ * MINIMAL identity (nickname + avatar) we're still entitled to as an existing
+ * chat partner, widened to the `PublicProfile` shape. Any non-404 error (and a
+ * 404 from the minimal endpoint, i.e. genuinely no shared conversation) is
+ * rethrown so react-query treats it as a real failure.
+ */
+async function resolvePeerProfile(id: string): Promise<PublicProfile> {
+  try {
+    return await api.request<PublicProfile>(`/profiles/${id}`);
+  } catch (err) {
+    if (err instanceof ApiClientError && err.status === 404) {
+      // Private profile — fall back to the minimal chat-partner identity.
+      const minimal = await api.request<MinimalProfile>(
+        `/conversations/peer/${id}/identity`,
+      );
+      return widenMinimalProfile(minimal);
+    }
+    throw err;
+  }
+}
+
+/**
  * Batch-resolve peer profiles for a set of user ids. Returns a `Map` keyed by
- * user id (only resolved entries are present).
+ * user id (only resolved entries are present). A peer whose full profile is
+ * privacy-gated still resolves to a minimal identity (see
+ * {@link resolvePeerProfile}) so an existing chat partner is never nameless.
  */
 export function usePeerProfiles(userIds: string[]): {
   byId: Map<string, PublicProfile>;
@@ -118,7 +176,7 @@ export function usePeerProfiles(userIds: string[]): {
   const results = useQueries({
     queries: unique.map((id) => ({
       queryKey: chatKeys.peer(id),
-      queryFn: () => api.request<PublicProfile>(`/profiles/${id}`),
+      queryFn: () => resolvePeerProfile(id),
       staleTime: 5 * 60_000,
     })),
   });

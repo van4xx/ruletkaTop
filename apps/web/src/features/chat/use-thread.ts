@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
-import type { Message } from '@ruletka/shared-types';
+import type { ChatRejectReason, Message } from '@ruletka/shared-types';
 
 import { api } from '@/lib/api';
 import { emitSocket, useSocket, useSocketEvent } from './lib/use-socket';
@@ -37,6 +37,12 @@ export interface ChatMessage extends Message {
   pending?: boolean;
   /** Local-only: the optimistic send failed. */
   failed?: boolean;
+  /**
+   * Local-only: WHY the send failed, when the server sent a typed `chat:rejected`
+   * (block / privacy / validation / rate limit). Absent for a generic failure
+   * (e.g. a REST/network error). The UI maps it to a localised hint.
+   */
+  failedReason?: ChatRejectReason;
   /** Local correlation id for optimistic bubbles (before the real id lands). */
   clientId?: string;
 }
@@ -108,6 +114,27 @@ export function useThread(conversationId: string, selfId: string | null): UseThr
       }
       if (prev.some((p) => p.id === m.id)) return prev;
       return [...prev, m];
+    });
+  });
+
+  // ── Rejected send: flip the matching optimistic bubble to FAILED ──
+  // The gateway echoes back our `clientId` (when supplied) so we can target the
+  // exact bubble; if it's missing we fall back to the OLDEST still-pending
+  // bubble in this conversation (the one that has waited longest for an echo).
+  useSocketEvent('chat:rejected', (p) => {
+    if (p.conversationId && p.conversationId !== conversationId) return;
+    setLocalMessages((prev) => {
+      let targetClientId = p.clientId;
+      if (!targetClientId) {
+        const oldestPending = prev.find((m) => m.pending);
+        if (!oldestPending) return prev;
+        targetClientId = oldestPending.clientId;
+      }
+      return prev.map((m) =>
+        m.clientId === targetClientId
+          ? { ...m, pending: false, failed: true, failedReason: p.reason }
+          : m,
+      );
     });
   });
 
@@ -200,9 +227,11 @@ export function useThread(conversationId: string, selfId: string | null): UseThr
 
       if (socket.connected) {
         // Realtime path: the gateway will echo the persisted Message back via
-        // `chat:message`, which reconciles the optimistic twin above. We still
-        // clear the pending flag after a short grace window as a safety net.
-        emitSocket('chat:message', { conversationId, content: trimmed });
+        // `chat:message`, which reconciles the optimistic twin above — or send a
+        // `chat:rejected` carrying this `clientId` (handled below) if the send is
+        // refused. We still clear the pending flag after a short grace window as
+        // a safety net for the success case.
+        emitSocket('chat:message', { conversationId, content: trimmed, clientId });
         window.setTimeout(() => {
           setLocalMessages((prev) =>
             prev.map((m) => (m.clientId === clientId && m.pending ? { ...m, pending: false } : m)),

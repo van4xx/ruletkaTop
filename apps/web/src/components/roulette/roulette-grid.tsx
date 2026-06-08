@@ -38,6 +38,7 @@ import { CallOverlay } from './call-overlay';
 import { CallChat } from './call-chat';
 import { GridControlButton } from './grid-control-button';
 import {
+  CallingScreen,
   EndedScreen,
   ErrorScreen,
   IdleScreen,
@@ -152,7 +153,8 @@ export function RouletteGrid({
       {/* ── Bottom-left: CONTROLS (square tiles) ────────────────── */}
       <Cell className="glass-panel bg-transparent">
         <div className="grid h-full grid-cols-3 content-center gap-2 overflow-y-auto p-2 sm:gap-2.5 sm:p-3">
-          {/* Primary: Start when idle, otherwise Next. */}
+          {/* Primary: Start when idle, otherwise Next — but a DIRECT (friend)
+              call has no "next stranger", so it shows neither (Stop ends it). */}
           {idle ? (
             <GridControlButton
               label={t('controls.start')}
@@ -161,7 +163,7 @@ export function RouletteGrid({
               onClick={r.start}
               disabled={r.isStarting}
             />
-          ) : (
+          ) : r.isDirectCall ? null : (
             <GridControlButton
               label={t('controls.next')}
               icon={<SkipForward />}
@@ -275,6 +277,8 @@ export function RouletteGrid({
           >
             {r.status === 'idle' || r.status === 'requesting' ? (
               <IdleScreen isVideo />
+            ) : r.status === 'calling' ? (
+              <CallingScreen peer={peer} />
             ) : r.status === 'searching' ? (
               <SearchingScreen positionHint={r.positionHint} longWait={longWait} />
             ) : r.status === 'ended' ? (

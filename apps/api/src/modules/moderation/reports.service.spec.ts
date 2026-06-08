@@ -21,6 +21,7 @@ function reportDoc(over: Partial<Record<string, unknown>> = {}): Record<string, 
     matchId: null,
     reason: 'spam',
     details: null,
+    evidenceUrl: null,
     status: 'open',
     get: (_k: string) => new Date('2026-05-31T00:00:00.000Z'),
     // `resolveReportWithBan` mutates `status` then persists via `save()`.
@@ -117,8 +118,34 @@ describe('ReportsService', () => {
       expect(reportModel.create).toHaveBeenCalledTimes(1);
       const [doc] = reportModel.create.mock.calls[0] as [Record<string, unknown>];
       expect(doc).toMatchObject({ reason: 'spam', status: 'open', details: null });
+      // No evidence supplied → persisted as null.
+      expect(doc.evidenceUrl).toBeNull();
       expect(result.status).toBe('open');
       expect(result.id).toBe('report-1');
+    });
+
+    it('retains the in-call evidence frame + match context on the persisted report', async () => {
+      usersService.findById.mockResolvedValue({ _id: AGAINST });
+      reportModel.exists.mockReturnValue(queryReturning(null));
+      const evidence = 'data:image/jpeg;base64,AAAA';
+      const MATCH = '507f1f77bcf86cd799439099';
+      reportModel.create.mockResolvedValue(
+        reportDoc({ matchId: { toString: () => MATCH }, evidenceUrl: evidence }),
+      );
+
+      const result = await service.createReport(FROM, {
+        againstUserId: AGAINST,
+        reason: 'nudity',
+        matchId: MATCH,
+        evidence,
+      });
+
+      const [doc] = reportModel.create.mock.calls[0] as [Record<string, unknown>];
+      // Evidence frame threaded through to the persisted row, tied to the match.
+      expect(doc.evidenceUrl).toBe(evidence);
+      expect(doc.matchId).toBeTruthy();
+      expect(result.evidenceUrl).toBe(evidence);
+      expect(result.matchId).toBe(MATCH);
     });
   });
 

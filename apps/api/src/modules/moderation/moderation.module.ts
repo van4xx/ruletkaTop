@@ -10,12 +10,15 @@ import { AdminEconomyService } from './admin-economy.service';
 import { AdminService } from './admin.service';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
+import { AppealsController } from './appeals.controller';
+import { AppealsService } from './appeals.service';
 import { BlocksService } from './blocks.service';
 import { FRAME_SCORER, resolveFrameScorer } from './frame-scorer';
 import { ModerationController } from './moderation.controller';
 import { ModerationService } from './moderation.service';
 import { ReportsService } from './reports.service';
 import { ReviewService } from './review.service';
+import { Appeal, AppealSchema } from './schemas/appeal.schema';
 import { Block, BlockSchema } from './schemas/block.schema';
 import { ModerationEvent, ModerationEventSchema } from './schemas/moderation-event.schema';
 import { Report, ReportSchema } from './schemas/report.schema';
@@ -60,6 +63,7 @@ import { Report, ReportSchema } from './schemas/report.schema';
       { name: Block.name, schema: BlockSchema },
       { name: Report.name, schema: ReportSchema },
       { name: ModerationEvent.name, schema: ModerationEventSchema },
+      { name: Appeal.name, schema: AppealSchema },
     ]),
     UsersModule,
     // Breaks the AuthModule → ProfilesModule → ModerationModule → AuthModule cycle.
@@ -67,6 +71,7 @@ import { Report, ReportSchema } from './schemas/report.schema';
   ],
   controllers: [
     ModerationController,
+    AppealsController,
     AdminController,
     AdminUsersController,
     AdminEconomyController,
@@ -74,6 +79,7 @@ import { Report, ReportSchema } from './schemas/report.schema';
   providers: [
     BlocksService,
     ReportsService,
+    AppealsService,
     AdminService,
     AdminUsersService,
     AdminEconomyService,

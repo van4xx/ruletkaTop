@@ -50,6 +50,9 @@ export const economyApi = {
   // ── Payments (CloudPayments) ──
   coinsCheckout: (dto: CoinsCheckoutDto) =>
     api.request<CheckoutWidgetParams>('/payments/coins/checkout', { method: 'POST', json: dto }),
+  /** Server-minted premium subscription checkout (PENDING payment + widget params). */
+  premiumCheckout: (dto: SubscribeDto) =>
+    api.request<CheckoutWidgetParams>('/payments/premium/checkout', { method: 'POST', json: dto }),
 
   // ── Gifts ──
   gifts: () => api.request<Gift[]>('/gifts'),
@@ -58,6 +61,8 @@ export const economyApi = {
 
   // ── Premium ──
   premiumPlans: () => api.request<PremiumPlan[]>('/premium/plans'),
+  /** Read the current subscription state (no side effects). */
+  subscription: () => api.request<Subscription>('/premium/subscription'),
   subscribe: (dto: SubscribeDto) =>
     api.request<Subscription>('/premium/subscribe', { method: 'POST', json: dto }),
   cancelPremium: () => api.request<Subscription>('/premium/cancel', { method: 'POST' }),

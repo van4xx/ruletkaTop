@@ -1,10 +1,16 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { CloudPaymentsClient } from '../payments/cloudpayments.client';
 import { PremiumController } from './premium.controller';
 import { PremiumService } from './premium.service';
 import { PremiumPlan, PremiumPlanSchema } from './schemas/premium-plan.schema';
 import { Subscription, SubscriptionSchema } from './schemas/subscription.schema';
+import {
+  SUBSCRIPTION_SWEEP_QUEUE,
+  SubscriptionSweepProcessor,
+} from './subscription-sweep.processor';
 
 /**
  * Owns the `premiumplans` catalogue and the `subscriptions` collection, plus
@@ -24,9 +30,19 @@ import { Subscription, SubscriptionSchema } from './schemas/subscription.schema'
       { name: PremiumPlan.name, schema: PremiumPlanSchema },
       { name: Subscription.name, schema: SubscriptionSchema },
     ]),
+    // Background expiry sweep (BullMQ). The root connection lives in AppModule;
+    // here we just register the named queue this module's processor drains.
+    BullModule.registerQueue({ name: SUBSCRIPTION_SWEEP_QUEUE }),
   ],
   controllers: [PremiumController],
-  providers: [PremiumService],
+  providers: [
+    PremiumService,
+    SubscriptionSweepProcessor,
+    // The outbound CloudPayments client is `ConfigService`-only (no DB/state),
+    // so we provide it directly here for the user-initiated cancel path rather
+    // than importing PaymentsModule (which imports PremiumModule — would cycle).
+    CloudPaymentsClient,
+  ],
   exports: [PremiumService, MongooseModule],
 })
 export class PremiumModule {}

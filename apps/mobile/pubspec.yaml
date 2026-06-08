@@ -31,6 +31,10 @@ dependencies:
   # Secure token storage (refresh token at rest; access token stays in memory).
   flutter_secure_storage: ^10.3.1
 
+  # Lightweight key-value prefs (e.g. the first-launch intro preloader "seen"
+  # flag, persisted so the neon intro plays ONCE per install).
+  shared_preferences: ^2.3.2
+
   # Realtime (matchmaking, signaling, presence, chat, calls, notifications).
   socket_io_client: ^3.1.4
 

@@ -190,10 +190,12 @@ export class FriendsService {
         : row.requesterId.toString(),
     );
 
-    // Two batched round-trips: presence (mget) and profiles ($in).
-    const [statuses, profiles] = await Promise.all([
+    // Three batched round-trips: presence (mget), profiles ($in) and the set of
+    // friends who hide their online status ($in over `settings`).
+    const [statuses, profiles, hiddenStatus] = await Promise.all([
       this.presenceService.getStatuses(friendIds),
       this.loadMinimalProfiles(friendIds),
+      this.loadHiddenStatusIds(friendIds),
     ]);
 
     const items: FriendSummary[] = [];
@@ -210,7 +212,9 @@ export class FriendsService {
       items.push({
         friendshipId: row._id.toString(),
         profile,
-        status: statuses[friendId] ?? 'offline',
+        // A friend who disabled `showOnlineStatus` always appears OFFLINE to
+        // others (they still see their own true state via their own session).
+        status: hiddenStatus.has(friendId) ? 'offline' : (statuses[friendId] ?? 'offline'),
         since: row.get('createdAt').toISOString(),
       });
     }
@@ -325,6 +329,38 @@ export class FriendsService {
       });
     }
     return out;
+  }
+
+  /**
+   * The subset of `friendIds` who have DISABLED `showOnlineStatus` — read in ONE
+   * `$in` projection over the `settings` collection (owned by the settings
+   * module, read directly by name here exactly like chat reads `whoCanMessage`,
+   * so no SettingsModule dependency / cycle is introduced). Absent settings
+   * docs default to "show" (the schema default), so they are simply not in the
+   * returned set. Used to mask a friend who hides their presence to OFFLINE.
+   */
+  private async loadHiddenStatusIds(friendIds: readonly string[]): Promise<Set<string>> {
+    const hidden = new Set<string>();
+    if (friendIds.length === 0) {
+      return hidden;
+    }
+    const objectIds = friendIds
+      .filter((fid) => Types.ObjectId.isValid(fid))
+      .map((fid) => new Types.ObjectId(fid));
+
+    const docs = await this.connection
+      .collection('settings')
+      .find(
+        { userId: { $in: objectIds }, 'privacy.showOnlineStatus': false },
+        { projection: { userId: 1 } },
+      )
+      .toArray();
+
+    for (const doc of docs) {
+      const { userId } = doc as unknown as { userId: Types.ObjectId };
+      hidden.add(userId.toString());
+    }
+    return hidden;
   }
 
   /**

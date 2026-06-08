@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   countryCodeSchema,
   genderSchema,
+  isoDateSchema,
   localeSchema,
   objectIdSchema,
   roleSchema,
@@ -141,3 +142,33 @@ export const jwtPayloadSchema = z.object({
   isPremium: z.boolean(),
 });
 export type JwtPayload = z.infer<typeof jwtPayloadSchema>;
+
+// ── Active sessions / device management ────────────────────────────────────
+/**
+ * One ACTIVE login (refresh-token rotation family) as surfaced to the owner for
+ * review/revocation by `GET /auth/sessions`. The raw refresh token is never
+ * exposed — `id` is the family identifier (stable across rotations of the same
+ * login), so revoking by it kills that whole device/login. `current` flags the
+ * session the requesting device is using right now (matched via the refresh
+ * cookie) so the UI can label it and protect it from "sign out everywhere".
+ *
+ * `ip`/`userAgent`/`device` are best-effort client context captured at sign-in
+ * (nullable — older rows or proxies may omit them). `createdAt` is when the
+ * login first began; `lastActiveAt` is the most recent rotation in the family
+ * (a fresh-token mint), i.e. the last time the device was demonstrably active.
+ */
+export const authSessionSchema = z.object({
+  /** Rotation-family id (stable across token rotations of one login). */
+  id: z.string(),
+  ip: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  /** Optional parsed device label (reserved; null until UA parsing lands). */
+  device: z.string().nullable(),
+  /** ISO timestamp the login first began (oldest row in the family). */
+  createdAt: isoDateSchema,
+  /** ISO timestamp of the most recent activity (newest rotation in the family). */
+  lastActiveAt: isoDateSchema,
+  /** True for the session the requesting device is currently using. */
+  current: z.boolean(),
+});
+export type AuthSession = z.infer<typeof authSessionSchema>;

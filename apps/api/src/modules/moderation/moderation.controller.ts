@@ -23,6 +23,7 @@ import {
 
 import {
   type Block,
+  type BlockedUser,
   type CreateBlockDto,
   createBlockSchema,
   type CreateReportDto,
@@ -220,9 +221,11 @@ export class ModerationController {
   }
 
   @Get('blocks')
-  @ApiOperation({ summary: 'List users the caller has blocked (newest first)' })
-  @ApiOkResponse({ description: 'Blocks owned by the caller' })
-  async listBlocks(@CurrentUser() user: JwtPayload): Promise<Block[]> {
+  @ApiOperation({
+    summary: 'List users the caller has blocked (newest first), with each blocked user’s nickname + avatar',
+  })
+  @ApiOkResponse({ description: 'Blocks owned by the caller, enriched with the blocked user identity' })
+  async listBlocks(@CurrentUser() user: JwtPayload): Promise<BlockedUser[]> {
     return this.blocksService.listOwnBlocks(user.sub);
   }
 

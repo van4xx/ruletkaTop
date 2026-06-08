@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api.dart';
 import '../../../core/di/di.dart';
 import '../../../core/models/models.dart';
+import '../../../core/router/routes.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/widgets/widgets.dart';
 import '../domain/roulette_state.dart';
@@ -59,13 +61,103 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
   MatchType get _type => widget.type;
   bool get _isVideo => _type == MatchType.video;
 
+  /// Whether a blocking ban acknowledgement is already on screen (so a repeated
+  /// `mod:action` doesn't stack dialogs).
+  bool _banDialogOpen = false;
+
   RouletteController get _controller =>
       ref.read(rouletteControllerProvider(_type).notifier);
 
   @override
+  void initState() {
+    super.initState();
+    // Surface server-forced moderation (warn / kick / ban) UX. The controller
+    // performs the call teardown on kick/ban; we only do the messaging here
+    // (mirrors the web `useModerationAction`).
+    _controller.onModeration = _handleModeration;
+  }
+
+  @override
   void dispose() {
     _longWaitTimer?.cancel();
+    // Drop our callback so it can't fire into a disposed State.
+    if (ref.read(rouletteControllerProvider(_type).notifier).onModeration ==
+        _handleModeration) {
+      ref.read(rouletteControllerProvider(_type).notifier).onModeration = null;
+    }
     super.dispose();
+  }
+
+  // ── Moderation UX (mirrors web useModerationAction) ──────────────────────
+  void _handleModeration(ModerationActionPayload payload) {
+    if (!mounted) return;
+    final reason = _moderationReason(payload);
+    switch (payload.action) {
+      case ModerationAction.warn:
+        showCallToast(context, 'Предупреждение: $reason', error: true);
+        break;
+      case ModerationAction.kick:
+        // The controller already ended the call; explain why.
+        showCallToast(context, 'Звонок завершён: $reason', error: true);
+        break;
+      case ModerationAction.ban:
+        _showBanDialog(reason, payload.banExpiresAt);
+        break;
+      case ModerationAction.blur:
+      case ModerationAction.none:
+        // Advisory only — the local screening loop already surfaced its toast.
+        break;
+    }
+  }
+
+  /// Human-readable reason for a `mod:action`, falling back through the label.
+  String _moderationReason(ModerationActionPayload payload) {
+    final reason = payload.reason?.trim();
+    if (reason != null && reason.isNotEmpty) return reason;
+    return switch (payload.label) {
+      ModerationLabel.nudity => 'обнажённый контент',
+      ModerationLabel.sexual => 'материалы сексуального характера',
+      ModerationLabel.violence => 'сцены насилия',
+      ModerationLabel.minor => 'риск контента с несовершеннолетними',
+      ModerationLabel.safe ||
+      ModerationLabel.other ||
+      null => 'нарушение правил сообщества',
+    };
+  }
+
+  String _banExpiryHint(int? banExpiresAt) {
+    if (banExpiresAt == null) return 'Доступ ограничен навсегда.';
+    final ms = banExpiresAt * 1000 - DateTime.now().millisecondsSinceEpoch;
+    if (ms <= 0) return 'Доступ ограничен навсегда.';
+    final hours = (ms / 3600000).ceil();
+    if (hours < 48) return 'Доступ ограничен на $hours ч.';
+    final days = (hours / 24).ceil();
+    return 'Доступ ограничен на $days дн.';
+  }
+
+  Future<void> _showBanDialog(String reason, int? banExpiresAt) async {
+    if (_banDialogOpen) return;
+    _banDialogOpen = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        icon: Icon(Icons.gpp_bad_rounded, color: Theme.of(dialogContext).colorScheme.error),
+        title: const Text('Аккаунт заблокирован'),
+        content: Text('$reason\n${_banExpiryHint(banExpiresAt)}'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Понятно'),
+          ),
+        ],
+      ),
+    );
+    _banDialogOpen = false;
+    if (!mounted) return;
+    // The session is no longer valid server-side — sign out + bounce to login.
+    await ref.read(authControllerProvider.notifier).logout();
+    if (mounted) context.go(AppRoutes.login);
   }
 
   // ── Long-wait hint ─────────────────────────────────────────────────────
@@ -151,6 +243,18 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
     final state = ref.watch(rouletteControllerProvider(_type));
     final isPremium = ref.watch(currentUserProvider)?.isPremium ?? false;
     final authed = ref.watch(authStateProvider).isAuthenticated;
+
+    // When on-device screening cuts the local feed, surface a gentle toast once
+    // (mirrors the web stage's screening.onViolation toast).
+    ref.listen<RouletteState>(rouletteControllerProvider(_type), (prev, next) {
+      if (next.flagged && !(prev?.flagged ?? false)) {
+        showCallToast(
+          context,
+          'Ваше видео скрыто: возможный недопустимый контент.',
+          error: true,
+        );
+      }
+    });
 
     _syncLongWait(state);
 
@@ -253,6 +357,7 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
                     child: _LocalPip(
                       stream: state.localStream,
                       cameraOff: state.cameraOff,
+                      flagged: state.flagged,
                     ),
                   )
                 else if (showStage)
@@ -486,10 +591,15 @@ class _Blob extends StatelessWidget {
 
 /// A draggable picture-in-picture self-view for video mode, with a "Вы" tag.
 class _LocalPip extends StatefulWidget {
-  const _LocalPip({required this.stream, required this.cameraOff});
+  const _LocalPip({
+    required this.stream,
+    required this.cameraOff,
+    this.flagged = false,
+  });
 
   final MediaStream? stream;
   final bool cameraOff;
+  final bool flagged;
 
   @override
   State<_LocalPip> createState() => _LocalPipState();
@@ -533,6 +643,7 @@ class _LocalPipState extends State<_LocalPip> {
                     stream: widget.stream,
                     mirror: true,
                     cameraOff: widget.cameraOff,
+                    flagged: widget.flagged,
                     placeholderName: 'Вы',
                   ),
                 ),

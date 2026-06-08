@@ -216,6 +216,12 @@ extension ApiEndpoints on ApiClient {
   /// `GET /blocks` — the caller's blocked users.
   Future<List<Block>> blocks() => getList('/blocks', Block.fromJson);
 
+  /// `POST /moderation/frame` — report a locally-detected NSFW violation with a
+  /// downscaled evidence frame. Fire-and-forget (best-effort, non-idempotent);
+  /// the server records it + owns escalation. Mirrors the web `moderationApi`.
+  Future<void> reportModerationFrame(ModerationViolationDto dto) =>
+      sendVoid('POST', '/moderation/frame', body: dto.toJson());
+
   // ──────────────────────── Presence / WebRTC (TURN) ──────────────────────
   /// `GET /presence/:id` — a user's current online status.
   Future<PresencePayload> presence(String userId) =>

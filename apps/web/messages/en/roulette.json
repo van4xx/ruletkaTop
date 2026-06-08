@@ -44,6 +44,9 @@
       "position": "You're in the queue: position {position}",
       "default": "This will take a couple of seconds."
     },
+    "calling": {
+      "subtitle": "Calling…"
+    },
     "ended": {
       "title": "Your partner disconnected",
       "subtitle": "Finding the next one…"

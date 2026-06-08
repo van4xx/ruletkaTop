@@ -12,6 +12,7 @@ import type {
   CoinsCheckoutDto,
 } from '@ruletka/shared-types';
 
+import { CloudPaymentsClient } from './cloudpayments.client';
 import {
   COIN_PACKAGES_SERVICE,
   type CoinPackagesServiceContract,
@@ -85,6 +86,7 @@ export class PaymentsService {
     @Inject(PREMIUM_SERVICE) private readonly premium: PremiumServiceContract,
     @Inject(COIN_PACKAGES_SERVICE)
     private readonly coinPackages: CoinPackagesServiceContract,
+    private readonly cloudPayments: CloudPaymentsClient,
   ) {
     this.publicId = this.config.get<string>('CLOUDPAYMENTS_PUBLIC_ID', '');
   }
@@ -132,6 +134,58 @@ export class PaymentsService {
       currency: this.currency,
       accountId: userId,
       description: `${pkg.coins + pkg.bonusCoins} coins (${pkg.code})`,
+      data,
+    };
+  }
+
+  /**
+   * Begin a premium subscription purchase: resolve the plan server-side, mint a
+   * PENDING {@link Payment} with a unique `invoiceId`, and return the widget
+   * params — INCLUDING the `cloudPayments.recurrent` descriptor so the first
+   * charge also creates the recurring subscription. The price + interval come
+   * from the catalogue; the client never sends an amount.
+   *
+   * Entitlement is still granted only by the `Pay` webhook (which matches this
+   * pending row by `invoiceId`), so this endpoint grants nothing for free — it
+   * just makes the SERVER own the invoice + amount instead of the browser.
+   *
+   * @throws NotFoundException when the plan code is unknown.
+   */
+  async createPremiumCheckout(userId: string, plan: string): Promise<CheckoutWidgetParams> {
+    const found = await this.premium.findPlanByCode(plan);
+    if (!found) {
+      throw new NotFoundException('Premium plan not found');
+    }
+
+    const invoiceId = randomUUID();
+    const amount = found.priceRub;
+
+    await this.paymentModel.create({
+      userId: new Types.ObjectId(userId),
+      provider: 'cloudpayments',
+      invoiceId,
+      amount,
+      currency: this.currency,
+      status: 'pending',
+      purpose: 'premium',
+      plan: found.code,
+    });
+
+    const data: CheckoutData = {
+      purpose: 'premium',
+      plan: found.code,
+      userId,
+      // The recurrent descriptor turns the first charge into a subscription.
+      cloudPayments: { recurrent: this.planToRecurrent(found.intervalDays) },
+    };
+
+    return {
+      publicId: this.publicId,
+      invoiceId,
+      amount,
+      currency: this.currency,
+      accountId: userId,
+      description: `${found.title} (${found.code})`,
       data,
     };
   }
@@ -228,7 +282,7 @@ export class PaymentsService {
       if (claimed.purpose === 'coins') {
         await this.fulfilCoins(claimed);
       } else {
-        await this.fulfilPremium(claimed, n.Token ?? undefined);
+        await this.fulfilPremium(claimed, n.Token ?? undefined, n.SubscriptionId ?? undefined);
       }
     } catch (err) {
       // Roll the claim back to pending so a redelivery can retry fulfilment;
@@ -291,9 +345,17 @@ export class PaymentsService {
 
   /**
    * `Recurrent` — a subscription billing attempt result. On `Active` we renew
-   * premium for another interval; on any terminal status
+   * premium for another interval AND record the renewal as a completed Payment
+   * row (revenue audit); on any terminal status
    * (`PastDue`/`Cancelled`/`Rejected`/`Expired`) we cancel local entitlement.
    * Keyed by `SubscriptionId` (falling back to invoice). Always ack `0`.
+   *
+   * CANCELLATION GUARD: if the user has already flagged the subscription to NOT
+   * renew (`cancelAtPeriodEnd`), an `Active` renewal is REFUSED — we do not
+   * re-activate or re-bill. This is the backstop for a race where a renewal
+   * charge lands after the user cancelled (or our upstream cancel didn't take):
+   * we cancel local entitlement and, best-effort, ask CloudPayments to cancel
+   * the subscription so it stops billing.
    */
   async handleRecurrent(n: CloudPaymentsNotification): Promise<CloudPaymentsAck> {
     const userId = this.userIdFromNotification(n);
@@ -304,9 +366,28 @@ export class PaymentsService {
 
     const status = n.Status ?? '';
     if (status === RECURRENT_ACTIVE) {
+      // Refuse to re-activate a subscription the user has cancelled.
+      if (await this.premium.hasCanceledRenewal(userId)) {
+        this.logger.warn(
+          `Recurrent Active for user ${userId} ignored: subscription is flagged canceled. Cancelling upstream.`,
+        );
+        await this.premium.cancel(userId);
+        await this.cancelUpstreamBestEffort(n);
+        return ACK_OK;
+      }
+
       const plan = await this.planFromRecurrent(n, userId);
       const periodEnd = await this.computePeriodEnd(plan);
-      await this.premium.activate(userId, plan, periodEnd, n.Token ?? undefined);
+      await this.premium.activate(
+        userId,
+        plan,
+        periodEnd,
+        n.Token ?? undefined,
+        n.SubscriptionId ?? undefined,
+      );
+      // Record the renewal as a completed Payment (revenue ledger). Best-effort:
+      // a ledger hiccup must not fail the webhook (entitlement already renewed).
+      await this.recordRenewalPayment(n, userId, plan);
       this.logger.log(`Renewed premium for user ${userId} (plan ${plan})`);
     } else if (RECURRENT_TERMINAL.has(status)) {
       await this.premium.cancel(userId);
@@ -363,6 +444,76 @@ export class PaymentsService {
     return ACK_OK;
   }
 
+  /**
+   * ADMIN-INITIATED refund of a completed payment by its Payment `_id`. Calls
+   * CloudPayments to actually refund the charge, then atomically marks the row
+   * `refunded` and reverses fulfilment (debit coins / cancel premium) — the same
+   * reversal the `Refund` webhook performs, so the redelivered webhook is a
+   * no-op (idempotent on the already-`refunded` status).
+   *
+   * Order matters: we call the provider FIRST and only mutate local state once
+   * the refund succeeded, so a provider rejection leaves the Payment untouched.
+   *
+   * @returns the refunded amount + provider transaction id (for the audit log).
+   * @throws NotFoundException when the payment doesn't exist.
+   * @throws BadRequestException when it isn't a completed, refundable charge.
+   * @throws ServiceUnavailableException when payments aren't configured.
+   * @throws Error when CloudPayments rejects the refund.
+   */
+  async refundByAdmin(
+    paymentId: string,
+  ): Promise<{ amount: number; transactionId: number | null }> {
+    if (!Types.ObjectId.isValid(paymentId)) {
+      throw new NotFoundException('Payment not found');
+    }
+    const payment = await this.paymentModel.findById(paymentId).exec();
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.status === 'refunded') {
+      throw new BadRequestException('Payment is already refunded');
+    }
+    if (payment.status !== 'completed') {
+      throw new BadRequestException('Only a completed payment can be refunded');
+    }
+    if (payment.transactionId === null || payment.transactionId === undefined) {
+      throw new BadRequestException('Payment has no provider transaction id to refund');
+    }
+
+    // 1) Refund upstream FIRST — if the provider rejects, we never touch state.
+    await this.cloudPayments.refundPayment(payment.transactionId, payment.amount);
+
+    // 2) Atomically claim the refund so the reversal runs exactly once even if
+    //    the provider's Refund webhook races us.
+    const claimed = await this.paymentModel
+      .findOneAndUpdate(
+        { _id: payment._id, status: 'completed' },
+        { $set: { status: 'refunded' } },
+        { new: true },
+      )
+      .exec();
+
+    // 3) Reverse fulfilment (best-effort — the money is already back).
+    if (claimed) {
+      try {
+        if (claimed.purpose === 'coins') {
+          await this.reverseCoins(claimed);
+        } else {
+          await this.premium.cancel(claimed.userId.toString());
+        }
+      } catch (err) {
+        this.logger.error(
+          `Admin refund reversal issue for invoice ${claimed.invoiceId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Admin refunded payment ${paymentId} (tx ${payment.transactionId}, amount ${payment.amount})`,
+    );
+    return { amount: payment.amount, transactionId: payment.transactionId };
+  }
+
   // ── internals ───────────────────────────────────────────────────────────────
 
   /** Credit purchased coins (base + bonus) keyed by invoiceId for idempotency. */
@@ -383,10 +534,14 @@ export class PaymentsService {
   }
 
   /** Activate premium for the paid interval, persisting the recurring token. */
-  private async fulfilPremium(payment: PaymentDocument, token?: string): Promise<void> {
+  private async fulfilPremium(
+    payment: PaymentDocument,
+    token?: string,
+    subscriptionId?: string,
+  ): Promise<void> {
     const plan = payment.plan ?? 'monthly';
     const periodEnd = await this.computePeriodEnd(plan);
-    await this.premium.activate(payment.userId.toString(), plan, periodEnd, token);
+    await this.premium.activate(payment.userId.toString(), plan, periodEnd, token, subscriptionId);
     this.logger.log(
       `Activated premium (plan ${plan}) for user ${payment.userId.toString()} until ${periodEnd.toISOString()}`,
     );
@@ -464,24 +619,108 @@ export class PaymentsService {
   }
 
   /**
+   * Record a successful recurring renewal as a `completed` Payment row so the
+   * revenue ledger + admin payment list reflect every renewal (not just the
+   * first charge). Idempotent on the provider `TransactionId` (a redelivered
+   * Recurrent webhook for the same charge does not create a duplicate row).
+   * Best-effort: failures are logged, never thrown (entitlement already renewed).
+   */
+  private async recordRenewalPayment(
+    n: CloudPaymentsNotification,
+    userId: string,
+    plan: string,
+  ): Promise<void> {
+    try {
+      // De-dupe by provider transaction id when present.
+      if (n.TransactionId !== undefined) {
+        const existing = await this.paymentModel
+          .findOne({ transactionId: n.TransactionId })
+          .select('_id')
+          .exec();
+        if (existing) {
+          return;
+        }
+      }
+
+      const found = await this.premium.findPlanByCode(plan);
+      const amount =
+        n.Amount !== undefined && Number.isFinite(n.Amount)
+          ? n.Amount
+          : (found?.priceRub ?? 0);
+
+      await this.paymentModel.create({
+        userId: new Types.ObjectId(userId),
+        provider: 'cloudpayments',
+        // Renewals have no checkout-minted invoice; synthesise a unique one so
+        // the `invoiceId` unique index is satisfied and the row is traceable.
+        invoiceId: `renewal:${n.SubscriptionId ?? 'sub'}:${n.TransactionId ?? randomUUID()}`,
+        transactionId: n.TransactionId ?? null,
+        subscriptionId: n.SubscriptionId ?? null,
+        subscriptionToken: n.Token ?? null,
+        amount,
+        currency: n.Currency ?? this.currency,
+        status: 'completed',
+        purpose: 'premium',
+        plan: found?.code ?? plan,
+        rawPayload: { ...n },
+      });
+      this.logger.log(
+        `Recorded renewal payment for user ${userId} (plan ${plan}, amount ${amount})`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to record renewal payment for user ${userId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Best-effort cancel of the upstream CloudPayments subscription referenced by
+   * a notification (used when we refuse a renewal for an already-cancelled
+   * subscription). Never throws — purely a backstop.
+   */
+  private async cancelUpstreamBestEffort(n: CloudPaymentsNotification): Promise<void> {
+    if (!n.SubscriptionId || !this.cloudPayments.isConfigured()) {
+      return;
+    }
+    try {
+      await this.cloudPayments.cancelSubscription(n.SubscriptionId);
+    } catch (err) {
+      this.logger.error(
+        `Best-effort upstream cancel of subscription ${n.SubscriptionId} failed: ${
+          (err as Error).message
+        }`,
+      );
+    }
+  }
+
+  /**
+   * Map a plan's `intervalDays` to the CloudPayments recurrent descriptor placed
+   * under `data.cloudPayments.recurrent` (mirrors the web `planToRecurrent`).
+   */
+  private planToRecurrent(intervalDays: number): {
+    interval: 'Day' | 'Week' | 'Month';
+    period: number;
+  } {
+    if (intervalDays % 30 === 0) {
+      return { interval: 'Month', period: Math.max(1, Math.round(intervalDays / 30)) };
+    }
+    if (intervalDays % 7 === 0) {
+      return { interval: 'Week', period: Math.max(1, Math.round(intervalDays / 7)) };
+    }
+    return { interval: 'Day', period: Math.max(1, intervalDays) };
+  }
+
+  /**
    * Compute the end of a freshly-paid period from the plan's `intervalDays`
    * (via the premium catalogue, defaulting to 30 days when unavailable),
    * measured from now.
    */
   private async computePeriodEnd(plan: string): Promise<Date> {
     let intervalDays = 30;
-    // The premium contract exposes plan lookup only via the concrete service;
-    // fall back to a sane default if the catalogue can't be consulted here.
-    const planLookup = (
-      this.premium as Partial<{
-        findPlanByCode(code: string): Promise<{ intervalDays: number } | null>;
-      }>
-    ).findPlanByCode;
-    if (typeof planLookup === 'function') {
-      const found = await planLookup.call(this.premium, plan);
-      if (found && Number.isFinite(found.intervalDays) && found.intervalDays > 0) {
-        intervalDays = found.intervalDays;
-      }
+    const found = await this.premium.findPlanByCode(plan);
+    if (found && Number.isFinite(found.intervalDays) && found.intervalDays > 0) {
+      intervalDays = found.intervalDays;
     }
     return new Date(Date.now() + intervalDays * 24 * 60 * 60 * 1000);
   }

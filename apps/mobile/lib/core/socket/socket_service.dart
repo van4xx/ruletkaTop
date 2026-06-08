@@ -311,6 +311,13 @@ class SocketService {
   VoidCallback onCallEnd(void Function(CallResponsePayload) cb) =>
       _onJson(SocketEvents.callEnd, CallResponsePayload.fromJson, cb);
 
+  // ──────────────────────────── Moderation ────────────────────────────────
+  // The `/mm` gateway pushes `mod:action` during a call when the server forces
+  // an enforcement action (warn / kick / ban) on this session. Subscribe while
+  // the call UI is mounted (mirrors the web `useModerationAction` hook).
+  VoidCallback onModAction(void Function(ModerationActionPayload) cb) =>
+      _onJson(SocketEvents.modAction, ModerationActionPayload.fromJson, cb);
+
   // ──────────────────────────── Notifications ─────────────────────────────
   VoidCallback onNotification(void Function(AppNotification) cb) =>
       _onJson(SocketEvents.notifNew, AppNotification.fromJson, cb);

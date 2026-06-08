@@ -282,6 +282,39 @@ enum NotificationKind {
       .firstWhere((e) => e.wire == value, orElse: () => NotificationKind.system);
 }
 
+/// `moderationLabelSchema` — the AI-screening category space —
+/// `nudity | sexual | violence | minor | safe | other`.
+enum ModerationLabel {
+  nudity('nudity'),
+  sexual('sexual'),
+  violence('violence'),
+  minor('minor'),
+  safe('safe'),
+  other('other');
+
+  const ModerationLabel(this.wire);
+  final String wire;
+
+  static ModerationLabel fromWire(String? value) => ModerationLabel.values
+      .firstWhere((e) => e.wire == value, orElse: () => ModerationLabel.other);
+}
+
+/// `moderationActionSchema` — escalating enforcement applied to an offender —
+/// `none | blur | warn | kick | ban`.
+enum ModerationAction {
+  none('none'),
+  blur('blur'),
+  warn('warn'),
+  kick('kick'),
+  ban('ban');
+
+  const ModerationAction(this.wire);
+  final String wire;
+
+  static ModerationAction fromWire(String? value) => ModerationAction.values
+      .firstWhere((e) => e.wire == value, orElse: () => ModerationAction.none);
+}
+
 /// `wsErrorPayloadSchema.code` — realtime rejection reason.
 enum WsErrorCode {
   rateLimited('rate_limited'),

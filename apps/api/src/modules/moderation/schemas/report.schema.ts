@@ -41,6 +41,16 @@ export class Report {
   @Prop({ required: false, default: null, type: String })
   details!: string | null;
 
+  /**
+   * Retained evidence frame (downscaled JPEG data-URL) captured from the live
+   * call at report time, for moderator review, or `null` when none was supplied
+   * (reports filed outside a call). Stored verbatim; named `evidenceUrl` so a
+   * real deployment can offload the blob to object storage and keep only a URL
+   * here without a contract/migration change — mirrors {@link ModerationEvent}.
+   */
+  @Prop({ required: false, default: null, type: String })
+  evidenceUrl!: string | null;
+
   @Prop({ required: true, enum: REPORT_STATUSES, type: String, default: 'open' })
   status!: ReportStatus;
 

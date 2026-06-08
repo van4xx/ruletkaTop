@@ -8,15 +8,37 @@
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { AlertCircle, Check, CheckCheck, Clock, RotateCw } from 'lucide-react';
+import type { ChatRejectReason } from '@ruletka/shared-types';
 import { cn } from '@/lib/cn';
 import { formatClock } from '@/features/chat/lib/format';
 import type { ChatMessage } from '@/features/chat/use-thread';
+
+/** Translator shape compatible with next-intl's `useTranslations('social')`. */
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+/** Map a typed rejection reason to its localised hint (under the `social` group). */
+const REJECT_REASON_KEY: Record<ChatRejectReason, string> = {
+  blocked: 'messageRejectedBlocked',
+  privacy: 'messageRejectedPrivacy',
+  not_found: 'messageRejectedNotFound',
+  invalid: 'messageRejectedInvalid',
+  rate_limited: 'messageRejectedRateLimited',
+  error: 'messageRejectedError',
+};
+
+/**
+ * Localised failure hint for a failed bubble: the typed `chat:rejected` reason
+ * when present, else the generic "not sent" label.
+ */
+function failureLabel(message: ChatMessage, t: Translate): string {
+  return message.failedReason ? t(REJECT_REASON_KEY[message.failedReason]) : t('messageNotSent');
+}
 
 function Ticks({ message }: { message: ChatMessage }) {
   const t = useTranslations('social');
   if (message.failed) {
     return (
-      <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-label={t('messageNotSent')} />
+      <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-label={failureLabel(message, t)} />
     );
   }
   if (message.pending) {
@@ -70,6 +92,12 @@ export function MessageBubble({
         <p className="whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere]">
           {message.content}
         </p>
+        {mine && message.failed && (
+          <p className="mt-1 flex items-center gap-1 text-[0.6875rem] font-medium text-white/90">
+            <AlertCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {failureLabel(message, t)}
+          </p>
+        )}
         <div
           className={cn(
             'mt-0.5 flex items-center justify-end gap-1 text-[0.6875rem]',

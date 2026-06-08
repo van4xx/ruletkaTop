@@ -12,6 +12,7 @@ import {
 import {
   type JwtPayload,
   type Message,
+  type MinimalProfile,
   type PaginationQuery,
   paginationQuerySchema,
   type SendMessageDto,
@@ -72,6 +73,22 @@ export class ChatController {
     @Query(createZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
   ): Promise<MessagePage> {
     return this.chatService.getMessages(id, user.sub, query);
+  }
+
+  @Get('conversations/peer/:userId/identity')
+  @ApiOperation({
+    summary: 'Minimal identity (nickname + avatar) of a user you share a conversation with',
+  })
+  @ApiParam({ name: 'userId', description: 'Peer user id (Mongo ObjectId)' })
+  @ApiOkResponse({
+    description:
+      'Minimal profile for an existing chat partner, even when their full profile is private',
+  })
+  async getPeerIdentity(
+    @CurrentUser() user: JwtPayload,
+    @Param('userId') peerUserId: string,
+  ): Promise<MinimalProfile> {
+    return this.chatService.getConversationPeerIdentity(user.sub, peerUserId);
   }
 
   @Post('messages')

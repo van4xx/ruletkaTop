@@ -45,6 +45,25 @@ export class PremiumController {
     return this.premiumService.findAllPlans();
   }
 
+  @Get('subscription')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: "Read the caller's subscription state (no side effects)",
+    description:
+      'Pure read of the current subscription — unlike POST /premium/subscribe, ' +
+      'this neither validates a plan nor materialises a record. Returns a ' +
+      "synthetic `none` subscription when the caller has never subscribed.",
+  })
+  @ApiOkResponse({ description: "The caller's subscription record" })
+  async subscription(@CurrentUser() user: JwtPayload): Promise<Subscription> {
+    const sub = await this.premiumService.getSubscriptionState(user.sub);
+    if (!sub) {
+      throw new NotFoundException('Subscription not found');
+    }
+    return sub;
+  }
+
   @Post('subscribe')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
@@ -80,7 +99,8 @@ export class PremiumController {
   })
   @ApiOkResponse({ description: "The caller's updated subscription record" })
   async cancel(@CurrentUser() user: JwtPayload): Promise<Subscription> {
-    await this.premiumService.cancel(user.sub);
+    // User-initiated: actually stop billing at CloudPayments, then flip state.
+    await this.premiumService.cancelAtPeriodEnd(user.sub);
     return this.premiumService.getSubscription(user.sub);
   }
 }

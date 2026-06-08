@@ -96,6 +96,40 @@ export const chatReadPayloadSchema = z.object({
 });
 export type ChatReadPayload = z.infer<typeof chatReadPayloadSchema>;
 
+/**
+ * Stable machine reason a `chat:message` send was rejected by the gateway:
+ * - `blocked`    — a block exists in either direction;
+ * - `privacy`    — the recipient's `whoCanMessage` privacy forbids it (e.g.
+ *                  `friends`-only and you are not friends, or `nobody`);
+ * - `not_found`  — the conversation / recipient could not be resolved;
+ * - `invalid`    — the payload failed validation (empty / too long content);
+ * - `rate_limited` — the per-user send budget was exceeded;
+ * - `error`      — an unexpected server-side failure.
+ */
+export const chatRejectReasonSchema = z.enum([
+  'blocked',
+  'privacy',
+  'not_found',
+  'invalid',
+  'rate_limited',
+  'error',
+]);
+export type ChatRejectReason = z.infer<typeof chatRejectReasonSchema>;
+
+/**
+ * Server→client ack that an attempted `chat:message` send was NOT persisted.
+ * `clientId` echoes the optimistic bubble's local correlation id (when the
+ * client supplied one) so the UI can mark exactly that bubble as failed;
+ * `conversationId` is echoed when known. `reason` is a stable token (see
+ * {@link chatRejectReasonSchema}) the client maps to a localised message.
+ */
+export const chatRejectedPayloadSchema = z.object({
+  clientId: z.string().optional(),
+  conversationId: objectIdSchema.optional(),
+  reason: chatRejectReasonSchema,
+});
+export type ChatRejectedPayload = z.infer<typeof chatRejectedPayloadSchema>;
+
 export const callInvitePayloadSchema = z.object({
   toUserId: objectIdSchema,
   type: matchTypeSchema,
@@ -137,7 +171,13 @@ export interface ClientToServerEvents {
   'rtc:ice-candidate': (p: RtcIcePayload) => void;
   'rtc:hangup': (p: RtcHangupPayload) => void;
   'presence:subscribe': (userIds: string[]) => void;
-  'chat:message': (p: { conversationId?: string; recipientId?: string; content: string }) => void;
+  'chat:message': (p: {
+    conversationId?: string;
+    recipientId?: string;
+    content: string;
+    /** Optional optimistic-bubble correlation id, echoed back on `chat:rejected`. */
+    clientId?: string;
+  }) => void;
   'chat:typing': (p: ChatTypingPayload) => void;
   'chat:read': (p: ChatReadPayload) => void;
   'call:invite': (p: CallInvitePayload) => void;
@@ -158,6 +198,8 @@ export interface ServerToClientEvents {
   'chat:message': (m: Message) => void;
   'chat:typing': (p: ChatTypingPayload) => void;
   'chat:read': (p: ChatReadPayload) => void;
+  /** A `chat:message` send was rejected (block / privacy / validation / rate limit). */
+  'chat:rejected': (p: ChatRejectedPayload) => void;
   'call:invite': (p: CallInvitePayload & { callId: string; fromUserId: string }) => void;
   'call:accept': (p: CallResponsePayload) => void;
   'call:decline': (p: CallResponsePayload) => void;

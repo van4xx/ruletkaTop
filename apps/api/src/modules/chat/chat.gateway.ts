@@ -10,6 +10,8 @@ import type { Socket } from 'socket.io';
 
 import type {
   ChatReadPayload,
+  ChatRejectedPayload,
+  ChatRejectReason,
   ChatTypingPayload,
   ClientToServerEvents,
   ServerToClientEvents,
@@ -32,6 +34,8 @@ interface ChatMessageInput {
   conversationId?: string;
   recipientId?: string;
   content: string;
+  /** Optional optimistic-bubble correlation id, echoed back on `chat:rejected`. */
+  clientId?: string;
 }
 
 /** Per-user room name (every device the user connects with joins it). */
@@ -149,14 +153,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   async handleMessage(client: ChatSocket, payload: ChatMessageInput): Promise<void> {
     const senderId = client.data.userId;
     if (!senderId || !payload || typeof payload.content !== 'string') {
+      // No identity or a structurally-broken payload: nothing to correlate a
+      // typed rejection against, so this stays a silent drop.
       return;
     }
+    const clientId = typeof payload.clientId === 'string' ? payload.clientId : undefined;
     if (!(await this.rateLimiter.consume(senderId, CHAT_MESSAGE_LIMIT))) {
+      // Keep the existing transport-level signal AND fail the optimistic bubble.
       emitWsError(client, { code: 'rate_limited', event: 'chat:message' });
+      this.emitRejected(client, {
+        clientId,
+        conversationId: payload.conversationId,
+        reason: 'rate_limited',
+      });
       return;
     }
     const content = payload.content.trim();
     if (content.length === 0 || content.length > 4000) {
+      this.emitRejected(client, {
+        clientId,
+        conversationId: payload.conversationId,
+        reason: 'invalid',
+      });
       return;
     }
 
@@ -173,10 +191,45 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       this.server.to(userRoom(sent.recipientId)).emit('chat:message', sent.message);
       this.server.to(userRoom(senderId)).emit('chat:message', sent.message);
     } catch (err) {
-      // Gate failures (block/privacy) and validation errors are swallowed for
-      // the realtime path — the client won't receive an echo, signalling drop.
+      // Gate failures (block/privacy) and validation errors used to be swallowed
+      // for the realtime path, leaving the sender's optimistic bubble stuck. Emit
+      // a typed `chat:rejected` (reason classified WITHOUT mutating state) so the
+      // originating client can flip exactly that bubble to a FAILED state.
       this.logger.debug(`chat:message rejected for ${senderId}: ${asMessage(err)}`);
+      const reason = await this.classifyRejection(senderId, {
+        conversationId: payload.conversationId,
+        recipientId: payload.recipientId,
+        content,
+      });
+      this.emitRejected(client, {
+        clientId,
+        conversationId: payload.conversationId,
+        reason,
+      });
     }
+  }
+
+  /**
+   * Classify a failed send into a stable {@link ChatRejectReason}. Delegates to
+   * {@link ChatService.classifyRejection} (block / privacy / not-found), guarding
+   * against a secondary failure in the classifier itself by falling back to the
+   * generic `error` reason.
+   */
+  private async classifyRejection(
+    senderId: string,
+    input: { conversationId?: string; recipientId?: string; content: string },
+  ): Promise<ChatRejectReason> {
+    try {
+      return await this.chatService.classifyRejection(senderId, input);
+    } catch (err) {
+      this.logger.debug(`chat rejection classification failed for ${senderId}: ${asMessage(err)}`);
+      return 'error';
+    }
+  }
+
+  /** Emit a typed `chat:rejected` ack to the originating socket only. */
+  private emitRejected(client: ChatSocket, payload: ChatRejectedPayload): void {
+    client.emit('chat:rejected', payload);
   }
 
   /** Relay a typing indicator to the conversation's other participant. */

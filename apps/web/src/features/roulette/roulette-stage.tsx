@@ -20,16 +20,18 @@
  * fullscreen toggle is offered there.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import type { MatchType } from '@ruletka/shared-types';
 import { toast } from '@ruletka/ui';
 
 import { useRoulette } from './use-roulette';
+import { consumeDirectCall } from '@/lib/stores/direct-call-store';
 import { useAuthToken } from '@/hooks/roulette/use-auth-token';
 import { useAddFriend } from '@/hooks/roulette/use-roulette-api';
 import { useSharedInterests } from '@/hooks/roulette/use-shared-interests';
-import { useLocalScreening, useModerationAction } from '@/features/moderation';
+import { captureStreamFrame, useLocalScreening, useModerationAction } from '@/features/moderation';
 import { FiltersDialog } from '@/components/roulette/filters-dialog';
 import { CallControls } from '@/components/roulette/call-controls';
 import { CallOverlay } from '@/components/roulette/call-overlay';
@@ -45,6 +47,7 @@ import { FullscreenBar } from '@/components/roulette/fullscreen-bar';
 import { VoiceOrb } from '@/components/roulette/voice-orb';
 import { VoiceLayoutSwitcher } from '@/components/roulette/voice-layout-switcher';
 import {
+  CallingScreen,
   EndedScreen,
   ErrorScreen,
   IdleScreen,
@@ -77,6 +80,52 @@ export function RouletteStage({ type }: { type: MatchType }) {
   const { token, ready, isPremium } = useAuthToken();
   const r = useRoulette({ type, token });
   const addFriend = useAddFriend();
+
+  // ── Direct (friend) call entry ────────────────────────────────────────
+  // Two ways a direct 1:1 call lands on this stage instead of the random queue:
+  //   1. A hand-off intent in the direct-call store — set by the incoming-call
+  //      modal's Accept (callee, holds the callId) or by a "video call" button
+  //      that routed here via the store (caller). Takes priority.
+  //   2. A `?to=<userId>` deep link from a friend card / chat thread (caller).
+  // Either way we kick off `startDirectCall` ONCE, as soon as auth is ready and
+  // the engine is idle, then strip `?to=` so a refresh/re-render can't re-ring.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const toUserId = searchParams.get('to');
+  // Stable handles so the effect runs on intent/token readiness — not on every
+  // status tick or new `startDirectCall` identity.
+  const startDirectCallRef = useRef(r.startDirectCall);
+  startDirectCallRef.current = r.startDirectCall;
+  const statusRef = useRef(r.status);
+  statusRef.current = r.status;
+  const directHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (directHandledRef.current) return;
+    if (!ready || !token) return;
+    // Only initiate from a clean slate — never hijack an in-progress session.
+    if (statusRef.current !== 'idle') return;
+
+    // A store intent (callee accept, or caller routed via the store) wins.
+    const intent = consumeDirectCall();
+    if (intent && intent.type === type) {
+      directHandledRef.current = true;
+      void startDirectCallRef.current({
+        role: intent.role,
+        peerUserId: intent.peerUserId,
+        callId: intent.callId,
+      });
+      return;
+    }
+
+    // Otherwise honour a `?to=<userId>` deep link as the CALLER, then drop the
+    // param so the call isn't re-initiated on a later render/refresh.
+    if (toUserId) {
+      directHandledRef.current = true;
+      void startDirectCallRef.current({ role: 'caller', peerUserId: toUserId });
+      router.replace(type === 'video' ? '/video' : '/voice');
+    }
+  }, [ready, token, type, toUserId, router]);
 
   // ── Layout (video only) ──────────────────────────────────────────────
   // Persisted standard-vs-grid choice; `hydrated` gates an SSR/CSR flash by
@@ -324,6 +373,12 @@ export function RouletteStage({ type }: { type: MatchType }) {
         onOpenChange={setReportOpen}
         againstUserId={peer.userId}
         peerName={peer.nickname}
+        matchId={r.roomId}
+        // Attach a proof frame of the reported peer (video calls only); voice has
+        // no video to capture, so this resolves null and the report goes without.
+        captureEvidence={
+          isVideo ? () => captureStreamFrame(r.remoteStream) : undefined
+        }
         onReported={skipNext}
       />
       <BlockConfirmDialog
@@ -459,6 +514,8 @@ export function RouletteStage({ type }: { type: MatchType }) {
           >
             {r.status === 'idle' || r.status === 'requesting' ? (
               <IdleScreen isVideo={isVideo} />
+            ) : r.status === 'calling' ? (
+              <CallingScreen peer={peer} />
             ) : r.status === 'searching' ? (
               <SearchingScreen positionHint={r.positionHint} longWait={longWait} />
             ) : r.status === 'ended' ? (
@@ -554,6 +611,7 @@ export function RouletteStage({ type }: { type: MatchType }) {
           cameraOff={r.cameraOff}
           isStarting={r.isStarting}
           hasPeer={hasPeer}
+          isDirect={r.isDirectCall}
           chatOpen={r.chatOpen}
           onStart={r.start}
           onNext={r.next}

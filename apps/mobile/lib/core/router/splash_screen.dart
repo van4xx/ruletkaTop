@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/theme.dart';
+import '../widgets/widgets.dart';
 
 /// Shown while [AuthController.bootstrap] resolves the session on cold start
 /// (auth status == unknown). The router redirects away from here as soon as
@@ -16,16 +17,8 @@ class SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(colors: colors.brandGradient),
-                boxShadow: AppShadows.glow(colors.neonViolet, strength: 0.8),
-              ),
-              child: const Icon(Icons.bolt_rounded, size: 46, color: Colors.white),
-            ),
+            // The neon roulette-orbit brand mark (matches the web logo).
+            const BrandLogo(size: 88, glow: true),
             const SizedBox(height: AppSpacing.xl),
             SizedBox(
               width: 26,

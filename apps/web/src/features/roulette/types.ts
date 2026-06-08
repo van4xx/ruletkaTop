@@ -12,6 +12,8 @@ export type { QualityLevel, QualitySample };
  *  idle        — not started; show the pre-flight / start screen.
  *  requesting  — acquiring camera/mic permission.
  *  searching   — in the matchmaking queue, waiting for `mm:matched`.
+ *  calling      — direct (friend) call only: invite sent, ringing the callee,
+ *                 waiting for `call:accept`. Distinct from 'searching' (queue).
  *  connecting   — matched; exchanging SDP/ICE, peer connection not yet live.
  *  connected    — media flowing both ways.
  *  reconnecting — a live call's transport dropped; we're attempting an
@@ -25,6 +27,7 @@ export type RouletteStatus =
   | 'idle'
   | 'requesting'
   | 'searching'
+  | 'calling'
   | 'connecting'
   | 'connected'
   | 'reconnecting'
@@ -71,6 +74,12 @@ export interface RouletteState {
   chatMessages: ChatLine[];
   /** Whether the in-call chat data channel is open. */
   chatOpen: boolean;
+  /**
+   * True while THIS session is a DIRECT (friend) call rather than a random
+   * matchmaking session. Lets the UI adapt (e.g. relabel Next→End, since a
+   * direct call has no "next stranger"). False for queue sessions and when idle.
+   */
+  isDirectCall: boolean;
 }
 
 /** A single ephemeral in-call chat line (not persisted). */
@@ -79,6 +88,20 @@ export interface ChatLine {
   from: 'me' | 'peer';
   text: string;
   at: number;
+}
+
+/**
+ * A direct (friend) call hand-off, passed to {@link UseRouletteResult.startDirectCall}.
+ * Mirrors the client-side `DirectCallIntent` but is kept structurally local to
+ * the hook so the engine has no import dependency on the store.
+ */
+export interface DirectCallStart {
+  /** `caller` emits `call:invite`; `callee` has already accepted (holds `callId`). */
+  role: 'caller' | 'callee';
+  /** The other party (invitee for a caller; caller for a callee). */
+  peerUserId: string;
+  /** Present for a callee (came in on the invite); absent for a caller. */
+  callId?: string;
 }
 
 export interface UseRouletteOptions {
@@ -99,6 +122,16 @@ export interface UseRouletteResult extends RouletteState {
   prewarm: () => void;
   /** Begin: acquire media, connect socket, join the queue. */
   start: () => Promise<void>;
+  /**
+   * Begin a DIRECT (friend) call instead of joining the random queue: acquire
+   * media + ICE + connect the socket, then either place the invite (caller) or
+   * answer it (callee). Reuses the exact same {@link PeerConnectionManager} +
+   * `rtc:*` signaling path as a matchmaking call (keyed on `roomId = callId`),
+   * so media/quality/reconnection/chat all work identically. A direct call does
+   * NOT auto-requeue — `next`/peer-hangup end the session (stop). No-op if a
+   * session is already active.
+   */
+  startDirectCall: (intent: DirectCallStart) => Promise<void>;
   /** Skip the current peer and search for the next one. */
   next: () => void;
   /** Stop everything: leave queue, stop media, close peer. */

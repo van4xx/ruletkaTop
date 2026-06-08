@@ -50,6 +50,13 @@ export interface CallControlsProps {
   isStarting: boolean;
   /** True when a peer is currently connected (enables social actions). */
   hasPeer: boolean;
+  /**
+   * True for a DIRECT (friend) call: there's no "next stranger", so the primary
+   * Start→Next button is suppressed (the user ends the call via Stop). The Start
+   * button still shows when idle (it just won't be reachable in direct mode,
+   * which always enters a session immediately).
+   */
+  isDirect: boolean;
   chatOpen: boolean;
   onStart: () => void;
   onNext: () => void;
@@ -107,6 +114,7 @@ export function CallControls(props: CallControlsProps) {
     cameraOff,
     isStarting,
     hasPeer,
+    isDirect,
     chatOpen,
     onStart,
     onNext,
@@ -155,7 +163,8 @@ export function CallControls(props: CallControlsProps) {
           </>
         )}
 
-        {/* Primary action */}
+        {/* Primary action — Start when idle, Next while in a random session. A
+            DIRECT (friend) call has no "next", so it shows neither (Stop ends it). */}
         {idle ? (
           <Button
             variant="primary"
@@ -167,7 +176,7 @@ export function CallControls(props: CallControlsProps) {
             <Play className="h-5 w-5" />
             {t('controls.start')}
           </Button>
-        ) : (
+        ) : isDirect ? null : (
           <Button variant="primary" size="lg" onClick={onNext} className="gap-2 rounded-full px-7">
             <SkipForward className="h-5 w-5" />
             {t('controls.next')}

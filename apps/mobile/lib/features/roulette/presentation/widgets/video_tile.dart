@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
@@ -17,6 +19,7 @@ class VideoTile extends StatefulWidget {
     required this.stream,
     this.mirror = false,
     this.cameraOff = false,
+    this.flagged = false,
     this.placeholderName,
     this.placeholderAvatar,
     this.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
@@ -25,6 +28,11 @@ class VideoTile extends StatefulWidget {
   final MediaStream? stream;
   final bool mirror;
   final bool cameraOff;
+
+  /// On-device screening flagged this (local) feed: blur it heavily and overlay
+  /// a "hidden for safety" shield so the offending content is not visible.
+  final bool flagged;
+
   final String? placeholderName;
   final String? placeholderAvatar;
   final RTCVideoViewObjectFit objectFit;
@@ -87,7 +95,53 @@ class _VideoTileState extends State<VideoTile> {
               avatarUrl: widget.placeholderAvatar,
               cameraOff: widget.cameraOff,
             ),
+
+          // Screening cut: blanket the tile in a heavy blur + a safety shield so
+          // flagged content is never visible (the outbound track is also
+          // disabled upstream).
+          if (widget.flagged)
+            Positioned.fill(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: const _FlaggedOverlay(),
+                ),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// The "hidden for safety" treatment painted over a screening-flagged feed.
+class _FlaggedOverlay extends StatelessWidget {
+  const _FlaggedOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return DecoratedBox(
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55)),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.shield_rounded, size: 30, color: colors.neonMagenta),
+            const SizedBox(height: AppSpacing.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: Text(
+                'Видео скрыто',
+                textAlign: TextAlign.center,
+                style: context.texts.labelMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

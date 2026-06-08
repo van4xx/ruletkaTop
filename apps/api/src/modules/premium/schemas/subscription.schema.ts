@@ -40,6 +40,14 @@ export class Subscription {
   @Prop({ required: false, default: null, select: false, type: String })
   token!: string | null;
 
+  /**
+   * CloudPayments subscription id (set once the provider creates a recurring
+   * subscription). Needed to CANCEL billing upstream when the user cancels.
+   * SERVER-ONLY (`select: false`) — never part of the public projection.
+   */
+  @Prop({ required: false, default: null, select: false, type: String })
+  subscriptionId!: string | null;
+
   /** When the (most recent) subscription period began, or `null`. */
   @Prop({ required: false, default: null, type: Date })
   startedAt!: Date | null;

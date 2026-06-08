@@ -6,6 +6,7 @@ import { WalletModule } from '../wallet/wallet.module';
 import { WalletService } from '../wallet/wallet.service';
 import { PremiumModule } from '../premium/premium.module';
 import { PremiumService } from '../premium/premium.service';
+import { CloudPaymentsClient } from './cloudpayments.client';
 import { CloudPaymentsSignatureGuard } from './cloudpayments-signature.guard';
 import { COIN_PACKAGES_SERVICE, PREMIUM_SERVICE, WALLET_SERVICE } from './payments.contracts';
 import { PaymentsController } from './payments.controller';
@@ -39,11 +40,17 @@ import { Payment, PaymentSchema } from './schemas/payment.schema';
   controllers: [PaymentsController],
   providers: [
     PaymentsService,
+    CloudPaymentsClient,
     CloudPaymentsSignatureGuard,
     // Bind the cross-module contract tokens to the real economy services.
     { provide: WALLET_SERVICE, useExisting: WalletService },
     { provide: PREMIUM_SERVICE, useExisting: PremiumService },
     { provide: COIN_PACKAGES_SERVICE, useExisting: CoinPackagesService },
   ],
+  // Export the outbound REST client + PaymentsService so the admin refund
+  // surface can drive an authoritative refund (CloudPayments call + ledger
+  // reversal) through the same code path the webhook uses. AdminModule imports
+  // PaymentsModule for this; no cycle (payments never imports admin).
+  exports: [CloudPaymentsClient, PaymentsService],
 })
 export class PaymentsModule {}

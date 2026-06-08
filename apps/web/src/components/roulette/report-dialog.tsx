@@ -30,6 +30,19 @@ export interface ReportDialogProps {
   onOpenChange: (open: boolean) => void;
   againstUserId: string;
   peerName: string;
+  /**
+   * The active match/room id, threaded onto the report so moderators can tie it
+   * to the session where the incident happened. `null` when reporting outside a
+   * live call.
+   */
+  matchId?: string | null;
+  /**
+   * Optional async capture of a single evidence frame (the reported peer's
+   * current video frame) to attach as proof. Invoked once at submit time;
+   * resolving `null` simply files the report without evidence. Kept as a
+   * callback so this dialog stays decoupled from the WebRTC stream plumbing.
+   */
+  captureEvidence?: () => Promise<string | null>;
   /** Called after a successful report (parent typically skips to next). */
   onReported?: () => void;
 }
@@ -49,19 +62,41 @@ export function ReportDialog({
   onOpenChange,
   againstUserId,
   peerName,
+  matchId,
+  captureEvidence,
   onReported,
 }: ReportDialogProps) {
   const t = useTranslations('roulette');
   const report = useReportUser();
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
+  // Local "capturing evidence" flag so the button stays busy across the (brief)
+  // frame grab that precedes the network mutation.
+  const [capturing, setCapturing] = useState(false);
 
-  function submit() {
+  async function submit() {
     if (!reason) return;
+    // Best-effort: grab a proof frame of the reported peer BEFORE we skip away.
+    // A failure (or no capturer) just files the report without evidence.
+    let evidence: string | null = null;
+    if (captureEvidence) {
+      setCapturing(true);
+      try {
+        evidence = await captureEvidence();
+      } catch {
+        evidence = null;
+      } finally {
+        setCapturing(false);
+      }
+    }
+
     const dto: CreateReportDto = {
       againstUserId,
       reason,
       details: details.trim() ? details.trim().slice(0, 1000) : undefined,
+      // Thread the live match context + the captured evidence frame onto the report.
+      matchId: matchId ?? undefined,
+      evidence: evidence ?? undefined,
     };
     report.mutate(dto, {
       onSuccess: () => {
@@ -138,11 +173,15 @@ export function ReportDialog({
           </Button>
           <Button
             variant="danger"
-            disabled={!reason || report.isPending}
-            onClick={submit}
+            disabled={!reason || report.isPending || capturing}
+            onClick={() => void submit()}
             className="gap-2"
           >
-            {report.isPending ? <Spinner size="sm" tone="current" /> : <Flag className="h-4 w-4" />}
+            {report.isPending || capturing ? (
+              <Spinner size="sm" tone="current" />
+            ) : (
+              <Flag className="h-4 w-4" />
+            )}
             {t('report.submit')}
           </Button>
         </DialogFooter>
