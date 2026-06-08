@@ -18,6 +18,15 @@ import { MATCH_TYPES, matchmakingPoolKey, METRIC_PREFIX } from './metrics.consta
  *   read PULL-style from Redis on each scrape (no hot-path coupling).
  * - `ruletka_matches_created_total` (counter) — pairings made.
  * - `ruletka_notifications_sent_total` (counter) — notifications persisted+fanned.
+ * - `ruletka_queue_jobs_completed_total{queue}` (counter) — background sweep jobs
+ *   that ran to success, per queue.
+ * - `ruletka_queue_jobs_failed_total{queue}` (counter) — background sweep jobs
+ *   that errored (after exhausting retries BullMQ stops re-driving them), per
+ *   queue. The primary alerting signal for the repeatable sweeps.
+ * - `ruletka_queue_register_failures_total{queue}` (counter) — boot-time
+ *   failures to (re)register a repeatable sweep schedule (e.g. a Redis blip at
+ *   startup), per queue. A non-zero value means a sweep may be UNSCHEDULED on
+ *   this node — alert on it.
  *
  * Always-on and Sentry-independent: this is cheap and safe to run with error
  * tracking disabled.
@@ -32,6 +41,9 @@ export class MetricsService implements OnModuleInit {
   private readonly activeSockets: Gauge<string>;
   private readonly matchesCreated: Counter<string>;
   private readonly notificationsSent: Counter<string>;
+  private readonly queueJobsCompleted: Counter<string>;
+  private readonly queueJobsFailed: Counter<string>;
+  private readonly queueRegisterFailures: Counter<string>;
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {
     // ── Live socket connections (per node) ────────────────────────────────
@@ -78,6 +90,28 @@ export class MetricsService implements OnModuleInit {
       labelNames: ['kind'],
       registers: [this.registry],
     });
+
+    // ── Background-sweep (BullMQ) counters ────────────────────────────────
+    // Per-queue so a single failing sweep is isolable in alerts. The `queue`
+    // label is a closed set (one per repeatable sweep) — low cardinality.
+    this.queueJobsCompleted = new Counter({
+      name: `${METRIC_PREFIX}queue_jobs_completed_total`,
+      help: 'Background queue jobs that ran to completion, by queue.',
+      labelNames: ['queue'],
+      registers: [this.registry],
+    });
+    this.queueJobsFailed = new Counter({
+      name: `${METRIC_PREFIX}queue_jobs_failed_total`,
+      help: 'Background queue jobs that errored, by queue (primary sweep alert).',
+      labelNames: ['queue'],
+      registers: [this.registry],
+    });
+    this.queueRegisterFailures = new Counter({
+      name: `${METRIC_PREFIX}queue_register_failures_total`,
+      help: 'Boot-time failures to (re)register a repeatable sweep schedule, by queue.',
+      labelNames: ['queue'],
+      registers: [this.registry],
+    });
   }
 
   /**
@@ -115,6 +149,26 @@ export class MetricsService implements OnModuleInit {
    */
   notificationSent(kind: string): void {
     this.notificationsSent.inc({ kind });
+  }
+
+  // ── Background-sweep (BullMQ) counters ────────────────────────────────────
+
+  /** A background sweep job ran to completion on the named queue. */
+  queueJobCompleted(queue: string): void {
+    this.queueJobsCompleted.inc({ queue });
+  }
+
+  /** A background sweep job errored on the named queue (primary sweep alert). */
+  queueJobFailed(queue: string): void {
+    this.queueJobsFailed.inc({ queue });
+  }
+
+  /**
+   * Registering a repeatable sweep schedule failed at boot (e.g. a Redis blip).
+   * A non-zero value means the sweep may be UNSCHEDULED on this node.
+   */
+  queueRegisterFailed(queue: string): void {
+    this.queueRegisterFailures.inc({ queue });
   }
 
   // ── Scrape surface (used by MetricsController) ───────────────────────────

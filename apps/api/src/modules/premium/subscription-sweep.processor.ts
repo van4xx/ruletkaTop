@@ -3,6 +3,8 @@ import { Logger, type OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Job, Queue } from 'bullmq';
 
+import { MetricsService } from '../../observability/metrics.service';
+import { registerSweepWithRetry, sweepJobOptions } from '../../observability/sweep-job';
 import { PremiumService } from './premium.service';
 
 /** BullMQ queue name for the subscription expiry sweep. */
@@ -41,35 +43,26 @@ export class SubscriptionSweepProcessor extends WorkerHost implements OnModuleIn
   constructor(
     @InjectQueue(SUBSCRIPTION_SWEEP_QUEUE) private readonly queue: Queue,
     private readonly premiumService: PremiumService,
+    private readonly metrics: MetricsService,
   ) {
     super();
   }
 
-  /** Register the repeatable sweep job once the queue is available. */
+  /**
+   * Register the repeatable sweep job once the queue is available. Bounded
+   * retry + loud surfacing of a Redis blip live in {@link registerSweepWithRetry}
+   * — a scheduler hiccup degrades (logs + metric) rather than crashing the API.
+   */
   async onModuleInit(): Promise<void> {
-    try {
-      await this.queue.add(
-        SWEEP_JOB_NAME,
-        {},
-        {
-          // A stable repeat key means re-adding on every boot is idempotent —
-          // BullMQ keeps a single schedule instead of accumulating duplicates.
-          repeat: { every: SWEEP_EVERY_MS },
-          jobId: SWEEP_JOB_NAME,
-          removeOnComplete: true,
-          removeOnFail: 50,
-        },
-      );
-      this.logger.log(
-        `Registered repeatable subscription expiry sweep (every ${SWEEP_EVERY_MS / 60000}m)`,
-      );
-    } catch (err) {
-      // A Redis hiccup at boot must not crash the API; the sweep is best-effort
-      // and will be re-registered on the next restart.
-      this.logger.error(
-        `Failed to register subscription expiry sweep: ${(err as Error).message}`,
-      );
-    }
+    await registerSweepWithRetry({
+      queue: this.queue,
+      queueName: SUBSCRIPTION_SWEEP_QUEUE,
+      jobName: SWEEP_JOB_NAME,
+      jobOptions: sweepJobOptions(SWEEP_EVERY_MS, SWEEP_JOB_NAME),
+      metrics: this.metrics,
+      logger: this.logger,
+      successMessage: `Registered repeatable subscription expiry sweep (every ${SWEEP_EVERY_MS / 60000}m)`,
+    });
   }
 
   /** Execute one sweep pass. */
@@ -78,8 +71,22 @@ export class SubscriptionSweepProcessor extends WorkerHost implements OnModuleIn
     return { expired };
   }
 
+  /** A sweep invocation ran to success — record it for completeness/alerting. */
+  @OnWorkerEvent('completed')
+  onCompleted(): void {
+    this.metrics.queueJobCompleted(SUBSCRIPTION_SWEEP_QUEUE);
+  }
+
+  /**
+   * A sweep invocation errored. Log at error level with job name+id+reason and
+   * bump `ruletka_queue_jobs_failed_total{queue}` so it is alertable. The failed
+   * job is retained (bounded) in BullMQ's failed set for inspection.
+   */
   @OnWorkerEvent('failed')
-  onFailed(job: Job, err: Error): void {
-    this.logger.error(`Subscription sweep job ${job.id ?? '(none)'} failed: ${err.message}`);
+  onFailed(job: Job | undefined, err: Error): void {
+    this.metrics.queueJobFailed(SUBSCRIPTION_SWEEP_QUEUE);
+    this.logger.error(
+      `Subscription sweep job ${job?.name ?? SWEEP_JOB_NAME} ${job?.id ?? '(none)'} failed: ${err.message}`,
+    );
   }
 }

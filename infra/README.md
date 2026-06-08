@@ -217,4 +217,67 @@ close an otherwise-healthy long-lived connection.
   treat the dev compose volumes as ephemeral local state.
 
 - **BullMQ.** Background queues run on the same Redis instance; scale workers by
-  running additional API/worker replicas — the queue coordinates them.
+  running additional API/worker replicas — the queue coordinates them. The
+  repeatable sweeps (subscription-expiry, top-expiry, match-reconciliation)
+  register with a STABLE `jobId`, so N replicas converge on one schedule rather
+  than stacking duplicate timers. Each invocation gets bounded retry + backoff,
+  and a permanently-failed job is RETAINED (bounded) in BullMQ's failed set for
+  post-mortem inspection. A boot-time Redis blip while registering a sweep
+  degrades (loud error log + `ruletka_queue_register_failures_total` metric) and
+  re-tries on the next restart instead of crashing the API.
+
+---
+
+## Observability (Prometheus metrics)
+
+Each API instance exposes Prometheus metrics at **`GET /api/metrics`** (behind
+the optional `METRICS_TOKEN` bearer gate; `@SkipThrottle`). Beyond the default
+`process_*` / `nodejs_*` series, the app emits `ruletka_*` metrics, including the
+background-sweep signals:
+
+| Metric                                          | Type    | Labels  | Meaning                                                       |
+| ----------------------------------------------- | ------- | ------- | ------------------------------------------------------------- |
+| `ruletka_queue_jobs_failed_total`               | counter | `queue` | Sweep jobs that errored — **primary sweep alert**.            |
+| `ruletka_queue_jobs_completed_total`            | counter | `queue` | Sweep jobs that ran to success (liveness).                    |
+| `ruletka_queue_register_failures_total`         | counter | `queue` | Boot-time failures to register a sweep schedule on a node.    |
+
+Suggested alerts: `increase(ruletka_queue_jobs_failed_total[15m]) > 0` and
+`ruletka_queue_register_failures_total > 0` (a sweep may be unscheduled on that
+node). A flatlined `ruletka_queue_jobs_completed_total` for a queue past its
+cadence also indicates a stuck/unscheduled sweep.
+
+### Scraping BOTH api replicas once scaled
+
+**The metrics are PER-NODE.** Counters like `ruletka_queue_jobs_failed_total`
+and the `ruletka_active_socket_connections` gauge live in each process's own
+in-memory registry — there is no aggregation across replicas, and they reset to
+zero on restart (use `rate()`/`increase()`, and `sum by (queue)` across instances
+in Grafana).
+
+The single-node default is fine: nginx pins one `api` upstream
+(`upstream api_backend` with `ip_hash`, see [`nginx/nginx.conf`](./nginx/nginx.conf)),
+so a scrape to the edge always lands on the one replica. **But once you scale to
+≥2 api replicas (`--scale api=2` / an explicit `api-2` service), do NOT scrape
+through nginx** — `ip_hash` would pin the scraper to a single replica and you'd
+silently miss the others' metrics.
+
+Scrape each replica directly on its own address. Prometheus example
+(replicas reachable on the compose network as `api`, `api-2`, …):
+
+```yaml
+scrape_configs:
+  - job_name: 'ruletka-api'
+    metrics_path: /api/metrics
+    # If METRICS_TOKEN is set, add:
+    #   authorization: { type: Bearer, credentials: '<METRICS_TOKEN>' }
+    static_configs:
+      # One target per replica — each has its own per-node registry. As you add
+      # replicas, add their host:port here (do NOT point this at the nginx edge,
+      # which would ip_hash-pin the scraper to a single replica).
+      - targets: ['api:4000', 'api-2:4000']
+        labels: { service: ruletka-api }
+```
+
+Then aggregate in queries, e.g. `sum by (queue) (increase(ruletka_queue_jobs_failed_total[15m]))`.
+For dynamic replica counts, prefer service discovery (Docker/DNS SD) over a
+static list so new replicas are picked up automatically.

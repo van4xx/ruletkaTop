@@ -1,8 +1,12 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/di/di.dart';
+import 'core/push/push.dart';
 import 'core/router/router.dart';
 import 'core/theme/theme.dart';
 import 'core/widgets/intro_preloader.dart';
@@ -14,7 +18,7 @@ import 'features/calls/presentation/direct_call_host.dart';
 /// session from secure storage BEFORE the first frame's routing decision, then
 /// builds [MaterialApp.router] with the dark-first theme and the guarded
 /// [routerProvider].
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Keep portrait-first; the roulette feature can opt into landscape locally.
   SystemChrome.setPreferredOrientations([
@@ -22,7 +26,34 @@ void main() {
     DeviceOrientation.portraitDown,
   ]);
 
-  runApp(const ProviderScope(child: RuletkaApp()));
+  // Best-effort native push: initialize Firebase + register the background
+  // handler, then activate the real [FirebasePushService]. If the platform
+  // config files (google-services.json / GoogleService-Info.plist) are absent —
+  // or anything else fails — we swallow it and keep the keyless no-op, so the
+  // app boots + runs fine without push configured.
+  final pushService = await _resolvePushService();
+
+  runApp(
+    ProviderScope(
+      overrides: [pushServiceProvider.overrideWithValue(pushService)],
+      child: const RuletkaApp(),
+    ),
+  );
+}
+
+/// Attempt to bring real FCM push online. Returns the [FirebasePushService] when
+/// Firebase initializes, else the keyless [NoopPushService]. Never throws.
+Future<PushService> _resolvePushService() async {
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    return FirebasePushService();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('[push] Firebase not configured — push disabled (no-op): $e');
+    }
+    return const NoopPushService();
+  }
 }
 
 /// Root widget. Kicks off the auth bootstrap on first build (idempotent) and

@@ -3,6 +3,8 @@ import { Logger, type OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Job, Queue } from 'bullmq';
 
+import { MetricsService } from '../../observability/metrics.service';
+import { registerSweepWithRetry, sweepJobOptions } from '../../observability/sweep-job';
 import { MatchService } from './match.service';
 
 /** BullMQ queue name for the stale-match reconciliation sweep. */
@@ -46,33 +48,26 @@ export class MatchReconcileProcessor extends WorkerHost implements OnModuleInit 
   constructor(
     @InjectQueue(MATCH_RECONCILE_QUEUE) private readonly queue: Queue,
     private readonly matchService: MatchService,
+    private readonly metrics: MetricsService,
   ) {
     super();
   }
 
-  /** Register the repeatable sweep job once the queue is available. */
+  /**
+   * Register the repeatable sweep job once the queue is available. Bounded
+   * retry + loud surfacing of a Redis blip live in {@link registerSweepWithRetry}
+   * — a scheduler hiccup degrades (logs + metric) rather than crashing the API.
+   */
   async onModuleInit(): Promise<void> {
-    try {
-      await this.queue.add(
-        SWEEP_JOB_NAME,
-        {},
-        {
-          // A stable repeat key means re-adding on every boot is idempotent —
-          // BullMQ keeps a single schedule instead of accumulating duplicates.
-          repeat: { every: SWEEP_EVERY_MS },
-          jobId: SWEEP_JOB_NAME,
-          removeOnComplete: true,
-          removeOnFail: 50,
-        },
-      );
-      this.logger.log(
-        `Registered repeatable match reconciliation sweep (every ${SWEEP_EVERY_MS / 60000}m)`,
-      );
-    } catch (err) {
-      // A Redis hiccup at boot must not crash the API; the sweep is best-effort
-      // and will be re-registered on the next restart.
-      this.logger.error(`Failed to register match reconciliation sweep: ${(err as Error).message}`);
-    }
+    await registerSweepWithRetry({
+      queue: this.queue,
+      queueName: MATCH_RECONCILE_QUEUE,
+      jobName: SWEEP_JOB_NAME,
+      jobOptions: sweepJobOptions(SWEEP_EVERY_MS, SWEEP_JOB_NAME),
+      metrics: this.metrics,
+      logger: this.logger,
+      successMessage: `Registered repeatable match reconciliation sweep (every ${SWEEP_EVERY_MS / 60000}m)`,
+    });
   }
 
   /** Execute one sweep pass. */
@@ -81,8 +76,22 @@ export class MatchReconcileProcessor extends WorkerHost implements OnModuleInit 
     return { reconciled };
   }
 
+  /** A sweep invocation ran to success — record it for completeness/alerting. */
+  @OnWorkerEvent('completed')
+  onCompleted(): void {
+    this.metrics.queueJobCompleted(MATCH_RECONCILE_QUEUE);
+  }
+
+  /**
+   * A sweep invocation errored. Log at error level with job name+id+reason and
+   * bump `ruletka_queue_jobs_failed_total{queue}` so it is alertable. The failed
+   * job is retained (bounded) in BullMQ's failed set for inspection.
+   */
   @OnWorkerEvent('failed')
-  onFailed(job: Job, err: Error): void {
-    this.logger.error(`Match reconciliation job ${job.id ?? '(none)'} failed: ${err.message}`);
+  onFailed(job: Job | undefined, err: Error): void {
+    this.metrics.queueJobFailed(MATCH_RECONCILE_QUEUE);
+    this.logger.error(
+      `Match reconciliation job ${job?.name ?? SWEEP_JOB_NAME} ${job?.id ?? '(none)'} failed: ${err.message}`,
+    );
   }
 }

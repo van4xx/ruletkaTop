@@ -19,8 +19,13 @@
 | `TURN_STATIC_AUTH_SECRET` + `TURN_REALM` | WebRTC relay (calls behind NAT) | **SET** (coturn) | — |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | auth | **SET** (generated) | — |
 | `COOKIE_DOMAIN=.ruletka.top` | cross-subdomain cookies | **SET** | — |
+| `FIREBASE_SERVICE_ACCOUNT` | **native mobile push** (FCM HTTP v1 — FCM on Android, APNs-via-FCM on iOS). Blank → mobile push is a clean NO-OP (in-app + socket delivery unaffected) and the API WARNs once at boot | **MISSING** → no native push on mobile until set | Firebase console → Project settings → Service accounts → "Generate new private key". Paste the JSON (or its base64) into the env var. |
 
-**Bottom line:** to actually **earn money** you need the 🔑 CloudPayments keys; to **moderate for real** you need the 🔑 Sightengine keys. Everything else is wired.
+**Mobile Firebase config files** (operator-supplied PROJECT SECRETS — NOT in the repo; needed for the mobile app to obtain an FCM/APNs token; the app still builds + boots without them, push just stays a no-op):
+- `apps/mobile/android/app/google-services.json` — Android FCM config (Firebase console → Project settings → Your apps → Android). **Also** apply the `com.google.gms.google-services` Gradle plugin: add `id("com.google.gms.google-services") version "4.4.x" apply false` to `apps/mobile/android/settings.gradle.kts` and `id("com.google.gms.google-services")` to `apps/mobile/android/app/build.gradle.kts`. (Left out of the repo on purpose — the google-services plugin fails the build if the JSON is absent.)
+- `apps/mobile/ios/Runner/GoogleService-Info.plist` — iOS config (Firebase console → iOS app), plus an **APNs auth key** uploaded in Firebase console → Cloud Messaging → Apple app configuration, and the Push Notifications + Background Modes (Remote notifications) capabilities in Xcode.
+
+**Bottom line:** to actually **earn money** you need the 🔑 CloudPayments keys; to **moderate for real** you need the 🔑 Sightengine keys; for **native mobile push** you need `FIREBASE_SERVICE_ACCOUNT` (server) + the two mobile config files above. Everything else is wired.
 
 ## 2. Pre-launch verification (do on staging before opening)
 

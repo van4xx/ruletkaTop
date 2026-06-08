@@ -66,14 +66,15 @@ dependencies:
   # Date/number formatting + relative timestamps.
   intl: ^0.20.2
 
-  # ── Push notifications (FCM / APNs) — OPT-IN ────────────────────────────────
-  # Uncomment to enable real push, then `flutter pub get`. The app boots WITHOUT
-  # these (PushService defaults to a keyless no-op); see core/push/. Enabling
-  # also requires the platform config files as an OPS step (NOT in the repo):
+  # ── Push notifications (FCM / APNs) ─────────────────────────────────────────
+  # Native push via Firebase Cloud Messaging (FCM on Android, APNs-via-FCM on
+  # iOS). The app still boots + runs WITHOUT the platform config files (init is
+  # guarded; PushService falls back to the keyless no-op — see core/push/). Real
+  # push additionally requires the config files as an OPS step (NOT in the repo):
   #   android/app/google-services.json  +  the google-services Gradle plugin
   #   ios/Runner/GoogleService-Info.plist  +  APNs key in the Firebase console
-  # firebase_core: ^4.1.0
-  # firebase_messaging: ^16.1.0
+  firebase_core: ^4.1.0
+  firebase_messaging: ^16.1.0
 
 dev_dependencies:
   flutter_test:
