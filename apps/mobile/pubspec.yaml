@@ -60,6 +60,20 @@ dependencies:
   # Multipart filename + content-type for the avatar upload.
   http_parser: ^4.1.2
 
+  # ── On-device NSFW screening (web parity) ───────────────────────────────────
+  # TensorFlow Lite interpreter for the on-device NSFW classifier — mirrors the
+  # web client running nsfwjs/MobileNetV2 entirely on-device (frames never leave
+  # the phone for classification). The classifier degrades gracefully: WITHOUT
+  # the model asset (assets/models/nsfw.tflite — an operator-provisioned binary,
+  # NOT in the repo) it falls back to the no-op and screening stays inert, so the
+  # app builds + boots + runs fine. See features/roulette/data/nsfw_classifier.dart
+  # and assets/models/README.md.
+  tflite_flutter: ^0.12.1
+
+  # JPEG decode + resize for the classifier (captured frames are JPEG bytes from
+  # MediaStreamTrack.captureFrame(); the model wants a 224×224 RGB input).
+  image: ^4.8.0
+
   # Open the Terms / Privacy legal pages (register consent) in the browser.
   url_launcher: ^6.3.1
 
@@ -88,3 +102,9 @@ flutter:
   # google_fonts at runtime, so no font files are bundled.
   assets:
     - assets/images/
+    # On-device NSFW model. The directory is declared so an operator-provisioned
+    # `nsfw.tflite` (see assets/models/README.md) is bundled when present; the app
+    # builds + runs WITHOUT it (the classifier degrades to the no-op). Declaring a
+    # directory tolerates the model being absent — a missing single-file asset
+    # entry would FAIL the build.
+    - assets/models/

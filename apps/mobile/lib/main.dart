@@ -11,6 +11,7 @@ import 'core/router/router.dart';
 import 'core/theme/theme.dart';
 import 'core/widgets/intro_preloader.dart';
 import 'features/calls/presentation/direct_call_host.dart';
+import 'features/roulette/data/nsfw_classifier.dart';
 
 /// App entry point.
 ///
@@ -32,6 +33,12 @@ Future<void> main() async {
   // or anything else fails — we swallow it and keep the keyless no-op, so the
   // app boots + runs fine without push configured.
   final pushService = await _resolvePushService();
+
+  // Best-effort on-device NSFW screening (web parity): activate the TFLite
+  // classifier ONLY if the model asset (assets/models/nsfw.tflite) is loadable.
+  // Without the operator-provisioned binary this is a no-op and the screening
+  // pipeline stays inert (never falsely cuts) — exactly today's behaviour.
+  await installTfliteNsfwClassifier();
 
   runApp(
     ProviderScope(

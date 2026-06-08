@@ -25,7 +25,10 @@
 - `apps/mobile/android/app/google-services.json` — Android FCM config (Firebase console → Project settings → Your apps → Android). **Also** apply the `com.google.gms.google-services` Gradle plugin: add `id("com.google.gms.google-services") version "4.4.x" apply false` to `apps/mobile/android/settings.gradle.kts` and `id("com.google.gms.google-services")` to `apps/mobile/android/app/build.gradle.kts`. (Left out of the repo on purpose — the google-services plugin fails the build if the JSON is absent.)
 - `apps/mobile/ios/Runner/GoogleService-Info.plist` — iOS config (Firebase console → iOS app), plus an **APNs auth key** uploaded in Firebase console → Cloud Messaging → Apple app configuration, and the Push Notifications + Background Modes (Remote notifications) capabilities in Xcode.
 
-**Bottom line:** to actually **earn money** you need the 🔑 CloudPayments keys; to **moderate for real** you need the 🔑 Sightengine keys; for **native mobile push** you need `FIREBASE_SERVICE_ACCOUNT` (server) + the two mobile config files above. Everything else is wired.
+**Mobile on-device NSFW model** (operator-provisioned binary — NOT in the repo; needed for the mobile app's on-device video moderation to be **active**):
+- `apps/mobile/assets/models/nsfw.tflite` — the gantman/nsfw_model MobileNetV2 (224×224, 5 classes Drawings/Hentai/Neutral/Porn/Sexy), the TFLite twin of the web's nsfwjs (see `apps/mobile/assets/models/README.md` for the exact spec + how to provision). **Without it** the mobile screening pipeline still runs (frame sampling, local blur/cut, evidence POST to `/moderation/frame`) but **never flags** — the classifier degrades to a no-op, so a clean user is never falsely cut. The **server-side Sightengine second-opinion still applies** once its 🔑 keys are set, independent of this asset.
+
+**Bottom line:** to actually **earn money** you need the 🔑 CloudPayments keys; to **moderate for real** you need the 🔑 Sightengine keys (server-side) and, for on-device mobile flagging, the `nsfw.tflite` asset above; for **native mobile push** you need `FIREBASE_SERVICE_ACCOUNT` (server) + the two mobile config files above. Everything else is wired.
 
 ## 2. Pre-launch verification (do on staging before opening)
 
