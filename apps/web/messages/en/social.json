@@ -152,6 +152,12 @@
     "statusAwayLower": "away"
   },
 
+  "draftThread": {
+    "newConversation": "New chat",
+    "sendError": "Couldn't send the message. Try again.",
+    "peerUnavailable": "This user is unavailable for messaging."
+  },
+
   "friendsClient": {
     "removedToast": "{name} removed from friends",
     "removeFailed": "Couldn't remove from friends",

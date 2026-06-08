@@ -1,7 +1,10 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/api/api_config.dart';
 import '../../../core/di/di.dart';
 import '../../../core/models/models.dart';
 import '../../../core/router/routes.dart';
@@ -308,17 +311,64 @@ class _SwitchAuthRow extends StatelessWidget {
 
 /// The Terms/Privacy consent row. Maps to `acceptedTerms` — registration is
 /// blocked until it's checked (the API rejects otherwise). Rendered as a frosted
-/// glass tile that lights up its border when accepted.
-class _ConsentTile extends StatelessWidget {
+/// glass tile that lights up its border when accepted. The "Условия
+/// использования" + "Политику конфиденциальности" labels are TAPPABLE and open
+/// the website's legal pages in the browser (the row's own tap still toggles the
+/// checkbox).
+class _ConsentTile extends StatefulWidget {
   const _ConsentTile({required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
+  State<_ConsentTile> createState() => _ConsentTileState();
+}
+
+class _ConsentTileState extends State<_ConsentTile> {
+  late final TapGestureRecognizer _termsTap;
+  late final TapGestureRecognizer _privacyTap;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTap = TapGestureRecognizer()
+      ..onTap = () => _openLegal(ApiConfig.termsUrl);
+    _privacyTap = TapGestureRecognizer()
+      ..onTap = () => _openLegal(ApiConfig.privacyUrl);
+  }
+
+  @override
+  void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openLegal(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть ссылку')),
+        );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme = context.scheme;
     final colors = context.colors;
+    final value = widget.value;
+    final linkStyle = TextStyle(
+      color: colors.neonCyan,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+      decorationColor: colors.neonCyan.withValues(alpha: 0.5),
+    );
 
     return AnimatedContainer(
       duration: AppDurations.normal,
@@ -336,7 +386,7 @@ class _ConsentTile extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: AppRadii.brMd,
-          onTap: () => onChanged(!value),
+          onTap: () => widget.onChanged(!value),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
@@ -347,7 +397,7 @@ class _ConsentTile extends StatelessWidget {
               children: [
                 Checkbox(
                   value: value,
-                  onChanged: (v) => onChanged(v ?? false),
+                  onChanged: (v) => widget.onChanged(v ?? false),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact,
                 ),
@@ -363,18 +413,14 @@ class _ConsentTile extends StatelessWidget {
                         const TextSpan(text: 'Я принимаю '),
                         TextSpan(
                           text: 'Условия использования',
-                          style: TextStyle(
-                            color: colors.neonCyan,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: linkStyle,
+                          recognizer: _termsTap,
                         ),
                         const TextSpan(text: ' и '),
                         TextSpan(
                           text: 'Политику конфиденциальности',
-                          style: TextStyle(
-                            color: colors.neonCyan,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: linkStyle,
+                          recognizer: _privacyTap,
                         ),
                         const TextSpan(text: '.'),
                       ],

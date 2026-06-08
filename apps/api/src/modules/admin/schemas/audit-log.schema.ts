@@ -47,8 +47,10 @@ export type AuditLogDocument = HydratedDocument<AuditLog>;
 export const AuditLogSchema = SchemaFactory.createForClass(AuditLog);
 
 // ── Indexes ────────────────────────────────────────────────────────────────
-// The audit feed: newest first, paginated by _id.
-AuditLogSchema.index({ _id: -1 });
+// NOTE: the audit feed paginates newest-first by `_id`, but Mongo already
+// maintains the default `{ _id: 1 }` index and serves `.sort({ _id: -1 })` from
+// it (B-tree reverse scan) — a lone `{ _id: -1 }` index is rejected/redundant,
+// so it is intentionally NOT declared here.
 // Filter by action (the queue's action facet), newest first.
 AuditLogSchema.index({ action: 1, _id: -1 });
 // All actions by one actor.

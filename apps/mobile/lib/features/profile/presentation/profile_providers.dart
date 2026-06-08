@@ -29,6 +29,17 @@ final giftCatalogProvider = FutureProvider<List<Gift>>((ref) {
   return ref.watch(profileRepositoryProvider).giftCatalog();
 });
 
+/// The cover catalogue (`GET /covers`) — cached for the picker.
+final coverCatalogProvider = FutureProvider<List<ProfileCover>>((ref) {
+  return ref.watch(profileRepositoryProvider).covers();
+});
+
+/// The caller's cover inventory (`GET /covers/me`) — active + owned ids.
+final coverInventoryProvider =
+    FutureProvider.autoDispose<CoverInventory>((ref) {
+  return ref.watch(profileRepositoryProvider).myCovers();
+});
+
 /// The aggregated received-gifts showcase for a profile. Joins the user's
 /// received-gift transactions with the catalog. While the catalog loads the
 /// tiles fall back to placeholder titles so the section still renders.
@@ -223,4 +234,130 @@ class ProfileEditController extends Notifier<ProfileEditState> {
 final profileEditProvider =
     NotifierProvider.autoDispose<ProfileEditController, ProfileEditState>(
   ProfileEditController.new,
+);
+
+/// Drives cover purchase + activation from the picker. Busy while a coin debit
+/// (purchase) or an activation round-trip is in flight; surfaces a message for
+/// the UI. On success it refreshes the inventory + own-profile caches so the
+/// hero + picker reflect the change.
+enum CoverActionStatus { idle, busy, success, error }
+
+class CoverActionState {
+  const CoverActionState({this.status = CoverActionStatus.idle, this.message});
+
+  final CoverActionStatus status;
+  final String? message;
+
+  bool get isBusy => status == CoverActionStatus.busy;
+}
+
+class CoverActionController extends Notifier<CoverActionState> {
+  ProfileRepository get _repo => ref.read(profileRepositoryProvider);
+
+  @override
+  CoverActionState build() => const CoverActionState();
+
+  /// Activate an already-owned (or free) cover. Returns `true` on success.
+  Future<bool> activate(String coverId) =>
+      _run(() => _repo.setActiveCover(coverId), 'Обложка применена');
+
+  /// Buy a paid cover (debits coins, auto-activates). Returns `true` on success.
+  Future<bool> purchase(String coverId) => _run(
+        () => _repo.purchaseCover(coverId),
+        'Обложка куплена и применена',
+      );
+
+  Future<bool> _run(Future<Object> Function() action, String okMessage) async {
+    if (state.isBusy) return false;
+    state = const CoverActionState(status: CoverActionStatus.busy);
+    try {
+      await action();
+      // Refresh the inventory + own-profile so the hero + picker update.
+      ref.invalidate(coverInventoryProvider);
+      ref.invalidate(myProfileDetailProvider);
+      state = CoverActionState(
+          status: CoverActionStatus.success, message: okMessage);
+      return true;
+    } catch (e) {
+      final raw = (e as dynamic).message;
+      state = CoverActionState(
+        status: CoverActionStatus.error,
+        message: raw is String && raw.isNotEmpty
+            ? raw
+            : 'Не удалось изменить обложку',
+      );
+      return false;
+    }
+  }
+}
+
+final coverActionProvider =
+    NotifierProvider.autoDispose<CoverActionController, CoverActionState>(
+  CoverActionController.new,
+);
+
+/// Drives avatar upload + reset (`POST`/`DELETE /profiles/me/avatar`). Busy
+/// while the multipart upload (or reset) is in flight; surfaces a message and
+/// refreshes the own-profile caches so the hero + settings reflect the change.
+enum AvatarActionStatus { idle, busy, success, error }
+
+class AvatarActionState {
+  const AvatarActionState({this.status = AvatarActionStatus.idle, this.message});
+
+  final AvatarActionStatus status;
+  final String? message;
+
+  bool get isBusy => status == AvatarActionStatus.busy;
+}
+
+class AvatarActionController extends Notifier<AvatarActionState> {
+  ProfileRepository get _repo => ref.read(profileRepositoryProvider);
+
+  @override
+  AvatarActionState build() => const AvatarActionState();
+
+  /// Upload new avatar [bytes] (re-encoded server-side). Returns `true` on
+  /// success.
+  Future<bool> upload(
+    List<int> bytes, {
+    required String filename,
+    String? mimeType,
+  }) =>
+      _run(
+        () => _repo.uploadAvatar(bytes, filename: filename, mimeType: mimeType),
+        'Аватар обновлён',
+      );
+
+  /// Reset the avatar to the default. Returns `true` on success.
+  Future<bool> remove() =>
+      _run(() => _repo.deleteAvatar(), 'Аватар сброшен');
+
+  Future<bool> _run(
+    Future<PublicProfile> Function() action,
+    String okMessage,
+  ) async {
+    if (state.isBusy) return false;
+    state = const AvatarActionState(status: AvatarActionStatus.busy);
+    try {
+      await action();
+      ref.invalidate(myProfileDetailProvider);
+      state = AvatarActionState(
+          status: AvatarActionStatus.success, message: okMessage);
+      return true;
+    } catch (e) {
+      final raw = (e as dynamic).message;
+      state = AvatarActionState(
+        status: AvatarActionStatus.error,
+        message: raw is String && raw.isNotEmpty
+            ? raw
+            : 'Не удалось обновить аватар',
+      );
+      return false;
+    }
+  }
+}
+
+final avatarActionProvider =
+    NotifierProvider.autoDispose<AvatarActionController, AvatarActionState>(
+  AvatarActionController.new,
 );

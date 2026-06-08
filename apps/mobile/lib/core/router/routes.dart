@@ -10,6 +10,15 @@ abstract final class AppRoutes {
   // ── Auth (public) ──
   static const String login = '/login';
   static const String register = '/register';
+  static const String forgotPassword = '/forgot-password';
+
+  /// Reset-password landing (from the emailed link). The single-use token is
+  /// read from the `token` query parameter (`/reset-password?token=…`).
+  static const String resetPassword = '/reset-password';
+
+  /// Email-verification landing (from the emailed link). The token is read from
+  /// the `token` query parameter (`/verify-email?token=…`).
+  static const String verifyEmail = '/verify-email';
 
   // ── Authenticated hub + roulette ──
   static const String dashboard = '/dashboard';
@@ -24,6 +33,11 @@ abstract final class AppRoutes {
   /// Chat thread by conversation id.
   static const String chat = '/chat/:id';
   static String chatTo(String conversationId) => '/chat/$conversationId';
+
+  /// Canonical thread route alias mirroring the web (`/chats/:id`). The API
+  /// emits message-notification deep links in this canonical form, so the alias
+  /// lets the same link resolve on mobile as well as web.
+  static const String chatAlias = '/chats/:id';
 
   /// Public profile by user id.
   static const String profile = '/profile/:id';
@@ -45,8 +59,16 @@ abstract final class AppRoutes {
   static const String notifications = '/notifications';
   static const String settings = '/settings';
 
-  /// Set of public (unauthenticated-allowed) route prefixes used by the guard.
-  static const Set<String> publicRoutes = {login, register};
+  /// Set of public (unauthenticated-allowed) routes used by the guard. The
+  /// email-link landings (`forgotPassword`/`resetPassword`/`verifyEmail`) are
+  /// public so a signed-out user can recover their account.
+  static const Set<String> publicRoutes = {
+    login,
+    register,
+    forgotPassword,
+    resetPassword,
+    verifyEmail,
+  };
 }
 
 /// A bottom-navigation destination. The shell renders these as the primary

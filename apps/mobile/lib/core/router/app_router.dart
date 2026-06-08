@@ -6,6 +6,9 @@ import '../di/di.dart';
 import '../models/models.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
+import '../../features/auth/presentation/reset_password_screen.dart';
+import '../../features/auth/presentation/verify_email_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/roulette/presentation/roulette_screen.dart';
 import '../../features/friends/presentation/friends_screen.dart';
@@ -98,7 +101,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         return AppRoutes.login;
       }
       if (auth.isAuthenticated && isPublic) {
-        // Authenticated users shouldn't see login/register.
+        // Authenticated users shouldn't see login/register. The email-verify
+        // landing is the exception — a signed-in user can legitimately open the
+        // emailed link to confirm their address.
+        if (location == AppRoutes.verifyEmail) return null;
         return AppRoutes.dashboard;
       }
       return null; // no redirect
@@ -110,6 +116,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       // ── Auth (public) ──
       GoRoute(path: AppRoutes.login, builder: (_, _) => const LoginScreen()),
       GoRoute(path: AppRoutes.register, builder: (_, _) => const RegisterScreen()),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        builder: (_, _) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.resetPassword,
+        builder: (_, state) =>
+            ResetPasswordScreen(token: state.uri.queryParameters['token'] ?? ''),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyEmail,
+        builder: (_, state) =>
+            VerifyEmailScreen(token: state.uri.queryParameters['token']),
+      ),
 
       // ── Authenticated hub + roulette ──
       GoRoute(path: AppRoutes.dashboard, builder: (_, _) => const DashboardScreen()),
@@ -128,6 +148,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.chats, builder: (_, _) => const ChatsScreen()),
       GoRoute(
         path: AppRoutes.chat,
+        builder: (_, state) =>
+            ChatThreadScreen(conversationId: state.pathParameters['id'] ?? ''),
+      ),
+      // Canonical web-aligned alias so an API message-notification deep link
+      // (`/chats/:id`) opens the same thread screen on mobile.
+      GoRoute(
+        path: AppRoutes.chatAlias,
         builder: (_, state) =>
             ChatThreadScreen(conversationId: state.pathParameters['id'] ?? ''),
       ),

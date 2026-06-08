@@ -87,6 +87,9 @@ export const PaymentSchema = SchemaFactory.createForClass(Payment);
 // Idempotency: one row per invoice, and the primary webhook lookup key.
 PaymentSchema.index({ invoiceId: 1 }, { unique: true });
 // Provider transaction lookups (idempotency for Confirm/Refund by tx id).
-PaymentSchema.index({ transactionId: 1 }, { sparse: true });
+// UNIQUE + SPARSE: an invoice ↔ CloudPayments transaction is 1:1, DB-enforced.
+// Sparse so the many rows that never get a `transactionId` (still `pending`, or
+// `null`) are excluded from the index and don't collide on a shared null key.
+PaymentSchema.index({ transactionId: 1 }, { unique: true, sparse: true });
 // A user's payment history, newest first.
 PaymentSchema.index({ userId: 1, createdAt: -1 });

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../api/api_config.dart';
 import '../models/models.dart';
 import '../theme/theme.dart';
 
@@ -46,13 +47,17 @@ class NeonAvatar extends StatelessWidget {
     final gap = ring ? (size * 0.02).clamp(1.0, 2.5) : 0.0;
     final inner = size - (ringWidth + gap) * 2;
 
+    // Avatars come back as server-relative paths (`/uploads/avatars/...`), so
+    // absolutize them against the API origin before the loader fetches them.
+    final resolvedUrl = ApiConfig.resolveMediaUrl(imageUrl);
+
     Widget avatar = ClipOval(
       child: SizedBox(
         width: inner,
         height: inner,
-        child: (imageUrl != null && imageUrl!.isNotEmpty)
+        child: (resolvedUrl != null && resolvedUrl.isNotEmpty)
             ? CachedNetworkImage(
-                imageUrl: imageUrl!,
+                imageUrl: resolvedUrl,
                 fit: BoxFit.cover,
                 placeholder: (_, _) => _Fallback(name: name, size: inner),
                 errorWidget: (_, _, _) => _Fallback(name: name, size: inner),

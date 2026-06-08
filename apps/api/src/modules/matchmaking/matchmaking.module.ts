@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { AdminModule } from '../admin/admin.module';
 import { FriendsModule } from '../friends/friends.module';
 import { FriendsService } from '../friends/friends.service';
 import { ModerationModule } from '../moderation/moderation.module';
@@ -62,6 +63,10 @@ import { Match, MatchSchema } from './schemas/match.schema';
     PresenceModule,
     RealtimeSecurityModule,
     SettingsModule,
+    // {@link AdminModule} exports the live-flag `SettingsService` so the gateway
+    // can honour the runtime MATCHMAKING_ENABLED kill-switch on `mm:join`.
+    // AdminModule is a sink (no path back here), so this adds no cycle.
+    AdminModule,
     // Background reconciliation sweep for `active` matches left open by an
     // unclean teardown. The BullMQ root connection lives in AppModule; here we
     // just register the named queue this module's processor drains.

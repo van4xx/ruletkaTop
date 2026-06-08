@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { AdminController } from './admin.controller';
@@ -68,6 +69,11 @@ import { Report, ReportSchema } from './schemas/report.schema';
     UsersModule,
     // Breaks the AuthModule → ProfilesModule → ModerationModule → AuthModule cycle.
     forwardRef(() => AuthModule),
+    // {@link AdminModule} exports {@link AuditService} so the privileged admin
+    // user-management actions (role change, force-logout, verify-email, delete)
+    // can append an audit-trail row. No cycle: AdminModule's imports (wallet/
+    // premium/notifications/payments) never reach back into ModerationModule.
+    AdminModule,
   ],
   controllers: [
     ModerationController,

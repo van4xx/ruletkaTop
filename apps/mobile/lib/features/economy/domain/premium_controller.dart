@@ -7,22 +7,16 @@ import '../../../core/models/models.dart';
 import '../data/cloudpayments.dart';
 import '../data/economy_repository.dart';
 import '../presentation/cloudpayments_webview.dart';
-import 'economy_providers.dart';
 
 /// The caller's current subscription.
 ///
-/// There is no `GET /premium/subscription` endpoint; the available read path is
-/// `POST /premium/subscribe`, which VALIDATES a plan and RETURNS the current
-/// subscription WITHOUT granting anything (entitlement only comes from the
-/// CloudPayments recurrent webhook). We probe with the first plan's code, the
-/// same approach the web takes. Only runs when authenticated.
+/// A pure read via `GET /premium/subscription` (no side effects) — replacing the
+/// old `POST /premium/subscribe` probe. The server returns a synthetic `none`
+/// record when the caller has never subscribed. Only runs when authenticated.
 final subscriptionProvider = FutureProvider.autoDispose<Subscription?>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return null;
-  final plans = await ref.watch(premiumPlansProvider.future);
-  final probe = plans.isNotEmpty ? plans.first.code : null;
-  if (probe == null) return null;
-  return ref.read(economyRepositoryProvider).subscribe(probe);
+  return ref.read(economyRepositoryProvider).premiumSubscription();
 });
 
 /// UI phase of the subscribe flow (mirrors the web's `SubscribePhase`).
@@ -58,9 +52,11 @@ class PremiumState {
 
 /// Orchestrates premium subscribe + cancel.
 ///
-/// Subscribe: register intent (`POST /premium/subscribe`) → open the recurrent
-/// CloudPayments sheet (client-supplied public id, plan-derived cadence) → show
-/// pending (entitlement activates on the webhook).
+/// Subscribe: get SERVER-minted CloudPayments widget params
+/// (`POST /payments/premium/checkout` — the amount + recurrent descriptor are
+/// fixed server-side, and a PENDING premium payment is created) → open the
+/// CloudPayments sheet with those params → show pending (entitlement activates
+/// on the Pay webhook).
 class PremiumController extends Notifier<PremiumState> {
   @override
   PremiumState build() => const PremiumState();
@@ -69,16 +65,6 @@ class PremiumController extends Notifier<PremiumState> {
 
   Future<void> subscribe(BuildContext context, PremiumPlan plan) async {
     if (state.isBusy) return;
-
-    if (!CloudPayments.hasPublicId) {
-      state = PremiumState(
-        phase: SubscribePhase.error,
-        activePlan: plan,
-        error:
-            'Платёжный виджет не настроен (нет CLOUDPAYMENTS_PUBLIC_ID).',
-      );
-      return;
-    }
 
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) {
@@ -92,9 +78,12 @@ class PremiumController extends Notifier<PremiumState> {
 
     state = PremiumState(phase: SubscribePhase.starting, activePlan: plan);
 
-    // 1) Register intent (backend validates the plan + returns the record).
+    // 1) Server-side checkout: validates the plan, creates a PENDING premium
+    //    payment and returns the CloudPayments widget params (incl. recurrent).
+    final CheckoutWidgetParams params;
     try {
-      await ref.read(economyRepositoryProvider).subscribe(plan.code);
+      params =
+          await ref.read(economyRepositoryProvider).premiumCheckout(plan.code);
     } on ApiException catch (e) {
       state = state.copyWith(phase: SubscribePhase.error, error: e.message);
       return;
@@ -111,15 +100,11 @@ class PremiumController extends Notifier<PremiumState> {
       return;
     }
 
-    // 2) Open the recurrent CloudPayments charge.
+    // 2) Open the CloudPayments charge with the server-minted params.
     state = state.copyWith(phase: SubscribePhase.widget);
     final result = await CloudPaymentsWebView.show(
       context,
-      CloudPaymentsCharge.premium(
-        publicId: CloudPayments.publicId,
-        plan: plan,
-        userId: userId,
-      ),
+      CloudPaymentsCharge.coins(params),
     );
 
     switch (result?.event) {

@@ -11,6 +11,8 @@ import '../../../core/widgets/widgets.dart';
 import '../../auth/domain/auth_options.dart';
 import '../../dashboard/presentation/dashboard_providers.dart';
 import 'profile_providers.dart';
+import 'widgets/avatar_upload.dart';
+import 'widgets/cover_picker_sheet.dart';
 import 'widgets/gift_showcase_section.dart';
 import 'widgets/interests.dart';
 import 'widgets/interests_editor.dart';
@@ -117,7 +119,11 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                       : InterestChips(interests: profile.interests),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                _ActionsPanel(profile: profile, onEdit: _enterEdit),
+                _ActionsPanel(
+                  profile: profile,
+                  onEdit: _enterEdit,
+                  onCover: () => showCoverPickerSheet(context),
+                ),
                 const SizedBox(height: AppSpacing.lg),
                 GiftShowcaseSection(
                   userId: profile.id,
@@ -195,13 +201,18 @@ class _MyStats extends ConsumerWidget {
   }
 }
 
-/// The own-profile actions: edit, settings, share/copy id, change avatar (which
-/// opens the inline editor focused on the avatar URL). Each is a glassy row.
+/// The own-profile actions: edit, change avatar (pick + upload), change cover,
+/// settings, copy id. Each is a glassy row.
 class _ActionsPanel extends StatelessWidget {
-  const _ActionsPanel({required this.profile, required this.onEdit});
+  const _ActionsPanel({
+    required this.profile,
+    required this.onEdit,
+    required this.onCover,
+  });
 
   final PublicProfile profile;
   final VoidCallback onEdit;
+  final VoidCallback onCover;
 
   @override
   Widget build(BuildContext context) {
@@ -217,11 +228,13 @@ class _ActionsPanel extends StatelessWidget {
             onTap: onEdit,
           ),
           const _ActionDivider(),
+          AvatarActionRow(hasAvatar: (profile.avatarUrl ?? '').isNotEmpty),
+          const _ActionDivider(),
           _ActionRow(
-            icon: Icons.image_outlined,
-            label: 'Сменить аватар',
-            subtitle: 'Обновите ссылку на фото',
-            onTap: onEdit,
+            icon: Icons.wallpaper_rounded,
+            label: 'Сменить обложку',
+            subtitle: 'Оформление шапки профиля',
+            onTap: onCover,
           ),
           const _ActionDivider(),
           _ActionRow(
@@ -347,7 +360,6 @@ class _ProfileEditFormState extends ConsumerState<_ProfileEditForm> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nickname;
   late final TextEditingController _status;
-  late final TextEditingController _avatarUrl;
   late Gender _gender;
   late String _country;
   late Set<Locale> _languages;
@@ -359,7 +371,6 @@ class _ProfileEditFormState extends ConsumerState<_ProfileEditForm> {
     final p = widget.profile;
     _nickname = TextEditingController(text: p.nickname);
     _status = TextEditingController(text: p.status ?? '');
-    _avatarUrl = TextEditingController(text: p.avatarUrl ?? '');
     _gender = p.gender;
     _country = p.country.toUpperCase();
     _languages = p.languages.toSet();
@@ -370,7 +381,6 @@ class _ProfileEditFormState extends ConsumerState<_ProfileEditForm> {
   void dispose() {
     _nickname.dispose();
     _status.dispose();
-    _avatarUrl.dispose();
     super.dispose();
   }
 
@@ -414,12 +424,11 @@ class _ProfileEditFormState extends ConsumerState<_ProfileEditForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Avatar preview from the current URL field.
+                  // Avatar preview (managed via "Сменить аватар" on the profile
+                  // screen — uploads go through POST /profiles/me/avatar).
                   Center(
                     child: NeonAvatar(
-                      imageUrl: _avatarUrl.text.trim().isEmpty
-                          ? null
-                          : _avatarUrl.text.trim(),
+                      imageUrl: widget.profile.avatarUrl,
                       name: _nickname.text,
                       size: 84,
                       ring: widget.profile.isPremium,
@@ -427,18 +436,6 @@ class _ProfileEditFormState extends ConsumerState<_ProfileEditForm> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  TextFormField(
-                    controller: _avatarUrl,
-                    keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.next,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      labelText: 'Ссылка на аватар',
-                      hintText: 'https://…',
-                      prefixIcon: Icon(Icons.image_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
                   TextFormField(
                     controller: _nickname,
                     textInputAction: TextInputAction.next,
@@ -561,15 +558,15 @@ class _ProfileEditFormState extends ConsumerState<_ProfileEditForm> {
     final p = widget.profile;
     final nickname = _nickname.text.trim();
     final status = _status.text.trim();
-    final avatar = _avatarUrl.text.trim();
     final languages = _languages.toList(growable: false);
     final interests = _interests.toList(growable: false);
 
-    // Diff against the original so we PATCH only what changed.
+    // Diff against the original so we PATCH only what changed. The avatar is no
+    // longer set here — it's managed by the dedicated upload surface (POST/
+    // DELETE /profiles/me/avatar), which the API also requires.
     final dto = UpdateProfileDto(
       nickname: nickname != p.nickname ? nickname : null,
       status: status != (p.status ?? '') ? status : null,
-      avatarUrl: avatar != (p.avatarUrl ?? '') ? avatar : null,
       gender: _gender != p.gender ? _gender : null,
       country: _country != p.country.toUpperCase() ? _country : null,
       languages: !_sameLanguages(languages, p.languages) ? languages : null,

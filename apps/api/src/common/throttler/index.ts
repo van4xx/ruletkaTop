@@ -6,3 +6,4 @@
 export * from './throttler.constants';
 export * from './throttler.module';
 export * from './throttler-behind-proxy.guard';
+export * from './fail-open-throttler.storage';

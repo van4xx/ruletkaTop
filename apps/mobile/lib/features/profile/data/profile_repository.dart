@@ -31,6 +31,32 @@ class ProfileRepository {
   Future<PublicProfile> updateProfile(UpdateProfileDto dto) =>
       _api.updateProfile(dto);
 
+  /// `POST /profiles/me/avatar` — upload (or replace) the caller's avatar.
+  Future<PublicProfile> uploadAvatar(
+    List<int> bytes, {
+    required String filename,
+    String? mimeType,
+  }) =>
+      _api.uploadAvatar(bytes, filename: filename, mimeType: mimeType);
+
+  /// `DELETE /profiles/me/avatar` — reset the caller's avatar to the default.
+  Future<PublicProfile> deleteAvatar() => _api.deleteAvatar();
+
+  // ── Covers (profile cosmetics) ──
+  /// `GET /covers` — the cover catalogue.
+  Future<List<ProfileCover>> covers() => _api.covers();
+
+  /// `GET /covers/me` — the caller's cover inventory.
+  Future<CoverInventory> myCovers() => _api.myCovers();
+
+  /// `POST /covers/purchase` — buy a cover (auto-activates).
+  Future<CoverInventory> purchaseCover(String coverId) =>
+      _api.purchaseCover(coverId);
+
+  /// `POST /covers/active` — set the caller's active cover.
+  Future<PublicProfile> setActiveCover(String coverId) =>
+      _api.setActiveCover(coverId);
+
   /// `POST /friends/request`.
   Future<Friendship> sendFriendRequest(String recipientId) =>
       _api.sendFriendRequest(recipientId);

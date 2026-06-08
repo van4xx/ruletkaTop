@@ -29,6 +29,7 @@ class AuthUser {
     required this.role,
     required this.nickname,
     required this.isPremium,
+    this.emailVerified,
   });
 
   final String id;
@@ -37,12 +38,18 @@ class AuthUser {
   final String nickname;
   final bool isPremium;
 
+  /// Whether the account's email is confirmed. Optional/additive in the
+  /// contract — `null` for older API responses that predate the field (the UI
+  /// then simply hides the "verify your email" affordance).
+  final bool? emailVerified;
+
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
         id: json['id'] as String,
         email: json['email'] as String? ?? '',
         role: Role.fromWire(json['role'] as String?),
         nickname: json['nickname'] as String? ?? '',
         isPremium: json['isPremium'] as bool? ?? false,
+        emailVerified: json['emailVerified'] as bool?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -51,14 +58,22 @@ class AuthUser {
         'role': role.wire,
         'nickname': nickname,
         'isPremium': isPremium,
+        if (emailVerified != null) 'emailVerified': emailVerified,
       };
 
-  AuthUser copyWith({String? nickname, bool? isPremium, Role? role}) => AuthUser(
+  AuthUser copyWith({
+    String? nickname,
+    bool? isPremium,
+    Role? role,
+    bool? emailVerified,
+  }) =>
+      AuthUser(
         id: id,
         email: email,
         role: role ?? this.role,
         nickname: nickname ?? this.nickname,
         isPremium: isPremium ?? this.isPremium,
+        emailVerified: emailVerified ?? this.emailVerified,
       );
 }
 
@@ -117,4 +132,96 @@ class LoginDto {
   final String password;
 
   Map<String, dynamic> toJson() => {'email': email, 'password': password};
+}
+
+// ── Email verification + password reset (token-based, emailed link) ──
+
+/// `requestPasswordResetSchema` — `{ email }`. The API always 204s (never
+/// reveals whether the email is registered).
+class RequestPasswordResetDto {
+  const RequestPasswordResetDto({required this.email});
+
+  final String email;
+
+  Map<String, dynamic> toJson() => {'email': email};
+}
+
+/// `resetPasswordSchema` — `{ token, password }`. The single-use token comes
+/// from the emailed link; setting the password revokes all sessions.
+class ResetPasswordDto {
+  const ResetPasswordDto({required this.token, required this.password});
+
+  final String token;
+  final String password;
+
+  Map<String, dynamic> toJson() => {'token': token, 'password': password};
+}
+
+/// `verifyEmailSchema` — `{ token }` from the emailed verification link.
+class VerifyEmailDto {
+  const VerifyEmailDto({required this.token});
+
+  final String token;
+
+  Map<String, dynamic> toJson() => {'token': token};
+}
+
+/// `changePasswordSchema` — change the password of an ALREADY-authenticated
+/// account (the user knows their current password). Distinct from the
+/// emailed-token reset flow. The server verifies `currentPassword` and revokes
+/// all sessions on success.
+class ChangePasswordDto {
+  const ChangePasswordDto({
+    required this.currentPassword,
+    required this.newPassword,
+  });
+
+  final String currentPassword;
+  final String newPassword;
+
+  Map<String, dynamic> toJson() => {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      };
+}
+
+// ── Active sessions / device management ──
+
+/// `authSessionSchema` — one ACTIVE login (refresh-token rotation family) as
+/// surfaced for review/revocation by `GET /auth/sessions`. The raw refresh
+/// token is never exposed: [id] is the family identifier (stable across
+/// rotations), so revoking by it kills that whole device/login. [current] flags
+/// the session the requesting device is using right now.
+class AuthSession {
+  const AuthSession({
+    required this.id,
+    required this.ip,
+    required this.userAgent,
+    required this.device,
+    required this.createdAt,
+    required this.lastActiveAt,
+    required this.current,
+  });
+
+  final String id;
+  final String? ip;
+  final String? userAgent;
+
+  /// Optional parsed device label (reserved; null until UA parsing lands).
+  final String? device;
+  final DateTime? createdAt;
+  final DateTime? lastActiveAt;
+
+  /// True for the session the requesting device is currently using.
+  final bool current;
+
+  factory AuthSession.fromJson(Map<String, dynamic> json) => AuthSession(
+        id: json['id'] as String? ?? '',
+        ip: json['ip'] as String?,
+        userAgent: json['userAgent'] as String?,
+        device: json['device'] as String?,
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+        lastActiveAt: DateTime.tryParse(json['lastActiveAt'] as String? ?? ''),
+        current: json['current'] as bool? ?? false,
+      );
 }

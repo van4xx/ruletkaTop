@@ -107,15 +107,25 @@ export class AppealsService {
       throw new ConflictException('You already have a pending appeal under review');
     }
 
-    const created = await this.appealModel.create({
-      userId,
-      email: user.email,
-      nickname: await this.resolveNickname(userId),
-      banReason: user.banReason ?? null,
-      message: dto.message,
-      status: 'pending',
-    });
-    return this.toContract(created);
+    try {
+      const created = await this.appealModel.create({
+        userId,
+        email: user.email,
+        nickname: await this.resolveNickname(userId),
+        banReason: user.banReason ?? null,
+        message: dto.message,
+        status: 'pending',
+      });
+      return this.toContract(created);
+    } catch (err) {
+      // The check above is non-atomic; a concurrent second submit can slip past
+      // it and trip the partial-unique index (one pending appeal per user). Map
+      // that race to the SAME 409 the explicit pre-check returns.
+      if (this.isDuplicatePendingError(err)) {
+        throw new ConflictException('You already have a pending appeal under review');
+      }
+      throw err;
+    }
   }
 
   /**
@@ -198,6 +208,20 @@ export class AppealsService {
     await appeal.save();
 
     return { appeal: this.toContract(appeal), ban: { userId: targetUserId, isBanned } };
+  }
+
+  /**
+   * True for the MongoDB duplicate-key error (code 11000 / E11000) raised by the
+   * partial-unique index that enforces one pending appeal per user. Mirrors the
+   * detection used in `PaymentsService`/`WalletService`.
+   */
+  private isDuplicatePendingError(err: unknown): boolean {
+    if (typeof err !== 'object' || err === null) {
+      return false;
+    }
+    const code = (err as { code?: number | string }).code;
+    const message = (err as { message?: string }).message ?? '';
+    return code === 11000 || code === 11001 || /E11000 duplicate key/i.test(message);
   }
 
   /**

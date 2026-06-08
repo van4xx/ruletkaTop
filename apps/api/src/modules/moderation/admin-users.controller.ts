@@ -104,8 +104,11 @@ export class AdminUsersController {
   @ApiOkResponse({ description: 'The updated user summary (emailVerified=true)' })
   @ApiNotFoundResponse({ description: 'No such user' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
-  async verifyEmail(@Param('id') id: string): Promise<AdminUserSummary> {
-    return this.adminUsersService.verifyEmail(id);
+  async verifyEmail(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<AdminUserSummary> {
+    return this.adminUsersService.verifyEmail(id, caller.sub);
   }
 
   @Post(':id/force-logout')
@@ -117,8 +120,11 @@ export class AdminUsersController {
   @ApiOkResponse({ description: 'Acknowledgement that sessions were revoked' })
   @ApiNotFoundResponse({ description: 'No such user' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
-  async forceLogout(@Param('id') id: string): Promise<{ ok: true }> {
-    return this.adminUsersService.forceLogout(id);
+  async forceLogout(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<{ ok: true }> {
+    return this.adminUsersService.forceLogout(id, caller.sub);
   }
 
   @Delete(':id')
@@ -131,7 +137,10 @@ export class AdminUsersController {
   @ApiOkResponse({ description: 'Acknowledgement that the account was deleted' })
   @ApiNotFoundResponse({ description: 'No such user (or already deleted)' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async deleteUser(@Param('id') id: string): Promise<{ ok: true }> {
-    return this.adminUsersService.deleteUser(id);
+  async deleteUser(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<{ ok: true }> {
+    return this.adminUsersService.deleteUser(id, caller.sub);
   }
 }

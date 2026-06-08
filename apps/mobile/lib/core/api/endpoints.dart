@@ -43,6 +43,59 @@ extension ApiEndpoints on ApiClient {
     );
   }
 
+  // ── Email verification + password reset (token-based, emailed link) ──
+  /// `POST /auth/request-password-reset` — request a reset email. Always 204s
+  /// (the API never reveals whether the email is registered). Public.
+  Future<void> requestPasswordReset(RequestPasswordResetDto dto) => sendVoid(
+        'POST',
+        '/auth/request-password-reset',
+        body: dto.toJson(),
+        skipAuth: true,
+      );
+
+  /// `POST /auth/reset-password` — set a new password with the emailed token.
+  /// On success the server revokes all sessions; the user re-logs in. Public.
+  Future<void> resetPassword(ResetPasswordDto dto) => sendVoid(
+        'POST',
+        '/auth/reset-password',
+        body: dto.toJson(),
+        skipAuth: true,
+      );
+
+  /// `POST /auth/verify-email` — confirm an email from the emailed token.
+  /// Public (the link is opened by a possibly-signed-out browser/app).
+  Future<void> verifyEmail(VerifyEmailDto dto) => sendVoid(
+        'POST',
+        '/auth/verify-email',
+        body: dto.toJson(),
+        skipAuth: true,
+      );
+
+  /// `POST /auth/resend-verification` — re-send the verification email to the
+  /// signed-in user (no-op if already verified).
+  Future<void> resendVerification() =>
+      sendVoid('POST', '/auth/resend-verification');
+
+  /// `POST /auth/change-password` — change the current password (verifying the
+  /// existing one). The server revokes all sessions on success, so the caller
+  /// must re-authenticate afterwards.
+  Future<void> changePassword(ChangePasswordDto dto) =>
+      sendVoid('POST', '/auth/change-password', body: dto.toJson());
+
+  // ── Active sessions / device management ──
+  /// `GET /auth/sessions` — the caller's active sessions, the requesting device
+  /// flagged `current`.
+  Future<List<AuthSession>> sessions() =>
+      getList('/auth/sessions', AuthSession.fromJson);
+
+  /// `DELETE /auth/sessions/:id` — revoke one session (sign out that device).
+  Future<void> revokeSession(String sessionId) =>
+      sendVoid('DELETE', '/auth/sessions/$sessionId');
+
+  /// `DELETE /auth/sessions` — revoke all OTHER sessions (keep the current
+  /// device).
+  Future<void> revokeOtherSessions() => sendVoid('DELETE', '/auth/sessions');
+
   // ─────────────────────────────── Profiles ───────────────────────────────
   /// `GET /profiles/:id`.
   Future<PublicProfile> profileById(String id, {CancelToken? cancelToken}) =>
@@ -87,6 +140,55 @@ extension ApiEndpoints on ApiClient {
   /// `GET /profiles/:id/gifts` — gifts received by a user.
   Future<List<GiftTransaction>> profileGifts(String id) =>
       getList('/profiles/$id/gifts', GiftTransaction.fromJson);
+
+  /// `POST /profiles/me/avatar` — upload (or replace) the caller's avatar. The
+  /// server re-encodes the bytes to a square WEBP and stores them under a
+  /// server-generated path; the returned profile carries the new `avatarUrl`.
+  Future<PublicProfile> uploadAvatar(
+    List<int> bytes, {
+    required String filename,
+    String? mimeType,
+  }) =>
+      uploadMultipart(
+        '/profiles/me/avatar',
+        PublicProfile.fromJson,
+        bytes: bytes,
+        field: 'file',
+        filename: filename,
+        mimeType: mimeType,
+      );
+
+  /// `DELETE /profiles/me/avatar` — reset the caller's avatar to the default.
+  Future<PublicProfile> deleteAvatar() =>
+      sendJson('DELETE', '/profiles/me/avatar', PublicProfile.fromJson);
+
+  // ──────────────────────────────── Covers ────────────────────────────────
+  /// `GET /covers` — the cover catalogue (free first, then cheapest-first).
+  /// Public.
+  Future<List<ProfileCover>> covers() =>
+      getList('/covers', ProfileCover.fromJson);
+
+  /// `GET /covers/me` — the caller's cover inventory `{ active, owned }`.
+  Future<CoverInventory> myCovers() =>
+      getJson('/covers/me', CoverInventory.fromJson);
+
+  /// `POST /covers/purchase` — buy a cover (debits coins, auto-activates).
+  /// Returns the updated inventory.
+  Future<CoverInventory> purchaseCover(String coverId) => sendJson(
+        'POST',
+        '/covers/purchase',
+        CoverInventory.fromJson,
+        body: PurchaseCoverDto(coverId: coverId).toJson(),
+      );
+
+  /// `POST /covers/active` — set the caller's active cover (must be owned/free).
+  /// Returns the updated public profile so the hero updates instantly.
+  Future<PublicProfile> setActiveCover(String coverId) => sendJson(
+        'POST',
+        '/covers/active',
+        PublicProfile.fromJson,
+        body: PurchaseCoverDto(coverId: coverId).toJson(),
+      );
 
   // ──────────────────────────────── Friends ───────────────────────────────
   /// `GET /friends` — the caller's accepted friends with presence.
@@ -170,7 +272,16 @@ extension ApiEndpoints on ApiClient {
   Future<List<PremiumPlan>> premiumPlans() =>
       getList('/premium/plans', PremiumPlan.fromJson);
 
-  /// `POST /premium/subscribe` — start/confirm a subscription to [planCode].
+  /// `GET /premium/subscription` — read the caller's subscription state with NO
+  /// side effects (returns a synthetic `none` record when never subscribed).
+  /// Prefer this for reads over [subscribe] (which is an intent-registration
+  /// POST, not a pure read).
+  Future<Subscription> premiumSubscription() =>
+      getJson('/premium/subscription', Subscription.fromJson);
+
+  /// `POST /premium/subscribe` — register subscription intent for [planCode]
+  /// (validates the plan + returns the current subscription; grants nothing —
+  /// entitlement comes from the payments webhook).
   Future<Subscription> subscribe(String planCode) => sendJson(
         'POST',
         '/premium/subscribe',
@@ -190,6 +301,16 @@ extension ApiEndpoints on ApiClient {
         '/payments/coins/checkout',
         CheckoutWidgetParams.fromJson,
         body: {'packageCode': packageCode},
+      );
+
+  /// `POST /payments/premium/checkout` — server-minted CloudPayments widget
+  /// params for a premium plan (including the recurrent descriptor). The amount
+  /// is fixed from the plan price server-side, so the client never supplies it.
+  Future<CheckoutWidgetParams> premiumCheckout(String planCode) => sendJson(
+        'POST',
+        '/payments/premium/checkout',
+        CheckoutWidgetParams.fromJson,
+        body: {'plan': planCode},
       );
 
   // ─────────────────────────────── Settings ───────────────────────────────

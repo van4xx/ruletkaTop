@@ -5,6 +5,7 @@ import '../../../../core/theme/theme.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../../auth/domain/auth_options.dart';
 import '../../../economy/presentation/economy_format.dart';
+import 'cover_art.dart';
 
 /// The signature profile hero, shared by the own- and public-profile screens.
 ///
@@ -41,25 +42,13 @@ class ProfileHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Aurora cover strip.
+          // Cover strip — the user's selected cosmetic (defaults to aurora).
           ClipRRect(
             borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(AppRadii.xl)),
             child: SizedBox(
               height: 92,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colors.neonViolet.withValues(alpha: 0.45),
-                      colors.neonMagenta.withValues(alpha: 0.30),
-                      colors.neonCyan.withValues(alpha: 0.35),
-                    ],
-                  ),
-                ),
-              ),
+              child: CoverArt(coverId: profile.activeCover),
             ),
           ),
           Padding(

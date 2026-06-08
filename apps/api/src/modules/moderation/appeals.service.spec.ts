@@ -137,6 +137,27 @@ describe('AppealsService', () => {
     expect(appealModel.create).not.toHaveBeenCalled();
   });
 
+  it('409s the check-then-create race: a concurrent insert tripping the partial-unique index (E11000) maps to 409', async () => {
+    // The non-atomic pre-check passes (no pending row visible yet)…
+    appealModel.exists.mockReturnValue(queryReturning(null));
+    // …but a concurrent second submit already won the race, so the partial
+    // unique index (one pending appeal per user) rejects this insert.
+    appealModel.create.mockRejectedValue(
+      Object.assign(new Error('E11000 duplicate key error'), { code: 11000 }),
+    );
+    await expect(
+      service.submitAppeal({ email: 'banned@example.com', password: PASSWORD, message: MESSAGE }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rethrows a non-duplicate create error unchanged', async () => {
+    appealModel.exists.mockReturnValue(queryReturning(null));
+    appealModel.create.mockRejectedValue(new Error('connection reset'));
+    await expect(
+      service.submitAppeal({ email: 'banned@example.com', password: PASSWORD, message: MESSAGE }),
+    ).rejects.toThrow('connection reset');
+  });
+
   // ── resolve ────────────────────────────────────────────────────────────────
 
   it('accepting an appeal unbans the user and stamps the decision', async () => {

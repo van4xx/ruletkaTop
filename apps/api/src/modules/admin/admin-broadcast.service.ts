@@ -25,9 +25,9 @@ const HISTORY_LIMIT = 100;
  * target segment to a bounded set of user ids and fans out a `system`
  * notification to each (persisted + delivered via the existing notif pipeline).
  * Resolution reads `users`/`profiles` by name via the shared connection. On
- * success it ALSO inserts a {@link BroadcastRecord} (WAVE-2) so history is real.
+ * success it ALSO inserts a {@link BroadcastRecord} so history is real.
  *
- * History — REAL (WAVE-2): reads the `broadcasts` collection, newest first.
+ * History — REAL: reads the `broadcasts` collection, newest first.
  */
 @Injectable()
 export class AdminBroadcastService {

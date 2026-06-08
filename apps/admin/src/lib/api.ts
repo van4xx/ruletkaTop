@@ -361,7 +361,7 @@ export const adminApi = {
     events: () => req<AdminSecurityEventList>('/admin/security/events'),
   },
 
-  /** Настройки — feature flags + limits; patch (admin, stub). */
+  /** Настройки — feature flags + limits; get + patch (admin). */
   settings: {
     get: () => req<AdminSettings>('/admin/settings'),
     patch: (body: AdminPatchSettingsDto) =>

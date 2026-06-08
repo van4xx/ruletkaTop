@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http_parser/http_parser.dart';
 
 import '../models/models.dart';
 import 'api_config.dart';
@@ -274,6 +275,38 @@ class ApiClient {
         options: _opts(skipAuth, method: method),
       ),
     );
+  }
+
+  /// POST a single-file `multipart/form-data` body (e.g. the avatar upload) →
+  /// decode the JSON object response. The bytes ride under [field] with the
+  /// given [filename] + optional [mimeType]; the bearer token is attached as
+  /// usual (so the 401-refresh-retry still applies on the first attempt).
+  Future<T> uploadMultipart<T>(
+    String path,
+    T Function(Map<String, dynamic>) decoder, {
+    required List<int> bytes,
+    required String field,
+    required String filename,
+    String? mimeType,
+    CancelToken? cancelToken,
+  }) async {
+    final form = FormData.fromMap({
+      field: MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: mimeType != null ? MediaType.parse(mimeType) : null,
+      ),
+    });
+    final res = await _send(
+      () => _dio.post<dynamic>(
+        path,
+        data: form,
+        cancelToken: cancelToken,
+        // Let Dio set the multipart boundary content-type for the FormData.
+        options: Options(method: 'POST', contentType: null),
+      ),
+    );
+    return decoder(_asMap(res.data));
   }
 
   Options _opts(bool skipAuth, {String? method}) => Options(

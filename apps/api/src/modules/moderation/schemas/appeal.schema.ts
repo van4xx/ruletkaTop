@@ -62,5 +62,15 @@ export const AppealSchema = SchemaFactory.createForClass(Appeal);
 // ── Indexes ────────────────────────────────────────────────────────────────
 // Admin review queue: pending/decided appeals, newest first (status + _id paginates).
 AppealSchema.index({ status: 1, _id: -1 });
-// "Has this user already filed an open appeal?" dedupe + per-user history.
-AppealSchema.index({ userId: 1, status: 1 });
+// ONE-PENDING-PER-USER, DB-enforced: a PARTIAL unique index over `{ userId }`
+// restricted to `status: 'pending'`. Because the filter only covers pending
+// rows, a user may still have many *decided* (accepted/rejected) appeals in
+// history, but at most one open one — closing the check-then-create race in
+// `AppealsService.submitAppeal` (a concurrent second submit now hits E11000,
+// which the service maps to the same 409 as the explicit pre-check).
+AppealSchema.index(
+  { userId: 1 },
+  { unique: true, partialFilterExpression: { status: 'pending' } },
+);
+// Per-user history (all statuses), newest first.
+AppealSchema.index({ userId: 1, _id: -1 });

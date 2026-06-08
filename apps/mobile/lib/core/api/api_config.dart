@@ -29,6 +29,35 @@ abstract final class ApiConfig {
     return 'http://$_host:$_port';
   }
 
+  /// The bare API ORIGIN (scheme + host[:port], NO `/api` suffix) — used to
+  /// absolutize the server-relative media paths the API hands back (avatars are
+  /// served at `/uploads/avatars/...`, NOT under `/api`). Derived from
+  /// [baseUrl] by stripping a trailing `/api`.
+  static String get assetOrigin {
+    final base = baseUrl;
+    final uri = Uri.tryParse(base);
+    if (uri != null && uri.hasScheme) {
+      return Uri(scheme: uri.scheme, host: uri.host, port: uri.hasPort ? uri.port : null)
+          .toString();
+    }
+    return 'http://$_host:$_port';
+  }
+
+  /// Resolve a possibly-relative media path (e.g. `/uploads/avatars/x.webp`) to
+  /// an absolute URL the image loader can fetch. Absolute http(s) URLs and data
+  /// URIs are returned unchanged; null/empty yields null.
+  static String? resolveMediaUrl(String? url) {
+    final value = url?.trim();
+    if (value == null || value.isEmpty) return null;
+    if (value.startsWith('http://') ||
+        value.startsWith('https://') ||
+        value.startsWith('data:')) {
+      return value;
+    }
+    final origin = assetOrigin;
+    return value.startsWith('/') ? '$origin$value' : '$origin/$value';
+  }
+
   static const int _port = 4000;
 
   /// Resolve the dev host for the current platform (override with
@@ -45,6 +74,25 @@ abstract final class ApiConfig {
     }
     return 'localhost';
   }
+
+  /// Public WEBSITE origin (no trailing slash) — where the legal/help pages and
+  /// the email-link landing pages live. The mobile app links OUT to these. A
+  /// `--dart-define=WEB_BASE_URL=https://ruletka.top` wins; otherwise we default
+  /// to the production site (the legal pages are static + public).
+  static String get webBaseUrl {
+    const fromDefine = String.fromEnvironment('WEB_BASE_URL');
+    if (fromDefine.isNotEmpty) {
+      return fromDefine.endsWith('/')
+          ? fromDefine.substring(0, fromDefine.length - 1)
+          : fromDefine;
+    }
+    return 'https://ruletka.top';
+  }
+
+  /// Canonical legal-document URLs (mirror the web routes in
+  /// `apps/web/src/config/nav.ts`: Terms → `/rules`, Privacy → `/privacy`).
+  static String get termsUrl => '$webBaseUrl/rules';
+  static String get privacyUrl => '$webBaseUrl/privacy';
 
   /// Default network timeouts.
   static const Duration connectTimeout = Duration(seconds: 15);

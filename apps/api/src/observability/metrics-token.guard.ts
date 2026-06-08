@@ -8,6 +8,7 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 
 import { METRICS_TOKEN } from './metrics.constants';
@@ -15,11 +16,16 @@ import { METRICS_TOKEN } from './metrics.constants';
 /**
  * Optional bearer gate for `GET /metrics`.
  *
- * FAIL-OPEN BY CONFIG: when `METRICS_TOKEN` is blank/undefined (the default),
- * the endpoint is OPEN — the intended deployment scrapes it from a private
- * network / sidecar where the listener itself is not publicly reachable. Set
- * `METRICS_TOKEN` to require `Authorization: Bearer <token>` when the port is
- * exposed more broadly.
+ * DEV/TEST — FAIL-OPEN BY CONFIG: when `METRICS_TOKEN` is blank/undefined, the
+ * endpoint is OPEN, so a local Prometheus / CI scrape works with no token.
+ *
+ * PRODUCTION — FAIL-FAST: a blank `METRICS_TOKEN` is REJECTED at construction
+ * (which runs during bootstrap, aborting `app.listen()`). The metrics route is
+ * reachable through the public nginx edge (`api.ruletka.top/api/metrics`), so a
+ * fail-open blank token there would publish queue depth, socket counts and the
+ * default `process_*` series to anyone — and leaking internal topology is an
+ * info-disclosure foothold. Refusing to boot closes that fail-open; the nginx
+ * config ALSO `deny all`s the `/metrics` location as defence-in-depth.
  *
  * The comparison is constant-time (`timingSafeEqual`) so a wrong token can't be
  * recovered byte-by-byte via timing. This guard is deliberately NOT the global
@@ -28,11 +34,29 @@ import { METRICS_TOKEN } from './metrics.constants';
  */
 @Injectable()
 export class MetricsTokenGuard implements CanActivate {
-  /** Pre-encoded expected token (`undefined` ⇒ endpoint open). */
+  /** Pre-encoded expected token (`undefined` ⇒ endpoint open, dev/test only). */
   private readonly expected?: Buffer;
 
-  constructor(@Optional() @Inject(METRICS_TOKEN) token?: string) {
+  constructor(
+    @Optional() @Inject(METRICS_TOKEN) token?: string,
+    @Optional() config?: ConfigService,
+  ) {
     const trimmed = token?.trim();
+
+    // PRODUCTION FAIL-FAST: an unset/blank METRICS_TOKEN leaves /metrics open at
+    // the public edge. Abort bootstrap rather than serve internal telemetry
+    // unauthenticated. Gated on NODE_ENV=production so dev/test/CI (which scrape
+    // without a token) are never blocked — matching common/config-validation.ts.
+    const isProd = config?.get<string>('NODE_ENV') === 'production';
+    if (isProd && !trimmed) {
+      throw new Error(
+        'FATAL: METRICS_TOKEN is required in production — GET /metrics is reachable ' +
+          'through the public nginx edge and would otherwise expose internal telemetry ' +
+          'unauthenticated. Set a strong METRICS_TOKEN (e.g. `openssl rand -base64 32`). ' +
+          'Refusing to boot.',
+      );
+    }
+
     this.expected = trimmed ? Buffer.from(trimmed, 'utf8') : undefined;
   }
 

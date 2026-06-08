@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -50,16 +50,41 @@ const DEFAULT_TURN_TTL_SECONDS = 1200;
  */
 @Injectable()
 export class TurnService {
+  private readonly logger = new Logger(TurnService.name);
   private readonly staticAuthSecret: string;
   private readonly ttlSeconds: number;
   private readonly turnUrls: string[];
   private readonly stunUrls: string[];
+  /**
+   * Whether a real TURN signing secret is configured. When `false` we MUST NOT
+   * mint a credential (an HMAC over an empty secret is a bogus credential coturn
+   * will reject) — we degrade to STUN-only instead, which still lets non-symmetric
+   * NATs connect directly. Computed once at construction.
+   */
+  private readonly configured: boolean;
 
   constructor(config: ConfigService) {
-    this.staticAuthSecret = config.get<string>('TURN_STATIC_AUTH_SECRET', '');
+    this.staticAuthSecret = config.get<string>('TURN_STATIC_AUTH_SECRET', '').trim();
     this.ttlSeconds = config.get<number>('TURN_CRED_TTL_SECONDS', DEFAULT_TURN_TTL_SECONDS);
     this.turnUrls = this.buildTurnUrls(config);
     this.stunUrls = this.buildStunUrls(config);
+    this.configured = this.staticAuthSecret.length > 0;
+
+    if (!this.configured) {
+      // Degrade gracefully (STUN-only) rather than mint a bogus credential — but
+      // be LOUD about it, because calls behind symmetric NATs/firewalls will fail
+      // to connect with no relay. In production this is almost certainly a
+      // misconfiguration, so log at error level (a crash-on-boot would take the
+      // whole API down for a non-fatal gap, so we don't throw).
+      const message =
+        'TURN_STATIC_AUTH_SECRET is not set — serving STUN-only ICE config; calls behind ' +
+        'symmetric NATs/firewalls will fail to connect. Configure a TURN relay for production.';
+      if (config.get<string>('NODE_ENV') === 'production') {
+        this.logger.error(message);
+      } else {
+        this.logger.warn(message);
+      }
+    }
   }
 
   /**
@@ -70,14 +95,18 @@ export class TurnService {
    */
   mintCredentials(userId: string): TurnCredentials {
     const expiry = Math.floor(Date.now() / 1000) + this.ttlSeconds;
-    const username = `${expiry}:${userId}`;
-    const credential = this.sign(username);
 
     const iceServers: IceServer[] = [];
     if (this.stunUrls.length > 0) {
       iceServers.push({ urls: this.stunUrls });
     }
-    if (this.turnUrls.length > 0) {
+    // Only advertise a TURN relay when a real signing secret is configured:
+    // signing with an empty secret yields a credential coturn will reject, so a
+    // misconfigured deployment would advertise a relay that never authenticates.
+    // When unconfigured we degrade to STUN-only (returned above) instead.
+    if (this.configured && this.turnUrls.length > 0) {
+      const username = `${expiry}:${userId}`;
+      const credential = this.sign(username);
       iceServers.push({ urls: this.turnUrls, username, credential });
     }
 

@@ -53,6 +53,16 @@ dependencies:
   # CloudPayments widget fallback (hosted checkout) + any embedded web content.
   webview_flutter: ^4.13.1
 
+  # Pick an avatar from the gallery / camera, then upload it (multipart) via
+  # POST /profiles/me/avatar.
+  image_picker: ^1.1.2
+
+  # Multipart filename + content-type for the avatar upload.
+  http_parser: ^4.1.2
+
+  # Open the Terms / Privacy legal pages (register consent) in the browser.
+  url_launcher: ^6.3.1
+
   # Date/number formatting + relative timestamps.
   intl: ^0.20.2
 

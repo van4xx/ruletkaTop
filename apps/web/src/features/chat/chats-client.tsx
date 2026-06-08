@@ -18,6 +18,7 @@ import { usePresence, type PresenceMap } from '@/features/friends/use-presence';
 import { ErrorState, SignInRequired, StatePanel } from '@/components/social/state-views';
 import { ConversationListItem } from '@/components/chat/conversation-list-item';
 import { ConversationsSkeleton } from '@/components/chat/chat-skeleton';
+import { DraftThread } from './draft-thread';
 import {
   useConversations,
   usePeerProfiles,
@@ -83,8 +84,11 @@ export function ChatsClient() {
     });
   }, [conversations, query, byId, selfId]);
 
-  const toPeer = toUserId ? byId.get(toUserId) : undefined;
-  const hasDeepLinkPrompt =
+  // A `?to=<userId>` deep link to a peer we've NEVER messaged: no conversation
+  // exists yet, so there is nothing to redirect into. Render a composable draft
+  // thread that CREATES the conversation on first send (see {@link DraftThread}),
+  // instead of the previous dead-end that could only "open profile".
+  const showDraftThread =
     Boolean(toUserId) &&
     !conversationsQuery.isLoading &&
     !conversations.some((c) => c.participants.includes(toUserId!));
@@ -93,32 +97,12 @@ export function ChatsClient() {
     return <SignInRequired description={t('chatsClient.signInDescription')} />;
   }
 
+  if (showDraftThread && toUserId) {
+    return <DraftThread recipientId={toUserId} />;
+  }
+
   return (
     <div className="space-y-4">
-      {/* Deep-link "start new chat" prompt */}
-      {hasDeepLinkPrompt && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-panel flex items-center gap-3 rounded-2xl p-3"
-        >
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-card/70 text-[var(--color-neon-cyan)]">
-            <MessageSquarePlus className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
-              {toPeer
-                ? t('chatsClient.newChatWith', { name: toPeer.nickname })
-                : t('chatsClient.newChat')}
-            </p>
-            <p className="text-xs text-muted-foreground">{t('chatsClient.sendFirstMessage')}</p>
-          </div>
-          <Button asChild variant="primary" size="sm">
-            <a href={`/profile/${toUserId}`}>{t('openProfile')}</a>
-          </Button>
-        </motion.div>
-      )}
-
       {/* Search */}
       <Input
         value={query}

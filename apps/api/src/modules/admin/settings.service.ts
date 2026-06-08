@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
-import type { AdminSettingFlag } from '@ruletka/shared-types';
+import type { AdminSettingFlag, PublicStatus } from '@ruletka/shared-types';
 
 import { AppSetting, AppSettingDocument } from './schemas/app-setting.schema';
 
@@ -70,6 +70,54 @@ export class SettingsService {
   /** Whether `key` is a known, runtime-toggleable (store-backed) flag. */
   isLiveKey(key: string): boolean {
     return LIVE_FLAG_BY_KEY.has(key);
+  }
+
+  /**
+   * Resolve ONE live flag's effective boolean value: its stored override if any,
+   * else the code default. Best-effort — a store-read failure falls back to the
+   * code default (via {@link loadOverrides}), so a flag read can never throw and
+   * break a gate it guards.
+   */
+  async getFlag(key: string): Promise<boolean> {
+    const def = LIVE_FLAG_BY_KEY.get(key);
+    if (!def) {
+      return false;
+    }
+    const overrides = await this.loadOverrides();
+    return overrides.has(key) ? this.coerceBool(overrides.get(key)!) : def.defaultValue;
+  }
+
+  /** Whether new-account registration is currently OPEN (live kill-switch). */
+  async isRegistrationOpen(): Promise<boolean> {
+    return this.getFlag('REGISTRATION_OPEN');
+  }
+
+  /** Whether the matchmaking/roulette pool is currently ENABLED (live kill-switch). */
+  async isMatchmakingEnabled(): Promise<boolean> {
+    return this.getFlag('MATCHMAKING_ENABLED');
+  }
+
+  /** Whether the platform is in maintenance mode (drives the public banner). */
+  async isMaintenanceMode(): Promise<boolean> {
+    return this.getFlag('MAINTENANCE_MODE');
+  }
+
+  /**
+   * The PUBLIC operational status the web/mobile clients read (unauthenticated)
+   * to show a maintenance banner and pre-disable register / "start" actions.
+   * Computed from the live flags in ONE store read.
+   */
+  async getPublicStatus(): Promise<PublicStatus> {
+    const overrides = await this.loadOverrides();
+    const flag = (key: string): boolean => {
+      const def = LIVE_FLAG_BY_KEY.get(key)!;
+      return overrides.has(key) ? this.coerceBool(overrides.get(key)!) : def.defaultValue;
+    };
+    return {
+      maintenanceMode: flag('MAINTENANCE_MODE'),
+      registrationOpen: flag('REGISTRATION_OPEN'),
+      matchmakingEnabled: flag('MATCHMAKING_ENABLED'),
+    };
   }
 
   /**

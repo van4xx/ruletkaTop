@@ -100,8 +100,9 @@ describe('ChatService.sendMessage — context (away) notifications', () => {
     expect(arg.recipientUserId).toBe(RECIPIENT);
     expect(arg.kind).toBe('message');
     expect(arg.actorId).toBe(SENDER);
-    // Deep-links to the conversation; title is the sender's nickname, body the preview.
-    expect(arg.link).toBe(`/chat/${CONVO_ID}`);
+    // Deep-links to the CANONICAL web thread route (/chats/:id, not the 404ing
+    // /chat/:id); title is the sender's nickname, body the preview.
+    expect(arg.link).toBe(`/chats/${CONVO_ID}`);
     expect(arg.title).toBe('Alice');
     expect(arg.body).toBe('hi there');
 

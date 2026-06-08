@@ -13,6 +13,7 @@ import 'sections/danger_section.dart';
 import 'sections/devices_section.dart';
 import 'sections/notifications_section.dart';
 import 'sections/privacy_section.dart';
+import 'sections/sessions_section.dart';
 
 /// `/settings` — the account control center. A single scrollable column that
 /// stacks every settings section (each a self-contained titled glass card) in a
@@ -107,6 +108,8 @@ class _PreferencesGroup extends StatelessWidget {
         PrivacySection(settings: settings),
         const SizedBox(height: AppSpacing.lg),
         DevicesSection(settings: settings),
+        const SizedBox(height: AppSpacing.lg),
+        const SessionsSection(),
       ],
     );
   }

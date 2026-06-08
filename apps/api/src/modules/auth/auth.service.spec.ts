@@ -141,6 +141,12 @@ interface Mocks {
     /** Direct access to the backing store (for assertions / resets if needed). */
     store: Map<string, string>;
   };
+  /** The admin live-flag store (registration / matchmaking kill-switches). */
+  liveFlags: {
+    isRegistrationOpen: jest.Mock;
+    isMatchmakingEnabled: jest.Mock;
+    isMaintenanceMode: jest.Mock;
+  };
   usersCollectionDeleteOne: jest.Mock;
   /** The `withTransaction` mock of the session returned by `startSession`. */
   withTransaction: jest.Mock;
@@ -304,6 +310,15 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
 
   const redis = buildFakeRedis();
 
+  // Live-flag store: registration OPEN by default so the register tests exercise
+  // the happy path; individual tests can flip `isRegistrationOpen` to assert the
+  // kill-switch.
+  const liveFlags = {
+    isRegistrationOpen: jest.fn().mockResolvedValue(true),
+    isMatchmakingEnabled: jest.fn().mockResolvedValue(true),
+    isMaintenanceMode: jest.fn().mockResolvedValue(false),
+  };
+
   return {
     usersService,
     jwtService,
@@ -316,6 +331,7 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
     mailerService,
     connection,
     redis,
+    liveFlags,
     usersCollectionDeleteOne,
     withTransaction: session.withTransaction,
   };
@@ -341,6 +357,8 @@ function makeService(m: Mocks): AuthService {
     m.connection as unknown as Connection,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     m.redis as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    m.liveFlags as any,
   );
 }
 
@@ -448,6 +466,17 @@ describe('AuthService.register', () => {
     const service = makeService(m);
 
     await expect(service.register(makeRegisterDto())).rejects.toBeInstanceOf(ConflictException);
+    expect(m.usersService.createUser).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES registration (403) when the live REGISTRATION_OPEN kill-switch is off', async () => {
+    const m = buildMocks('commit');
+    m.liveFlags.isRegistrationOpen.mockResolvedValue(false);
+    const service = makeService(m);
+
+    await expect(service.register(makeRegisterDto())).rejects.toBeInstanceOf(ForbiddenException);
+    // The gate trips BEFORE any account work.
+    expect(m.usersService.findByEmail).not.toHaveBeenCalled();
     expect(m.usersService.createUser).not.toHaveBeenCalled();
   });
 

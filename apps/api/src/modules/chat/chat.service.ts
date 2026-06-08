@@ -264,8 +264,12 @@ export class ChatService {
    * Raise a `message` notification for the recipient UNLESS they are actively
    * looking at this conversation right now (a live focus marker on the thread).
    * A recipient who is away — offline, or online but reading a DIFFERENT thread —
-   * gets an in-app notification deep-linking to `/chat/<conversationId>`; the
+   * gets an in-app notification deep-linking to `/chats/<conversationId>`; the
    * notification itself fans out a push (it persists, emits `notif:new`, pushes).
+   *
+   * The link is the CANONICAL web thread route (`/chats/:id`); the older
+   * `/chat/:id` form 404s on web. Mobile keeps a `/chats/:id` router alias so the
+   * same canonical link resolves on both platforms.
    *
    * Strictly best-effort: any failure (including the active-conversation lookup)
    * is swallowed so a delivery-side hiccup never fails the send. The notification
@@ -290,7 +294,7 @@ export class ChatService {
         title: senderName,
         body: preview,
         actorId: senderId,
-        link: `/chat/${conversationId}`,
+        link: `/chats/${conversationId}`,
       });
     } catch (err) {
       this.logger.debug(`message notification failed: ${asMessage(err)}`);

@@ -152,6 +152,12 @@
     "statusAwayLower": "отошёл"
   },
 
+  "draftThread": {
+    "newConversation": "Новый чат",
+    "sendError": "Не удалось отправить сообщение. Попробуйте ещё раз.",
+    "peerUnavailable": "Этот пользователь недоступен для переписки."
+  },
+
   "friendsClient": {
     "removedToast": "{name} удалён из друзей",
     "removeFailed": "Не удалось удалить из друзей",

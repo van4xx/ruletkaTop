@@ -141,6 +141,45 @@ describe('TurnService.mintCredentials — coturn use-auth-secret scheme', () => 
     expect(ttlExpiresAt).toBe(Math.floor(NOW_MS / 1000) + 1200);
   });
 
+  it('degrades to STUN-only (no bogus TURN credential) when the signing secret is blank', () => {
+    // No TURN_STATIC_AUTH_SECRET ⇒ unconfigured: signing with an empty secret
+    // would mint a credential coturn rejects, so we must NOT advertise TURN.
+    const service = turnServiceWith({
+      // secret omitted entirely
+      TURN_HOST: 'turn.ruletka.top',
+      TURN_PORT: 3478,
+      TURN_TLS_PORT: 5349,
+      NEXT_PUBLIC_STUN_URLS: 'stun:stun.ruletka.top:3478',
+    });
+
+    const { iceServers } = service.mintCredentials(userId);
+
+    // Exactly the STUN entry — no TURN entry, no credential anywhere.
+    expect(iceServers).toHaveLength(1);
+    expect(iceServers[0]?.urls).toEqual(['stun:stun.ruletka.top:3478']);
+    expect(iceServers.some((s) => s.credential !== undefined)).toBe(false);
+    expect(iceServers.some((s) => s.username !== undefined)).toBe(false);
+  });
+
+  it('treats a whitespace-only secret as unconfigured (still STUN-only)', () => {
+    const service = turnServiceWith({
+      TURN_STATIC_AUTH_SECRET: '   ',
+      TURN_HOST: 'turn.ruletka.top',
+    });
+
+    const { iceServers } = service.mintCredentials(userId);
+    expect(iceServers.some((s) => s.credential !== undefined)).toBe(false);
+  });
+
+  it('still mints a TURN credential when the secret IS configured (no regression)', () => {
+    const service = turnServiceWith({
+      TURN_STATIC_AUTH_SECRET: SECRET,
+      TURN_HOST: 'turn.ruletka.top',
+    });
+    const { iceServers } = service.mintCredentials(userId);
+    expect(iceServers.some((s) => s.credential !== undefined)).toBe(true);
+  });
+
   it('falls back to host-derived TURN urls when the explicit TURN list is all blank', () => {
     // A blank/comma-only NEXT_PUBLIC_TURN_URLS yields an EMPTY explicit list, so
     // buildTurnUrls falls through to the TURN_HOST/PORT-derived urls — TURN is

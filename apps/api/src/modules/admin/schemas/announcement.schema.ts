@@ -49,7 +49,8 @@ export type AnnouncementDocument = HydratedDocument<Announcement>;
 export const AnnouncementSchema = SchemaFactory.createForClass(Announcement);
 
 // ── Indexes ──────────────────────────────────────────────────────────────────
-// The admin list: newest first.
-AnnouncementSchema.index({ _id: -1 });
+// NOTE: the admin list paginates newest-first by `_id`, served from Mongo's
+// default `{ _id: 1 }` index via a reverse scan — a lone `{ _id: -1 }` index is
+// rejected/redundant, so it is intentionally NOT declared here.
 // Fast "active announcements" lookup for a future client banner surface.
 AnnouncementSchema.index({ active: 1, _id: -1 });

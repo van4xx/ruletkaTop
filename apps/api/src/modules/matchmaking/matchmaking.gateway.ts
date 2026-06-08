@@ -40,6 +40,9 @@ import {
 import { MetricsService } from '../../observability/metrics.service';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import type { AppIoServer } from '../../realtime/redis-io.adapter';
+// The admin live-flag store (matchmaking kill-switch + maintenance). Aliased to
+// avoid colliding with the per-user privacy `SettingsService` below.
+import { SettingsService as LiveFlagsService } from '../admin/settings.service';
 import { PresenceService } from '../presence/presence.service';
 import { SettingsService } from '../settings/settings.service';
 import {
@@ -213,6 +216,7 @@ export class MatchmakingGateway
     private readonly calls: CallService,
     private readonly presence: PresenceService,
     private readonly settings: SettingsService,
+    private readonly liveFlags: LiveFlagsService,
     private readonly wsAuth: WsAuthService,
     private readonly rateLimiter: WsRateLimiterService,
     private readonly metrics: MetricsService,
@@ -374,6 +378,19 @@ export class MatchmakingGateway
     }
     if (!(await this.rateLimiter.consume(userId, MM_JOIN_LIMIT))) {
       emitWsError(client, { code: 'rate_limited', event: 'mm:join' });
+      return;
+    }
+    // Live matchmaking kill-switch (admin-toggleable, no restart): when the pool
+    // is disabled, refuse the join with a `ws:error` so the client can show a
+    // "temporarily unavailable" state instead of spinning on 'searching'. The
+    // public `/public/status` read lets the UI pre-disable "start", but this is
+    // the enforcement point. STUN/`forbidden` is the closest stable code token.
+    if (!(await this.liveFlags.isMatchmakingEnabled())) {
+      emitWsError(client, {
+        code: 'forbidden',
+        event: 'mm:join',
+        message: 'Matchmaking is temporarily unavailable',
+      });
       return;
     }
     const parsed = mmJoinPayloadSchema.safeParse(payload);

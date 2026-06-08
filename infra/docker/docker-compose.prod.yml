@@ -6,8 +6,11 @@
 #     TRANSACTIONS + automatic failover (the wallet/auth transactional paths run
 #     for real here; the dev single-node fallback is NOT used).
 #   • Redis with a required password.
-#   • TWO API replicas behind nginx (Socket.io fan-out via the Redis adapter;
-#     nginx pins long-poll sessions with ip_hash — see infra/nginx/nginx.conf).
+#   • ONE API instance behind nginx by default (Socket.io fan-out via the Redis
+#     adapter; nginx pins long-poll sessions with ip_hash — see
+#     infra/nginx/nginx.conf). Scale out with `--scale api=2` or an `api-2`
+#     service — see the SCALING note on the `api` service below. (`deploy.replicas`
+#     is NOT used: `docker compose up` ignores it — that key is Swarm-only.)
 #   • coturn for TURN relay.
 #
 # Run (from repo root):
@@ -125,13 +128,35 @@ services:
       - letsencrypt:/etc/letsencrypt:ro
     networks: [ruletka-net]
 
-  # ── API (2 replicas; no published ports — only nginx reaches it) ───────────
+  # ── API (SINGLE instance by default; no published ports — only nginx reaches it)
+  #
+  # SCALING: `docker compose up` does NOT honour `deploy.replicas` (that key is
+  # Swarm-only — under plain Compose it is silently ignored). So this service runs
+  # exactly ONE container, which is the intended default. To actually run a second
+  # replica, EITHER:
+  #   • run-time scale:  `docker compose -f infra/docker/docker-compose.prod.yml \
+  #       up -d --scale api=2`. No `container_name` is set on this service, so
+  #       Compose can number the instances; nginx reaches them all via the `api`
+  #       DNS name (Docker DNS returns multiple A records) and the `resolver` in
+  #       nginx.conf re-resolves so a dead instance is evicted. No nginx edit needed.
+  #   • OR add an explicit second service `api-2:` (copy this block) AND uncomment
+  #       the `server api-2:4000;` line in infra/nginx/nginx.conf.
+  # Socket.io cross-node fan-out is via the Redis adapter; nginx pins long-poll
+  # sessions with ip_hash (see nginx.conf).
   api:
     build:
       context: ../..
       dockerfile: infra/docker/api.Dockerfile
     restart: unless-stopped
     env_file: [../../.env]
+    # node runs as PID 1 in the container. Without an init, it does NOT reap
+    # zombies and (more importantly here) SIGTERM forwarding on `docker stop` /
+    # redeploy is fragile. `init: true` injects a tiny PID-1 init (tini) that
+    # forwards SIGTERM to node so Nest's graceful shutdown hooks fire; the longer
+    # grace period gives in-flight calls / socket drains time to finish before
+    # SIGKILL (default is only 10s).
+    init: true
+    stop_grace_period: 30s
     environment:
       NODE_ENV: production
       API_HOST: 0.0.0.0
@@ -150,8 +175,10 @@ services:
       redis: { condition: service_healthy }
       coturn: { condition: service_started }
     networks: [ruletka-net]
-    deploy:
-      replicas: 2
+    # NOTE: a `deploy.replicas` key was intentionally REMOVED here — `docker
+    # compose up` ignores it (Swarm-only), so it falsely implied 2 running
+    # replicas while exactly one ran. Use `--scale api=2` or an `api-2` service
+    # to scale out (see the header comment on this service above).
     healthcheck:
       test:
         [

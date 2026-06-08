@@ -21,6 +21,7 @@ import type {
   Role,
 } from '@ruletka/shared-types';
 
+import { AuditService } from '../admin/audit.service';
 import { AuthService } from '../auth/auth.service';
 import { User, UserDocument } from '../users/schemas/user.schema';
 
@@ -66,6 +67,7 @@ export class AdminUsersService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectConnection() private readonly connection: Connection,
     @Inject(forwardRef(() => AuthService)) private readonly authService: AuthService,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -170,9 +172,20 @@ export class AdminUsersService {
 
     // Revoke sessions when stripping a privileged role so an already-minted
     // access token can't keep its old powers until it expires.
-    if (isDemotion(before.role, role)) {
+    const demoted = isDemotion(before.role, role);
+    if (demoted) {
       await this.authService.revokeAllSessions(targetUserId);
     }
+
+    // Append the privileged action to the audit trail (best-effort; never fails
+    // the action). Records the before/after role + whether sessions were revoked.
+    await this.auditService.log({
+      actorId: callerUserId,
+      action: 'user.role.set',
+      targetType: 'user',
+      targetId: targetUserId,
+      meta: { from: before.role, to: role, sessionsRevoked: demoted },
+    });
 
     const profiles = await this.loadProfiles([updated._id]);
     return this.toSummary(updated as unknown as UserRow, profiles.get(updated._id.toString()));
@@ -185,7 +198,7 @@ export class AdminUsersService {
    * already-verified account simply re-asserts the flag. A tombstoned
    * (`deletedAt`) account is treated as not-found. Returns the refreshed summary.
    */
-  async verifyEmail(targetUserId: string): Promise<AdminUserSummary> {
+  async verifyEmail(targetUserId: string, callerUserId?: string | null): Promise<AdminUserSummary> {
     if (!Types.ObjectId.isValid(targetUserId)) {
       throw new NotFoundException('User not found');
     }
@@ -201,7 +214,12 @@ export class AdminUsersService {
     if (!updated) {
       throw new NotFoundException('User not found');
     }
-    // TODO: audit once reachable (AuditService lives in AdminModule).
+    await this.auditService.log({
+      actorId: callerUserId ?? null,
+      action: 'user.email.verify',
+      targetType: 'user',
+      targetId: targetUserId,
+    });
     const profiles = await this.loadProfiles([updated._id]);
     return this.toSummary(updated as unknown as UserRow, profiles.get(updated._id.toString()));
   }
@@ -213,7 +231,7 @@ export class AdminUsersService {
    * refreshed and every device must re-authenticate. 404s an invalid id;
    * otherwise idempotent (revoking already-revoked sessions is a no-op).
    */
-  async forceLogout(targetUserId: string): Promise<{ ok: true }> {
+  async forceLogout(targetUserId: string, callerUserId?: string | null): Promise<{ ok: true }> {
     if (!Types.ObjectId.isValid(targetUserId)) {
       throw new NotFoundException('User not found');
     }
@@ -222,7 +240,12 @@ export class AdminUsersService {
       throw new NotFoundException('User not found');
     }
     await this.authService.revokeAllSessions(targetUserId);
-    // TODO: audit once reachable (AuditService lives in AdminModule).
+    await this.auditService.log({
+      actorId: callerUserId ?? null,
+      action: 'user.force_logout',
+      targetType: 'user',
+      targetId: targetUserId,
+    });
     return { ok: true };
   }
 
@@ -244,7 +267,7 @@ export class AdminUsersService {
    * non-transactional (honours the single-node dev-Mongo caveat): the profile
    * scrub is independent and a failure is logged, never failing the delete.
    */
-  async deleteUser(targetUserId: string): Promise<{ ok: true }> {
+  async deleteUser(targetUserId: string, callerUserId?: string | null): Promise<{ ok: true }> {
     if (!Types.ObjectId.isValid(targetUserId)) {
       throw new NotFoundException('User not found');
     }
@@ -304,7 +327,12 @@ export class AdminUsersService {
         ),
       );
 
-    // TODO: audit once reachable (AuditService lives in AdminModule).
+    await this.auditService.log({
+      actorId: callerUserId ?? null,
+      action: 'user.delete',
+      targetType: 'user',
+      targetId: targetUserId,
+    });
     this.logger.log(`Admin-deleted account ${targetUserId}`);
     return { ok: true };
   }

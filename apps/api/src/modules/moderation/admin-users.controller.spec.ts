@@ -79,4 +79,34 @@ describe('AdminUsersController delegation', () => {
 
     expect(listUsers).toHaveBeenCalledWith({ limit: 30, q: 'bob' });
   });
+
+  it('verifyEmail forwards the CALLER identity (so the action can be audited)', async () => {
+    const verifyEmail = jest.fn().mockResolvedValue({ id: TARGET });
+    const service = { verifyEmail } as unknown as AdminUsersService;
+    const controller = new AdminUsersController(service);
+
+    await controller.verifyEmail(TARGET, principal('admin'));
+
+    expect(verifyEmail).toHaveBeenCalledWith(TARGET, CALLER);
+  });
+
+  it('forceLogout forwards the CALLER identity (so the action can be audited)', async () => {
+    const forceLogout = jest.fn().mockResolvedValue({ ok: true });
+    const service = { forceLogout } as unknown as AdminUsersService;
+    const controller = new AdminUsersController(service);
+
+    await controller.forceLogout(TARGET, principal('admin'));
+
+    expect(forceLogout).toHaveBeenCalledWith(TARGET, CALLER);
+  });
+
+  it('deleteUser forwards the CALLER identity (so the action can be audited)', async () => {
+    const deleteUser = jest.fn().mockResolvedValue({ ok: true });
+    const service = { deleteUser } as unknown as AdminUsersService;
+    const controller = new AdminUsersController(service);
+
+    await controller.deleteUser(TARGET, principal('admin'));
+
+    expect(deleteUser).toHaveBeenCalledWith(TARGET, CALLER);
+  });
 });

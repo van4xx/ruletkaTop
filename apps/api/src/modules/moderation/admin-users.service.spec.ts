@@ -6,9 +6,17 @@ import type { Model } from 'mongoose';
 
 import type { Role } from '@ruletka/shared-types';
 
+import type { AuditService } from '../admin/audit.service';
 import type { AuthService } from '../auth/auth.service';
 import type { UserDocument } from '../users/schemas/user.schema';
 import { AdminUsersService } from './admin-users.service';
+
+/** A no-op {@link AuditService} stub whose `log` is a resolved jest mock. */
+function auditStub(): AuditService & { log: jest.Mock } {
+  return { log: jest.fn().mockResolvedValue(undefined) } as unknown as AuditService & {
+    log: jest.Mock;
+  };
+}
 
 const USER_A = '507f1f77bcf86cd7994390a1';
 const USER_B = '507f1f77bcf86cd7994390a2';
@@ -81,7 +89,12 @@ describe('AdminUsersService.listUsers', () => {
       },
       // USER_B has no profile row → defaults.
     ]);
-    const service = new AdminUsersService(userModel, connectionWith(find), {} as AuthService);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(find),
+      {} as AuthService,
+      auditStub(),
+    );
 
     const res = await service.listUsers({ limit: 30 });
 
@@ -124,6 +137,7 @@ describe('AdminUsersService.listUsers', () => {
       userModel,
       connectionWith(profilesFind([])),
       {} as AuthService,
+      auditStub(),
     );
 
     const res = await service.listUsers({ limit: 1 });
@@ -141,6 +155,7 @@ describe('AdminUsersService.listUsers', () => {
       userModel,
       connectionWith(profilesFind([])),
       {} as AuthService,
+      auditStub(),
     );
 
     await service.listUsers({ limit: 30, role: 'moderator', banned: true, cursor: USER_A });
@@ -160,6 +175,7 @@ describe('AdminUsersService.listUsers', () => {
       userModel,
       connectionWith(profileLookup),
       {} as AuthService,
+      auditStub(),
     );
 
     await service.listUsers({ limit: 30, q: 'ali.ce' });
@@ -183,6 +199,7 @@ describe('AdminUsersService.getUser', () => {
       userModel,
       connectionWith(profilesFind([])),
       {} as AuthService,
+      auditStub(),
     );
     await expect(service.getUser('not-an-id')).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -198,6 +215,7 @@ describe('AdminUsersService.getUser', () => {
       userModel,
       connectionWith(profilesFind([])),
       {} as AuthService,
+      auditStub(),
     );
     await expect(service.getUser(USER_A)).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -221,7 +239,12 @@ describe('AdminUsersService.setRole', () => {
   it('rejects a non-admin caller (defence-in-depth) with 403', async () => {
     const userModel = {} as unknown as Model<UserDocument>;
     const auth = { revokeAllSessions: jest.fn() } as unknown as AuthService;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), auth);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      auth,
+      auditStub(),
+    );
 
     await expect(service.setRole(USER_A, 'admin', 'moderator', ADMIN)).rejects.toBeInstanceOf(
       ForbiddenException,
@@ -231,19 +254,25 @@ describe('AdminUsersService.setRole', () => {
   it('blocks an admin from demoting their own account (400)', async () => {
     const userModel = {} as unknown as Model<UserDocument>;
     const auth = { revokeAllSessions: jest.fn() } as unknown as AuthService;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), auth);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      auth,
+      auditStub(),
+    );
 
     await expect(service.setRole(ADMIN, 'user', 'admin', ADMIN)).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });
 
-  it('revokes the target sessions on a demotion (admin → user)', async () => {
+  it('revokes the target sessions on a demotion (admin → user) and audits the change', async () => {
     const model = modelForRoleChange('admin');
     const userModel = model as unknown as Model<UserDocument>;
     const revokeAllSessions = jest.fn().mockResolvedValue(undefined);
     const auth = { revokeAllSessions } as unknown as AuthService;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), auth);
+    const audit = auditStub();
+    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), auth, audit);
 
     const res = await service.setRole(USER_A, 'user', 'admin', ADMIN);
 
@@ -255,6 +284,16 @@ describe('AdminUsersService.setRole', () => {
     expect(update).toEqual({ $set: { role: 'user' } });
     expect(revokeAllSessions).toHaveBeenCalledWith(USER_A);
     expect(res.id).toBe(USER_A);
+
+    // The privileged role change is recorded with the actor + before/after roles.
+    expect(audit.log).toHaveBeenCalledTimes(1);
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'user.role.set',
+      targetType: 'user',
+      targetId: USER_A,
+      meta: { from: 'admin', to: 'user', sessionsRevoked: true },
+    });
   });
 
   it('does NOT revoke sessions on a promotion (user → moderator)', async () => {
@@ -262,7 +301,12 @@ describe('AdminUsersService.setRole', () => {
     const userModel = model as unknown as Model<UserDocument>;
     const revokeAllSessions = jest.fn().mockResolvedValue(undefined);
     const auth = { revokeAllSessions } as unknown as AuthService;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), auth);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      auth,
+      auditStub(),
+    );
 
     await service.setRole(USER_A, 'moderator', 'admin', ADMIN);
 
@@ -277,10 +321,112 @@ describe('AdminUsersService.setRole', () => {
     }));
     const userModel = { findById } as unknown as Model<UserDocument>;
     const auth = { revokeAllSessions: jest.fn() } as unknown as AuthService;
-    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), auth);
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      auth,
+      auditStub(),
+    );
 
     await expect(service.setRole(USER_A, 'moderator', 'admin', ADMIN)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+});
+
+describe('AdminUsersService — audit trail for privileged actions', () => {
+  it('verifyEmail records `user.email.verify` with the actor + target', async () => {
+    const findOneAndUpdate = jest.fn(() => ({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(userRow(USER_A, { emailVerified: true })),
+    }));
+    const userModel = { findOneAndUpdate } as unknown as Model<UserDocument>;
+    const audit = auditStub();
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      {} as AuthService,
+      audit,
+    );
+
+    await service.verifyEmail(USER_A, ADMIN);
+
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'user.email.verify',
+      targetType: 'user',
+      targetId: USER_A,
+    });
+  });
+
+  it('does NOT audit verifyEmail when the user is missing (404 before the log)', async () => {
+    const findOneAndUpdate = jest.fn(() => ({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(null),
+    }));
+    const userModel = { findOneAndUpdate } as unknown as Model<UserDocument>;
+    const audit = auditStub();
+    const service = new AdminUsersService(
+      userModel,
+      connectionWith(profilesFind([])),
+      {} as AuthService,
+      audit,
+    );
+
+    await expect(service.verifyEmail(USER_A, ADMIN)).rejects.toBeInstanceOf(NotFoundException);
+    expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('forceLogout revokes sessions then records `user.force_logout`', async () => {
+    const userModel = {
+      exists: jest.fn().mockResolvedValue({ _id: new Types.ObjectId(USER_A) }),
+    } as unknown as Model<UserDocument>;
+    const revokeAllSessions = jest.fn().mockResolvedValue(undefined);
+    const auth = { revokeAllSessions } as unknown as AuthService;
+    const audit = auditStub();
+    const service = new AdminUsersService(userModel, connectionWith(profilesFind([])), auth, audit);
+
+    await service.forceLogout(USER_A, ADMIN);
+
+    expect(revokeAllSessions).toHaveBeenCalledWith(USER_A);
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'user.force_logout',
+      targetType: 'user',
+      targetId: USER_A,
+    });
+  });
+
+  it('deleteUser records `user.delete` after the erasure', async () => {
+    const userDoc = {
+      _id: new Types.ObjectId(USER_A),
+      deletedAt: null,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    const userModel = {
+      findById: jest.fn(() => ({ exec: jest.fn().mockResolvedValue(userDoc) })),
+    } as unknown as Model<UserDocument>;
+    // The delete path scrubs `profiles` + `sessions` via the raw connection.
+    const connection = {
+      collection: jest.fn(() => ({
+        updateOne: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({}),
+        find: jest.fn(() => cursor([])),
+      })),
+    } as unknown as Connection;
+    const auth = { revokeAllSessions: jest.fn() } as unknown as AuthService;
+    const audit = auditStub();
+    const service = new AdminUsersService(userModel, connection, auth, audit);
+
+    await service.deleteUser(USER_A, ADMIN);
+
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'user.delete',
+      targetType: 'user',
+      targetId: USER_A,
+    });
   });
 });

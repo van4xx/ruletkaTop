@@ -13,8 +13,8 @@ import '../../../core/models/models.dart';
 ///  * Coins  — `GET /coin-packages`, `POST /payments/coins/checkout`.
 ///  * Gifts  — `GET /gifts`, `POST /gifts/send`.
 ///  * Top    — `GET /top`, `POST /top/purchase`.
-///  * Premium— `GET /premium/plans`, `POST /premium/subscribe`,
-///             `POST /premium/cancel`.
+///  * Premium— `GET /premium/plans`, `GET /premium/subscription`,
+///             `POST /payments/premium/checkout`, `POST /premium/cancel`.
 class EconomyRepository {
   EconomyRepository(this._api);
 
@@ -44,6 +44,16 @@ class EconomyRepository {
 
   // ── Premium ──
   Future<List<PremiumPlan>> premiumPlans() => _api.premiumPlans();
+
+  /// Pure read of the caller's subscription state (`GET /premium/subscription`)
+  /// — no side effects, unlike [subscribe].
+  Future<Subscription> premiumSubscription() => _api.premiumSubscription();
+
+  /// Server-minted CloudPayments widget params for a premium plan
+  /// (`POST /payments/premium/checkout`) — the amount + recurrent descriptor are
+  /// fixed server-side.
+  Future<CheckoutWidgetParams> premiumCheckout(String planCode) =>
+      _api.premiumCheckout(planCode);
 
   Future<Subscription> subscribe(String planCode) => _api.subscribe(planCode);
 

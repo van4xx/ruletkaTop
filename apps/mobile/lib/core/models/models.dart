@@ -6,6 +6,7 @@ library;
 
 export 'auth_models.dart';
 export 'common_models.dart';
+export 'cosmetics_models.dart';
 export 'economy_models.dart';
 export 'enums.dart';
 export 'leaderboard_models.dart';

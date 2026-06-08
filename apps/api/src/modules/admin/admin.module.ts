@@ -25,6 +25,7 @@ import { AdminSettingsService } from './admin-settings.service';
 import { AdminWalletController } from './admin-wallet.controller';
 import { AdminWalletService } from './admin-wallet.service';
 import { AuditService } from './audit.service';
+import { PublicStatusController } from './public-status.controller';
 import { SettingsService } from './settings.service';
 import { Announcement, AnnouncementSchema } from './schemas/announcement.schema';
 import { AppSetting, AppSettingSchema } from './schemas/app-setting.schema';
@@ -82,6 +83,8 @@ import { BroadcastRecord, BroadcastRecordSchema } from './schemas/broadcast-reco
     AdminSecurityController,
     AdminSettingsController,
     AdminAuditController,
+    // Unauthenticated public status (maintenance banner + pre-gate hints).
+    PublicStatusController,
   ],
   providers: [
     AuditService,
@@ -96,6 +99,10 @@ import { BroadcastRecord, BroadcastRecordSchema } from './schemas/broadcast-reco
     AdminSecurityService,
     AdminSettingsService,
   ],
-  exports: [AuditService],
+  // {@link AuditService} backs the admin audit trail (consumed by the moderation
+  // user-management actions). {@link SettingsService} exposes the LIVE
+  // operational flags (registration / matchmaking kill-switches + maintenance)
+  // so the auth + matchmaking gates can read them without re-deriving the store.
+  exports: [AuditService, SettingsService],
 })
 export class AdminModule {}

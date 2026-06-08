@@ -1,6 +1,7 @@
 /// Mirrors `packages/shared-types/src/profile.ts`.
 library;
 
+import 'cosmetics_models.dart';
 import 'enums.dart';
 
 /// `publicProfileSchema` — the public view of any user.
@@ -17,6 +18,7 @@ class PublicProfile {
     this.interests = const [],
     required this.badges,
     required this.isPremium,
+    this.activeCover = kDefaultCoverId,
     required this.profileViews,
     required this.createdAt,
   });
@@ -36,6 +38,12 @@ class PublicProfile {
   final List<String> interests;
   final List<Badge> badges;
   final bool isPremium;
+
+  /// The user's selected profile-cover cosmetic, read on every hero render.
+  /// Defaults to [kDefaultCoverId] so responses from an API that predates the
+  /// field (and the unknown ids) still render the historical aurora hero.
+  final String activeCover;
+
   final int profileViews;
   final DateTime createdAt;
 
@@ -55,6 +63,7 @@ class PublicProfile {
             .toList(growable: false),
         badges: Badge.listFromWire(json['badges']),
         isPremium: json['isPremium'] as bool? ?? false,
+        activeCover: _coverOrDefault(json['activeCover'] as String?),
         profileViews: (json['profileViews'] as num?)?.toInt() ?? 0,
         createdAt:
             DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
@@ -72,10 +81,16 @@ class PublicProfile {
         'interests': interests,
         'badges': badges.map((e) => e.wire).toList(),
         'isPremium': isPremium,
+        'activeCover': activeCover,
         'profileViews': profileViews,
         'createdAt': createdAt.toIso8601String(),
       };
 }
+
+/// Clamp an over-the-wire cover id to a known one, defaulting unknown/null to
+/// [kDefaultCoverId] so a future server cover never breaks the hero render.
+String _coverOrDefault(String? raw) =>
+    (raw != null && kCoverIds.contains(raw)) ? raw : kDefaultCoverId;
 
 /// `updateProfileSchema` — all fields optional (PATCH /profiles/me).
 class UpdateProfileDto {

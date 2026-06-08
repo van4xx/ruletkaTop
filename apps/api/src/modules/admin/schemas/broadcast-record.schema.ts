@@ -48,5 +48,6 @@ export type BroadcastRecordDocument = HydratedDocument<BroadcastRecord>;
 export const BroadcastRecordSchema = SchemaFactory.createForClass(BroadcastRecord);
 
 // ── Indexes ──────────────────────────────────────────────────────────────────
-// Broadcast history: newest first.
-BroadcastRecordSchema.index({ _id: -1 });
+// NOTE: broadcast history paginates newest-first by `_id`, served from Mongo's
+// default `{ _id: 1 }` index via a reverse scan — a lone `{ _id: -1 }` index is
+// rejected/redundant, so it is intentionally NOT declared here.

@@ -17,8 +17,12 @@ import { HydratedDocument, Types } from 'mongoose';
  */
 @Schema({ collection: 'app_settings', timestamps: { createdAt: true, updatedAt: true } })
 export class AppSetting {
-  /** Stable flag key (e.g. `MAINTENANCE_MODE`). Unique — one row per key. */
-  @Prop({ required: true, unique: true, trim: true, type: String })
+  /**
+   * Stable flag key (e.g. `MAINTENANCE_MODE`). Unique — one row per key.
+   * The unique index is declared once via `.index()` below (not here) so Mongoose
+   * doesn't emit a duplicate-index warning at boot.
+   */
+  @Prop({ required: true, trim: true, type: String })
   key!: string;
 
   /** The override value — boolean | number | string. */

@@ -27,6 +27,10 @@ import type {
 } from '@ruletka/shared-types';
 
 import { REDIS_CLIENT } from '../../redis/redis.constants';
+// The admin live-flag store (registration / matchmaking kill-switches +
+// maintenance). Aliased to avoid colliding with the per-user privacy
+// `SettingsService` in `modules/settings`.
+import { SettingsService as LiveFlagsService } from '../admin/settings.service';
 import { MailerService } from '../mail/mailer.service';
 import { Profile, ProfileDocument } from '../profiles/schemas/profile.schema';
 import { UsersService } from '../users/users.service';
@@ -219,6 +223,7 @@ export class AuthService {
     private readonly mailerService: MailerService,
     @InjectConnection() private readonly connection: Connection,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly liveFlags: LiveFlagsService,
   ) {}
 
   // ── Registration ──────────────────────────────────────────────────────────
@@ -236,6 +241,14 @@ export class AuthService {
     const captchaOk = await this.captchaService.verify(dto.captchaToken, ctx.ip);
     if (!captchaOk) {
       throw new BadRequestException('CAPTCHA verification failed');
+    }
+
+    // Live registration kill-switch (admin-toggleable, no restart). When an admin
+    // closes registration (or during maintenance) we refuse new sign-ups with a
+    // 403 BEFORE any work — the public `/public/status` read lets the client
+    // pre-disable the form, but the server is the enforcement point.
+    if (!(await this.liveFlags.isRegistrationOpen())) {
+      throw new ForbiddenException('Registration is currently closed');
     }
 
     // Ban-evasion gate: block re-registration from a device/IP whose

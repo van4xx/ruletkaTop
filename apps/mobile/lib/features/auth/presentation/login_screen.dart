@@ -108,6 +108,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     onSubmitted: _submit,
                   ),
 
+                  // "Forgot password?" — routes to the reset-request flow.
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: auth.isBusy
+                          ? null
+                          : () => context.push(AppRoutes.forgotPassword),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colors.neonCyan,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Забыли пароль?',
+                        style: context.texts.labelMedium?.copyWith(
+                          color: colors.neonCyan,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   if (auth.errorMessage != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     AuthErrorBanner(message: auth.errorMessage!),

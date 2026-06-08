@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { AdminModule } from '../admin/admin.module';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
@@ -37,6 +38,10 @@ import { VerificationToken, VerificationTokenSchema } from './schemas/verificati
     ]),
     UsersModule,
     ProfilesModule,
+    // {@link AdminModule} exports the live-flag `SettingsService` so `register()`
+    // can honour the runtime registration kill-switch. AdminModule is a sink
+    // (its imports never reach AuthModule), so this adds no dependency cycle.
+    AdminModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, CaptchaService, FingerprintService],

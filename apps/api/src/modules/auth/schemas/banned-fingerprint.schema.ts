@@ -20,8 +20,12 @@ import { HydratedDocument, Types } from 'mongoose';
  */
 @Schema({ collection: 'bannedfingerprints', timestamps: true })
 export class BannedFingerprint {
-  /** SHA-256 hex of (IP + '|' + User-Agent). Unique — the primary lookup key. */
-  @Prop({ required: true, unique: true })
+  /**
+   * SHA-256 hex of (IP + '|' + User-Agent). Unique — the primary lookup key.
+   * The unique index is declared once via `.index()` below (not here) so Mongoose
+   * doesn't emit a duplicate-index warning at boot.
+   */
+  @Prop({ required: true })
   fingerprint!: string;
 
   /** The account whose ban created/last-touched this row (audit link). */

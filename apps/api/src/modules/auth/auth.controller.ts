@@ -26,7 +26,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { CookieOptions, Request, Response } from 'express';
 
 import {
@@ -52,7 +52,7 @@ import {
 
 import { CurrentUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
-import { AUTH_THROTTLER } from '../../common/throttler/throttler.constants';
+import { AUTH_THROTTLER, REFRESH_THROTTLER } from '../../common/throttler/throttler.constants';
 import { createZodValidationPipe } from '../../common/zod-validation.pipe';
 import { AuthService, type SessionContext } from './auth.service';
 
@@ -134,6 +134,13 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  // Refresh is silent + frequent (proactive pre-expiry, cold-start boot,
+  // refresh-on-resume), so it gets its OWN GENEROUS bucket and is EXEMPTED from
+  // the strict controller-level `auth` login/register limit. Critical: a 429 on
+  // refresh used to be mistaken by the web for a session-expiry and log the user
+  // out under heavy navigation — keeping this off the strict bucket prevents that.
+  @SkipThrottle({ [AUTH_THROTTLER]: true })
+  @Throttle({ [REFRESH_THROTTLER]: {} })
   @ApiOperation({ summary: 'Rotate the refresh token (from cookie) for a new access token' })
   @ApiOkResponse({ description: 'A fresh access token (refresh cookie rotated)' })
   @ApiUnauthorizedResponse({ description: 'Invalid, expired or reused refresh token' })

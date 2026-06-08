@@ -64,7 +64,7 @@ export class AdminBroadcastController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Broadcast history (STUB — empty until wave2)' })
+  @ApiOperation({ summary: 'Broadcast history (most recent first)' })
   @ApiOkResponse({ description: 'Broadcast history' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
   async history(): Promise<AdminBroadcastHistory> {

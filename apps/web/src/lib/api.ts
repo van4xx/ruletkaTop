@@ -360,10 +360,17 @@ async function tryRefresh(): Promise<RefreshResult> {
           credentials: 'include',
         });
         if (!res.ok) {
-          // A 5xx is a server-side blip — transient, keep the in-memory token.
-          // Any other non-2xx (401/403/…) means the refresh credential is no
-          // longer honoured → a true rejection: clear auth.
-          if (res.status >= 500) {
+          // Distinguish a TRANSIENT failure (keep the session, retry) from a HARD
+          // rejection (the refresh credential is no longer honoured → clear auth).
+          //
+          // - 5xx           → server-side blip; transient.
+          // - 429           → the HTTP rate limiter throttled the refresh. This is
+          //   NOT a session-expiry: under heavy navigation a burst of refreshes
+          //   could 429, and treating it as `unauthorized` here logged the user
+          //   out mid-session. Keep the token, back off, retry.
+          // - other 4xx (401/403/…) → the refresh cookie is missing/expired/
+          //   revoked/reused: a true rejection, clear auth.
+          if (res.status >= 500 || res.status === 429) {
             return { ok: false, reason: 'transient' };
           }
           setAuthTokens(null);
@@ -402,6 +409,42 @@ async function tryRefresh(): Promise<RefreshResult> {
  */
 export function refreshAccessToken(): Promise<RefreshResult> {
   return tryRefresh();
+}
+
+// ──────────────── Reactive (401-path) refresh retry tuning ─────────────
+/**
+ * Max extra refresh attempts on the transparent 401-retry path when the refresh
+ * itself fails TRANSIENTLY (a 429 from the rate limiter, or a 5xx). Small and
+ * fast: this sits inline on a user request, so it must not add noticeable
+ * latency — it just absorbs a single throttled/blip'd refresh rather than
+ * surfacing the 401 immediately.
+ */
+const REACTIVE_REFRESH_MAX_RETRIES = 2;
+/** Base backoff (ms) for the reactive refresh retry; grows with full jitter. */
+const REACTIVE_REFRESH_BASE_MS = 250;
+/** Cap on any single reactive refresh backoff wait (ms). */
+const REACTIVE_REFRESH_MAX_MS = 1_500;
+
+/**
+ * Refresh the access token, retrying with bounded backoff when the refresh
+ * fails TRANSIENTLY (notably a `429` from the HTTP rate limiter under heavy
+ * navigation, or a 5xx blip). A hard `unauthorized` returns immediately (no
+ * point retrying a dead credential), and success returns at once. Used by the
+ * transparent 401-retry path so a throttled refresh recovers instead of bubbling
+ * the original 401 — which the UI would otherwise treat as a failed request.
+ */
+async function tryRefreshWithBackoff(signal?: AbortSignal): Promise<RefreshResult> {
+  let result = await tryRefresh();
+  for (
+    let attempt = 0;
+    attempt < REACTIVE_REFRESH_MAX_RETRIES && !result.ok && result.reason === 'transient';
+    attempt += 1
+  ) {
+    const ceiling = Math.min(REACTIVE_REFRESH_MAX_MS, REACTIVE_REFRESH_BASE_MS * 2 ** attempt);
+    await delay(Math.random() * ceiling, signal);
+    result = await tryRefresh();
+  }
+  return result;
 }
 
 // ───────────────────────── Proactive refresh ──────────────────────────
@@ -558,8 +601,13 @@ async function performRequest<T>(path: string, options: RequestOptions): Promise
   // Attempt one transparent refresh + retry on 401. (Unchanged hardened model:
   // the refresh token never leaves its httpOnly cookie; tryRefresh reads the
   // fresh access token from body.tokens.accessToken and stores it in memory.)
+  // A TRANSIENT refresh failure (a 429 from the rate limiter under heavy
+  // navigation, or a 5xx blip) is retried with bounded backoff before giving up,
+  // so a throttled refresh recovers rather than surfacing the original 401. A
+  // hard `unauthorized` (the api client already cleared auth + emitted expiry)
+  // bubbles the 401 below — but never as a side effect of a mere 429.
   if (res.status === 401 && !skipAuth && !_isRetry) {
-    const refreshed = await tryRefresh();
+    const refreshed = await tryRefreshWithBackoff(signal);
     if (refreshed.ok) {
       return performRequest<T>(path, { ...options, _isRetry: true });
     }

@@ -413,3 +413,24 @@ export const adminAuditListSchema = z.object({
   hasMore: z.boolean(),
 });
 export type AdminAuditList = z.infer<typeof adminAuditListSchema>;
+
+// ═══════════════════════════════ Public status ═════════════════════════════
+
+/**
+ * The PUBLIC (unauthenticated) operational status served by `GET /public/status`.
+ *
+ * Derived from the live, admin-toggleable flags (no env/secret is exposed). The
+ * web/mobile clients poll it to surface a maintenance banner and to pre-disable
+ * the register form / "start matching" action BEFORE the user hits the gated
+ * endpoint — the server still enforces each gate (`403` on register,
+ * `ws:error` on `mm:join`), this is purely UX.
+ */
+export const publicStatusSchema = z.object({
+  /** Platform is in maintenance — clients show a banner. */
+  maintenanceMode: z.boolean(),
+  /** New-account registration is open. */
+  registrationOpen: z.boolean(),
+  /** The matchmaking/roulette pool is accepting joins. */
+  matchmakingEnabled: z.boolean(),
+});
+export type PublicStatus = z.infer<typeof publicStatusSchema>;
