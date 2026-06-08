@@ -7,10 +7,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/di.dart';
 import '../../../core/models/models.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/status/public_status_provider.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../notifications/domain/notifications_controller.dart';
 import 'dashboard_providers.dart';
+import 'widgets/dashboard_banners.dart';
 import 'widgets/daily_bonus_card.dart';
 import 'widgets/online_friends_section.dart';
 import 'widgets/profile_block.dart';
@@ -98,16 +100,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         NotificationsButton(count: unread),
         const SizedBox(width: AppSpacing.xs),
       ],
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        edgeOffset: 8,
-        color: context.colors.neonViolet,
-        backgroundColor: context.scheme.surface,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xxxl),
-          children: [
-            const _WelcomeHero(),
+      // Refresh the public status (maintenance flag) on app resume, no polling.
+      body: PublicStatusResumeRefresher(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          edgeOffset: 8,
+          color: context.colors.neonViolet,
+          backgroundColor: context.scheme.surface,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xxxl),
+            children: [
+              // Client-completeness notices (each renders nothing when N/A).
+              const MaintenanceBanner(),
+              const VerifyEmailBanner(),
+              const _WelcomeHero(),
             const SizedBox(height: AppSpacing.xl),
             reveal(const ProfileBlock()),
             const SizedBox(height: AppSpacing.xl),
@@ -124,7 +131,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             reveal(const OnlineFriendsSection()),
             const SizedBox(height: AppSpacing.lg),
             reveal(const RecentChatsSection()),
-          ],
+            ],
+          ),
         ),
       ),
     );

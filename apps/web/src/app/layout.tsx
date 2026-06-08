@@ -6,6 +6,7 @@ import { Preloader } from '@/components/preloader';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { VerifyEmailBanner } from '@/components/auth/verify-email-banner';
+import { MaintenanceBanner } from '@/components/maintenance-banner';
 import { Analytics } from '@/components/analytics';
 import { JsonLdScript } from '@/components/json-ld';
 import { organizationLd, websiteLd } from '@/lib/json-ld';
@@ -148,6 +149,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </a>
             <div className="flex min-h-dvh flex-col">
               <SiteHeader />
+              {/* Site-wide maintenance notice. Driven by the PUBLIC `/public/status`
+                  flag, so it shows for signed-in AND signed-out users. Topmost
+                  notice — it affects everyone. Renders nothing when not in
+                  maintenance. */}
+              <MaintenanceBanner />
               {/* Non-blocking nudge for unverified accounts; renders nothing when
                   signed out / already verified. Lives in the global chrome so it
                   shows across the authenticated app, just under the header. */}

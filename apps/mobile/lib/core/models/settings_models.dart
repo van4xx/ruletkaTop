@@ -186,3 +186,43 @@ class UpdateSettingsDto {
         if (locale != null) 'locale': locale!.wire,
       };
 }
+
+/// `publicStatusSchema` — the UNAUTHENTICATED operational status served by
+/// `GET /public/status` (mirrors `packages/shared-types/src/admin-panel.ts`).
+///
+/// Derived from the live, admin-toggleable flags (no env/secret is exposed).
+/// The clients read it to surface a maintenance banner and to pre-disable the
+/// register form / "start matching" action BEFORE the user hits the gated
+/// endpoint — the server still enforces each gate (`403` on register,
+/// `ws:error` on `mm:join`); this is purely a UX hint.
+///
+/// All three flags default to the "everything open" values so that a failed /
+/// older response degrades to NOT nagging (no banner, registration allowed).
+class PublicStatus {
+  const PublicStatus({
+    this.maintenanceMode = false,
+    this.registrationOpen = true,
+    this.matchmakingEnabled = true,
+  });
+
+  /// Platform is in maintenance — clients show a non-blocking banner.
+  final bool maintenanceMode;
+
+  /// New-account registration is open.
+  final bool registrationOpen;
+
+  /// The matchmaking/roulette pool is accepting joins.
+  final bool matchmakingEnabled;
+
+  factory PublicStatus.fromJson(Map<String, dynamic> json) => PublicStatus(
+        maintenanceMode: json['maintenanceMode'] as bool? ?? false,
+        registrationOpen: json['registrationOpen'] as bool? ?? true,
+        matchmakingEnabled: json['matchmakingEnabled'] as bool? ?? true,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'maintenanceMode': maintenanceMode,
+        'registrationOpen': registrationOpen,
+        'matchmakingEnabled': matchmakingEnabled,
+      };
+}

@@ -8,6 +8,7 @@ import '../../../core/api/api_config.dart';
 import '../../../core/di/di.dart';
 import '../../../core/models/models.dart';
 import '../../../core/router/routes.dart';
+import '../../../core/status/public_status_provider.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/widgets/widgets.dart';
 import '../domain/auth_options.dart';
@@ -61,6 +62,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _submitted ? AuthValidators.birthDate(_birthDate) : null;
 
   Future<void> _submit() async {
+    // Registration is closed server-side — the button is disabled, but guard
+    // anyway (the API also enforces this with a 403).
+    if (!(ref.read(publicStatusProvider).value?.registrationOpen ?? true)) {
+      return;
+    }
     setState(() => _submitted = true);
     final formOk = _formKey.currentState?.validate() ?? false;
     final pickersOk = _countryError == null && _birthDateError == null;
@@ -89,6 +95,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final colors = context.colors;
     final scheme = context.scheme;
     final auth = ref.watch(authStateProvider);
+    // Pre-disable registration when the server reports the gate is closed
+    // (mirrors the web). Unknown/loading/errored status degrades to "open" so a
+    // flaky network never blocks sign-up — the API still enforces the 403.
+    final registrationOpen =
+        ref.watch(publicStatusProvider).value?.registrationOpen ?? true;
 
     return AuthShell(
       tagline: 'Присоединяйся к эфиру',
@@ -124,6 +135,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     style: context.texts.bodyMedium
                         ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
+
+                  // Registration-closed inline notice (server flag). Shown above
+                  // the form so the user sees it before filling anything in.
+                  if (!registrationOpen) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    const _RegistrationClosedNotice(),
+                  ],
+
                   const SizedBox(height: AppSpacing.xl),
 
                   // Email
@@ -228,7 +247,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     icon: Icons.auto_awesome_rounded,
                     gradientColors: [colors.neonViolet, colors.neonMagenta],
                     loading: auth.isBusy,
-                    onPressed: _acceptedTerms ? _submit : null,
+                    onPressed:
+                        (_acceptedTerms && registrationOpen) ? _submit : null,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
@@ -246,6 +266,47 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             prompt: 'Уже есть аккаунт?',
             actionLabel: 'Войти',
             onPressed: auth.isBusy ? null : () => context.go(AppRoutes.login),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// An inline notice shown above the register form when the server reports
+/// `registrationOpen === false`. A glassy warning-tinted bar; the submit button
+/// is separately disabled (this is the explanatory copy). Mirrors the web's
+/// "registration temporarily closed" notice.
+class _RegistrationClosedNotice extends StatelessWidget {
+  const _RegistrationClosedNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md - 1,
+      ),
+      decoration: BoxDecoration(
+        color: colors.warning.withValues(alpha: 0.12),
+        borderRadius: AppRadii.brMd,
+        border: Border.all(color: colors.warning.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_clock_outlined, size: 18, color: colors.warning),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Регистрация временно закрыта. Попробуйте позже.',
+              style: context.texts.bodySmall?.copyWith(
+                color: context.scheme.onSurface,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
           ),
         ],
       ),

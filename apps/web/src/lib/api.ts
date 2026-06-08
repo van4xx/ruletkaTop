@@ -27,6 +27,7 @@ import type {
   PaginationMeta,
   PremiumPlan,
   PublicProfile,
+  PublicStatus,
   PushSubscriptionDto,
   RegisterDto,
   RequestPasswordResetDto,
@@ -727,6 +728,19 @@ export const api = {
       request<AuthResponse>('/auth/login', { method: 'POST', json: dto, skipAuth: true }),
     me: () => request<PublicProfile>('/auth/me'),
     logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  },
+
+  /**
+   * Public, UNAUTHENTICATED operational status (`GET /public/status`). Surfaces
+   * the live, admin-toggleable flags (`maintenanceMode` / `registrationOpen` /
+   * `matchmakingEnabled`) so the chrome can show a maintenance banner and the
+   * register form can pre-disable itself BEFORE hitting a gated endpoint. No
+   * secret/env is exposed; the server still enforces every gate. `skipAuth` so it
+   * works signed-out without dragging the bearer/refresh dance into it.
+   */
+  public: {
+    status: (signal?: AbortSignal) =>
+      request<PublicStatus>('/public/status', { skipAuth: true, signal }),
   },
 
   /**

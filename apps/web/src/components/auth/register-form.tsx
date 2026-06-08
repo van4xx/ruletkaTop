@@ -16,9 +16,10 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
-import { AtSign, CircleAlert, UserRound } from 'lucide-react';
+import { AtSign, CircleAlert, Lock, UserRound } from 'lucide-react';
 import { Button, Input, toast } from '@ruletka/ui';
 import { track } from '@/lib/analytics';
+import { usePublicStatus } from '@/features/status/use-public-status';
 import {
   GENDER_OPTIONS,
   LOCALE_OPTIONS,
@@ -46,6 +47,14 @@ export function RegisterForm() {
   const fieldError = useFieldError();
   const errorMessage = useErrorMessage();
   const registerMutation = useRegister();
+
+  // Live, admin-toggleable flag (public — works signed-out). When registration
+  // is closed we show an inline notice and pre-disable submit; the API still
+  // 403s the POST, this just makes the closed state user-friendly up front. We
+  // only treat an EXPLICIT `false` as closed — undefined (loading / fetch
+  // failed) leaves the form open so a status hiccup never blocks signups.
+  const { data: publicStatus } = usePublicStatus();
+  const registrationClosed = publicStatus?.registrationOpen === false;
 
   // Localized option labels for the segmented controls (the option arrays carry
   // stable `labelKey`s; resolve them here against the `auth` namespace).
@@ -108,8 +117,10 @@ export function RegisterForm() {
   const busy = isSubmitting || registerMutation.isPending;
   // Block submission until the CAPTCHA is solved (only when configured, else the
   // gate would deadlock the dev/no-key flow) AND the consent box is ticked (the
-  // API rejects a registration without `acceptedTerms: true`).
-  const submitDisabled = busy || (captchaRequired && !captchaToken) || !termsAccepted;
+  // API rejects a registration without `acceptedTerms: true`). Also hard-block
+  // while registration is closed (the API 403s anyway — this fails fast).
+  const submitDisabled =
+    busy || registrationClosed || (captchaRequired && !captchaToken) || !termsAccepted;
 
   return (
     <div>
@@ -117,6 +128,28 @@ export function RegisterForm() {
         <h1 className="font-display text-3xl font-bold tracking-tight">{t('register.title')}</h1>
         <p className="mt-2 text-muted-foreground">{t('register.subtitle')}</p>
       </header>
+
+      {/* Registration temporarily closed (live admin flag). Prominent inline
+          notice; submit is also disabled below so the form fails fast before the
+          backend 403. */}
+      <AnimatePresence>
+        {registrationClosed && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            role="status"
+            aria-live="polite"
+            className="flex items-start gap-2.5 overflow-hidden rounded-xl border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-3.5 py-3 text-sm text-foreground/90"
+          >
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-warning)]" aria-hidden="true" />
+            <span>
+              <span className="font-semibold">{t('register.closed.title')}</span>{' '}
+              <span className="text-muted-foreground">{t('register.closed.body')}</span>
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {registerMutation.isError && (

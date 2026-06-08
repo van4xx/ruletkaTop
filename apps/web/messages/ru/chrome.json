@@ -2,6 +2,10 @@
   "brand": {
     "homeAria": "ruletka.top — на главную"
   },
+  "maintenance": {
+    "titlePrefix": "Идут технические работы.",
+    "body": "Некоторые функции временно недоступны."
+  },
   "desktopNav": {
     "aria": "Основная навигация"
   },

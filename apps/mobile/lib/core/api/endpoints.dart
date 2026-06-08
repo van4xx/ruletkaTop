@@ -10,6 +10,19 @@ import 'api_client.dart';
 /// All routes are relative to the `/api` base (see [ApiConfig.baseUrl]). List
 /// endpoints return a flat [Paginated] page (`{ items, nextCursor, hasMore }`).
 extension ApiEndpoints on ApiClient {
+  // ───────────────────────── Public operational status ────────────────────
+  /// `GET /public/status` — the UNAUTHENTICATED operational flags
+  /// (`{ maintenanceMode, registrationOpen, matchmakingEnabled }`). The shells
+  /// read it to show a maintenance banner and pre-disable register / "start
+  /// matching" before the user hits a gated endpoint. `skipAuth` so it never
+  /// carries (or refreshes) a bearer token — it works signed-out.
+  Future<PublicStatus> publicStatus({CancelToken? cancelToken}) => getJson(
+        '/public/status',
+        PublicStatus.fromJson,
+        skipAuth: true,
+        cancelToken: cancelToken,
+      );
+
   // ───────────────────────────────── Auth ─────────────────────────────────
   /// `POST /auth/register` — create an account (18+) and start a session.
   Future<AuthResponse> register(RegisterDto dto) => sendJson(

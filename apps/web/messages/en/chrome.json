@@ -2,6 +2,10 @@
   "brand": {
     "homeAria": "ruletka.top — home"
   },
+  "maintenance": {
+    "titlePrefix": "Scheduled maintenance in progress.",
+    "body": "Some features are temporarily unavailable."
+  },
   "desktopNav": {
     "aria": "Primary navigation"
   },
