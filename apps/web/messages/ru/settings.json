@@ -26,9 +26,9 @@
     "profile": {
       "title": "Профиль",
       "description": "Так тебя видят другие пользователи.",
-      "avatarLabel": "Ссылка на аватар",
-      "avatarHint": "Прямая ссылка на изображение (https://…)",
-      "avatarPlaceholder": "https://…/avatar.jpg",
+      "avatarLabel": "Фото профиля",
+      "avatarHint": "Загрузите изображение с устройства (JPEG, PNG, WEBP или GIF, до 5 МБ).",
+      "avatarChange": "Изменить фото",
       "nicknameLabel": "Никнейм",
       "statusLabel": "Статус",
       "statusHint": "До 140 символов",

@@ -13,6 +13,11 @@ out/
 # Test / coverage
 coverage/
 
+# User uploads written at runtime (dev local-disk avatar storage). The dir is
+# (re)created on demand by the API; never commit uploaded images.
+apps/api/uploads/
+uploads/
+
 # Env & secrets
 .env
 .env.local

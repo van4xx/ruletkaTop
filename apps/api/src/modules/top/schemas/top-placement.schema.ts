@@ -12,7 +12,8 @@ const TOP_LANES: readonly TopLane[] = ['left', 'right'];
  * A user buys visibility by spending coins; `priority` (derived from coins
  * spent) ranks placements within a lane — higher first. A placement is "active"
  * while `now` is within `[startsAt, expiresAt)`. Expired rows are kept for
- * history/audit (and may be reaped by a TTL/sweeper later).
+ * history/audit; the background expiry sweep flips {@link expired} on them past
+ * their window so the Top feed (and any consumer) can cheaply skip dead rows.
  */
 @Schema({ collection: 'topplacements', timestamps: true })
 export class TopPlacement {
@@ -40,6 +41,16 @@ export class TopPlacement {
   @Prop({ required: true, type: Date })
   expiresAt!: Date;
 
+  /**
+   * Set by the background expiry sweep once `expiresAt` has elapsed. Live reads
+   * already exclude past-window rows via `expiresAt > now`, so this is NOT what
+   * hides an expired placement from the feed — it is the sweep's idempotency
+   * latch (a swept row is never re-processed) and an explicit audit marker that
+   * the placement was reconciled to its terminal state.
+   */
+  @Prop({ required: true, default: false, type: Boolean })
+  expired!: boolean;
+
   // `createdAt` / `updatedAt` added by `timestamps: true`.
 }
 
@@ -53,3 +64,5 @@ export const TopPlacementSchema = SchemaFactory.createForClass(TopPlacement);
 TopPlacementSchema.index({ lane: 1, expiresAt: 1, priority: -1 });
 // Per-user placement history.
 TopPlacementSchema.index({ userId: 1, expiresAt: -1 });
+// Expiry sweep: find not-yet-reconciled placements whose window has elapsed.
+TopPlacementSchema.index({ expired: 1, expiresAt: 1 });

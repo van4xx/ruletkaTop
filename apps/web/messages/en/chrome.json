@@ -332,25 +332,21 @@
     },
     "avatarUpload": {
       "title": "Change avatar",
-      "description": "Upload a new profile photo or paste a link.",
+      "description": "Upload a new profile photo from your device.",
       "previewAlt": "Avatar preview",
       "preview": "Preview",
-      "tabUrl": "By link",
-      "tabFile": "Upload",
-      "urlLabel": "Image link",
-      "urlPlaceholder": "https://example.com/avatar.jpg",
       "pickAnother": "Pick another photo",
       "pickPhoto": "Pick a photo",
-      "fileNotice": "File uploads are coming soon. For now, set your avatar by link on the “By link” tab — for example, from your cloud storage or a social network.",
+      "uploadNotice": "JPEG, PNG, WEBP or GIF · up to 5 MB",
+      "uploadCta": "Upload",
+      "removeAvatar": "Remove",
       "cancel": "Cancel",
-      "save": "Save",
-      "saveDisabledTitle": "A file-upload endpoint is required",
       "savedTitle": "Avatar updated",
+      "removedTitle": "Avatar removed",
       "errGeneric": "Couldn't update the avatar",
-      "invalidUrl": "Enter a valid image link (https://…).",
-      "errNotImage": "Choose an image",
-      "errTooLargeTitle": "File too large",
-      "errTooLargeDescription": "5 MB maximum."
+      "errUploadFailed": "Couldn't upload the image. Please try another file.",
+      "errNotImage": "Choose an image file",
+      "errTooLarge": "Image is too large (5 MB maximum)."
     }
   }
 }

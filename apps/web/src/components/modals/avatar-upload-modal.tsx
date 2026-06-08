@@ -1,25 +1,28 @@
 'use client';
 
 /**
- * Set a new avatar.
+ * Set or reset the profile avatar.
  *
- * The profile contract stores an avatar as a URL (`updateProfileSchema.avatarUrl`
- * is a `string().url()`), and there is no file-upload endpoint yet — so this
- * modal has two modes:
- *   • "По ссылке": paste an image URL → validated → PATCH /profile/me. Fully wired.
- *   • "Загрузить": pick a local image for a live preview. Saving a *local* file
- *     needs an upload endpoint (see the integrator note); until then the local
- *     mode previews only and points the user at the URL mode.
+ * The avatar is now an IMAGE FILE stored server-side: this modal picks a local
+ * image, shows a live preview, and uploads it to `POST /profiles/me/avatar`
+ * (multipart, field `file`). The server validates the bytes (magic-number +
+ * size cap), re-encodes/resizes it, deletes the previous file, and returns the
+ * updated public profile — which we write straight into the economy "me" cache
+ * (and mirror onto the profile detail caches) so the new avatar shows instantly.
  *
- * Persists via the base `api.profile.update` and refreshes the economy "me"
- * query so the new avatar shows immediately.
+ * The old "by URL" input was removed (users found it confusing): file upload is
+ * the only way to set an avatar. When an avatar already exists, a "Remove"
+ * action resets it to the default via `DELETE /profiles/me/avatar`.
  */
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
-import { ImagePlus, Link2, Upload } from 'lucide-react';
-import { z } from 'zod';
-import type { PublicProfile, UpdateProfileDto } from '@ruletka/shared-types';
+import { ImagePlus, Trash2, UploadCloud } from 'lucide-react';
+import {
+  AVATAR_ALLOWED_MIME_TYPES,
+  AVATAR_MAX_BYTES,
+  type PublicProfile,
+} from '@ruletka/shared-types';
 import {
   Avatar,
   Button,
@@ -27,20 +30,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
   toast,
 } from '@ruletka/ui';
-import { api } from '@/lib/api';
+import { ApiClientError, api } from '@/lib/api';
+import { cn } from '@/lib/cn';
 import { meKey } from '@/features/economy/use-me';
+import { profileKeys } from '@/features/profile/use-profile';
 import { useModal, useModalProps } from '@/lib/stores/modal-store';
 import { FieldError } from './shared';
 
-const urlSchema = z.string().url();
+const ALLOWED_MIME = new Set<string>(AVATAR_ALLOWED_MIME_TYPES);
 
 export function AvatarUploadModal() {
   const { close } = useModal();
@@ -49,57 +48,78 @@ export function AvatarUploadModal() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [mode, setMode] = useState<'url' | 'file'>('url');
-  const [url, setUrl] = useState(currentUrl ?? '');
-  const [urlError, setUrlError] = useState<string | null>(null);
+  // The picked file (not yet uploaded) + its object-URL preview.
+  const [file, setFile] = useState<File | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Revoke any object URL we created when the modal unmounts.
+  // Revoke the object URL we created whenever it changes / on unmount.
   useEffect(() => {
     return () => {
       if (localPreview) URL.revokeObjectURL(localPreview);
     };
   }, [localPreview]);
 
-  const save = useMutation({
-    mutationFn: (dto: UpdateProfileDto) => api.profile.update(dto),
+  /** Fan the fresh profile out to every cache that renders the avatar. */
+  function syncCaches(updated: PublicProfile) {
+    // `meKey` IS `['economy','me']` — the header/dashboard avatar source.
+    qc.setQueryData(meKey, updated);
+    // The profile-page hero reads its own detail key; mirror the fresh avatar
+    // there too so an open profile updates without a refetch.
+    qc.setQueryData(profileKeys.detail(updated.id), updated);
+    void qc.invalidateQueries({ queryKey: meKey });
+    void qc.invalidateQueries({ queryKey: ['auth', 'me'] });
+  }
+
+  const upload = useMutation({
+    mutationFn: (f: File) => api.profile.uploadAvatar(f),
     onSuccess: (updated: PublicProfile) => {
-      qc.setQueryData(meKey, updated);
-      void qc.invalidateQueries({ queryKey: meKey });
+      syncCaches(updated);
       toast.success(t('modals.avatarUpload.savedTitle'));
+      close();
+    },
+    onError: (err: unknown) => {
+      // Surface a server validation message (e.g. unsupported/invalid image)
+      // when present; otherwise a generic failure.
+      const msg =
+        err instanceof ApiClientError && typeof err.body?.message === 'string'
+          ? err.body.message
+          : t('modals.avatarUpload.errUploadFailed');
+      toast.error(msg);
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api.profile.removeAvatar(),
+    onSuccess: (updated: PublicProfile) => {
+      syncCaches(updated);
+      toast.success(t('modals.avatarUpload.removedTitle'));
       close();
     },
     onError: () => toast.error(t('modals.avatarUpload.errGeneric')),
   });
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      toast.error(t('modals.avatarUpload.errNotImage'));
+  function pickFile(picked: File | undefined) {
+    if (!picked) return;
+    // Client-side first-line checks mirror the server's contract; the server
+    // still re-validates the bytes authoritatively.
+    if (!ALLOWED_MIME.has(picked.type) && !picked.type.startsWith('image/')) {
+      setError(t('modals.avatarUpload.errNotImage'));
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error(t('modals.avatarUpload.errTooLargeTitle'), {
-        description: t('modals.avatarUpload.errTooLargeDescription'),
-      });
+    if (picked.size > AVATAR_MAX_BYTES) {
+      setError(t('modals.avatarUpload.errTooLarge'));
       return;
     }
+    setError(null);
     if (localPreview) URL.revokeObjectURL(localPreview);
-    setLocalPreview(URL.createObjectURL(file));
+    setLocalPreview(URL.createObjectURL(picked));
+    setFile(picked);
   }
 
-  function saveUrl() {
-    const trimmed = url.trim();
-    if (!urlSchema.safeParse(trimmed).success) {
-      setUrlError(t('modals.avatarUpload.invalidUrl'));
-      return;
-    }
-    setUrlError(null);
-    save.mutate({ avatarUrl: trimmed });
-  }
-
-  const preview = mode === 'file' ? localPreview : url.trim() || currentUrl;
+  const busy = upload.isPending || remove.isPending;
+  const preview = localPreview ?? currentUrl ?? undefined;
+  const hasCurrent = Boolean(currentUrl);
 
   return (
     <>
@@ -108,93 +128,88 @@ export function AvatarUploadModal() {
         <DialogDescription>{t('modals.avatarUpload.description')}</DialogDescription>
       </DialogHeader>
 
-      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
         {/* Live preview */}
         <div className="flex shrink-0 flex-col items-center gap-2">
           <Avatar
             size="xl"
-            src={preview || undefined}
+            src={preview}
             alt={t('modals.avatarUpload.previewAlt')}
             ring="aurora"
           />
           <span className="text-xs text-muted-foreground">{t('modals.avatarUpload.preview')}</span>
         </div>
 
-        <div className="w-full">
-          <Tabs value={mode} onValueChange={(v) => setMode(v as 'url' | 'file')}>
-            <TabsList className="w-full">
-              <TabsTrigger value="url" className="flex-1">
-                <Link2 className="mr-1.5 h-4 w-4" /> {t('modals.avatarUpload.tabUrl')}
-              </TabsTrigger>
-              <TabsTrigger value="file" className="flex-1">
-                <Upload className="mr-1.5 h-4 w-4" /> {t('modals.avatarUpload.tabFile')}
-              </TabsTrigger>
-            </TabsList>
+        {/* Picker + actions */}
+        <div className="w-full space-y-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => pickFile(e.target.files?.[0])}
+          />
 
-            <TabsContent value="url" className="space-y-1.5 pt-3">
-              <Label htmlFor="avatar-url">{t('modals.avatarUpload.urlLabel')}</Label>
-              <Input
-                id="avatar-url"
-                type="url"
-                inputMode="url"
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value);
-                  if (urlError) setUrlError(null);
-                }}
-                placeholder={t('modals.avatarUpload.urlPlaceholder')}
-                invalid={!!urlError}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <FieldError>{urlError}</FieldError>
-            </TabsContent>
+          {/* Clickable dropzone-style trigger (keyboard + pointer). */}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            className={cn(
+              'group flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 bg-card/40 px-4 py-6 text-center transition-colors',
+              'hover:border-[var(--color-neon-violet)]/60 hover:bg-card/60',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-neon-violet)]/15 text-foreground ring-1 ring-[var(--color-neon-violet)]/40 transition-transform group-hover:scale-105">
+              <ImagePlus className="h-5 w-5" />
+            </span>
+            <span className="font-display text-sm font-semibold">
+              {file ? t('modals.avatarUpload.pickAnother') : t('modals.avatarUpload.pickPhoto')}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {t('modals.avatarUpload.uploadNotice')}
+            </span>
+          </button>
 
-            <TabsContent value="file" className="space-y-3 pt-3">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={handleFile}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                block
-                leadingIcon={<ImagePlus className="h-4 w-4" />}
-                onClick={() => fileRef.current?.click()}
-              >
-                {localPreview
-                  ? t('modals.avatarUpload.pickAnother')
-                  : t('modals.avatarUpload.pickPhoto')}
-              </Button>
-              <p className="rounded-lg border border-border/60 bg-card/40 p-2.5 text-xs text-muted-foreground">
-                {t('modals.avatarUpload.fileNotice')}
-              </p>
-            </TabsContent>
-          </Tabs>
+          <FieldError>{error}</FieldError>
         </div>
       </div>
 
-      <DialogFooter>
-        <Button type="button" variant="ghost" onClick={close}>
-          {t('modals.avatarUpload.cancel')}
-        </Button>
-        {mode === 'url' ? (
-          <Button type="button" variant="primary" loading={save.isPending} onClick={saveUrl}>
-            {t('modals.avatarUpload.save')}
+      <DialogFooter className="sm:justify-between">
+        {/* Reset-to-default (only when an avatar exists). */}
+        {hasCurrent ? (
+          <Button
+            type="button"
+            variant="ghost"
+            leadingIcon={<Trash2 className="h-4 w-4" />}
+            onClick={() => remove.mutate()}
+            loading={remove.isPending}
+            disabled={busy}
+            className="text-destructive hover:text-destructive"
+          >
+            {t('modals.avatarUpload.removeAvatar')}
           </Button>
         ) : (
+          <span />
+        )}
+
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="ghost" onClick={close} disabled={busy}>
+            {t('modals.avatarUpload.cancel')}
+          </Button>
           <Button
             type="button"
             variant="primary"
-            disabled
-            title={t('modals.avatarUpload.saveDisabledTitle')}
+            leadingIcon={<UploadCloud className="h-4 w-4" />}
+            disabled={!file || busy}
+            loading={upload.isPending}
+            onClick={() => file && upload.mutate(file)}
           >
-            {t('modals.avatarUpload.save')}
+            {t('modals.avatarUpload.uploadCta')}
           </Button>
-        )}
+        </div>
       </DialogFooter>
     </>
   );

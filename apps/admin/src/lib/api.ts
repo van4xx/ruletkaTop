@@ -36,6 +36,7 @@ import type {
   AuthResponse,
   AuthUser,
   EconomyOverview,
+  Report,
   ReviewItem,
   Role,
 } from '@ruletka/shared-types';
@@ -131,6 +132,13 @@ interface ReviewPage {
   hasMore: boolean;
 }
 
+/** A cursor page of abuse reports (`GET /reports`), typed via the shared contract. */
+export interface ReportPage {
+  items: Report[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 /* ───────────────────────────── Economy CRUD types ─────────────────────────────
  * The economy/premium-plan CRUD endpoints are NOT in `@ruletka/shared-types`
  * (they're local to `admin-economy.controller`), so the row/DTO shapes are
@@ -193,6 +201,16 @@ export const adminApi = {
   reviewQueue: (status?: string) => req<ReviewPage>('/moderation/review', { query: { status } }),
   resolveReview: (id: string, status: 'resolved' | 'dismissed') =>
     req<ReviewItem>(`/moderation/review/${id}/resolve`, { method: 'POST', json: { status } }),
+
+  // ── Abuse reports (moderator/admin) ──
+  reports: {
+    /**
+     * Every report filed AGAINST one user (the reported account), newest-first,
+     * for the user-dossier "reports against this user" view. Cursor-paginated.
+     */
+    against: (againstUserId: string, cursor?: string) =>
+      req<ReportPage>('/reports', { query: { againstUserId, cursor } }),
+  },
 
   // ── User enforcement (moderator/admin) — routes live under /admin ──
   banUser: (id: string, reason?: string) =>

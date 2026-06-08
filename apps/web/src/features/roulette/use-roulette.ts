@@ -28,6 +28,7 @@
  */
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { toast } from '@ruletka/ui';
 import type {
   CallResponsePayload,
   MatchFilters,
@@ -36,6 +37,7 @@ import type {
   PublicProfile,
   RtcIcePayload,
   RtcOfferPayload,
+  WsErrorPayload,
 } from '@ruletka/shared-types';
 
 import { getSocket, connectSocket } from '@/lib/socket';
@@ -262,6 +264,12 @@ const MAX_ICE_RESTARTS = 2;
  * and trying again (or giving up). Generous enough for a fresh TURN allocation.
  */
 const ICE_RESTART_TIMEOUT_MS = 10_000;
+/**
+ * Renew TURN credentials this long before their hard `ttlExpiresAt` when an ICE
+ * restart is about to fire. The skew absorbs clock drift + the time a fresh TURN
+ * allocation takes, so the restart never races a credential expiry.
+ */
+const TURN_REFRESH_SKEW_MS = 30_000;
 /** Cadence of the in-call quality sampler. */
 const QUALITY_POLL_MS = 2_000;
 
@@ -278,6 +286,11 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   const roomIdRef = useRef<string | null>(null);
   const isInitiatorRef = useRef(false);
   const iceServersRef = useRef<IceServerConfig[] | null>(null);
+  // Epoch ms at which the cached TURN credentials expire (from
+  // `/turn/credentials`'s `ttlExpiresAt`, seconds → ms). null when we only have
+  // the STUN fallback (which never expires) or before the first fetch. Drives a
+  // pre-ICE-restart refresh so a long call doesn't reconnect on dead relay creds.
+  const iceServersExpireAtRef = useRef<number | null>(null);
   const startedRef = useRef(false); // session active (between start and stop)
   const joinedRef = useRef(false); // an initial mm:join has been emitted
   const mountedRef = useRef(true); // false after unmount — guards async entries
@@ -441,6 +454,9 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   const onIceTroubleRef = useRef<(state: RTCIceConnectionState) => void>(() => undefined);
   const onIceHealthyRef = useRef<() => void>(() => undefined);
   const startQualityPollingRef = useRef<() => void>(() => undefined);
+  // Renew TURN creds + push them onto the live PC right before a restart.
+  // Forward ref because attemptIceRestart (defined first, stable []) calls it.
+  const refreshIceServersForRestartRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const handlePeerGone = useCallback(() => {
     if (!startedRef.current) return;
     closePeer();
@@ -481,11 +497,23 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   }, [handleDirectEnded]);
 
   // ── ICE-restart reconnection ────────────────────────────────────────────
-  // Perform ONE ICE-restart attempt. Only the initiator drives renegotiation
-  // (no glare in our 1↔1 topology); the answerer simply re-answers the re-offer
-  // via the existing `rtc:offer`/`rtc:answer` handlers. We start a watchdog: if
-  // the connection isn't healthy again within ICE_RESTART_TIMEOUT_MS we either
-  // try again or, once attempts are exhausted, declare the call lost.
+  // Perform ONE ICE-restart attempt. EITHER peer may drive the renegotiation:
+  // a NAT/relay drop is often one-sided (only one end sees its ICE go
+  // 'failed'/'disconnected'), so restricting the re-offer to the initiator left
+  // those drops unrecoverable — the side that noticed couldn't ask the other to
+  // restart. Now whichever side detects trouble emits the iceRestart offer; the
+  // other handles it through its existing `rtc:offer`/`rtc:answer` path. If both
+  // happen to offer at once (rare — both ends saw the drop within the same
+  // window) the resulting SDP glare throws on one side, is swallowed, and the
+  // watchdog simply retries — still a recovery rather than a teardown.
+  //
+  // Before offering we renew TURN credentials if they're near expiry and push
+  // them onto the live PC (refreshIceServersForRestart), so a long call doesn't
+  // gather relay candidates against dead creds. We use createOffer({ iceRestart:
+  // true }) — the portable path that mints fresh ICE credentials (new ufrag/pwd)
+  // AND produces the offer we relay over the existing rtc:offer channel.
+  // (pc.restartIce() alone wouldn't emit an offer in our manual-signaling setup
+  // since we don't listen to negotiationneeded.)
   const attemptIceRestart = useCallback(() => {
     const manager = peerRef.current;
     if (!startedRef.current || !manager || manager.isClosed) return;
@@ -495,25 +523,25 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     reconnectingRef.current = true;
     dispatch({ type: 'RECONNECTING', attempt });
 
-    // Only the initiator emits a renegotiation offer. The answerer just waits;
-    // its existing onOffer handler will produce a fresh answer. We use
-    // createOffer({ iceRestart: true }) — the portable path that mints fresh ICE
-    // credentials (new ufrag/pwd) AND produces the offer we relay over the
-    // existing rtc:offer channel. (pc.restartIce() alone wouldn't emit an offer
-    // in our manual-signaling setup since we don't listen to negotiationneeded.)
-    if (isInitiatorRef.current) {
-      const socket = getSocket('/mm');
-      void manager
-        .createOffer({ iceRestart: true })
-        .then((sdp) => {
-          if (roomIdRef.current && !manager.isClosed) {
-            socket.emit('rtc:offer', { roomId: roomIdRef.current, sdp });
-          }
-        })
-        .catch(() => {
-          /* swallow — the watchdog will retry or give up */
-        });
-    }
+    const socket = getSocket('/mm');
+    void (async () => {
+      // Renew TURN creds first (no-op unless near expiry / TURN in use), so the
+      // restart's fresh allocation uses valid credentials.
+      try {
+        await refreshIceServersForRestartRef.current();
+      } catch {
+        /* best-effort; fall through with existing servers */
+      }
+      if (manager.isClosed || peerRef.current !== manager) return;
+      try {
+        const sdp = await manager.createOffer({ iceRestart: true });
+        if (roomIdRef.current && !manager.isClosed) {
+          socket.emit('rtc:offer', { roomId: roomIdRef.current, sdp });
+        }
+      } catch {
+        /* swallow — the watchdog will retry or give up */
+      }
+    })();
 
     // Watchdog for this attempt.
     if (iceRestartTimeoutRef.current) clearTimeout(iceRestartTimeoutRef.current);
@@ -628,16 +656,47 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
   }, [clearMatchTimeout, type]);
 
   // ── Fetch ICE servers (cached on the ref for the session) ──
-  const ensureIceServers = useCallback(async () => {
-    if (iceServersRef.current) return;
+  // `force` re-fetches even when a list is already cached — used to renew TURN
+  // credentials before an ICE restart on a long call (see refreshIceServers).
+  const ensureIceServers = useCallback(async (force = false) => {
+    if (iceServersRef.current && !force) return;
     try {
       const creds = await api.request<TurnCredentials>('/turn/credentials');
       iceServersRef.current =
         creds.iceServers?.length > 0 ? creds.iceServers : FALLBACK_ICE_SERVERS;
+      // Record expiry only when the server actually returned TURN creds; the
+      // STUN fallback never expires, so leave it null there.
+      iceServersExpireAtRef.current =
+        creds.iceServers?.length > 0 && typeof creds.ttlExpiresAt === 'number'
+          ? creds.ttlExpiresAt * 1000
+          : null;
     } catch {
-      iceServersRef.current = FALLBACK_ICE_SERVERS;
+      // On a forced refresh keep whatever we already had (a transient fetch
+      // failure must not downgrade a live call to STUN mid-reconnect).
+      if (!iceServersRef.current) iceServersRef.current = FALLBACK_ICE_SERVERS;
     }
   }, []);
+
+  // Renew TURN credentials if they're at/near expiry, and push the fresh list
+  // onto the live peer connection so the imminent ICE restart gathers relay
+  // candidates against valid credentials. Best-effort and quick: a fetch failure
+  // simply leaves the existing servers in place. We refresh slightly BEFORE the
+  // hard expiry (skew margin) since the restart + fresh allocation take a beat.
+  const refreshIceServersForRestart = useCallback(async () => {
+    const expireAt = iceServersExpireAtRef.current;
+    // No TURN creds (STUN-only) or not yet near expiry → nothing to renew.
+    if (expireAt == null) return;
+    if (Date.now() < expireAt - TURN_REFRESH_SKEW_MS) return;
+    await ensureIceServers(true);
+    const servers = iceServersRef.current;
+    const manager = peerRef.current;
+    if (servers && manager && !manager.isClosed) {
+      manager.setIceServers(servers);
+    }
+  }, [ensureIceServers]);
+  useEffect(() => {
+    refreshIceServersForRestartRef.current = refreshIceServersForRestart;
+  }, [refreshIceServersForRestart]);
 
   // ───────────────────────── Socket event wiring ───────────────────────
   // Bound once per session start (re-bound if `type` changes).
@@ -709,11 +768,12 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     const onOffer = async (p: RtcOfferPayload) => {
       const manager = peerRef.current;
       if (!manager || manager.isClosed || p.roomId !== roomIdRef.current) return;
-      // A SECOND offer on an already-connected peer is an ICE-restart
-      // renegotiation initiated by the other side. Reflect the reconnecting UI
-      // on this (answerer) side too so both peers show the same state. The
-      // existing setRemoteDescription/createAnswer path handles re-offers; the
-      // browser performs an implicit rollback if we were mid-negotiation.
+      // A SECOND offer on an already-connected (or troubled) peer is an
+      // ICE-restart renegotiation from the other side. Reflect the reconnecting
+      // UI here too so both peers show the same state. setRemoteDescription
+      // resolves offer-glare internally (perfect negotiation): if it returns
+      // false this is a colliding offer our impolite side is ignoring (our own
+      // restart offer stands), so we must NOT answer it.
       if (
         manager.connectionState === 'connected' ||
         manager.iceConnectionState === 'disconnected' ||
@@ -725,7 +785,8 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
         }
       }
       try {
-        await manager.setRemoteDescription('offer', p.sdp);
+        const applied = await manager.setRemoteDescription('offer', p.sdp);
+        if (!applied) return; // glare: impolite peer keeps its own offer
         const sdp = await manager.createAnswer();
         if (roomIdRef.current && !manager.isClosed) {
           socket.emit('rtc:answer', { roomId: roomIdRef.current, sdp });
@@ -802,6 +863,44 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       handleDirectEndedRef.current();
     };
 
+    // ── Realtime action rejected by the gateway (rate limit / cap / forbidden) ─
+    // Surface a toast so a throttled Next, a blocked invite, or a forced
+    // disconnect isn't silent. A stable per-code toast id coalesces bursts (e.g.
+    // hammering Next) into a single, self-replacing toast instead of a stack.
+    // `banned`/`unauthorized` also drive a hard disconnect server-side; the
+    // moderation modal + socket-drop handlers own that teardown, so here we only
+    // add the explanatory toast.
+    const onWsError = (p: WsErrorPayload) => {
+      const code = p.code;
+      // A rate-limited queue action (Next / join) is the common, gentlest case:
+      // phrase it as a "slow down" hint rather than a hard error.
+      const isQueueThrottle =
+        code === 'rate_limited' && (p.event === 'mm:join' || p.event === 'mm:next');
+      if (isQueueThrottle) {
+        toast.info(t('wsError.slowDownTitle'), {
+          id: 'roulette-ws-rate',
+          description: t('wsError.slowDownDescription'),
+          duration: 4000,
+        });
+        return;
+      }
+      const titleKey =
+        code === 'rate_limited'
+          ? 'wsError.rateLimitedTitle'
+          : code === 'too_many_connections'
+            ? 'wsError.tooManyConnectionsTitle'
+            : code === 'forbidden'
+              ? 'wsError.forbiddenTitle'
+              : code === 'banned'
+                ? 'wsError.bannedTitle'
+                : 'wsError.unauthorizedTitle';
+      toast.error(t(titleKey), {
+        id: `roulette-ws-${code}`,
+        description: t(`wsError.${code}Description`),
+        duration: 6000,
+      });
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('mm:waiting', onWaiting);
@@ -813,6 +912,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
     socket.on('call:accept', onCallAccept);
     socket.on('call:decline', onCallDecline);
     socket.on('call:end', onCallEnd);
+    socket.on('ws:error', onWsError);
 
     return () => {
       socket.off('connect', onConnect);
@@ -826,8 +926,9 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       socket.off('call:accept', onCallAccept);
       socket.off('call:decline', onCallDecline);
       socket.off('call:end', onCallEnd);
+      socket.off('ws:error', onWsError);
     };
-  }, [type, beginNegotiation, clearMatchTimeout, clearRequeueTimeout]);
+  }, [type, beginNegotiation, clearMatchTimeout, clearRequeueTimeout, t]);
 
   // ───────────────────────────── Actions ───────────────────────────────
   // Acquire (or reuse) the local stream. Coalesces concurrent callers onto one
@@ -1109,6 +1210,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       void pending.then(stopStream).catch(() => undefined);
     }
     iceServersRef.current = null;
+    iceServersExpireAtRef.current = null;
     // Do NOT disconnect the shared /mm socket here: its lifecycle is owned by
     // login/logout, and notifications (`notif:new`) + the /chat socket ride on
     // it app-wide. Leaving the roulette session only means exiting the queue/

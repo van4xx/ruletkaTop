@@ -26,9 +26,9 @@
     "profile": {
       "title": "Profile",
       "description": "This is how other users see you.",
-      "avatarLabel": "Avatar URL",
-      "avatarHint": "Direct link to an image (https://…)",
-      "avatarPlaceholder": "https://…/avatar.jpg",
+      "avatarLabel": "Profile photo",
+      "avatarHint": "Upload an image from your device (JPEG, PNG, WEBP or GIF, up to 5 MB).",
+      "avatarChange": "Change photo",
       "nicknameLabel": "Nickname",
       "statusLabel": "Status",
       "statusHint": "Up to 140 characters",

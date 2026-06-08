@@ -1,7 +1,24 @@
-import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -11,6 +28,9 @@ import {
 import type { Request } from 'express';
 
 import {
+  AVATAR_ALLOWED_MIME_TYPES,
+  AVATAR_MAX_BYTES,
+  type AvatarUploadResponse,
   type GiftTransaction,
   type JwtPayload,
   type ProfileSearchQuery,
@@ -27,7 +47,16 @@ import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 // be local — see src/common/jwt-payload.schema.ts).
 import { jwtPayloadSchema } from '../../common/jwt-payload.schema';
 import { createZodValidationPipe } from '../../common/zod-validation.pipe';
+import { AvatarStorageService, type UploadedAvatar } from './avatar-storage.service';
 import { type ProfileSearchResult, ProfilesService } from './profiles.service';
+
+/**
+ * `AVATAR_ALLOWED_MIME_TYPES` is a readonly tuple of literals; multer's
+ * `fileFilter` compares the incoming mimetype against it. This is only a FIRST
+ * gate — the bytes are independently sniffed by magic-number in
+ * {@link AvatarStorageService.store}, so a spoofed mimetype never reaches disk.
+ */
+const ALLOWED_MIME_SET = new Set<string>(AVATAR_ALLOWED_MIME_TYPES);
 
 /**
  * REST surface for user profiles under `/profiles`.
@@ -45,6 +74,7 @@ export class ProfilesController {
   constructor(
     private readonly profilesService: ProfilesService,
     private readonly jwtService: JwtService,
+    private readonly avatarStorage: AvatarStorageService,
   ) {}
 
   @Get('search')
@@ -99,6 +129,96 @@ export class ProfilesController {
     @Body(createZodValidationPipe(updateProfileSchema)) dto: UpdateProfileDto,
   ): Promise<PublicProfile> {
     return this.profilesService.updateOwnProfile(user.sub, dto);
+  }
+
+  /**
+   * Upload (or replace) the authenticated user's avatar.
+   *
+   * `multipart/form-data` with a single image part named `file`. The file is
+   * buffered IN MEMORY (multer `memoryStorage`) — never written under a client
+   * path — then validated (size cap + magic-byte image sniff), re-encoded to a
+   * square WEBP (EXIF stripped) and stored under `/uploads/avatars/` with a
+   * SERVER-GENERATED filename. On success the user's PRIOR avatar file is
+   * deleted (only the current file is kept) and the updated public profile is
+   * returned.
+   *
+   * Limits/allowlist come from the shared contract (`AVATAR_MAX_BYTES`,
+   * `AVATAR_ALLOWED_MIME_TYPES`); the mimetype check here is a fast first gate,
+   * with the authoritative content validation done on the bytes server-side.
+   */
+  @Post('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: "Upload/replace the authenticated user's avatar image" })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+      required: ['file'],
+    },
+  })
+  @ApiOkResponse({ description: 'Updated public profile with the new avatar URL' })
+  @UseInterceptors(
+    // No explicit `storage` → multer's DEFAULT in-memory storage, so the file
+    // arrives as `file.buffer` (never written to a client-controlled path).
+    // Avoiding an explicit `memoryStorage()` keeps this off a direct `multer`
+    // import (multer is a transitive dep of @nestjs/platform-express).
+    FileInterceptor('file', {
+      limits: { fileSize: AVATAR_MAX_BYTES, files: 1 },
+      fileFilter: (
+        _req: unknown,
+        file: { mimetype: string },
+        cb: (error: Error | null, acceptFile: boolean) => void,
+      ) => {
+        // First-line mimetype gate (the bytes are re-validated downstream).
+        if (ALLOWED_MIME_SET.has(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Unsupported image type'), false);
+        }
+      },
+    }),
+  )
+  async uploadAvatar(
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() file: UploadedAvatar | undefined,
+  ): Promise<AvatarUploadResponse> {
+    if (!file) {
+      throw new BadRequestException('No file uploaded (expected field "file")');
+    }
+    // Remember the path we're superseding so we can delete it AFTER the new one
+    // is safely stored + persisted (never leave the user avatar-less on failure).
+    const previousUrl = await this.profilesService.getAvatarUrl(user.sub);
+    const stored = await this.avatarStorage.store(user.sub, file);
+    try {
+      const profile = await this.profilesService.setAvatar(user.sub, stored.url);
+      // Best-effort cleanup of the old file (ignored if external/missing).
+      await this.avatarStorage.deleteByUrl(previousUrl);
+      return profile;
+    } catch (err) {
+      // Persisting the new path failed — remove the orphaned file we just wrote
+      // so the uploads dir doesn't accumulate garbage.
+      await this.avatarStorage.deleteByUrl(stored.url);
+      throw err;
+    }
+  }
+
+  /**
+   * Reset the authenticated user's avatar to the default: clears the stored
+   * `avatarUrl` and deletes the underlying local file (if it is one of ours).
+   * Returns the updated public profile.
+   */
+  @Delete('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: "Reset the authenticated user's avatar to the default" })
+  @ApiOkResponse({ description: 'Updated public profile with no avatar' })
+  async deleteAvatar(@CurrentUser() user: JwtPayload): Promise<AvatarUploadResponse> {
+    const previousUrl = await this.profilesService.getAvatarUrl(user.sub);
+    const profile = await this.profilesService.clearAvatar(user.sub);
+    await this.avatarStorage.deleteByUrl(previousUrl);
+    return profile;
   }
 
   /**

@@ -120,14 +120,26 @@ export class ReportsService {
 
   /**
    * Cursor-paginated triage queue, newest-first, optionally filtered by
-   * `status`. The `cursor` is the `_id` of the last item from the previous page
-   * (fetch older reports with `_id < cursor`). Moderator-only (gated in the
-   * controller).
+   * `status` and/or `againstUserId` (every report filed AGAINST a given user —
+   * the per-target dossier view investigators use). The `cursor` is the `_id` of
+   * the last item from the previous page (fetch older reports with
+   * `_id < cursor`). Moderator-only (gated in the controller). The
+   * `againstUserId + status` index backs the combined filter.
+   *
+   * `againstUserId` is already validated as a 24-char-hex ObjectId by the query
+   * pipe, so it is safe to cast here.
    */
-  async listReports(pagination: PaginationQuery, status?: ReportStatus): Promise<ReportPage> {
+  async listReports(
+    pagination: PaginationQuery,
+    status?: ReportStatus,
+    againstUserId?: string,
+  ): Promise<ReportPage> {
     const filter: QueryFilter<ReportDocument> = {};
     if (status) {
       filter.status = status;
+    }
+    if (againstUserId) {
+      filter.againstUserId = new Types.ObjectId(againstUserId);
     }
     if (pagination.cursor) {
       if (!Types.ObjectId.isValid(pagination.cursor)) {

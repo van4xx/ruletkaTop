@@ -335,3 +335,59 @@ describe('TopService.getActiveFeed', () => {
     expect(feed.left[0]?.profile).toBeNull();
   });
 });
+
+describe('TopService.sweepExpired', () => {
+  let service: TopService;
+  let placementModel: { create: jest.Mock; find: jest.Mock; updateMany: jest.Mock };
+  let wallet: { debit: jest.Mock; credit: jest.Mock };
+
+  /** `updateMany(...).exec()` chain resolving to a Mongo write result. */
+  function updateManyReturning(modifiedCount: number): { exec: jest.Mock } {
+    return { exec: jest.fn().mockResolvedValue({ acknowledged: true, modifiedCount }) };
+  }
+
+  beforeEach(() => {
+    placementModel = {
+      create: jest.fn(),
+      find: jest.fn(),
+      updateMany: jest.fn().mockReturnValue(updateManyReturning(0)),
+    };
+    wallet = { debit: jest.fn(), credit: jest.fn() };
+    service = new TopService(
+      placementModel as unknown as Model<TopPlacementDocument>,
+      connectionReturning(),
+      wallet as unknown as WalletService,
+    );
+  });
+
+  it('latches expired:true on past-window rows not yet reconciled', async () => {
+    placementModel.updateMany.mockReturnValue(updateManyReturning(4));
+    const now = new Date('2026-06-08T12:00:00.000Z');
+
+    const count = await service.sweepExpired(now);
+
+    expect(count).toBe(4);
+    const [filter, update] = placementModel.updateMany.mock.calls[0] as [
+      Record<string, any>,
+      Record<string, any>,
+    ];
+    // Only matches rows past their window that have NOT already been latched.
+    expect(filter.expired).toEqual({ $ne: true });
+    expect((filter.expiresAt.$lte as Date).getTime()).toBe(now.getTime());
+    expect(update.$set).toEqual({ expired: true });
+  });
+
+  it('returns 0 (no-op) when nothing is past its window', async () => {
+    placementModel.updateMany.mockReturnValue(updateManyReturning(0));
+
+    const count = await service.sweepExpired(new Date());
+
+    expect(count).toBe(0);
+  });
+
+  it('treats a missing modifiedCount as 0 reconciled', async () => {
+    placementModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
+
+    await expect(service.sweepExpired(new Date())).resolves.toBe(0);
+  });
+});

@@ -145,7 +145,11 @@ export class ModerationController {
   @Get('reports')
   @UseGuards(RolesGuard)
   @Roles('moderator', 'admin')
-  @ApiOperation({ summary: 'List abuse reports for triage (moderator/admin)' })
+  @ApiOperation({
+    summary:
+      'List abuse reports for triage (moderator/admin); ' +
+      'optional `againstUserId` lists every report filed against one user',
+  })
   @ApiOkResponse({ description: 'Cursor-paginated reports, newest first' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
   async listReports(
@@ -154,6 +158,7 @@ export class ModerationController {
     return this.reportsService.listReports(
       { cursor: query.cursor, limit: query.limit },
       query.status,
+      query.againstUserId,
     );
   }
 

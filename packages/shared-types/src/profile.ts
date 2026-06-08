@@ -11,10 +11,19 @@ import {
 import { nicknameSchema } from './auth';
 import { coverIdSchema, DEFAULT_COVER_ID } from './cosmetics';
 
+/**
+ * An avatar reference. Either a server-RELATIVE path served by the API/CDN
+ * (e.g. `/uploads/avatars/<file>.webp`, produced by the avatar-upload endpoint)
+ * or a legacy absolute URL. Kept as a plain (non-`.url()`) string so the
+ * self-hosted served path validates — mirrors how `avatarUrl` is already typed
+ * across the rest of the contract (leaderboard/economy/moderation/matchmaking).
+ */
+const avatarUrlSchema = z.string().min(1).max(2048);
+
 export const publicProfileSchema = z.object({
   id: objectIdSchema,
   nickname: nicknameSchema,
-  avatarUrl: z.string().url().nullable(),
+  avatarUrl: avatarUrlSchema.nullable(),
   status: z.string().max(140).nullable(),
   gender: genderSchema,
   age: z.number().int().min(18).max(120),
@@ -46,15 +55,23 @@ export type PublicProfile = z.infer<typeof publicProfileSchema>;
 export const minimalProfileSchema = z.object({
   id: objectIdSchema,
   nickname: nicknameSchema,
-  avatarUrl: z.string().url().nullable(),
+  avatarUrl: avatarUrlSchema.nullable(),
 });
 export type MinimalProfile = z.infer<typeof minimalProfileSchema>;
 
+/**
+ * Owner profile PATCH (`PATCH /profiles/me`). Every field is optional (partial).
+ *
+ * NOTE: `avatarUrl` is deliberately NOT settable here. The avatar is now managed
+ * exclusively by the dedicated upload surface (`POST /profiles/me/avatar` to set,
+ * `DELETE /profiles/me/avatar` to reset) so the server always owns the stored
+ * path (a re-encoded, validated local file) — a client can no longer point the
+ * avatar at an arbitrary URL through the generic profile patch.
+ */
 export const updateProfileSchema = z
   .object({
     nickname: nicknameSchema,
     status: z.string().max(140),
-    avatarUrl: z.string().url(),
     gender: genderSchema,
     birthDate: z.string(),
     country: countryCodeSchema,
@@ -63,6 +80,34 @@ export const updateProfileSchema = z
   })
   .partial();
 export type UpdateProfileDto = z.infer<typeof updateProfileSchema>;
+
+/**
+ * Maximum avatar upload size in bytes (~5 MB). Enforced server-side by multer's
+ * limit AND surfaced to the client so the file picker can reject oversize files
+ * before the round-trip. Keep the two in lock-step.
+ */
+export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Image mimetypes accepted by the avatar upload. The server does NOT trust this
+ * list alone — it additionally sniffs the file's magic bytes and re-encodes —
+ * but it gates the client `accept` and gives a fast first-line rejection.
+ */
+export const AVATAR_ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+] as const;
+export type AvatarAllowedMimeType = (typeof AVATAR_ALLOWED_MIME_TYPES)[number];
+
+/**
+ * Response of `POST /profiles/me/avatar` and `DELETE /profiles/me/avatar`: the
+ * caller's full updated public profile (so the client can refresh its `me`
+ * caches from a single source of truth). Identical shape to {@link PublicProfile};
+ * aliased for endpoint-contract clarity.
+ */
+export type AvatarUploadResponse = PublicProfile;
 
 /**
  * Query for `GET /profiles/search` — a free-text nickname prefix plus optional

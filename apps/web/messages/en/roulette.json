@@ -32,6 +32,20 @@
     "signInToStart": "Sign in to your account to start chatting.",
     "startFailed": "Couldn't start. Please try again."
   },
+  "wsError": {
+    "slowDownTitle": "Too fast",
+    "slowDownDescription": "You're switching too quickly. Give it a second and keep going.",
+    "rateLimitedTitle": "Too many requests",
+    "rate_limitedDescription": "Too many actions in a row. Wait a moment and try again.",
+    "tooManyConnectionsTitle": "Too many connections",
+    "too_many_connectionsDescription": "Too many tabs or devices are open. Close some and try again.",
+    "forbiddenTitle": "Action unavailable",
+    "forbiddenDescription": "This action isn't available right now.",
+    "bannedTitle": "Account banned",
+    "bannedDescription": "Your account is banned, so chatting is unavailable.",
+    "unauthorizedTitle": "Session expired",
+    "unauthorizedDescription": "Sign in again to continue."
+  },
   "peerSubtitle": "{age} · {flag} {country}",
   "status": {
     "idle": {

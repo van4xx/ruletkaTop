@@ -18,6 +18,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { validateCriticalConfig } from './common/config-validation';
+import { AvatarStorageService } from './modules/profiles/avatar-storage.service';
 import { RedisIoAdapter } from './realtime/redis-io.adapter';
 
 /**
@@ -226,6 +227,13 @@ async function bootstrap(): Promise<void> {
     PUBLIC_CACHEABLE_GETS.map((entry) => [`/${prefix}/${entry.path}`, entry.cacheControl]),
   );
   app.use((req: Request, res: Response, next: NextFunction) => {
+    // Static uploads (avatars) set their OWN long-lived cache headers in the
+    // useStaticAssets registration below — don't stamp them `no-store`. The
+    // filenames are content-addressed (random suffix) so a stale cache is never
+    // a problem: a new avatar gets a new URL.
+    if (req.path.startsWith('/uploads/')) {
+      return next();
+    }
     if (req.method === 'GET' || req.method === 'HEAD') {
       // `req.path` excludes the query string, so `?cursor=` variants don't leak
       // past the exact match (the cacheable list has no query-bearing routes).
@@ -242,6 +250,28 @@ async function bootstrap(): Promise<void> {
     // because they short-circuit via the early return.)
     res.setHeader('Cache-Control', 'no-store');
     next();
+  });
+
+  // ── Static serving of user uploads (avatars) — DEV/SELF-HOSTED ──────────
+  // Serves files written by the avatar-upload endpoint at `/uploads/**` (NO API
+  // global prefix — `useStaticAssets` registers at the Express layer, before the
+  // controller prefix, so it does not clash with `/${globalPrefix}/...` routes
+  // and the served path matches the stored `avatarUrl`). The dir is the same one
+  // the AvatarStorageService writes to (single source of truth via DI).
+  //
+  // PROD: the uploads dir MUST be a PERSISTENT Docker volume (the container FS is
+  // ephemeral — avatars would be lost on every redeploy) and SHOULD be served by
+  // nginx directly from that volume (an `location /uploads/ { root … }` block),
+  // bypassing Node entirely. This Node-level serving is the dev/standalone path.
+  const avatarStorage = app.get(AvatarStorageService);
+  app.useStaticAssets(avatarStorage.getUploadsRoot(), {
+    prefix: '/uploads',
+    index: false,
+    redirect: false,
+    setHeaders: (res: Response) => {
+      // Immutable: content-addressed filenames mean the bytes at a URL never change.
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
   });
 
   // ── Graceful shutdown (lets RedisModule / adapter close connections) ────

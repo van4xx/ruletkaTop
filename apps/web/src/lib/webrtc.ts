@@ -236,6 +236,16 @@ export class PeerConnectionManager {
   private closed = false;
   private remoteStream: MediaStream | null = null;
   private chatChannel: RTCDataChannel | null = null;
+  /**
+   * Perfect-negotiation politeness for ICE-restart glare. The ANSWERER is
+   * `polite`; the INITIATOR is impolite. When BOTH peers emit an iceRestart
+   * offer at once (a two-sided drop), the polite peer rolls back its own offer
+   * and answers the incoming one, while the impolite peer ignores the colliding
+   * offer and keeps its own — so the renegotiation deterministically converges
+   * instead of deadlocking on two dangling local offers. With one-sided drops
+   * there is no collision and this never triggers.
+   */
+  private readonly polite: boolean;
   /** Per-stream cumulative counters from the previous {@link sampleQuality} call. */
   private lastStats: {
     packetsLost: number;
@@ -249,6 +259,9 @@ export class PeerConnectionManager {
     options: { isInitiator?: boolean; withChat?: boolean } = {},
   ) {
     this.callbacks = callbacks;
+    // The answerer is the polite peer (see {@link polite}); the initiator is
+    // impolite. Defaults to polite when role is unspecified.
+    this.polite = !options.isInitiator;
     this.pc = new RTCPeerConnection({
       iceServers: iceServers as RTCIceServer[],
       // Bundle + rtcp-mux keep the connection to a single transport.
@@ -362,23 +375,48 @@ export class PeerConnectionManager {
 
   /**
    * Apply a remote SDP description (offer or answer). Once applied, any ICE
-   * candidates that arrived early are flushed in order.
+   * candidates that arrived early are flushed in order. Returns `true` if the
+   * description was applied (so the caller knows whether to produce an answer),
+   * `false` if it was intentionally skipped (stale answer, or an offer the
+   * impolite peer ignored during glare).
    *
-   * Safe for renegotiation (ICE restart): a remote OFFER is accepted in both
-   * `stable` (fresh negotiation) and `have-remote-offer` (re-offer) states; the
-   * browser performs an implicit rollback if needed. A remote ANSWER is only
-   * meaningful while we have a local offer outstanding (`have-local-offer`); an
-   * answer that arrives in any other state is stale/duplicate and is ignored so
-   * a late answer can't tear down an otherwise-healthy call.
+   * Safe for renegotiation (ICE restart):
+   *  - A remote OFFER arriving in a clean state (`stable` / `have-remote-offer`)
+   *    is applied directly.
+   *  - A remote OFFER that COLLIDES with our own outstanding local offer
+   *    (`have-local-offer`, i.e. both peers restarted ICE at once) is resolved by
+   *    perfect-negotiation politeness: the IMPOLITE peer ignores it (returns
+   *    `false`, keeping its own offer to be answered), while the POLITE peer
+   *    rolls its own offer back and applies the incoming one — so the
+   *    renegotiation converges instead of deadlocking on two dangling offers.
+   *  - A remote ANSWER is only meaningful while we have a local offer outstanding
+   *    (`have-local-offer`); an answer in any other state is stale/duplicate and
+   *    is ignored so a late answer can't tear down an otherwise-healthy call.
    */
-  async setRemoteDescription(type: 'offer' | 'answer', sdp: string): Promise<void> {
+  async setRemoteDescription(type: 'offer' | 'answer', sdp: string): Promise<boolean> {
     if (type === 'answer' && this.pc.signalingState !== 'have-local-offer') {
       // No pending local offer → this answer is stale (e.g. raced a restart).
-      return;
+      return false;
+    }
+    if (type === 'offer') {
+      const collision = this.pc.signalingState === 'have-local-offer';
+      if (collision) {
+        if (!this.polite) {
+          // Impolite peer: ignore the colliding offer; our own offer stands.
+          return false;
+        }
+        // Polite peer: roll our offer back so the remote offer can apply on top.
+        try {
+          await this.pc.setLocalDescription({ type: 'rollback' } as RTCLocalSessionDescriptionInit);
+        } catch {
+          /* some engines auto-rollback on the next setRemoteDescription(offer) */
+        }
+      }
     }
     await this.pc.setRemoteDescription({ type, sdp });
     this.hasRemoteDescription = true;
     await this.flushPendingCandidates();
+    return true;
   }
 
   /**
@@ -422,6 +460,44 @@ export class PeerConnectionManager {
   /** Whether the underlying connection has been closed/torn down. */
   get isClosed(): boolean {
     return this.closed;
+  }
+
+  /**
+   * Swap the ICE server list on the LIVE connection (TURN credential refresh).
+   *
+   * A long call may outlive its TURN credentials (`/turn/credentials` carries a
+   * `ttlExpiresAt`); the cached list this PC was constructed with then mints a
+   * fresh, but already-expired, relay allocation on the next ICE restart and the
+   * reconnection fails. Calling `setConfiguration({ iceServers })` here before a
+   * `createOffer({ iceRestart: true })` makes the restart gather candidates
+   * against the renewed credentials.
+   *
+   * No-op safe: if `setConfiguration` is unavailable (very old browsers) we keep
+   * the original servers — STUN-reachable peers still recover; relay-only peers
+   * degrade exactly as they do today. Returns `true` if the config was applied.
+   */
+  setIceServers(iceServers: IceServerConfig[]): boolean {
+    if (this.closed) return false;
+    const pc = this.pc as RTCPeerConnection & {
+      setConfiguration?: (config: RTCConfiguration) => void;
+      getConfiguration?: () => RTCConfiguration;
+    };
+    if (typeof pc.setConfiguration !== 'function') return false;
+    try {
+      // Preserve the bundle/mux policy the constructor pinned; only the ICE
+      // servers change. getConfiguration() echoes the current policy when
+      // available, otherwise we restate the constructor's choices.
+      const current = typeof pc.getConfiguration === 'function' ? pc.getConfiguration() : {};
+      pc.setConfiguration({
+        ...current,
+        iceServers: iceServers as RTCIceServer[],
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

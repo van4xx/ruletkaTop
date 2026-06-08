@@ -296,5 +296,21 @@ describe('ReportsService', () => {
       expect(page).toEqual({ items: [], nextCursor: null, hasMore: false });
       expect(reportModel.find).not.toHaveBeenCalled();
     });
+
+    it('filters by againstUserId (reports filed against one user), composing with status', async () => {
+      const chain = {
+        sort: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([reportDoc()]),
+      };
+      reportModel.find.mockReturnValue(chain);
+
+      await service.listReports({ limit: 20 }, 'open', AGAINST);
+
+      // The query targets the reported user via an ObjectId, alongside status.
+      const [filter] = reportModel.find.mock.calls[0] as [Record<string, unknown>];
+      expect(filter.status).toBe('open');
+      expect(String(filter.againstUserId)).toBe(AGAINST);
+    });
   });
 });

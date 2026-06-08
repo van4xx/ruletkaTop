@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * Live "incoming friend requests" panel, fed by realtime notifications.
- * Rendered only when there is at least one pending request notice.
+ * Live "incoming friend requests" banner, fed by realtime notifications
+ * (see `use-friend-requests.ts`). Rendered only when there is at least one
+ * pending request notice.
  *
- * Because the API does not yet return the `friendshipId` for an incoming
- * request (see `use-friend-requests.ts`), the per-request action is a
- * "Show friends" refresh rather than a one-tap accept. The visual treatment
- * still communicates that requests need attention.
+ * This is an awareness surface: each row's action ("View", via `onReview`)
+ * sends the user to `/friends/requests`, where Accept/Decline happens one-tap
+ * against the real `GET /friends/requests` data. The banner stays deliberately
+ * action-light so the lean notification payload (no `friendshipId`) is enough.
  */
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslations } from 'next-intl';

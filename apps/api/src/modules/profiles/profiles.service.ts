@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Redis } from 'ioredis';
 import { ClientSession, Connection, Model, type QueryFilter, Types } from 'mongoose';
@@ -97,7 +98,6 @@ function isDuplicateKeyError(err: unknown): boolean {
 type ProfileMutableFields = Partial<{
   nickname: string;
   status: string;
-  avatarUrl: string;
   gender: Gender;
   birthDate: Date;
   country: string;
@@ -147,13 +147,42 @@ export function computeAge(birthDate: Date, now: Date = new Date()): number {
 export class ProfilesService {
   private readonly logger = new Logger(ProfilesService.name);
 
+  /**
+   * Externally-reachable base origin the avatar files are served from (e.g.
+   * `http://localhost:4000` in dev; in prod the host nginx serves `/uploads`
+   * from). Read once from `PUBLIC_API_URL`; empty means "emit the stored value
+   * verbatim" (relative paths stay relative). Trailing slash trimmed.
+   */
+  private readonly publicApiBase: string;
+
   constructor(
     @InjectModel(Profile.name) private readonly profileModel: Model<ProfileDocument>,
     @InjectConnection() private readonly connection: Connection,
     private readonly settingsService: SettingsService,
     private readonly blocksService: BlocksService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    this.publicApiBase = (this.config.get<string>('PUBLIC_API_URL') ?? '').replace(/\/+$/, '');
+  }
+
+  /**
+   * Project a STORED avatar reference onto the wire. Stored values are either:
+   *   - a server-relative `/uploads/...` path (what the upload endpoint writes) —
+   *     prefixed with {@link publicApiBase} so cross-origin clients (the web app
+   *     on another origin, mobile) can load it directly; or
+   *   - a legacy absolute `http(s)://…` URL — returned unchanged.
+   * `null` (no avatar) passes through as `null`. When `PUBLIC_API_URL` is unset
+   * the relative path is returned as-is (same-origin / nginx-rewrite setups).
+   */
+  private resolveAvatarUrl(stored: string | null): string | null {
+    if (!stored) return null;
+    if (/^https?:\/\//i.test(stored)) return stored;
+    if (stored.startsWith('/uploads/') && this.publicApiBase) {
+      return `${this.publicApiBase}${stored}`;
+    }
+    return stored;
+  }
 
   /** Create a profile (optionally enlisted in a registration transaction). */
   async createProfile(
@@ -413,7 +442,8 @@ export class ProfilesService {
     const update: ProfileMutableFields = {};
     if (patch.nickname !== undefined) update.nickname = patch.nickname;
     if (patch.status !== undefined) update.status = patch.status;
-    if (patch.avatarUrl !== undefined) update.avatarUrl = patch.avatarUrl;
+    // `avatarUrl` is intentionally NOT patchable here — the avatar is owned by
+    // the dedicated upload endpoints (see `setAvatar` / `clearAvatar`).
     if (patch.gender !== undefined) update.gender = patch.gender;
     if (patch.country !== undefined) update.country = patch.country;
     if (patch.languages !== undefined) update.languages = patch.languages;
@@ -456,6 +486,56 @@ export class ProfilesService {
   }
 
   /**
+   * Read ONLY the currently-stored `avatarUrl` for a user (or `null` when the
+   * profile is missing or has no avatar). Used by the avatar-upload flow to
+   * locate the file that the new upload supersedes, so it can be deleted.
+   */
+  async getAvatarUrl(userId: string): Promise<string | null> {
+    const doc = await this.findByUserId(userId);
+    return doc?.avatarUrl ?? null;
+  }
+
+  /**
+   * Point the caller's avatar at a freshly-stored file path and return the
+   * updated public profile. The path is produced + validated by the avatar
+   * upload pipeline (a server-generated, re-encoded local file under
+   * `/uploads/avatars/`); this method only persists it. Use {@link clearAvatar}
+   * to reset to the default.
+   */
+  async setAvatar(userId: string, avatarUrl: string): Promise<PublicProfile> {
+    const doc = await this.profileModel
+      .findOneAndUpdate(
+        { userId: new Types.ObjectId(userId) },
+        { $set: { avatarUrl } },
+        { new: true, runValidators: true },
+      )
+      .exec();
+    if (!doc) {
+      throw new NotFoundException('Profile not found');
+    }
+    return this.toPublicProfile(doc);
+  }
+
+  /**
+   * Reset the caller's avatar to the default (clear the stored path). Returns
+   * the updated public profile. Deletion of the underlying file is handled by
+   * the controller/storage layer; this only nulls the persisted reference.
+   */
+  async clearAvatar(userId: string): Promise<PublicProfile> {
+    const doc = await this.profileModel
+      .findOneAndUpdate(
+        { userId: new Types.ObjectId(userId) },
+        { $set: { avatarUrl: null } },
+        { new: true, runValidators: true },
+      )
+      .exec();
+    if (!doc) {
+      throw new NotFoundException('Profile not found');
+    }
+    return this.toPublicProfile(doc);
+  }
+
+  /**
    * Gifts received by a user, newest first. Reads the economy-owned
    * `gifttransactions` collection directly by name (no duplicate model) so the
    * profiles module does not take a hard schema dependency on economy.
@@ -479,7 +559,7 @@ export class ProfilesService {
     return {
       id: doc.userId.toString(),
       nickname: doc.nickname,
-      avatarUrl: doc.avatarUrl,
+      avatarUrl: this.resolveAvatarUrl(doc.avatarUrl),
       status: doc.status,
       gender: doc.gender,
       age: computeAge(doc.birthDate),

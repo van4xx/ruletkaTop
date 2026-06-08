@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
@@ -19,6 +20,7 @@ import {
   PREMIUM_SERVICE,
   PROFILES_SERVICE,
 } from './contracts/external-services';
+import { MATCH_RECONCILE_QUEUE, MatchReconcileProcessor } from './match-reconcile.processor';
 import { MatchService } from './match.service';
 import { MatchmakingGateway } from './matchmaking.gateway';
 import { MatchmakingService } from './matchmaking.service';
@@ -60,12 +62,17 @@ import { Match, MatchSchema } from './schemas/match.schema';
     PresenceModule,
     RealtimeSecurityModule,
     SettingsModule,
+    // Background reconciliation sweep for `active` matches left open by an
+    // unclean teardown. The BullMQ root connection lives in AppModule; here we
+    // just register the named queue this module's processor drains.
+    BullModule.registerQueue({ name: MATCH_RECONCILE_QUEUE }),
   ],
   providers: [
     MatchService,
     MatchmakingService,
     CallService,
     MatchmakingGateway,
+    MatchReconcileProcessor,
     { provide: PROFILES_SERVICE, useExisting: ProfilesService },
     { provide: BLOCKS_SERVICE, useExisting: BlocksService },
     { provide: PREMIUM_SERVICE, useExisting: PremiumService },

@@ -1,21 +1,18 @@
 'use client';
 
 /**
- * Incoming friend-request awareness, driven by the realtime notification feed.
+ * Lightweight, realtime "you have incoming friend requests" AWARENESS feed,
+ * driven by `notif:new` (kind `friend_request`). It powers the live banner on
+ * the friends list (count + recent notices) and nudges the user toward the
+ * dedicated requests surface.
  *
- * ── Contract gap (flagged for the integrator) ────────────────────────────
- * The API currently has NO endpoint to list a user's pending *incoming* friend
- * requests, and the `notif:new` payload (id/kind/title/body/createdAt) does not
- * carry the `friendshipId` needed to call `POST /friends/:id/accept`. So this
- * hook surfaces incoming requests for awareness (live count + list) but cannot
- * yet wire a one-tap Accept/Decline.
- *
- * To make Accept/Decline work, the backend needs either:
- *   (a) `GET /friends/requests` → Friendship[] (with requester profiles), or
- *   (b) a `friendshipId` (+ minimal requester profile) embedded in the
- *       `friend_request` notification payload.
- * Once available, replace this with a real query/mutation; the page already
- * renders a requests section that will light up automatically.
+ * This is intentionally awareness-only: the actual list-and-act flow lives on
+ * `/friends/requests`, backed by `GET /friends/requests` (`{ incoming, outgoing }`)
+ * and one-tap `POST /friends/:id/accept` / `DELETE /friends/:id` via
+ * `useFriendRequests` — which carry the `friendshipId` the lean notification
+ * payload deliberately omits. So the banner links over there ("View") rather
+ * than duplicating per-row accept/decline. A new `friend_request` notice also
+ * invalidates the accepted-friends list so it refreshes without a reload.
  */
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';

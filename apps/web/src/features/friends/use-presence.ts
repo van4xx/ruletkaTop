@@ -7,9 +7,9 @@
  * to the ids it cares about via `presence:subscribe`.
  *
  * All presence traffic rides the `/mm` socket (presence is delivered by the /mm
- * gateway). NOTE: the backend has no `presence:*` handler yet, so live updates
- * won't actually arrive until that lands — this keeps the wiring on the right
- * namespace so it lights up the moment the backend gap is closed.
+ * gateway): `presence:subscribe(ids)` joins each subject's watch room and the
+ * gateway replies with the current status plus live `presence:online` /
+ * `presence:offline` transitions.
  *
  * Used by the friends list (live dots) and the chat header.
  */

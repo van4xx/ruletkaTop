@@ -5,15 +5,17 @@
  * read-only account email (from the auth user), and a change-password dialog.
  *
  * The profile form uses react-hook-form + the contract `updateProfileSchema`
- * (picked down to the editable fields). Email is immutable here. Loading,
- * error and saving states are all covered.
+ * (picked down to the editable fields). Email is immutable here. The AVATAR is
+ * NOT a form field — it is an uploaded image managed by the shared avatar-upload
+ * modal (file upload to `POST /profiles/me/avatar`); clicking the avatar opens
+ * it. Loading, error and saving states are all covered.
  */
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslations } from 'next-intl';
-import { AtSign, ImageIcon, KeyRound, Quote, UserRound } from 'lucide-react';
+import { AtSign, Camera, KeyRound, Quote, UserRound } from 'lucide-react';
 import {
   updateProfileSchema,
   type PublicProfile,
@@ -24,15 +26,17 @@ import { useAuth } from '@/features/auth/use-auth';
 import { useProfileMe, useUpdateProfile } from '@/features/settings/use-settings';
 import { useFieldError } from '@/features/auth/use-field-error';
 import { useErrorMessage } from '@/lib/error-message';
+import { cn } from '@/lib/cn';
+import { useModal } from '@/lib/stores/modal-store';
 import { FormField } from '@/components/auth/form-field';
 import { SettingRow, SettingsSection } from '../primitives';
 import { ChangePasswordDialog } from '../change-password-dialog';
 
-// Editable subset of the profile for this tab.
+// Editable subset of the profile for this tab. The avatar is handled separately
+// by the avatar-upload modal, so it is deliberately NOT part of this form.
 const accountFormSchema = updateProfileSchema.pick({
   nickname: true,
   status: true,
-  avatarUrl: true,
 });
 type AccountFormValues = z.infer<typeof accountFormSchema>;
 
@@ -58,6 +62,7 @@ export function AccountTab() {
   const fieldError = useFieldError();
   const errorMessage = useErrorMessage();
   const { user } = useAuth();
+  const { open } = useModal();
   const { data: profile, isLoading, isError, error, refetch } = useProfileMe();
   const update = useUpdateProfile();
 
@@ -73,13 +78,10 @@ export function AccountTab() {
       ? {
           nickname: profile.nickname,
           status: profile.status ?? '',
-          avatarUrl: profile.avatarUrl ?? '',
         }
       : undefined,
   });
 
-  // Keep avatar preview in sync with the (optional) URL field.
-  const avatarUrl = watch('avatarUrl');
   const nickname = watch('nickname');
 
   useEffect(() => {
@@ -87,7 +89,6 @@ export function AccountTab() {
       reset({
         nickname: profile.nickname,
         status: profile.status ?? '',
-        avatarUrl: profile.avatarUrl ?? '',
       });
     }
   }, [profile, reset]);
@@ -97,7 +98,6 @@ export function AccountTab() {
     const payload: UpdateProfileDto = {
       nickname: values.nickname,
       status: values.status ? values.status : undefined,
-      avatarUrl: values.avatarUrl ? values.avatarUrl : undefined,
     };
     update.mutate(payload, {
       onSuccess: () => toast.success(t('account.profile.saved')),
@@ -141,29 +141,46 @@ export function AccountTab() {
         ) : profile ? (
           <form id="account-form" onSubmit={onSubmit} noValidate className="space-y-5">
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-              <Avatar
-                size="xl"
-                src={avatarUrl || profile.avatarUrl}
-                alt={nickname || profile.nickname}
-                ring={profile.isPremium ? 'aurora' : 'none'}
-              />
-              <div className="w-full flex-1">
-                <FormField
-                  label={t('account.profile.avatarLabel')}
-                  error={errors.avatarUrl?.message}
-                  hint={t('account.profile.avatarHint')}
+              {/* Avatar — click to open the shared upload modal (file upload). */}
+              <button
+                type="button"
+                onClick={() => open('avatar-upload', { currentUrl: profile.avatarUrl })}
+                aria-label={t('account.profile.avatarLabel')}
+                className={cn(
+                  'group relative shrink-0 rounded-full',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                )}
+              >
+                <Avatar
+                  size="xl"
+                  src={profile.avatarUrl}
+                  alt={nickname || profile.nickname}
+                  ring={profile.isPremium ? 'aurora' : 'none'}
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-background/55 opacity-0 backdrop-blur-[1px] transition-opacity group-hover:opacity-100"
                 >
-                  {(field) => (
-                    <Input
-                      {...field}
-                      type="url"
-                      inputMode="url"
-                      placeholder={t('account.profile.avatarPlaceholder')}
-                      leadingIcon={<ImageIcon />}
-                      {...register('avatarUrl')}
-                    />
-                  )}
-                </FormField>
+                  <Camera className="h-5 w-5 text-foreground" />
+                </span>
+              </button>
+              <div className="flex-1">
+                <p className="font-display text-sm font-semibold">
+                  {t('account.profile.avatarLabel')}
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {t('account.profile.avatarHint')}
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  leadingIcon={<Camera className="h-4 w-4" />}
+                  onClick={() => open('avatar-upload', { currentUrl: profile.avatarUrl })}
+                >
+                  {t('account.profile.avatarChange')}
+                </Button>
               </div>
             </div>
 

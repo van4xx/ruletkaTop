@@ -191,6 +191,14 @@ function toApiClientError(error: unknown): unknown {
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   /** JSON-serialisable request body. */
   json?: unknown;
+  /**
+   * Raw `multipart/form-data` body (e.g. a file upload). Mutually exclusive with
+   * `json`. The browser sets the `Content-Type` (with the multipart boundary)
+   * itself, so we deliberately do NOT set a content-type header for it. Requests
+   * carrying a `formData` body are never de-duplicated or auto-retried (they are
+   * non-idempotent and the body is single-use).
+   */
+  formData?: FormData;
   /** Query-string parameters. `undefined`/`null` values are dropped. */
   query?: Record<string, string | number | boolean | undefined | null>;
   /** Skip bearer-token injection (e.g. for login/register). */
@@ -500,10 +508,12 @@ export function bindRefreshOnResume(): void {
  * transient-failure concern).
  */
 async function performRequest<T>(path: string, options: RequestOptions): Promise<T> {
-  const { json, query, skipAuth, _isRetry, signal, headers, ...init } = options;
+  const { json, formData, query, skipAuth, _isRetry, signal, headers, ...init } = options;
 
   const finalHeaders = new Headers(headers);
-  if (json !== undefined && !finalHeaders.has('content-type')) {
+  // For a FormData body the browser MUST set Content-Type (it appends the
+  // multipart boundary), so we leave it unset. JSON bodies get the JSON type.
+  if (formData === undefined && json !== undefined && !finalHeaders.has('content-type')) {
     finalHeaders.set('content-type', 'application/json');
   }
   if (!skipAuth) {
@@ -529,7 +539,12 @@ async function performRequest<T>(path: string, options: RequestOptions): Promise
       // Send cookies (httpOnly refresh on /auth routes; presence flag) and accept
       // Set-Cookie responses. Required for the cookie-based refresh strategy.
       credentials: 'include',
-      body: json !== undefined ? JSON.stringify(json) : undefined,
+      body:
+        formData !== undefined
+          ? formData
+          : json !== undefined
+            ? JSON.stringify(json)
+            : undefined,
     });
   } catch (error) {
     // `fetch` only throws when the request never completed: a `TypeError`
@@ -611,6 +626,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     !options.noDedupe &&
     options.signal === undefined &&
     options.json === undefined &&
+    options.formData === undefined &&
     IDEMPOTENT_METHODS.has(method);
 
   if (!dedupable) {
@@ -700,6 +716,24 @@ export const api = {
     byId: (id: string) => request<PublicProfile>(`/profiles/${id}`),
     update: (dto: UpdateProfileDto) =>
       request<PublicProfile>('/profiles/me', { method: 'PATCH', json: dto }),
+    /**
+     * Upload a new avatar IMAGE FILE (`multipart/form-data`, field `file`) to
+     * `POST /profiles/me/avatar`. The server validates + re-encodes it, deletes
+     * the previous file, and returns the updated public profile. `noRetry` is
+     * set because the body is a single-use file stream.
+     */
+    uploadAvatar: (file: File) => {
+      const body = new FormData();
+      body.append('file', file);
+      return request<PublicProfile>('/profiles/me/avatar', {
+        method: 'POST',
+        formData: body,
+        noRetry: true,
+      });
+    },
+    /** Reset the avatar to the default (`DELETE /profiles/me/avatar`). */
+    removeAvatar: () =>
+      request<PublicProfile>('/profiles/me/avatar', { method: 'DELETE' }),
   },
 
   /**

@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { ModerationModule } from '../moderation/moderation.module';
 import { SettingsModule } from '../settings/settings.module';
+import { AvatarStorageService } from './avatar-storage.service';
 import { ProfilesController } from './profiles.controller';
 import { ProfilesService } from './profiles.service';
 import { Profile, ProfileSchema } from './schemas/profile.schema';
@@ -30,7 +31,7 @@ import { Profile, ProfileSchema } from './schemas/profile.schema';
     ModerationModule,
   ],
   controllers: [ProfilesController],
-  providers: [ProfilesService],
-  exports: [ProfilesService, MongooseModule],
+  providers: [ProfilesService, AvatarStorageService],
+  exports: [ProfilesService, AvatarStorageService, MongooseModule],
 })
 export class ProfilesModule {}

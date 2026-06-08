@@ -32,6 +32,20 @@
     "signInToStart": "Войдите в аккаунт, чтобы начать общение.",
     "startFailed": "Не удалось запустить. Попробуйте ещё раз."
   },
+  "wsError": {
+    "slowDownTitle": "Слишком быстро",
+    "slowDownDescription": "Вы переключаетесь слишком часто. Секунду — и продолжим.",
+    "rateLimitedTitle": "Слишком много запросов",
+    "rate_limitedDescription": "Слишком много действий подряд. Подождите немного и попробуйте снова.",
+    "tooManyConnectionsTitle": "Слишком много подключений",
+    "too_many_connectionsDescription": "Открыто слишком много вкладок или устройств. Закройте лишние и попробуйте снова.",
+    "forbiddenTitle": "Действие недоступно",
+    "forbiddenDescription": "Это действие сейчас недоступно.",
+    "bannedTitle": "Аккаунт заблокирован",
+    "bannedDescription": "Ваш аккаунт заблокирован, общение недоступно.",
+    "unauthorizedTitle": "Сессия истекла",
+    "unauthorizedDescription": "Войдите в аккаунт заново, чтобы продолжить."
+  },
   "peerSubtitle": "{age} · {flag} {country}",
   "status": {
     "idle": {

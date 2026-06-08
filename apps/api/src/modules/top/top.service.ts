@@ -185,6 +185,37 @@ export class TopService {
     }
   }
 
+  /**
+   * EXPIRY SWEEP (called by the repeatable BullMQ job): reconcile every
+   * placement whose active window has elapsed but which the sweep has not yet
+   * latched, flipping {@link TopPlacement.expired} to `true`.
+   *
+   * Live correctness does NOT depend on this — {@link activeForLane} already
+   * filters the feed by `expiresAt > now`, so a lapsed placement stops showing
+   * the instant its window closes regardless of the flag. The sweep exists so
+   * the collection cannot grow an unbounded backlog of unmarked dead rows: it
+   * gives every expired placement an explicit terminal state (for audit /
+   * metrics) and a latch so a second pass never re-touches it.
+   *
+   * Idempotent + safe on any cadence: the filter only matches rows that are
+   * past `expiresAt` AND not yet `expired`, so re-running is a no-op once caught
+   * up. Returns the number of placements reconciled (for logging/metrics).
+   */
+  async sweepExpired(now: Date = new Date()): Promise<number> {
+    const res = await this.placementModel
+      .updateMany(
+        { expired: { $ne: true }, expiresAt: { $lte: now } },
+        { $set: { expired: true } },
+      )
+      .exec();
+
+    const reconciled = res.modifiedCount ?? 0;
+    if (reconciled > 0) {
+      this.logger.log(`Top expiry sweep: reconciled ${reconciled} placement(s)`);
+    }
+    return reconciled;
+  }
+
   /** Active placements for one lane, highest priority first. */
   private async activeForLane(lane: TopLane, now: Date): Promise<TopPlacementContract[]> {
     const docs = await this.placementModel

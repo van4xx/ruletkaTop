@@ -4,15 +4,17 @@
  * Post-registration onboarding — a guided, multi-step flow that helps a new user
  * complete their profile. Steps:
  *   0. Welcome
- *   1. Avatar (URL — the project has no upload service yet)
+ *   1. Avatar — upload an image FILE via the shared avatar-upload modal
+ *      (POST /profiles/me/avatar); persisted immediately, not part of the finish PATCH
  *   2. Identity — gender + birth date (hard 18+ gate, mirrors the API rule)
  *   3. Country
  *   4. Languages
  *   5. Interests (collected client-side; see note re: missing backend field)
  *
  * On finish we PATCH /profiles/me with the supported contract fields
- * (avatarUrl, gender, birthDate, country, languages) via the existing
- * `useUpdateProfile` mutation, then route to the home feed.
+ * (gender, birthDate, country, languages) via the existing `useUpdateProfile`
+ * mutation, then route to the home feed. The avatar is uploaded separately by
+ * the modal, so it is NOT included in this DTO.
  *
  * Data is wired against the existing api client + shared-types. Loading/empty/
  * error states are handled; the whole flow is keyboard-navigable and responsive.
@@ -25,8 +27,8 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  Camera,
   Check,
-  ImageIcon,
   Mars,
   Sparkles,
   Transgender,
@@ -37,6 +39,7 @@ import { Avatar, Button, CountrySelect, Input, Label, Spinner, toast } from '@ru
 import { ROUTES } from '@/config/nav';
 import { ApiClientError } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { useModal } from '@/lib/stores/modal-store';
 import { useAuth, MIN_AGE, ageFromBirthDate } from '@/features/auth';
 import { useProfile, useUpdateProfile } from '@/features/profile/use-profile';
 import { SignInRequired } from '@/components/social/state-views';
@@ -70,7 +73,6 @@ const LOCALES: { value: Locale; label: string }[] = [
 ];
 
 interface OnboardingState {
-  avatarUrl: string;
   gender: Gender | null;
   birthDate: string;
   country: CountryCode | null;
@@ -81,6 +83,7 @@ interface OnboardingState {
 export function OnboardingClient() {
   const t = useTranslations('misc');
   const router = useRouter();
+  const { open } = useModal();
   const { user, isAuthenticated, isReady } = useAuth();
   const profileQuery = useProfile(user?.id);
   const updateProfile = useUpdateProfile();
@@ -89,7 +92,6 @@ export function OnboardingClient() {
   // Direction drives the slide animation (1 = forward, -1 = back).
   const [dir, setDir] = useState(1);
   const [state, setState] = useState<OnboardingState>({
-    avatarUrl: '',
     gender: null,
     birthDate: '',
     country: null,
@@ -99,13 +101,14 @@ export function OnboardingClient() {
   const hydratedRef = useRef(false);
 
   // Prefill once from the loaded profile (so returning users see their data).
+  // The avatar is read live from `profile` for the preview (the upload modal
+  // refreshes that cache), so it is intentionally not mirrored into local state.
   const profile = profileQuery.data;
   useEffect(() => {
     if (!profile || hydratedRef.current) return;
     hydratedRef.current = true;
     setState((s) => ({
       ...s,
-      avatarUrl: profile.avatarUrl ?? '',
       gender: profile.gender ?? null,
       country: profile.country ?? null,
       languages: profile.languages?.length ? profile.languages : s.languages,
@@ -147,7 +150,7 @@ export function OnboardingClient() {
 
   function buildDto(): UpdateProfileDto {
     const dto: UpdateProfileDto = {};
-    if (state.avatarUrl.trim()) dto.avatarUrl = state.avatarUrl.trim();
+    // Avatar is uploaded separately (file upload via the modal), not patched here.
     if (state.gender) dto.gender = state.gender;
     if (state.birthDate) dto.birthDate = state.birthDate;
     if (state.country) dto.country = state.country;
@@ -248,27 +251,46 @@ export function OnboardingClient() {
                     subtitle={t('onboarding.avatarSubtitle')}
                   />
                   <div className="flex flex-col items-center gap-4 sm:flex-row">
-                    <Avatar
-                      src={state.avatarUrl || null}
-                      alt={displayName}
-                      size="xl"
-                      ring={state.avatarUrl ? 'aurora' : 'none'}
-                    />
-                    <div className="w-full flex-1">
-                      <Label htmlFor="ob-avatar">{t('onboarding.avatarLabel')}</Label>
-                      <Input
-                        id="ob-avatar"
-                        type="url"
-                        inputMode="url"
-                        placeholder="https://…/avatar.jpg"
-                        value={state.avatarUrl}
-                        onChange={(e) => setState((s) => ({ ...s, avatarUrl: e.target.value }))}
-                        leadingIcon={<ImageIcon className="h-4 w-4" />}
-                        className="mt-1.5"
+                    {/* Click the avatar (or the button) to upload an image file. */}
+                    <button
+                      type="button"
+                      onClick={() => open('avatar-upload', { currentUrl: profile?.avatarUrl })}
+                      aria-label={t('onboarding.avatarChange')}
+                      className={cn(
+                        'group relative shrink-0 rounded-full',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                      )}
+                    >
+                      <Avatar
+                        src={profile?.avatarUrl ?? null}
+                        alt={displayName}
+                        size="xl"
+                        ring={profile?.avatarUrl ? 'aurora' : 'none'}
                       />
-                      <p className="mt-1.5 text-xs text-muted-foreground">
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-0 flex items-center justify-center rounded-full bg-background/55 opacity-0 backdrop-blur-[1px] transition-opacity group-hover:opacity-100"
+                      >
+                        <Camera className="h-5 w-5 text-foreground" />
+                      </span>
+                    </button>
+                    <div className="w-full flex-1">
+                      <p className="font-display text-sm font-semibold">
+                        {t('onboarding.avatarLabel')}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {t('onboarding.avatarHint')}
                       </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="mt-3"
+                        leadingIcon={<Camera className="h-4 w-4" />}
+                        onClick={() => open('avatar-upload', { currentUrl: profile?.avatarUrl })}
+                      >
+                        {t('onboarding.avatarChange')}
+                      </Button>
                     </div>
                   </div>
                 </div>

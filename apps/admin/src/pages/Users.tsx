@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Input } from '@ruletka/ui';
+import type { Report, ReportReason } from '@ruletka/shared-types';
 
 import { adminApi, AdminApiError, req } from '../lib/api';
 import type { AdminLedgerEntry, AdminUserSummary, Role } from '../lib/types';
@@ -40,6 +41,32 @@ const ROLE_BADGE: Record<Role, BadgeVariant> = {
   user: 'muted',
   moderator: 'info',
   admin: 'accent',
+};
+
+/** Report-reason → Russian label + badge tone (mirrors the Moderation console). */
+const REPORT_REASON_LABEL: Record<ReportReason, string> = {
+  nudity: 'Нагота',
+  harassment: 'Харассмент',
+  minor: 'Несовершеннолетний',
+  violence: 'Насилие',
+  spam: 'Спам',
+  scam: 'Мошенничество',
+  other: 'Другое',
+};
+const REPORT_REASON_VARIANT: Record<ReportReason, BadgeVariant> = {
+  nudity: 'warning',
+  harassment: 'warning',
+  minor: 'danger',
+  violence: 'danger',
+  spam: 'muted',
+  scam: 'warning',
+  other: 'muted',
+};
+const REPORT_STATUS_BADGE: Record<string, { label: string; variant: BadgeVariant }> = {
+  open: { label: 'Новый', variant: 'info' },
+  reviewing: { label: 'На проверке', variant: 'accent' },
+  resolved: { label: 'Подтверждён', variant: 'success' },
+  dismissed: { label: 'Отклонён', variant: 'muted' },
 };
 
 type BannedFilter = 'all' | 'banned' | 'active';
@@ -386,6 +413,9 @@ function Dossier({
             </div>
           </div>
 
+          {/* Reports filed AGAINST this user */}
+          <ReportsAgainst userId={userId} />
+
           {/* Actions */}
           <div className="border-t border-border/60 pt-4">
             <h3 className="mb-3 font-display text-sm font-semibold">Действия</h3>
@@ -564,6 +594,89 @@ function Field({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="font-medium">{value}</dd>
+    </div>
+  );
+}
+
+/** Status pill for a report row (reuses the Moderation console's tones). */
+function ReportStatusBadge({ status }: { status: string }) {
+  const s = REPORT_STATUS_BADGE[status] ?? { label: status, variant: 'muted' as BadgeVariant };
+  return <Badge variant={s.variant}>{s.label}</Badge>;
+}
+
+/**
+ * "Жалобы на пользователя" — every abuse report filed AGAINST the dossier's
+ * user, newest-first, cursor-paginated via `GET /reports?againstUserId=…`. A
+ * read-only investigator view: triage/resolution stays in the Moderation
+ * console. Typed end-to-end via the shared `Report` contract.
+ */
+function ReportsAgainst({ userId }: { userId: string }) {
+  const reports = useInfiniteQuery({
+    queryKey: ['reports-against', userId] as const,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => adminApi.reports.against(userId, pageParam),
+    getNextPageParam: (last) => (last.hasMore ? (last.nextCursor ?? undefined) : undefined),
+  });
+
+  const rows = useMemo(
+    () => reports.data?.pages.flatMap((p) => p.items) ?? [],
+    [reports.data],
+  );
+
+  const columns: Column<Report>[] = [
+    {
+      key: 'reason',
+      header: 'Причина',
+      render: (r) => (
+        <Badge variant={REPORT_REASON_VARIANT[r.reason]}>{REPORT_REASON_LABEL[r.reason]}</Badge>
+      ),
+    },
+    {
+      key: 'details',
+      header: 'Детали',
+      render: (r) =>
+        r.details ? (
+          <span className="line-clamp-2 max-w-[14rem] text-muted-foreground" title={r.details}>
+            {r.details}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    { key: 'status', header: 'Статус', render: (r) => <ReportStatusBadge status={r.status} /> },
+    {
+      key: 'when',
+      header: 'Когда',
+      align: 'right',
+      render: (r) => <RelativeTime iso={r.createdAt} />,
+    },
+  ];
+
+  return (
+    <div className="border-t border-border/60 pt-4">
+      <h3 className="mb-3 font-display text-sm font-semibold">Жалобы на пользователя</h3>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        loading={reports.isLoading}
+        error={reports.isError ? 'Не удалось загрузить жалобы.' : undefined}
+        empty={
+          <p className="p-6 text-center text-sm text-muted-foreground">
+            На этого пользователя жалоб нет.
+          </p>
+        }
+        footer={
+          rows.length > 0 ? (
+            <Pagination
+              hasMore={Boolean(reports.hasNextPage)}
+              loading={reports.isFetchingNextPage}
+              loadedCount={rows.length}
+              onLoadMore={() => reports.fetchNextPage()}
+            />
+          ) : undefined
+        }
+      />
     </div>
   );
 }

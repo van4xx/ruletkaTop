@@ -20,14 +20,24 @@ export const resolveReportSchema = z.object({
 export type ResolveReportDto = z.infer<typeof resolveReportSchema>;
 
 /**
- * Query of `GET /reports`: cursor pagination plus an optional `status` filter.
- * `limit` is coerced from the query string and bounded, mirroring the shared
- * `paginationQuerySchema`.
+ * Query of `GET /reports`: cursor pagination plus optional `status` and
+ * `againstUserId` filters. `limit` is coerced from the query string and bounded,
+ * mirroring the shared `paginationQuerySchema`. `againstUserId` lets an
+ * investigator list every report filed AGAINST a given user (the reported
+ * account); it is validated as a 24-char-hex ObjectId — structurally aligned
+ * with the shared `objectIdSchema` (kept API-local for the reason in the file
+ * header), so a malformed id is rejected at the pipe rather than the service.
+ * Both filters compose, and `againstUserId + status` is index-backed on the
+ * report schema.
  */
 export const listReportsQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(['open', 'reviewing', 'resolved', 'dismissed']).optional(),
+  againstUserId: z
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, 'Invalid id')
+    .optional(),
 });
 export type ListReportsQuery = z.infer<typeof listReportsQuerySchema>;
 
