@@ -68,15 +68,26 @@ export function useLayoutMode(): RouletteLayoutMode {
  * stage avoid an SSR/CSR mismatch: render `'standard'` until this flips true.
  */
 export function useLayoutHydrated(): boolean {
-  const [hydrated, setHydrated] = useState(() => useRouletteLayoutStore.persist.hasHydrated());
+  // Start `false` on BOTH the server and the client's first render. The persist
+  // API isn't available during SSR (no localStorage), so calling `hasHydrated()`
+  // in the `useState` initializer throws "Cannot read properties of undefined
+  // (reading 'hasHydrated')" and aborts server rendering of the whole stage. The
+  // stage renders `'standard'` until this flips true on the client — which is the
+  // intended SSR/CSR-mismatch-free behaviour anyway.
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    // Already hydrated (e.g. a fast client nav) — nothing to wait for.
-    if (useRouletteLayoutStore.persist.hasHydrated()) {
+    const persist = useRouletteLayoutStore.persist;
+    if (!persist) {
       setHydrated(true);
       return;
     }
-    const unsub = useRouletteLayoutStore.persist.onFinishHydration(() => setHydrated(true));
+    // Already hydrated (e.g. a fast client nav) — nothing to wait for.
+    if (persist.hasHydrated()) {
+      setHydrated(true);
+      return;
+    }
+    const unsub = persist.onFinishHydration(() => setHydrated(true));
     return unsub;
   }, []);
 
