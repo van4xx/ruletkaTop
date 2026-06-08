@@ -128,9 +128,64 @@ interface Mocks {
     startSession: jest.Mock;
     collection: jest.Mock;
   };
+  /**
+   * Minimal in-memory fake of the shared ioredis client used by the Redis-backed
+   * login lockout. Implements only the surface AuthService touches (`exists`,
+   * `eval` of the attempt-counter Lua, `del`) with the same lock semantics so
+   * the lockout tests exercise real cross-call state without a live Redis.
+   */
+  redis: {
+    exists: jest.Mock;
+    eval: jest.Mock;
+    del: jest.Mock;
+    /** Direct access to the backing store (for assertions / resets if needed). */
+    store: Map<string, string>;
+  };
   usersCollectionDeleteOne: jest.Mock;
   /** The `withTransaction` mock of the session returned by `startSession`. */
   withTransaction: jest.Mock;
+}
+
+/**
+ * Build the in-memory fake Redis. Models just enough of ioredis for the login
+ * lockout: `exists(key)`, the attempt-counter `eval(lua, 2, attemptKey,
+ * lockKey, ttl, max, lockTtl)` (INCR + lock-on-threshold + reset-on-lock), and
+ * `del(...keys)`. TTLs are tracked as presence only (jest's fake timers are not
+ * used here; the lockout-window tests assert the LOCK is engaged, not its
+ * expiry, mirroring the prior in-memory behaviour).
+ */
+function buildFakeRedis(): Mocks['redis'] {
+  const store = new Map<string, string>();
+  const exists = jest.fn(async (key: string) => (store.has(key) ? 1 : 0));
+  const del = jest.fn(async (...keys: string[]) => {
+    let removed = 0;
+    for (const key of keys) {
+      if (store.delete(key)) removed += 1;
+    }
+    return removed;
+  });
+  const evalFn = jest.fn(
+    async (
+      _lua: string,
+      _numKeys: number,
+      attemptKey: string,
+      lockKey: string,
+      _ttl: string,
+      maxAttempts: string,
+      _lockTtl: string,
+    ) => {
+      const next = Number(store.get(attemptKey) ?? '0') + 1;
+      if (next >= Number(maxAttempts)) {
+        // Engage the lock and reset the counter (matches the Lua + old in-memory).
+        store.set(lockKey, '1');
+        store.delete(attemptKey);
+      } else {
+        store.set(attemptKey, String(next));
+      }
+      return next;
+    },
+  );
+  return { exists, eval: evalFn, del, store };
 }
 
 /**
@@ -247,6 +302,8 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
     collection: jest.fn().mockReturnValue({ deleteOne: usersCollectionDeleteOne }),
   };
 
+  const redis = buildFakeRedis();
+
   return {
     usersService,
     jwtService,
@@ -258,6 +315,7 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
     verificationTokenModel,
     mailerService,
     connection,
+    redis,
     usersCollectionDeleteOne,
     withTransaction: session.withTransaction,
   };
@@ -281,6 +339,8 @@ function makeService(m: Mocks): AuthService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     m.mailerService as any,
     m.connection as unknown as Connection,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    m.redis as any,
   );
 }
 

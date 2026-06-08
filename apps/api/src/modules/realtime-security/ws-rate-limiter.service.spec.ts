@@ -2,6 +2,8 @@ import { WsRateLimiterService } from './ws-rate-limiter.service';
 import {
   CHAT_MESSAGE_LIMIT,
   MAX_SOCKETS_PER_USER,
+  WS_HANDSHAKE_IP_LIMIT,
+  wsHandshakeIpKey,
   wsRateKey,
   wsSocketCountKey,
 } from './realtime-security.constants';
@@ -9,7 +11,13 @@ import {
 describe('WsRateLimiterService — token buckets + concurrent socket cap', () => {
   const userId = 'u-1';
 
-  let redis: { incr: jest.Mock; expire: jest.Mock; decr: jest.Mock; del: jest.Mock };
+  let redis: {
+    incr: jest.Mock;
+    expire: jest.Mock;
+    decr: jest.Mock;
+    del: jest.Mock;
+    eval: jest.Mock;
+  };
   let service: WsRateLimiterService;
 
   beforeEach(() => {
@@ -18,6 +26,7 @@ describe('WsRateLimiterService — token buckets + concurrent socket cap', () =>
       expire: jest.fn().mockResolvedValue(1),
       decr: jest.fn(),
       del: jest.fn().mockResolvedValue(1),
+      eval: jest.fn(),
     };
     service = new WsRateLimiterService(redis as never);
   });
@@ -59,30 +68,65 @@ describe('WsRateLimiterService — token buckets + concurrent socket cap', () =>
     });
   });
 
-  describe('registerSocket — concurrent-socket cap', () => {
-    it('admits a socket within the cap and arms the counter TTL', async () => {
-      redis.incr.mockResolvedValue(1);
+  describe('consumeHandshakeIp — per-IP pre-auth handshake throttle', () => {
+    const ip = '203.0.113.7';
+
+    it('admits the first handshake in a window (atomic INCR+EXPIRE via Lua)', async () => {
+      redis.eval.mockResolvedValue(1);
+
+      await expect(service.consumeHandshakeIp(ip, WS_HANDSHAKE_IP_LIMIT)).resolves.toBe(true);
+
+      // One atomic round-trip keyed on the per-IP handshake key with the window.
+      expect(redis.eval).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
+        wsHandshakeIpKey(ip),
+        String(WS_HANDSHAKE_IP_LIMIT.windowSec),
+      );
+    });
+
+    it('admits exactly `max` handshakes then rejects the next', async () => {
+      redis.eval.mockResolvedValue(WS_HANDSHAKE_IP_LIMIT.max);
+      await expect(service.consumeHandshakeIp(ip, WS_HANDSHAKE_IP_LIMIT)).resolves.toBe(true);
+
+      redis.eval.mockResolvedValue(WS_HANDSHAKE_IP_LIMIT.max + 1);
+      await expect(service.consumeHandshakeIp(ip, WS_HANDSHAKE_IP_LIMIT)).resolves.toBe(false);
+    });
+
+    it('fails OPEN (no Redis call) when the IP is missing/blank', async () => {
+      await expect(service.consumeHandshakeIp(undefined, WS_HANDSHAKE_IP_LIMIT)).resolves.toBe(true);
+      await expect(service.consumeHandshakeIp('', WS_HANDSHAKE_IP_LIMIT)).resolves.toBe(true);
+      expect(redis.eval).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('registerSocket — concurrent-socket cap (atomic Lua)', () => {
+    it('admits a socket within the cap (script returns the live count)', async () => {
+      redis.eval.mockResolvedValue(1);
 
       await expect(service.registerSocket(userId)).resolves.toBe(true);
 
-      expect(redis.incr).toHaveBeenCalledWith(wsSocketCountKey(userId));
-      expect(redis.expire).toHaveBeenCalledWith(wsSocketCountKey(userId), expect.any(Number));
-      expect(redis.decr).not.toHaveBeenCalled();
+      // One atomic round-trip: INCR + EXPIRE + over-cap rollback in the script.
+      expect(redis.eval).toHaveBeenCalledWith(
+        expect.any(String),
+        1,
+        wsSocketCountKey(userId),
+        expect.any(String),
+        String(MAX_SOCKETS_PER_USER),
+      );
     });
 
     it('admits the socket sitting exactly at the cap', async () => {
-      redis.incr.mockResolvedValue(MAX_SOCKETS_PER_USER);
+      redis.eval.mockResolvedValue(MAX_SOCKETS_PER_USER);
 
       await expect(service.registerSocket(userId)).resolves.toBe(true);
-      expect(redis.decr).not.toHaveBeenCalled();
     });
 
-    it('rejects an over-cap socket AND rolls the counter back', async () => {
-      redis.incr.mockResolvedValue(MAX_SOCKETS_PER_USER + 1);
+    it('rejects an over-cap socket (script rolled back → returns 0)', async () => {
+      // The Lua script DECRs the over-cap connection itself and returns 0.
+      redis.eval.mockResolvedValue(0);
 
       await expect(service.registerSocket(userId)).resolves.toBe(false);
-      // The rejected connection must not inflate the live count.
-      expect(redis.decr).toHaveBeenCalledWith(wsSocketCountKey(userId));
     });
   });
 

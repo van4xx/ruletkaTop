@@ -20,6 +20,16 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 /** The square edge (px) every avatar is normalised to. */
 const AVATAR_EDGE_PX = 512;
 
+/**
+ * Hard ceiling on the decoded pixel count `sharp` will accept for an uploaded
+ * avatar (~24 MP — comfortably above any real phone/camera still, far below the
+ * sizes a decompression-bomb relies on). Passed as `limitInputPixels` so a
+ * tiny-on-disk-but-enormous-when-decoded image is rejected BEFORE it is fully
+ * rasterised, rather than after it has exhausted memory. `sharp`'s own default
+ * is higher (0x3FFF * 0x3FFF); we tighten it for untrusted public uploads.
+ */
+const AVATAR_MAX_INPUT_PIXELS = 24_000_000;
+
 /** Public URL path prefix the saved files are served under (see main.ts static-assets). */
 const AVATAR_URL_PREFIX = '/uploads/avatars';
 
@@ -91,13 +101,29 @@ export interface StoredAvatar {
 }
 
 /**
- * Optional `sharp` interface — present when the dependency is installed (it is,
- * pulled in for image processing). Typed locally so the module compiles even if
- * the package is ever removed; we resolve it lazily and fall back to a safe
- * store-as-is path if the require fails at runtime.
+ * Subset of `sharp`'s constructor options we pass for untrusted public uploads.
+ * `pages: 1` reads only the FIRST frame of an animated input (so a many-frame
+ * GIF/WEBP "animation bomb" cannot blow up memory or be re-served full-size);
+ * `limitInputPixels` caps the decoded resolution to stop decompression bombs;
+ * `failOn: 'error'` makes a structurally-broken (but magic-byte-valid) image
+ * throw rather than be silently truncated.
+ */
+interface SharpConstructorOptions {
+  readonly pages?: number;
+  readonly limitInputPixels?: number | boolean;
+  readonly failOn?: 'none' | 'truncated' | 'error' | 'warning';
+}
+
+/**
+ * Optional `sharp` interface — present when the dependency is installed (it is
+ * a direct dependency of this package for image processing). Typed locally so
+ * the module compiles even if the native binary is ever absent; we resolve it
+ * lazily. In production a missing `sharp` is FAIL-CLOSED (the upload is
+ * rejected — never stored raw); in non-production it degrades to a store-as-is
+ * fallback so dev/test still boot without the native binary.
  */
 interface SharpModule {
-  (input: Buffer): SharpInstance;
+  (input: Buffer, options?: SharpConstructorOptions): SharpInstance;
 }
 interface SharpInstance {
   rotate(): SharpInstance;
@@ -137,8 +163,15 @@ export class AvatarStorageService {
   private readonly avatarsDir: string;
   /** Lazily-resolved `sharp` (null until first lookup; `false` if unavailable). */
   private sharp: SharpModule | null | false = null;
+  /**
+   * Whether we are running in production. In production a missing `sharp` is a
+   * hard failure (reject the upload) rather than the store-raw fallback, so we
+   * never leak EXIF/GPS or serve an un-re-encoded decode-bomb to other users.
+   */
+  private readonly isProduction: boolean;
 
   constructor(private readonly config: ConfigService) {
+    this.isProduction = this.config.get<string>('NODE_ENV') === 'production';
     const configured = this.config.get<string>('UPLOADS_DIR');
     // Default to `<apps/api>/uploads` in dev. `process.cwd()` is the API package
     // dir under `nest start` / `pnpm --filter`. An absolute UPLOADS_DIR is used
@@ -231,9 +264,15 @@ export class AvatarStorageService {
 
   /**
    * Re-encode + resize to a square 512×512 WEBP (auto-orient via EXIF, then the
-   * orientation tag is dropped on re-encode — strips metadata + neutralises any
-   * smuggled payload). Falls back to the validated ORIGINAL bytes under the
-   * sniffed extension when `sharp` is unavailable.
+   * orientation tag is dropped on re-encode — strips metadata incl. EXIF/GPS +
+   * neutralises any smuggled payload, and the `pages: 1` constructor flag drops
+   * every animated frame but the first).
+   *
+   * FAIL-CLOSED on a missing `sharp`:
+   *   - in PRODUCTION, throw — we MUST NOT store the raw upload (that would leak
+   *     EXIF/GPS and allow a decode-bomb to be served back at full size);
+   *   - in non-production only, degrade to the magic-byte-validated original so
+   *     dev/test still work without the native binary.
    */
   private async normalise(
     input: Buffer,
@@ -241,14 +280,32 @@ export class AvatarStorageService {
   ): Promise<{ bytes: Buffer; ext: string }> {
     const sharp = this.resolveSharp();
     if (!sharp) {
-      // SAFE FALLBACK (no sharp): store the magic-byte-validated original as-is.
-      // Note: without re-encoding, EXIF is retained and animated GIFs keep all
-      // frames. Validation by magic bytes + size cap + server-side filename
-      // still applies.
+      if (this.isProduction) {
+        // FAIL-CLOSED: never persist un-re-encoded bytes in production. This is
+        // an operational misconfiguration (sharp's native binary is missing),
+        // surfaced as a 500 so it is loud rather than silently leaking metadata
+        // / serving decode-bombs.
+        this.logger.error(
+          '`sharp` is unavailable in production — rejecting avatar upload to avoid ' +
+            'storing un-re-encoded bytes (EXIF/GPS leak + decode-bomb risk). ' +
+            'Ensure the `sharp` native binary is installed for this platform.',
+        );
+        throw new InternalServerErrorException('Image processing is unavailable');
+      }
+      // NON-PROD FALLBACK (no sharp): store the magic-byte-validated original
+      // as-is. Note: without re-encoding, EXIF is retained and animated GIFs
+      // keep all frames — acceptable in dev/test only.
       return { bytes: input, ext: sniffedExt };
     }
     try {
-      const bytes = await sharp(input)
+      const bytes = await sharp(input, {
+        // Read only the first frame of an animated input (anti animation-bomb)…
+        pages: 1,
+        // …and cap the decoded pixel count (anti decompression-bomb)…
+        limitInputPixels: AVATAR_MAX_INPUT_PIXELS,
+        // …and reject structurally-broken images rather than truncating them.
+        failOn: 'error',
+      })
         .rotate() // apply EXIF orientation, then re-encode drops the metadata
         .resize({ width: AVATAR_EDGE_PX, height: AVATAR_EDGE_PX, fit: 'cover', position: 'centre' })
         .webp({ quality: 82 })
@@ -256,7 +313,8 @@ export class AvatarStorageService {
       return { bytes, ext: 'webp' };
     } catch (err) {
       // A decode failure here means the bytes passed the magic-byte gate but are
-      // structurally broken/hostile — reject rather than store something unsafe.
+      // structurally broken/hostile (or exceed the pixel cap) — reject rather
+      // than store something unsafe.
       this.logger.warn(`sharp failed to process avatar: ${(err as Error).message}`);
       throw new BadRequestException('Could not process image');
     }
@@ -289,8 +347,10 @@ export class AvatarStorageService {
       return mod;
     } catch {
       this.logger.warn(
-        "`sharp` is not installed — avatars will be stored without re-encoding/resizing. " +
-          'Run `pnpm --filter @ruletka/api add sharp` to enable square WEBP normalisation.',
+        '`sharp` could not be loaded. In production avatar uploads are REJECTED ' +
+          '(fail-closed) to avoid storing un-re-encoded bytes; in dev/test they are ' +
+          'stored as-is without re-encoding/resizing. Ensure the `sharp` native ' +
+          'binary is installed (`pnpm --filter @ruletka/api install`).',
       );
       this.sharp = false;
       return null;

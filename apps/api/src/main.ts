@@ -271,6 +271,11 @@ async function bootstrap(): Promise<void> {
     setHeaders: (res: Response) => {
       // Immutable: content-addressed filenames mean the bytes at a URL never change.
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      // Harden a served upload against MIME-sniffing into stored XSS: pin the
+      // declared content type (no sniffing) and force inline rendering rather
+      // than letting the browser interpret an avatar as, e.g., active HTML.
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', 'inline');
     },
   });
 

@@ -25,10 +25,16 @@ function makeLogger(): jest.Mocked<LoggerService> {
   } as unknown as jest.Mocked<LoggerService>;
 }
 
-/** Strong, non-placeholder secret values used to satisfy the critical checks. */
+/**
+ * Strong, non-placeholder secret values used to satisfy the critical checks.
+ * Each is ≥32 chars so they also clear the production strength floor, and a
+ * `TURNSTILE_SECRET` is included so the prod-required CAPTCHA secret is present
+ * by default (individual tests drop it to exercise the missing path).
+ */
 const GOOD = {
   JWT_ACCESS_SECRET: 'b8f1c0e2a7d94f3e8c1a6b5d4e2f9a0c7b3d6e1f',
   JWT_REFRESH_SECRET: 'f0a9c8e7d6b5a4938271605f4e3d2c1b0a9f8e7d',
+  TURNSTILE_SECRET: '0x4AAAAAAA-strong-turnstile-server-secret-key',
 };
 
 describe('validateCriticalConfig', () => {
@@ -89,6 +95,96 @@ describe('validateCriticalConfig', () => {
       expect(loggedError).toContain('JWT_REFRESH_SECRET');
       // The real secret value must not leak into any log line.
       expect(loggedError).not.toContain('super-secret-real-value-should-never-appear');
+    });
+  });
+
+  describe('TURNSTILE_SECRET is prod-required (closes the CAPTCHA fail-open)', () => {
+    it('throws in production when TURNSTILE_SECRET is MISSING (even with valid JWT secrets)', () => {
+      const config = makeConfig({
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: GOOD.JWT_ACCESS_SECRET,
+        JWT_REFRESH_SECRET: GOOD.JWT_REFRESH_SECRET,
+        // TURNSTILE_SECRET missing → CaptchaService fails open on /auth/register.
+      });
+      const logger = makeLogger();
+
+      expect(() => validateCriticalConfig(config, logger)).toThrow(/TURNSTILE_SECRET/);
+      expect(logger.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws when TURNSTILE_SECRET is left at a placeholder in production', () => {
+      const config = makeConfig({
+        NODE_ENV: 'production',
+        ...GOOD,
+        TURNSTILE_SECRET: 'change-me',
+      });
+
+      expect(() => validateCriticalConfig(config, makeLogger())).toThrow(/TURNSTILE_SECRET/);
+    });
+
+    it('does NOT require TURNSTILE_SECRET outside production (dev no-op CAPTCHA still boots)', () => {
+      const config = makeConfig({
+        NODE_ENV: 'development',
+        JWT_ACCESS_SECRET: GOOD.JWT_ACCESS_SECRET,
+        JWT_REFRESH_SECRET: GOOD.JWT_REFRESH_SECRET,
+        // No TURNSTILE_SECRET — dev runs the captcha as a no-op.
+      });
+
+      expect(() => validateCriticalConfig(config, makeLogger())).not.toThrow();
+    });
+  });
+
+  describe('production secret-strength floor (≥32 chars)', () => {
+    it('throws when a critical secret is present + non-placeholder but TOO SHORT', () => {
+      const config = makeConfig({
+        NODE_ENV: 'production',
+        ...GOOD,
+        // 16 chars — under the 32-char floor (and not a recognised placeholder).
+        JWT_ACCESS_SECRET: 'a1b2c3d4e5f6a7b8',
+      });
+      const logger = makeLogger();
+
+      expect(() => validateCriticalConfig(config, logger)).toThrow(/JWT_ACCESS_SECRET/);
+      // The error documents the recommended generator.
+      const loggedError = (logger.error as jest.Mock).mock.calls[0]?.[0] as string;
+      expect(loggedError).toContain('openssl rand -base64 48');
+    });
+
+    it('reports a short secret distinctly from a missing one (both flagged, no double-count)', () => {
+      const config = makeConfig({
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: 'too-short-1234', // present but < 32
+        JWT_REFRESH_SECRET: GOOD.JWT_REFRESH_SECRET,
+        // TURNSTILE_SECRET missing → a separate missing offender.
+      });
+      const logger = makeLogger();
+
+      expect(() => validateCriticalConfig(config, logger)).toThrow();
+      const loggedError = (logger.error as jest.Mock).mock.calls[0]?.[0] as string;
+      // The too-short var appears under the length offence…
+      expect(loggedError).toMatch(/shorter than the 32-char minimum:.*JWT_ACCESS_SECRET/);
+      // …and the missing var appears under the missing/placeholder offence.
+      expect(loggedError).toMatch(/missing or still set to a placeholder:.*TURNSTILE_SECRET/);
+      // The short secret value itself never leaks.
+      expect(loggedError).not.toContain('too-short-1234');
+    });
+
+    it('passes when every critical secret is present, non-placeholder, and ≥32 chars', () => {
+      const config = makeConfig({ NODE_ENV: 'production', ...GOOD });
+      const logger = makeLogger();
+
+      expect(() => validateCriticalConfig(config, logger)).not.toThrow();
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('does NOT enforce the length floor outside production', () => {
+      const config = makeConfig({
+        NODE_ENV: 'development',
+        JWT_ACCESS_SECRET: 'short',
+        JWT_REFRESH_SECRET: 'short',
+      });
+
+      expect(() => validateCriticalConfig(config, makeLogger())).not.toThrow();
     });
   });
 

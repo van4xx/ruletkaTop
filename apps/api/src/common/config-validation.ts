@@ -30,8 +30,27 @@ import type { LoggerService } from '@nestjs/common';
  * Both JWT secrets are required: `JWT_ACCESS_SECRET` signs/verifies access
  * tokens (CommonModule + JwtStrategy) and `JWT_REFRESH_SECRET` signs/verifies
  * the refresh token (auth.service).
+ *
+ * `TURNSTILE_SECRET` is required too: the CaptchaService FAILS OPEN when it is
+ * unset (`verify()` returns `true` for any/absent token — captcha.service.ts),
+ * which in production silently disables the bot gate on `/auth/register` and
+ * leaves it open to automated farming. Refusing to boot without it closes that
+ * fail-open in production while dev/test (no Cloudflare account) stay unaffected.
  */
-const CRITICAL_SECRETS: readonly string[] = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET'];
+const CRITICAL_SECRETS: readonly string[] = [
+  'JWT_ACCESS_SECRET',
+  'JWT_REFRESH_SECRET',
+  'TURNSTILE_SECRET',
+];
+
+/**
+ * Minimum byte length for a production secret. Below this a symmetric signing
+ * key (HS256 for both JWT secrets) is brute-forceable, so in production we
+ * reject any present-but-too-short critical secret in addition to the
+ * blank/placeholder checks. 32 chars is the floor; generate one with
+ * `openssl rand -base64 48`.
+ */
+const MIN_SECRET_LENGTH = 32;
 
 /**
  * Optional-but-recommended secrets, grouped by the capability they unlock. A
@@ -98,7 +117,8 @@ function isUnsetOrPlaceholder(value: string | undefined): boolean {
  * recommended integrations is emitted in every environment so misconfig is
  * visible early without blocking.
  *
- * @throws Error when `NODE_ENV=production` and ≥1 critical secret is unset/placeholder.
+ * @throws Error when `NODE_ENV=production` and ≥1 critical secret is unset,
+ *   still a placeholder, or shorter than {@link MIN_SECRET_LENGTH}.
  */
 export function validateCriticalConfig(config: ConfigService, logger: LoggerService): void {
   const isProd = config.get<string>('NODE_ENV') === 'production';
@@ -120,19 +140,44 @@ export function validateCriticalConfig(config: ConfigService, logger: LoggerServ
     return;
   }
 
-  const offenders = CRITICAL_SECRETS.filter((name) =>
+  // Missing or still a shipped placeholder → a guessable/disabled secret.
+  const missingOrPlaceholder = CRITICAL_SECRETS.filter((name) =>
     isUnsetOrPlaceholder(config.get<string>(name)),
   );
 
-  if (offenders.length > 0) {
+  // Present + non-placeholder but TOO SHORT → a brute-forceable signing key.
+  // Skip vars already flagged above so a value is never reported twice.
+  const tooShort = CRITICAL_SECRETS.filter((name) => {
+    if (missingOrPlaceholder.includes(name)) {
+      return false;
+    }
+    const value = config.get<string>(name);
+    return typeof value === 'string' && value.trim().length < MIN_SECRET_LENGTH;
+  });
+
+  if (missingOrPlaceholder.length > 0 || tooShort.length > 0) {
     // Name the offending vars only — never their values.
+    const parts: string[] = [];
+    if (missingOrPlaceholder.length > 0) {
+      parts.push(
+        `missing or still set to a placeholder: ${missingOrPlaceholder.join(', ')}`,
+      );
+    }
+    if (tooShort.length > 0) {
+      parts.push(
+        `shorter than the ${MIN_SECRET_LENGTH}-char minimum: ${tooShort.join(', ')}`,
+      );
+    }
     const message =
-      `FATAL: ${offenders.length} critical secret(s) are missing or still set to a ` +
-      `placeholder in production: ${offenders.join(', ')}. ` +
-      `Set a strong, unique value for each before starting the API. Refusing to boot.`;
+      `FATAL: critical secret(s) are misconfigured in production — ${parts.join('; ')}. ` +
+      `Set a strong, unique value (≥${MIN_SECRET_LENGTH} chars) for each before starting the ` +
+      `API — generate one with \`openssl rand -base64 48\`. Refusing to boot.`;
     logger.error?.(message, undefined, 'ConfigValidation');
     throw new Error(message);
   }
 
-  logger.log?.('Critical secrets present and non-placeholder.', 'ConfigValidation');
+  logger.log?.(
+    `Critical secrets present, non-placeholder, and ≥${MIN_SECRET_LENGTH} chars.`,
+    'ConfigValidation',
+  );
 }

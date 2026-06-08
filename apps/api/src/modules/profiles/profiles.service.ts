@@ -112,6 +112,16 @@ export interface ProfileSearchResult {
   hasMore: boolean;
 }
 
+/**
+ * Public-facing received-gift row. Identical to {@link GiftTransaction} EXCEPT
+ * the sender (`fromUserId`) is intentionally DROPPED: the received-gift wall is
+ * a public/visibility-gated read, and exposing every sender's id leaks who
+ * gifted whom (a privacy + soft-deanonymisation issue) even from a "friends-only"
+ * or "nobody" profile. The wall only ever needs the gift glyph + value, never
+ * the sender, so we never put `fromUserId` on the wire here.
+ */
+export type PublicGiftTransaction = Omit<GiftTransaction, 'fromUserId'>;
+
 /** Input accepted by {@link ProfilesService.createProfile}. */
 export interface CreateProfileInput {
   userId: string;
@@ -536,14 +546,32 @@ export class ProfilesService {
   }
 
   /**
-   * Gifts received by a user, newest first. Reads the economy-owned
-   * `gifttransactions` collection directly by name (no duplicate model) so the
-   * profiles module does not take a hard schema dependency on economy.
+   * Gifts received by a user, newest first — VISIBILITY-GATED for `viewerId`.
+   *
+   * The received-gift wall is part of the public profile, so it MUST honour the
+   * target's `whoCanViewProfile` exactly like {@link getPublicProfileFor}: we
+   * resolve the profile through that same gate first, so a stranger viewing a
+   * `friends`/`nobody` profile (or one in a block relationship) gets the SAME
+   * `404 Not Found` as the profile read — never the gift list. The sender id is
+   * additionally dropped from every row (see {@link PublicGiftTransaction}).
+   *
+   * Reads the economy-owned `gifttransactions` collection directly by name (no
+   * duplicate model) so the profiles module does not take a hard schema
+   * dependency on economy.
    */
-  async getReceivedGifts(userId: string, limit = 50): Promise<GiftTransaction[]> {
+  async getReceivedGifts(
+    viewerId: string | null,
+    userId: string,
+    limit = 50,
+  ): Promise<PublicGiftTransaction[]> {
     if (!Types.ObjectId.isValid(userId)) {
       return [];
     }
+    // Enforce the SAME privacy gate as the profile read. Throws `404` (matching
+    // the sibling profile endpoint) when the viewer may not see this profile,
+    // so a friends-only / nobody profile never leaks its gift wall + senders.
+    await this.getPublicProfileFor(viewerId, userId);
+
     const rows = await this.connection
       .collection('gifttransactions')
       .find({ toUserId: new Types.ObjectId(userId) })
@@ -551,7 +579,7 @@ export class ProfilesService {
       .limit(limit)
       .toArray();
 
-    return rows.map((row) => this.toGiftTransaction(row));
+    return rows.map((row) => this.toPublicGiftTransaction(row));
   }
 
   /** Map a hydrated profile to the public over-the-wire shape. */
@@ -581,12 +609,15 @@ export class ProfilesService {
     };
   }
 
-  /** Map a raw `gifttransactions` row to the shared `GiftTransaction` shape. */
-  private toGiftTransaction(row: Record<string, unknown>): GiftTransaction {
+  /**
+   * Map a raw `gifttransactions` row to the PUBLIC received-gift shape. The
+   * sender (`fromUserId`) is deliberately OMITTED — see
+   * {@link PublicGiftTransaction}; the wall renders only the gift + value.
+   */
+  private toPublicGiftTransaction(row: Record<string, unknown>): PublicGiftTransaction {
     const createdAt = row.createdAt;
     return {
       id: String(row._id),
-      fromUserId: String(row.fromUserId),
       toUserId: String(row.toUserId),
       giftId: String(row.giftId),
       priceCoins: Number(row.priceCoins ?? 0),

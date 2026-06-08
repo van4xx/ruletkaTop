@@ -31,7 +31,6 @@ import {
   AVATAR_ALLOWED_MIME_TYPES,
   AVATAR_MAX_BYTES,
   type AvatarUploadResponse,
-  type GiftTransaction,
   type JwtPayload,
   type ProfileSearchQuery,
   profileSearchQuerySchema,
@@ -48,7 +47,11 @@ import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { jwtPayloadSchema } from '../../common/jwt-payload.schema';
 import { createZodValidationPipe } from '../../common/zod-validation.pipe';
 import { AvatarStorageService, type UploadedAvatar } from './avatar-storage.service';
-import { type ProfileSearchResult, ProfilesService } from './profiles.service';
+import {
+  type ProfileSearchResult,
+  ProfilesService,
+  type PublicGiftTransaction,
+} from './profiles.service';
 
 /**
  * `AVATAR_ALLOWED_MIME_TYPES` is a readonly tuple of literals; multer's
@@ -112,11 +115,18 @@ export class ProfilesController {
   }
 
   @Get(':id/gifts')
-  @ApiOperation({ summary: 'List gifts received by a user (newest first)' })
+  @ApiOperation({ summary: 'List gifts received by a user (privacy-gated, newest first)' })
   @ApiParam({ name: 'id', description: 'Recipient user id (Mongo ObjectId)' })
-  @ApiOkResponse({ description: 'Received gift transactions' })
-  async getGifts(@Param('id') id: string): Promise<GiftTransaction[]> {
-    return this.profilesService.getReceivedGifts(id);
+  @ApiOkResponse({ description: 'Received gift transactions (sender id omitted)' })
+  async getGifts(
+    @Param('id') id: string,
+    @Req() req: Request,
+  ): Promise<PublicGiftTransaction[]> {
+    // Resolve the (optional) viewer and enforce the SAME `whoCanViewProfile`
+    // visibility as the profile read: a stranger viewing a friends-only / nobody
+    // profile gets the same `404` as `GET /profiles/:id`, never the gift wall.
+    const viewerId = this.tryGetViewerId(req);
+    return this.profilesService.getReceivedGifts(viewerId, id);
   }
 
   @Patch('me')

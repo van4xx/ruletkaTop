@@ -33,6 +33,16 @@ export function wsSocketCountKey(userId: string): string {
   return `ws:sockets:${userId}`;
 }
 
+/**
+ * Per-IP handshake fixed-window counter key. Counts WebSocket handshakes from a
+ * single client IP BEFORE authentication, so an unauthenticated client cannot
+ * loop handshakes from one address — the per-user socket cap only kicks in
+ * post-auth and is keyed on a verified token, which a flooder never presents.
+ */
+export function wsHandshakeIpKey(ip: string): string {
+  return `ws:handshake:ip:${ip}`;
+}
+
 /** TTL (seconds) guarding the socket counter against leaks from missed disconnects. */
 export const SOCKET_COUNT_TTL_SECONDS = 6 * 60 * 60;
 
@@ -52,6 +62,23 @@ export interface RateLimitRule {
   /** Fixed window length in seconds. */
   readonly windowSec: number;
 }
+
+/**
+ * `ws:handshake:ip` — per-IP WebSocket-handshake limit: at most `max` connection
+ * attempts per `windowSec` fixed window from one IP, enforced in the gateway's
+ * `handleConnection` BEFORE any DB work (the ban-check). A generous ceiling for a
+ * real client (a flapping network, multi-tab user or shared NAT still reconnects
+ * well under this) that nonetheless caps a pre-auth handshake flood: the per-user
+ * socket cap only kicks in post-auth and is keyed on a verified token, which a
+ * flooder never presents. Application-layer companion to the nginx
+ * `limit_req`/`limit_conn` on `/socket.io` (defence-in-depth: covers the
+ * direct-to-API case and any topology where nginx is bypassed).
+ */
+export const WS_HANDSHAKE_IP_LIMIT: RateLimitRule = {
+  action: 'ws:handshake:ip',
+  max: 60,
+  windowSec: 60,
+};
 
 /** `chat:message` — generous for fast typers, caps spam. */
 export const CHAT_MESSAGE_LIMIT: RateLimitRule = {

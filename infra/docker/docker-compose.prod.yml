@@ -140,6 +140,11 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       TURN_HOST: coturn
+      # Cloudflare Turnstile server secret. Passed through from .env so the
+      # prod CAPTCHA gate is satisfiable; `:-` keeps compose parseable when the
+      # var is supplied via env_file rather than exported in the shell. Leave
+      # blank in .env to keep CAPTCHA a no-op (dev); set it to enforce the gate.
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
     depends_on:
       mongo-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }

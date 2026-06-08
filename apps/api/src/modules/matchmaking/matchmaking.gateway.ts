@@ -47,6 +47,7 @@ import {
   MM_JOIN_LIMIT,
   RTC_SDP_LIMIT,
   RTC_SIGNAL_LIMIT,
+  WS_HANDSHAKE_IP_LIMIT,
 } from '../realtime-security/realtime-security.constants';
 import type { RateLimitRule } from '../realtime-security/realtime-security.constants';
 import { WsAuthService } from '../realtime-security/ws-auth.service';
@@ -279,11 +280,23 @@ export class MatchmakingGateway
   // ── Connection lifecycle ─────────────────────────────────────────────────────
 
   /**
-   * Verify the handshake token (HS256-pinned + shape-validated), reject banned
-   * accounts, enforce the per-user concurrent-socket cap, then bind identity and
-   * join the per-user room.
+   * Per-IP pre-auth handshake throttle, verify the handshake token (HS256-pinned
+   * + shape-validated), reject banned accounts, enforce the per-user
+   * concurrent-socket cap, then bind identity and join the per-user room.
    */
   async handleConnection(client: MmSocket): Promise<void> {
+    // Per-IP handshake rate limit BEFORE any DB work (the ban-check below). The
+    // per-user socket cap only applies post-auth and is keyed on a verified
+    // token, so without this an unauthenticated client could loop handshakes
+    // from one IP. Defence-in-depth alongside the nginx `limit_req` on
+    // `/socket.io`. Cheap Redis-only check; a missing/blank IP is allowed
+    // through (nginx is the edge defence there).
+    const ip = extractClientIp(client);
+    if (!(await this.rateLimiter.consumeHandshakeIp(ip, WS_HANDSHAKE_IP_LIMIT))) {
+      emitWsError(client, { code: 'rate_limited', message: 'Too many connection attempts' });
+      client.disconnect(true);
+      return;
+    }
     const token = extractToken(client);
     const payload = this.wsAuth.verifyToken(token);
     if (!payload) {
@@ -1151,6 +1164,26 @@ function extractToken(client: MmSocket): string | null {
   }
   const token = header.slice('Bearer '.length).trim();
   return token.length > 0 ? token : null;
+}
+
+/**
+ * Best-effort client IP for the per-IP handshake throttle. Prefers the
+ * left-most entry of `X-Forwarded-For` (the real client when behind nginx, which
+ * sets it), mirroring `ThrottlerBehindProxyGuard`; falls back to the raw socket
+ * address. Returns `undefined` when nothing usable is present (the limiter then
+ * fails open — nginx is the edge defence in that case).
+ */
+function extractClientIp(client: MmSocket): string | undefined {
+  const forwarded = client.handshake.headers['x-forwarded-for'];
+  const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  if (typeof raw === 'string') {
+    const first = raw.split(',')[0]?.trim();
+    if (first && first.length > 0) {
+      return first;
+    }
+  }
+  const address = client.handshake.address;
+  return typeof address === 'string' && address.length > 0 ? address : undefined;
 }
 
 /** Emit a typed `ws:error` to a single socket. */

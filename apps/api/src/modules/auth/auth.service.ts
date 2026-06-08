@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -12,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import * as argon2 from 'argon2';
+import { Redis } from 'ioredis';
 import { ClientSession, Connection, Model, Types } from 'mongoose';
 
 import type {
@@ -24,6 +26,7 @@ import type {
   RegisterDto,
 } from '@ruletka/shared-types';
 
+import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { MailerService } from '../mail/mailer.service';
 import { Profile, ProfileDocument } from '../profiles/schemas/profile.schema';
 import { UsersService } from '../users/users.service';
@@ -55,14 +58,48 @@ const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const TOKEN_BYTES = 32;
 
 /**
- * Consecutive failed logins (per email) after which we lock the account for
- * {@link LOGIN_LOCK_MS}. Brute-force mitigation backed by the Session schema's
- * sibling collection is overkill; we track counters in-memory per process which
- * is sufficient as a defence-in-depth signal (the real rate limit lives at the
- * edge / gateway).
+ * Consecutive failed logins (per email + client IP) after which we lock that
+ * identity for {@link LOGIN_LOCK_MS}. Brute-force mitigation as a
+ * defence-in-depth signal on top of the edge/gateway rate limit.
+ *
+ * The counter lives in the shared Redis (NOT per-process): production runs >1
+ * replica, so an in-memory Map both multiplied the effective threshold (each
+ * replica counted independently → ~Nx the real limit) and reset on every
+ * deploy. Redis makes the threshold + lockout window correct cluster-wide and
+ * durable across restarts.
  */
 const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_LOCK_MS = 15 * 60 * 1000;
+
+/** Redis key prefixes for the failed-login counter and the active lockout. */
+const LOGIN_ATTEMPT_KEY_PREFIX = 'auth:login:attempts:';
+const LOGIN_LOCK_KEY_PREFIX = 'auth:login:lock:';
+
+/**
+ * TTL (seconds) on the failed-attempt counter. The counter auto-expires after a
+ * window of inactivity so a few spread-out typos never accumulate into a lock;
+ * it is reset explicitly on a successful login. Matches the lockout duration.
+ */
+const LOGIN_ATTEMPT_TTL_SECONDS = Math.ceil(LOGIN_LOCK_MS / 1000);
+
+/**
+ * Lua: atomically INCR the per-identity attempt counter and (re-)arm its TTL,
+ * returning the new count. On reaching the threshold (ARGV[2]) it SETs the
+ * lockout key with a TTL of ARGV[3] seconds and resets the counter to 0 (so the
+ * NEXT lock needs a fresh run of failures — mirrors the previous in-memory
+ * `state.count = 0` on lock). KEYS[1]=attempt counter, KEYS[2]=lock key,
+ * ARGV[1]=counter ttl, ARGV[2]=max attempts, ARGV[3]=lock ttl. Returns the count.
+ */
+const LOGIN_ATTEMPT_LUA = `
+local n = redis.call('INCR', KEYS[1])
+if n >= tonumber(ARGV[2]) then
+  redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])
+  redis.call('DEL', KEYS[1])
+else
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return n
+`;
 
 /**
  * ROTATION GRACE window. When a refresh token was rotated out (`replacedByHash`
@@ -117,6 +154,11 @@ const ARGON2_OPTIONS: argon2.Options = {
   parallelism: 1,
 };
 
+/** Narrows an unknown thrown value to a printable message (for logs). */
+function asMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /** Type guard for a MongoDB duplicate-key write error. */
 function isDuplicateKeyError(err: unknown): boolean {
   return (
@@ -138,12 +180,6 @@ interface RefreshTokenPayload extends JwtPayload {
   family: string;
   /** Per-token nonce so each issued refresh token is unique even same-second. */
   jti: string;
-}
-
-/** Tracks failed-login pressure for an email within the current process. */
-interface LoginAttemptState {
-  count: number;
-  lockedUntil: number | null;
 }
 
 /**
@@ -168,9 +204,6 @@ interface LoginAttemptState {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  /** In-process failed-login counters, keyed by lower-cased email. */
-  private readonly loginAttempts = new Map<string, LoginAttemptState>();
-
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -185,6 +218,7 @@ export class AuthService {
     private readonly verificationTokenModel: Model<VerificationTokenDocument>,
     private readonly mailerService: MailerService,
     @InjectConnection() private readonly connection: Connection,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   // ── Registration ──────────────────────────────────────────────────────────
@@ -434,7 +468,7 @@ export class AuthService {
    */
   async login(dto: LoginDto, ctx: SessionContext = {}): Promise<AuthResponse> {
     const email = dto.email.toLowerCase();
-    this.assertNotLocked(email);
+    await this.assertNotLocked(email, ctx.ip);
 
     // Ban-evasion gate: a device/IP tied to an active ban may not log in at all
     // (catches a banned user signing into a different, not-yet-banned account
@@ -464,13 +498,13 @@ export class AuthService {
           dto.password,
         )
         .catch(() => false);
-      this.registerFailedAttempt(email);
+      await this.registerFailedAttempt(email, ctx.ip);
       throw new UnauthorizedException('Invalid email or password');
     }
 
     const ok = await argon2.verify(user.passwordHash, dto.password).catch(() => false);
     if (!ok) {
-      this.registerFailedAttempt(email);
+      await this.registerFailedAttempt(email, ctx.ip);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -492,7 +526,7 @@ export class AuthService {
       });
     }
 
-    this.clearFailedAttempts(email);
+    await this.clearFailedAttempts(email, ctx.ip);
 
     const isPremium = await this.resolveIsPremium(user._id.toString());
     const authUser: AuthUser = {
@@ -1260,31 +1294,78 @@ export class AuthService {
     return profile?.nickname ?? '';
   }
 
-  // ── Brute-force counters ─────────────────────────────────────────────────
+  // ── Brute-force counters (Redis-backed, correct across replicas) ──────────
 
-  /** Reject early if the email is currently locked out. */
-  private assertNotLocked(email: string): void {
-    const state = this.loginAttempts.get(email);
-    if (state?.lockedUntil && state.lockedUntil > Date.now()) {
+  /**
+   * Derive the per-identity Redis key suffix from the lower-cased email and the
+   * best-effort client IP. Keying on BOTH (rather than email alone) scopes the
+   * lock to the attacking source so one abuser cannot trivially lock a victim's
+   * email out from afar, while still capping per-source brute force. A missing
+   * IP collapses to the email so the counter still functions.
+   */
+  private loginIdentity(email: string, ip?: string | null): string {
+    const normalizedIp = ip && ip.trim().length > 0 ? ip.trim() : 'noip';
+    return `${email}|${normalizedIp}`;
+  }
+
+  /**
+   * Reject early if this identity (email + client IP) is currently locked out.
+   * FAILS OPEN on a Redis error: a cache outage must not deny every login (the
+   * edge/gateway rate limit remains the hard backstop).
+   */
+  private async assertNotLocked(email: string, ip?: string | null): Promise<void> {
+    const lockKey = LOGIN_LOCK_KEY_PREFIX + this.loginIdentity(email, ip);
+    let locked = false;
+    try {
+      locked = (await this.redis.exists(lockKey)) === 1;
+    } catch (err) {
+      this.logger.warn(`Login lockout check failed (allowing attempt): ${asMessage(err)}`);
+      return;
+    }
+    if (locked) {
       throw new UnauthorizedException('Too many failed attempts. Try again later.');
     }
   }
 
-  /** Increment the failed-login counter and lock the email past the threshold. */
-  private registerFailedAttempt(email: string): void {
-    const state = this.loginAttempts.get(email) ?? { count: 0, lockedUntil: null };
-    state.count += 1;
-    if (state.count >= MAX_LOGIN_ATTEMPTS) {
-      state.lockedUntil = Date.now() + LOGIN_LOCK_MS;
-      state.count = 0;
-      this.logger.warn(`Login lockout engaged for ${email}`);
+  /**
+   * Atomically increment the failed-login counter for this identity and, on
+   * crossing {@link MAX_LOGIN_ATTEMPTS}, engage the {@link LOGIN_LOCK_MS}
+   * lockout (the Lua script resets the counter on lock, matching the prior
+   * in-memory semantics). FAILS OPEN on a Redis error — a cache blip must not
+   * crash the login path.
+   */
+  private async registerFailedAttempt(email: string, ip?: string | null): Promise<void> {
+    const identity = this.loginIdentity(email, ip);
+    try {
+      const count = (await this.redis.eval(
+        LOGIN_ATTEMPT_LUA,
+        2,
+        LOGIN_ATTEMPT_KEY_PREFIX + identity,
+        LOGIN_LOCK_KEY_PREFIX + identity,
+        String(LOGIN_ATTEMPT_TTL_SECONDS),
+        String(MAX_LOGIN_ATTEMPTS),
+        String(Math.ceil(LOGIN_LOCK_MS / 1000)),
+      )) as number;
+      if (count >= MAX_LOGIN_ATTEMPTS) {
+        this.logger.warn(`Login lockout engaged for ${email}`);
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to record login attempt: ${asMessage(err)}`);
     }
-    this.loginAttempts.set(email, state);
   }
 
-  /** Clear the failed-login counter after a successful login. */
-  private clearFailedAttempts(email: string): void {
-    this.loginAttempts.delete(email);
+  /**
+   * Clear the failed-login counter (and any standing lock) after a successful
+   * login. Best-effort: a Redis error here only means a stale counter ages out
+   * via its TTL.
+   */
+  private async clearFailedAttempts(email: string, ip?: string | null): Promise<void> {
+    const identity = this.loginIdentity(email, ip);
+    try {
+      await this.redis.del(LOGIN_ATTEMPT_KEY_PREFIX + identity, LOGIN_LOCK_KEY_PREFIX + identity);
+    } catch (err) {
+      this.logger.warn(`Failed to clear login attempts: ${asMessage(err)}`);
+    }
   }
 
   // ── Misc ──────────────────────────────────────────────────────────────────
