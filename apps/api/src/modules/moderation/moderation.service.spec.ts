@@ -74,6 +74,19 @@ describe('ModerationService — escalation policy', () => {
     expect(doc.label).toBe('nudity');
   });
 
+  it('counts prior violations EXCLUDING dismissed (cleared false-positives never escalate)', async () => {
+    withPriorViolations(0);
+
+    await service.handleViolation(USER, violation());
+
+    // The escalation count must skip moderator-`dismissed` events.
+    const [filter] = eventModel.countDocuments.mock.calls[0] as [Record<string, unknown>];
+    expect(filter.status).toEqual({ $ne: 'dismissed' });
+    expect(filter).toMatchObject({
+      createdAt: expect.objectContaining({ $gte: expect.any(Date) }),
+    });
+  });
+
   it('2nd strike (1 prior) → kick; ends the call via published action; no ban', async () => {
     withPriorViolations(1);
 
@@ -159,6 +172,32 @@ describe('ModerationService — escalation policy', () => {
     // Upgraded to a high-score ban via the server signal.
     expect(action.action).toBe('ban');
     expect(action.label).toBe('sexual');
+  });
+
+  it('a MORE-SEVERE server label upgrades a HIGHER-score client report (severity beats score)', async () => {
+    withPriorViolations(0);
+    // Server detects CSAM ('minor') at a LOWER score than the client's 'nudity'.
+    // Severity must win: the merged signal is the zero-tolerance 'minor' → ban.
+    frameScorer.score.mockResolvedValue({ label: 'minor', score: 0.55 });
+
+    const action = await service.handleViolation(USER, violation({ label: 'nudity', score: 0.9 }));
+
+    expect(action.label).toBe('minor');
+    expect(action.action).toBe('ban');
+    // Zero-tolerance short-circuits before counting prior violations.
+    expect(eventModel.countDocuments).not.toHaveBeenCalled();
+  });
+
+  it('a LOWER-severity server label does NOT override a more-severe client report', async () => {
+    withPriorViolations(0);
+    // Server says 'nudity' (less severe) at a high score; client reported 'minor'.
+    frameScorer.score.mockResolvedValue({ label: 'nudity', score: 0.99 });
+
+    const action = await service.handleViolation(USER, violation({ label: 'minor', score: 0.3 }));
+
+    // The more-severe client label stands (server cannot downgrade severity).
+    expect(action.label).toBe('minor');
+    expect(action.action).toBe('ban');
   });
 
   it('a failing ban side-effect still returns the ban action (does not throw)', async () => {

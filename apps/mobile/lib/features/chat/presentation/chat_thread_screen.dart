@@ -33,10 +33,23 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   final TextEditingController _composerController = TextEditingController();
   final FocusNode _composerFocus = FocusNode();
 
-  late final ThreadArg _arg = ThreadArg.conversation(widget.conversationId);
+  // Parse the raw route param (`c:<id>` / `u:<userId>` / `new` / bare id) into a
+  // typed thread argument so prefixed deep-links load + compose correctly.
+  late final ThreadArg _arg = ThreadArg.parse(widget.conversationId);
 
   int _lastMessageCount = 0;
   bool _canSend = false;
+
+  /// The conversation id currently marked active on the inbox, so we only push
+  /// an update when it actually changes (e.g. compose → adopted real id).
+  String? _activeConversationId;
+
+  /// The resolved real conversation id for inbox bookkeeping (active-thread
+  /// marker + peer lookup). For an existing conversation this is known up front;
+  /// in compose mode it lands once the controller adopts the server's id.
+  String? get _resolvedConversationId =>
+      ref.read(chatThreadControllerProvider(_arg)).conversationId ??
+      _arg.conversationId;
 
   @override
   void initState() {
@@ -46,10 +59,21 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
     // Suppress unread inflation on the inbox badge while this thread is open.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref
-          .read(conversationsControllerProvider.notifier)
-          .setActiveConversation(widget.conversationId);
+      _syncActiveConversation(_resolvedConversationId);
     });
+  }
+
+  /// Mark [conversationId] active on the inbox (suppressing unread inflation),
+  /// but only when it changed — covers a compose thread adopting its real id
+  /// after the first send.
+  void _syncActiveConversation(String? conversationId) {
+    if (conversationId == null || conversationId == _activeConversationId) {
+      return;
+    }
+    _activeConversationId = conversationId;
+    ref
+        .read(conversationsControllerProvider.notifier)
+        .setActiveConversation(conversationId);
   }
 
   @override
@@ -120,7 +144,12 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   Widget build(BuildContext context) {
     final controller = ref.watch(chatThreadControllerProvider(_arg));
     final selfId = ref.watch(currentUserIdProvider);
-    final peer = _peerProfile(ref, selfId);
+    // Resolve the peer against the controller's real conversation id (compose
+    // threads only learn it after the first send echoes back).
+    final peer = _peerProfile(ref, selfId, controller.conversationId);
+    // Keep the inbox active-marker pointed at the real conversation id once a
+    // compose thread adopts it (so unread suppression follows the new id).
+    _syncActiveConversation(controller.conversationId);
 
     return AppScaffold(
       showBottomNav: false,
@@ -161,18 +190,26 @@ class _ChatThreadScreenState extends ConsumerState<ChatThreadScreen> {
   /// Resolve the peer's public profile for the header by locating this
   /// conversation in the live inbox, deriving the other participant, and
   /// watching that user's cached profile.
-  PublicProfile? _peerProfile(WidgetRef ref, String? selfId) {
+  ///
+  /// In compose mode (no conversation yet) we fall back to the recipient id
+  /// parsed from the route, so the header shows the correct peer before the
+  /// first message creates the conversation.
+  PublicProfile? _peerProfile(
+      WidgetRef ref, String? selfId, String? conversationId) {
+    if (selfId == null) return null;
     final inbox = ref.watch(conversationsControllerProvider).value;
-    if (inbox == null || selfId == null) return null;
-    Conversation? conversation;
-    for (final c in inbox.conversations) {
-      if (c.id == widget.conversationId) {
-        conversation = c;
-        break;
+    String? peerId;
+    if (conversationId != null && inbox != null) {
+      for (final c in inbox.conversations) {
+        if (c.id == conversationId) {
+          peerId = c.peerId(selfId);
+          break;
+        }
       }
     }
-    final peerId = conversation?.peerId(selfId);
-    if (peerId == null) return null;
+    // Compose target (or inbox miss): use the recipient from the parsed arg.
+    peerId ??= _arg.recipientId;
+    if (peerId == null || peerId.isEmpty) return null;
     return ref.watch(peerProfileProvider(peerId)).value;
   }
 }

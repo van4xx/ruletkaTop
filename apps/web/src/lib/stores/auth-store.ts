@@ -6,9 +6,10 @@
  *
  * ─────────────────────────── Token strategy ───────────────────────────────
  * Hardened cookie strategy:
- *   - The REFRESH token lives ONLY in an httpOnly, SameSite=Strict cookie set
+ *   - The REFRESH token lives ONLY in an httpOnly, SameSite=Lax cookie set
  *     by the API and scoped to `/api/auth`. JavaScript can't read it, so an XSS
- *     payload can't exfiltrate it.
+ *     payload can't exfiltrate it. (Lax, not Strict, so the cross-subdomain
+ *     refresh under a shared `COOKIE_DOMAIN` survives top-level navigations.)
  *   - The short-lived ACCESS token is held IN MEMORY only (the api client's
  *     token store) — never localStorage. A reload drops it; the app re-acquires
  *     one by calling `/auth/refresh` (the cookie is sent automatically) during

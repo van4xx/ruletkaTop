@@ -32,6 +32,9 @@ const PROTECTED_PREFIXES = [
   '/profile/me',
   '/wallet',
   '/notifications',
+  // Onboarding personalises a freshly-created account — it is meaningless (and
+  // its API calls 401) for a signed-out visitor, so gate it at the edge too.
+  '/onboarding',
 ] as const;
 
 /** Auth screens an already-authenticated user should be bounced away from. */

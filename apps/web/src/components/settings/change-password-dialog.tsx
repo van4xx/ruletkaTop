@@ -29,6 +29,8 @@ import {
 import { useChangePassword } from '@/features/settings/use-settings';
 import { useFieldError } from '@/features/auth/use-field-error';
 import { useErrorMessage } from '@/lib/error-message';
+import { useAuthStore } from '@/lib/stores/auth-store';
+import { disconnectSocket } from '@/lib/socket';
 import { FormField } from '@/components/auth/form-field';
 import { PasswordField } from '@/components/auth/password-field';
 
@@ -45,6 +47,7 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
   const errorMessage = useErrorMessage();
   const [open, setOpen] = useState(false);
   const changePassword = useChangePassword();
+  const clearAuth = useAuthStore((s) => s.clear);
 
   // Built inside the component so validation messages can be localized.
   const schema = useMemo(
@@ -90,8 +93,18 @@ export function ChangePasswordDialog({ trigger }: { trigger: ReactNode }) {
       { currentPassword: values.currentPassword, newPassword: values.newPassword },
       {
         onSuccess: () => {
-          toast.success(t('password.saved'));
-          onOpenChange(false);
+          // The server revokes EVERY refresh session on a password change —
+          // including THIS device's. Silently keeping the user "logged in" on a
+          // now-dead session is the surprise we're fixing: the very next refresh
+          // would 401 with a confusing "session expired". So we own the logout
+          // explicitly — clear local auth, drop the socket, and bounce to /login
+          // with a clear "sign in again" toast — instead of leaving a stale
+          // session to fail later.
+          setOpen(false);
+          clearAuth();
+          disconnectSocket();
+          toast.success(t('password.savedSignedOut'));
+          window.location.assign('/login');
         },
       },
     );

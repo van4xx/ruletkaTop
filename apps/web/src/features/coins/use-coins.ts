@@ -28,8 +28,23 @@ export function useCoinPackages() {
   });
 }
 
-/** UI phase of the buy flow, used to drive the modal/inline feedback. */
-export type CheckoutPhase = 'idle' | 'starting' | 'widget' | 'pending' | 'credited' | 'error';
+/**
+ * UI phase of the buy flow, used to drive the modal/inline feedback.
+ *
+ * - `pending`     — charge captured; polling the balance for the webhook credit.
+ * - `credited`    — an ACTUAL balance increase was observed (true success).
+ * - `unconfirmed` — polling finished without seeing the credit land. The charge
+ *   went through, but we can't confirm the coins yet (the webhook may still be
+ *   in flight). A neutral "check your balance shortly" state — NOT a success.
+ */
+export type CheckoutPhase =
+  | 'idle'
+  | 'starting'
+  | 'widget'
+  | 'pending'
+  | 'credited'
+  | 'unconfirmed'
+  | 'error';
 
 export interface UseBuyCoinsResult {
   /** Kick off the purchase for a package code. */
@@ -90,9 +105,14 @@ export function useBuyCoins(): UseBuyCoinsResult {
               },
               {
                 onSuccess: () => {
-                  // Charge captured; the credit arrives via webhook.
+                  // Charge captured; the credit arrives via webhook. Only show
+                  // 'credited' on an OBSERVED balance increase — otherwise land
+                  // on the neutral 'unconfirmed' ("check your balance") state so
+                  // we never claim coins arrived when they might not have.
                   setPhase('pending');
-                  void pollBalance(balanceBefore).then(() => setPhase('credited'));
+                  void pollBalance(balanceBefore).then((credited) =>
+                    setPhase(credited ? 'credited' : 'unconfirmed'),
+                  );
                 },
                 onFail: (reason) => {
                   setError(reason || t('coinsHook.paymentFailed'));

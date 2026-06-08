@@ -33,10 +33,15 @@ import type {
   AdminWalletAdjustResult,
   AdminWalletDetail,
   AdminWalletStats,
+  Appeal,
+  AppealStatus,
   AuthResponse,
   AuthUser,
   EconomyOverview,
+  OpenReportCount,
   Report,
+  ResolvedAppeal,
+  ResolvedWithBan,
   ReviewItem,
   Role,
 } from '@ruletka/shared-types';
@@ -139,6 +144,13 @@ export interface ReportPage {
   hasMore: boolean;
 }
 
+/** A cursor page of ban appeals (`GET /moderation/appeals`), shared-typed. */
+export interface AppealPage {
+  items: Appeal[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 /* ───────────────────────────── Economy CRUD types ─────────────────────────────
  * The economy/premium-plan CRUD endpoints are NOT in `@ruletka/shared-types`
  * (they're local to `admin-economy.controller`), so the row/DTO shapes are
@@ -204,12 +216,39 @@ export const adminApi = {
 
   // ── Abuse reports (moderator/admin) ──
   reports: {
+    /** Cursor-paginated triage queue, optionally filtered by `status`. */
+    list: (status?: string, cursor?: string) =>
+      req<ReportPage>('/reports', { query: { status, cursor } }),
     /**
      * Every report filed AGAINST one user (the reported account), newest-first,
      * for the user-dossier "reports against this user" view. Cursor-paginated.
      */
     against: (againstUserId: string, cursor?: string) =>
       req<ReportPage>('/reports', { query: { againstUserId, cursor } }),
+    /** Close a report as resolved/dismissed (no ban). */
+    resolve: (id: string, status: 'resolved' | 'dismissed') =>
+      req<Report>(`/reports/${id}/resolve`, { method: 'POST', json: { status } }),
+    /** Uphold a report AND ban the reported user in one action. */
+    resolveBan: (id: string) =>
+      req<ResolvedWithBan>(`/reports/${id}/resolve-ban`, { method: 'POST' }),
+    /** Per-target open-report counts, most-reported first (the "hot list"). */
+    openCounts: (limit?: number) =>
+      req<OpenReportCount[]>('/reports/open-counts', {
+        query: { limit: limit != null ? String(limit) : undefined },
+      }),
+  },
+
+  // ── Ban appeals (moderator/admin) ──
+  appeals: {
+    /** Cursor-paginated appeals queue, optionally filtered by `status`. */
+    list: (status?: AppealStatus, cursor?: string) =>
+      req<AppealPage>('/moderation/appeals', { query: { status, cursor } }),
+    /** Accept (⇒ unban the user) or reject a ban appeal. */
+    resolve: (id: string, status: 'accepted' | 'rejected') =>
+      req<ResolvedAppeal>(`/moderation/appeals/${id}/resolve`, {
+        method: 'POST',
+        json: { status },
+      }),
   },
 
   // ── User enforcement (moderator/admin) — routes live under /admin ──
@@ -342,4 +381,13 @@ export const adminApi = {
   },
 };
 
-export type { AdminUserList, AdminUserSummary, EconomyOverview, ReviewItem, Role };
+export type {
+  AdminUserList,
+  AdminUserSummary,
+  Appeal,
+  AppealStatus,
+  EconomyOverview,
+  OpenReportCount,
+  ReviewItem,
+  Role,
+};

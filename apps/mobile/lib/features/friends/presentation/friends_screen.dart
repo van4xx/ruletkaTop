@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api.dart';
-import '../../../core/di/di.dart';
 import '../../../core/models/models.dart' hide Badge;
 import '../../../core/router/routes.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/widgets/widgets.dart';
+import '../../calls/domain/direct_call_controller.dart';
 import '../../chat/domain/conversations_controller.dart';
 import '../domain/friend_requests_controller.dart';
 import '../domain/friends_controller.dart';
@@ -61,10 +61,13 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     }
   }
 
-  /// Invite a friend to a video call over the socket (the call UI itself is the
-  /// roulette feature's responsibility; this fires the invite + confirms it).
+  /// Invite a friend to a video call. Routes through the global direct-call
+  /// host so the outgoing ring is tracked (it surfaces a ringing sheet and
+  /// reacts to the friend's accept/decline/end over the `call:*` socket events).
   void _call(FriendSummary friend) {
-    ref.read(socketServiceProvider).callInvite(friend.profile.id, MatchType.video);
+    ref
+        .read(directCallControllerProvider.notifier)
+        .placeCall(friend.profile.id, MatchType.video);
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..clearSnackBars()

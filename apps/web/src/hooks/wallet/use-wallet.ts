@@ -79,10 +79,40 @@ export function useEconomyInvalidation() {
 
   /**
    * Poll the balance a few times after a pending purchase so the UI reflects
-   * the webhook-driven credit without a manual refresh. Stops early once the
-   * balance increases beyond `fromBalance`.
+   * the webhook-driven credit without a manual refresh.
+   *
+   * Returns `true` only when an ACTUAL increase over the pre-charge balance was
+   * observed, and `false` if the credit hadn't landed by the time we stopped
+   * polling. Callers must NOT treat a `false` result as success — the webhook
+   * may still be in flight, so the UI should fall back to a neutral
+   * "pending — check your balance" state rather than claiming the coins arrived.
+   *
+   * `fromBalance` is the caller's pre-charge balance. When it's `null` (the
+   * wallet hadn't loaded yet, e.g. a top-up straight after sign-in) we resolve
+   * the real current balance from the server first, so a stale/unknown baseline
+   * can never be mistaken for a "+0" success.
    */
-  const pollBalance = async (fromBalance: number | null, attempts = 6, intervalMs = 2500) => {
+  const pollBalance = async (
+    fromBalance: number | null,
+    attempts = 6,
+    intervalMs = 2500,
+  ): Promise<boolean> => {
+    // Establish a trustworthy baseline before we start watching for the credit.
+    let baseline = fromBalance;
+    if (baseline === null) {
+      try {
+        const current = await qc.fetchQuery({
+          queryKey: economyKeys.wallet(),
+          queryFn: economyApi.wallet,
+        });
+        baseline = current.balanceCoins;
+      } catch {
+        // Couldn't read the baseline — leave it null and require a strict
+        // increase below (any positive balance counts as an observed credit).
+        baseline = null;
+      }
+    }
+
     for (let i = 0; i < attempts; i += 1) {
       await new Promise((r) => setTimeout(r, intervalMs));
       const next = await qc.fetchQuery({
@@ -90,8 +120,11 @@ export function useEconomyInvalidation() {
         queryFn: economyApi.wallet,
       });
       qc.invalidateQueries({ queryKey: economyKeys.transactions() });
-      if (fromBalance === null || next.balanceCoins > fromBalance) break;
+      if (baseline === null ? next.balanceCoins > 0 : next.balanceCoins > baseline) {
+        return true;
+      }
     }
+    return false;
   };
 
   return { invalidateBalance, pollBalance };

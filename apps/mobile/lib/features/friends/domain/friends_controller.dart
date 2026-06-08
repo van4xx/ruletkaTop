@@ -62,7 +62,10 @@ class FriendsController extends AsyncNotifier<FriendsState> {
 
   @override
   Future<FriendsState> build() async {
-    // Tear down presence listeners when this provider is disposed.
+    // Subscribe presence listeners exactly ONCE per provider lifetime and tear
+    // them down on dispose. `build` runs once (the provider isn't recreated for
+    // a pull-to-refresh — that calls [_fetchFirstPage] only), so this never
+    // leaks duplicate listeners.
     final disposers = <VoidCallback>[
       _socket.onPresenceOnline(_onPresence),
       _socket.onPresenceOffline(_onPresence),
@@ -73,6 +76,13 @@ class FriendsController extends AsyncNotifier<FriendsState> {
       }
     });
 
+    return _fetchFirstPage();
+  }
+
+  /// Load the first page of friends (presence-overlaid + subscribed). Pure data
+  /// fetch — no listener wiring — so [refresh] can re-run it without leaking
+  /// socket subscriptions.
+  Future<FriendsState> _fetchFirstPage() async {
     final page = await _repo.listFriends(limit: _pageSize);
     final friends = _applyPresence(page.items);
     _subscribePresence(friends);
@@ -156,10 +166,11 @@ class FriendsController extends AsyncNotifier<FriendsState> {
     }
   }
 
-  /// Pull-to-refresh: reload the first page from scratch.
+  /// Pull-to-refresh: reload the first page from scratch WITHOUT re-running
+  /// `build` (which would re-subscribe the presence listeners and leak them).
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(build);
+    state = await AsyncValue.guard(_fetchFirstPage);
   }
 
   /// Optimistically remove a friendship (or decline a request) and reconcile.

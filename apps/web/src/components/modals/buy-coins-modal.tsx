@@ -17,6 +17,7 @@ import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   CheckCircle2,
+  Clock,
   Loader2,
   ShieldCheck,
   ShoppingBag,
@@ -91,6 +92,27 @@ export function BuyCoinsModal() {
         icon={<CheckCircle2 className="h-7 w-7 text-success" />}
         title={t('modals.buyCoins.creditedTitle')}
         description={t('modals.buyCoins.creditedDescription', { amount })}
+      >
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => {
+            buy.reset();
+            close();
+          }}
+        >
+          {t('modals.buyCoins.thanks')}
+        </Button>
+      </StatusPanel>
+    );
+  }
+
+  if (buy.phase === 'unconfirmed') {
+    return (
+      <StatusPanel
+        icon={<Clock className="h-7 w-7 text-warning" />}
+        title={t('modals.buyCoins.unconfirmedTitle')}
+        description={t('modals.buyCoins.unconfirmedDescription')}
       >
         <Button
           type="button"

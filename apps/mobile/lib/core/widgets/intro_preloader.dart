@@ -65,6 +65,10 @@ class _IntroPreloaderState extends State<IntroPreloader>
   bool _reduceMotion = false;
   bool _started = false;
 
+  /// Set once the intro is being dismissed (by completion OR a tap-to-skip), so
+  /// a tap can't race a second exit and `onFinished` only ever fires once.
+  bool _dismissing = false;
+
   @override
   void initState() {
     super.initState();
@@ -93,9 +97,27 @@ class _IntroPreloaderState extends State<IntroPreloader>
       // Brief hold on the settled wheel + revealed wordmark.
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
+    if (!mounted || _dismissing) return;
+    await _dismiss();
+  }
+
+  /// Run the exit fade then hand control back to the host. Idempotent: a second
+  /// invocation (e.g. natural completion arriving just after a skip) is a no-op.
+  Future<void> _dismiss() async {
+    if (_dismissing) return;
+    _dismissing = true;
     if (!mounted) return;
     await _fade.reverse(); // 1 → 0 opacity
     if (mounted) widget.onFinished();
+  }
+
+  /// Tap-to-skip: snap the intro to its settled state and fade straight to the
+  /// app, so a returning-feeling user is never trapped behind the animation.
+  void _skip() {
+    if (_dismissing) return;
+    _intro.stop();
+    _intro.value = 1;
+    _dismiss();
   }
 
   @override
@@ -112,15 +134,19 @@ class _IntroPreloaderState extends State<IntroPreloader>
 
     return FadeTransition(
       opacity: _fade,
-      child: Material(
-        color: const Color(0xFF07070B),
-        child: Stack(
-          children: [
-            // Aurora ambience — soft neon blobs over the void.
-            const Positioned.fill(child: _AuroraVoid()),
+      // Tap anywhere to skip straight to the app.
+      child: GestureDetector(
+        onTap: _skip,
+        behavior: HitTestBehavior.opaque,
+        child: Material(
+          color: const Color(0xFF07070B),
+          child: Stack(
+            children: [
+              // Aurora ambience — soft neon blobs over the void.
+              const Positioned.fill(child: _AuroraVoid()),
 
-            Center(
-              child: AnimatedBuilder(
+              Center(
+                child: AnimatedBuilder(
                 animation: _intro,
                 builder: (context, _) {
                   final t = _intro.value;
@@ -163,9 +189,27 @@ class _IntroPreloaderState extends State<IntroPreloader>
                     ],
                   );
                 },
+                ),
               ),
-            ),
-          ],
+
+              // Subtle "tap to skip" affordance pinned to the bottom.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: AppSpacing.xxl,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Text(
+                      'Нажмите, чтобы пропустить',
+                      style: context.texts.labelSmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.45),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

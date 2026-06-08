@@ -124,6 +124,21 @@ describe('ReportsService', () => {
       expect(result.id).toBe('report-1');
     });
 
+    it.each(['minor', 'violence'] as const)(
+      'files a high-severity %s report as REVIEWING (child-safety fast-lane), not open',
+      async (reason) => {
+        usersService.findById.mockResolvedValue({ _id: AGAINST });
+        reportModel.exists.mockReturnValue(queryReturning(null));
+        reportModel.create.mockResolvedValue(reportDoc({ reason, status: 'reviewing' }));
+
+        await service.createReport(FROM, { againstUserId: AGAINST, reason });
+
+        const [doc] = reportModel.create.mock.calls[0] as [Record<string, unknown>];
+        // High-severity reasons skip `open` so they jump the triage queue.
+        expect(doc.status).toBe('reviewing');
+      },
+    );
+
     it('retains the in-call evidence frame + match context on the persisted report', async () => {
       usersService.findById.mockResolvedValue({ _id: AGAINST });
       reportModel.exists.mockReturnValue(queryReturning(null));

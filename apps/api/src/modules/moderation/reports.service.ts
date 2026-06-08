@@ -50,6 +50,17 @@ const DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const RESOLVABLE_STATUSES: readonly ReportStatus[] = ['resolved', 'dismissed'];
 
 /**
+ * Child-safety / violence reasons are HIGH-SEVERITY: a report carrying one of
+ * these is created already in `reviewing` (not `open`) so it jumps the triage
+ * queue ahead of routine `open` reports — a `minor` (CSAM-risk) complaint must
+ * never sit behind spam. {@link ReportsService.createReport} uses this set.
+ */
+const HIGH_SEVERITY_REASONS: ReadonlySet<CreateReportDto['reason']> = new Set([
+  'minor',
+  'violence',
+]);
+
+/**
  * Owns the `reports` collection — user-submitted abuse reports against other
  * users, optionally tied to the match where the incident occurred.
  *
@@ -113,7 +124,9 @@ export class ReportsService {
       details: dto.details ?? null,
       // Retain the optional in-call evidence frame for moderator review.
       evidenceUrl: dto.evidence ?? null,
-      status: 'open',
+      // High-severity (child-safety / violence) reports skip the `open` lane and
+      // are filed `reviewing` so the moderator fast-lane surfaces them first.
+      status: HIGH_SEVERITY_REASONS.has(dto.reason) ? 'reviewing' : 'open',
     });
     return this.toContract(created);
   }

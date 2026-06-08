@@ -79,12 +79,27 @@ export const CALL_INVITE_LIMIT: RateLimitRule = {
 };
 
 /**
- * `rtc:*` signaling relays (offer/answer/ice). ICE trickling can be chatty, so
- * this is the most permissive bucket; it exists to stop a peer weaponising the
- * relay against the other side, not to throttle a healthy negotiation.
+ * `rtc:ice-candidate` trickling. ICE candidates can be chatty (a full gather can
+ * trickle dozens of candidates back-to-back), so this is the most permissive
+ * bucket; it exists to stop a peer weaponising the relay against the other side,
+ * not to throttle a healthy negotiation.
  */
 export const RTC_SIGNAL_LIMIT: RateLimitRule = {
   action: 'rtc:signal',
   max: 100,
+  windowSec: 10,
+};
+
+/**
+ * `rtc:offer` / `rtc:answer` (SDP) relays — kept on a SEPARATE, dedicated budget
+ * from the chatty ICE bucket above so an ICE-candidate flood can never starve a
+ * legitimate offer/answer (re-negotiation + ICE-restart offers are rare but
+ * call-critical). A handful of SDP exchanges per window is plenty for a healthy
+ * negotiation (initial offer/answer + the occasional ICE-restart), while still
+ * capping an SDP-spam abuse vector.
+ */
+export const RTC_SDP_LIMIT: RateLimitRule = {
+  action: 'rtc:sdp',
+  max: 20,
   windowSec: 10,
 };

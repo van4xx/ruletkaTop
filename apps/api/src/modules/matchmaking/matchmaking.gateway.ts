@@ -45,8 +45,10 @@ import { SettingsService } from '../settings/settings.service';
 import {
   CALL_INVITE_LIMIT,
   MM_JOIN_LIMIT,
+  RTC_SDP_LIMIT,
   RTC_SIGNAL_LIMIT,
 } from '../realtime-security/realtime-security.constants';
+import type { RateLimitRule } from '../realtime-security/realtime-security.constants';
 import { WsAuthService } from '../realtime-security/ws-auth.service';
 
 /**
@@ -388,6 +390,10 @@ export class MatchmakingGateway
     const allowed = await this.matchmaking.consumeNextToken(userId);
     if (!allowed) {
       this.logger.debug(`mm:next rate-limited for ${userId}`);
+      // Tell the client so it can recover instead of stranding the user on
+      // 'searching' forever: the client keeps its current peer and re-issues
+      // `mm:next`/`mm:join` once the cooldown lapses.
+      emitWsError(client, { code: 'rate_limited', event: 'mm:next' });
       return;
     }
 
@@ -628,7 +634,7 @@ export class MatchmakingGateway
   /** Relay an SDP offer to the peer after verifying room membership. */
   @SubscribeMessage('rtc:offer')
   async handleOffer(client: MmSocket, payload: RtcOfferPayload): Promise<void> {
-    if (!(await this.allowSignal(client))) {
+    if (!(await this.allowSignal(client, RTC_SDP_LIMIT))) {
       return;
     }
     const parsed = rtcOfferPayloadSchema.safeParse(payload);
@@ -641,7 +647,7 @@ export class MatchmakingGateway
   /** Relay an SDP answer to the peer after verifying room membership. */
   @SubscribeMessage('rtc:answer')
   async handleAnswer(client: MmSocket, payload: RtcAnswerPayload): Promise<void> {
-    if (!(await this.allowSignal(client))) {
+    if (!(await this.allowSignal(client, RTC_SDP_LIMIT))) {
       return;
     }
     const parsed = rtcAnswerPayloadSchema.safeParse(payload);
@@ -654,7 +660,7 @@ export class MatchmakingGateway
   /** Relay a trickled ICE candidate to the peer after verifying membership. */
   @SubscribeMessage('rtc:ice-candidate')
   async handleIce(client: MmSocket, payload: RtcIcePayload): Promise<void> {
-    if (!(await this.allowSignal(client))) {
+    if (!(await this.allowSignal(client, RTC_SIGNAL_LIMIT))) {
       return;
     }
     const parsed = rtcIcePayloadSchema.safeParse(payload);
@@ -770,15 +776,17 @@ export class MatchmakingGateway
 
   /**
    * Per-user token-bucket gate for the `rtc:*` signaling relays. Returns `true`
-   * when the caller is authenticated and within the signaling budget; emits a
-   * `ws:error` and returns `false` when over the limit.
+   * when the caller is authenticated and within the budget for `rule`; emits a
+   * `ws:error` and returns `false` when over the limit. SDP (offer/answer) and
+   * ICE candidates pass DIFFERENT rules so the chatty ICE stream can never
+   * exhaust the budget a call-critical offer/answer needs.
    */
-  private async allowSignal(client: MmSocket): Promise<boolean> {
+  private async allowSignal(client: MmSocket, rule: RateLimitRule): Promise<boolean> {
     const userId = client.data.userId;
     if (!userId) {
       return false;
     }
-    if (!(await this.rateLimiter.consume(userId, RTC_SIGNAL_LIMIT))) {
+    if (!(await this.rateLimiter.consume(userId, rule))) {
       emitWsError(client, { code: 'rate_limited', event: 'rtc' });
       return false;
     }

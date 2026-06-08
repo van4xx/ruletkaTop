@@ -55,6 +55,9 @@ export function ReviewCard({ item, onResolve, onResolveAndBan, pending = false }
   const labelMeta = LABEL_META[item.label] ?? LABEL_META.other;
   const actionMeta = ACTION_META[item.autoAction] ?? ACTION_META.none;
   const scorePct = Math.round((Number.isFinite(item.score) ? item.score : 0) * 100);
+  // The auto-escalation policy already BANNED this account at ingest. Surface it
+  // prominently so the moderator knows dismissing this item will UNBAN the user.
+  const autoBanned = item.autoAction === 'ban';
 
   return (
     <motion.article
@@ -125,6 +128,16 @@ export function ReviewCard({ item, onResolve, onResolveAndBan, pending = false }
           <Badge variant={actionMeta.variant} size="sm">
             {t(actionMeta.labelKey)}
           </Badge>
+          {autoBanned && (
+            <Badge
+              variant="danger"
+              size="sm"
+              className="gap-1 font-semibold uppercase tracking-wide"
+            >
+              <Ban className="h-3 w-3" aria-hidden="true" />
+              {t('moderation.alreadyBanned')}
+            </Badge>
+          )}
           <span className="ml-auto text-xs text-muted-foreground">
             {formatRelativeTime(item.createdAt)}
           </span>

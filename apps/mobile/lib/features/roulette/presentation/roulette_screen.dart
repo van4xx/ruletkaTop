@@ -3,12 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api.dart';
 import '../../../core/di/di.dart';
 import '../../../core/models/models.dart';
-import '../../../core/router/routes.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/widgets/widgets.dart';
 import '../domain/roulette_state.dart';
@@ -138,6 +136,10 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
   Future<void> _showBanDialog(String reason, int? banExpiresAt) async {
     if (_banDialogOpen) return;
     _banDialogOpen = true;
+    // Messaging-only: the AUTH layer's global `mod:action` listener owns the
+    // sign-out (it's always alive on `/mm`, so a ban invalidates the session
+    // even off this screen). The router guard bounces to /login once the
+    // session flips to unauthenticated, so we don't logout/navigate here.
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -154,10 +156,6 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
       ),
     );
     _banDialogOpen = false;
-    if (!mounted) return;
-    // The session is no longer valid server-side — sign out + bounce to login.
-    await ref.read(authControllerProvider.notifier).logout();
-    if (mounted) context.go(AppRoutes.login);
   }
 
   // ── Long-wait hint ─────────────────────────────────────────────────────

@@ -78,9 +78,10 @@ const DEFAULT_REFRESH_MAX_AGE_S = 30 * 24 * 60 * 60; // 30 days
  * Authentication REST surface under `/auth`.
  *
  * ───────────────────────────── Token transport ─────────────────────────────
- * The REFRESH token is delivered ONLY as an httpOnly, SameSite=Strict cookie
+ * The REFRESH token is delivered ONLY as an httpOnly, SameSite=Lax cookie
  * (Secure in production), path-scoped to the auth routes — it is never readable
- * from JavaScript, so an XSS payload can't exfiltrate it. The response body
+ * from JavaScript, so an XSS payload can't exfiltrate it. (Lax, not Strict — see
+ * `refreshCookieOptions` for why Strict breaks the cross-subdomain refresh.) The response body
  * carries only the short-lived ACCESS token (the body's `tokens.refreshToken`
  * is intentionally blanked). `/auth/refresh` reads the token from the cookie,
  * with a legacy fallback to a request body for mid-migration clients, and

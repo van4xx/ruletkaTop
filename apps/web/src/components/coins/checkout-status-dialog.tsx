@@ -12,7 +12,7 @@
  * this dialog only narrates our side of the flow.
  */
 import { useTranslations } from 'next-intl';
-import { CheckCircle2, CreditCard, Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, CreditCard, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import type { CoinPackage } from '@ruletka/shared-types';
 import {
   Button,
@@ -48,7 +48,11 @@ export function CheckoutStatusDialog({
   // The dialog is visible for every phase except idle and the active widget
   // overlay (where CloudPayments owns the screen).
   const open =
-    phase === 'starting' || phase === 'pending' || phase === 'credited' || phase === 'error';
+    phase === 'starting' ||
+    phase === 'pending' ||
+    phase === 'credited' ||
+    phase === 'unconfirmed' ||
+    phase === 'error';
   const total = pkg ? pkg.coins + pkg.bonusCoins : 0;
 
   return (
@@ -60,24 +64,28 @@ export function CheckoutStatusDialog({
               ? t('checkout.titleError')
               : phase === 'credited'
                 ? t('checkout.titleCredited')
-                : phase === 'pending'
-                  ? t('checkout.titlePending')
-                  : t('checkout.titlePreparing')}
+                : phase === 'unconfirmed'
+                  ? t('checkout.titleUnconfirmed')
+                  : phase === 'pending'
+                    ? t('checkout.titlePending')
+                    : t('checkout.titlePreparing')}
           </DialogTitle>
           <DialogDescription>
             {phase === 'error'
               ? (error ?? t('checkout.descError'))
               : phase === 'credited'
                 ? t('checkout.descCredited', { amount: formatNumber(total) })
-                : phase === 'pending'
-                  ? t('checkout.descPending')
-                  : t('checkout.descPreparing')}
+                : phase === 'unconfirmed'
+                  ? t('checkout.descUnconfirmed')
+                  : phase === 'pending'
+                    ? t('checkout.descPending')
+                    : t('checkout.descPreparing')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4 py-4">
           <StatusGlyph phase={phase} />
-          {pkg && phase !== 'error' && (
+          {pkg && phase !== 'error' && phase !== 'unconfirmed' && (
             <div className="inline-flex items-center gap-2 rounded-full border border-[color-mix(in_oklch,var(--coin)_30%,transparent)] bg-[color-mix(in_oklch,var(--coin)_12%,transparent)] px-3.5 py-1.5">
               <CoinIcon size="sm" className="text-[var(--coin)]" />
               <span className="text-sm font-semibold tabular-nums">
@@ -93,7 +101,7 @@ export function CheckoutStatusDialog({
           )}
         </div>
 
-        {(phase === 'credited' || phase === 'error') && (
+        {(phase === 'credited' || phase === 'unconfirmed' || phase === 'error') && (
           <DialogFooter>
             {phase === 'error' ? (
               <>
@@ -121,6 +129,13 @@ function StatusGlyph({ phase }: { phase: CheckoutPhase }) {
     return (
       <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success">
         <CheckCircle2 className="h-8 w-8" aria-hidden="true" />
+      </span>
+    );
+  }
+  if (phase === 'unconfirmed') {
+    return (
+      <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-warning/15 text-warning">
+        <Clock className="h-8 w-8" aria-hidden="true" />
       </span>
     );
   }

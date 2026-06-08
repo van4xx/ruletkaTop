@@ -274,6 +274,7 @@
     "actionWarn": "Warning",
     "actionBlur": "Blur",
     "actionNone": "No action",
+    "alreadyBanned": "Already banned",
     "evidenceAlt": "Evidence frame",
     "hideEvidenceAria": "Hide evidence",
     "showEvidenceAria": "Show evidence",

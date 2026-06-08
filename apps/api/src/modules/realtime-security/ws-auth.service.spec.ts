@@ -123,11 +123,25 @@ describe('WsAuthService', () => {
       await expect(svc.isBanned(VALID_PAYLOAD.sub)).resolves.toBe(false);
     });
 
-    it('fails OPEN (not banned) on a transient DB read error', async () => {
+    it('fails CLOSED (treats as banned) when the read errors on both the first try AND the retry', async () => {
       usersFindOne.mockRejectedValue(new Error('mongo down'));
       const svc = build();
 
+      // Security gate: an unresolved ban check must DENY the socket.
+      await expect(svc.isBanned(VALID_PAYLOAD.sub)).resolves.toBe(true);
+      // One first attempt + one retry.
+      expect(usersFindOne).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries once and RECOVERS when the first read fails but the retry succeeds', async () => {
+      usersFindOne
+        .mockRejectedValueOnce(new Error('transient blip'))
+        .mockResolvedValueOnce({ _id: new Types.ObjectId(VALID_PAYLOAD.sub), isBanned: false });
+      const svc = build();
+
+      // The retry sees an active account → not banned.
       await expect(svc.isBanned(VALID_PAYLOAD.sub)).resolves.toBe(false);
+      expect(usersFindOne).toHaveBeenCalledTimes(2);
     });
   });
 

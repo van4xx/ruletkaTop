@@ -274,6 +274,7 @@
     "actionWarn": "Предупреждение",
     "actionBlur": "Размытие",
     "actionNone": "Без действия",
+    "alreadyBanned": "Уже забанен",
     "evidenceAlt": "Кадр-улика",
     "hideEvidenceAria": "Скрыть улику",
     "showEvidenceAria": "Показать улику",

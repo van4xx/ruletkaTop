@@ -62,9 +62,28 @@ export function planToRecurrent(plan: PremiumPlan): CloudPaymentsRecurrent {
 
 export type SubscribePhase = 'idle' | 'starting' | 'widget' | 'pending' | 'active' | 'error';
 
+/**
+ * Poll `GET /premium/subscription` until the recurrent webhook flips the
+ * entitlement to `active`. Resolves `true` once seen, or `false` if the credit
+ * hadn't landed by the time we stopped (the webhook may still be in flight).
+ */
+async function pollSubscriptionActive(attempts = 6, intervalMs = 2500): Promise<boolean> {
+  for (let i = 0; i < attempts; i += 1) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    try {
+      const sub = await economyApi.subscription();
+      if (sub?.status === 'active') return true;
+    } catch {
+      // Transient read error — keep polling; a later attempt may succeed.
+    }
+  }
+  return false;
+}
+
 /** Orchestrates the subscribe flow + recurrent widget. */
 export function useSubscribe() {
   const t = useTranslations('economy');
+  const qc = useQueryClient();
   const [phase, setPhase] = useState<SubscribePhase>('idle');
   const [activePlan, setActivePlan] = useState<PremiumPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +133,22 @@ export function useSubscribe() {
                 data: params.data as CloudPaymentsData,
               },
               {
-                onSuccess: () => setPhase('pending'),
+                onSuccess: () => {
+                  // Charge captured; entitlement is granted by the recurrent
+                  // webhook. Show 'pending' while we poll the subscription, then
+                  // flip to 'active' on an OBSERVED active status (and refresh
+                  // the caches so /me + the subscription reflect premium). If it
+                  // hasn't landed in time we stay on 'pending' — the user keeps
+                  // the "activating…" message rather than a false success.
+                  setPhase('pending');
+                  void pollSubscriptionActive().then((active) => {
+                    if (active) {
+                      void qc.invalidateQueries({ queryKey: economyKeys.subscription() });
+                      void qc.invalidateQueries({ queryKey: meKey });
+                      setPhase('active');
+                    }
+                  });
+                },
                 onFail: (reason) => {
                   setError(reason || t('premiumHook.paymentFailed'));
                   setPhase('error');

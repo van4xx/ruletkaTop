@@ -55,6 +55,7 @@
     "confirmLabel": "Repeat new password",
     "submit": "Change password",
     "saved": "Password changed",
+    "savedSignedOut": "Password changed. Sign in again with your new password.",
     "errors": {
       "currentRequired": "Enter your current password",
       "mismatch": "Passwords don't match",

@@ -94,10 +94,13 @@ export function AccountTab() {
   }, [profile, reset]);
 
   const onSubmit = handleSubmit((values) => {
-    // Drop empty optional strings so we don't send "" for unset fields.
+    // Send the status EXPLICITLY (an empty string is the intent to CLEAR it).
+    // Coercing "" → undefined here drops the field from the PATCH, so clearing a
+    // status silently no-ops and the old value sticks. `?? ''` keeps an empty
+    // edit as a real "" the server persists as "no status".
     const payload: UpdateProfileDto = {
       nickname: values.nickname,
-      status: values.status ? values.status : undefined,
+      status: values.status ?? '',
     };
     update.mutate(payload, {
       onSuccess: () => toast.success(t('account.profile.saved')),

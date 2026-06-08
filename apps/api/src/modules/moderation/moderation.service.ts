@@ -178,7 +178,12 @@ export class ModerationService {
     };
   }
 
-  /** Count this user's prior violations within the rolling escalation window. */
+  /**
+   * Count this user's prior violations within the rolling escalation window.
+   * A moderator-`dismissed` event was reviewed and cleared (a false positive),
+   * so it must NOT count toward escalation — excluding it prevents wrongly
+   * escalating a user on the strength of a flag a human already overturned.
+   */
   private async countRecentViolations(userId: string): Promise<number> {
     if (!Types.ObjectId.isValid(userId)) {
       return 0;
@@ -188,6 +193,7 @@ export class ModerationService {
       .countDocuments({
         userId: new Types.ObjectId(userId),
         createdAt: { $gte: since },
+        status: { $ne: 'dismissed' },
       })
       .exec();
   }
@@ -268,16 +274,43 @@ export class ModerationService {
 }
 
 /**
+ * Severity rank of each label, low → high. The merge prefers the MORE SEVERE
+ * label first (a `minor`/CSAM spot-check must win over a `nudity` report even at
+ * a lower confidence), and only falls back to the higher score when both signals
+ * carry the SAME-severity label. `safe` is the floor and can never win.
+ */
+const LABEL_SEVERITY: Record<ModerationLabel, number> = {
+  safe: 0,
+  other: 1,
+  nudity: 2,
+  sexual: 3,
+  violence: 3,
+  minor: 4,
+};
+
+/**
  * Combine the client-reported signal with the server's spot-check. We never let
  * a `safe` / weaker server result downgrade a client report (defence-in-depth:
- * the client's on-device model is the primary detector). A confident, non-`safe`
- * server label with a strictly higher score upgrades the signal.
+ * the client's on-device model is the primary detector). The server upgrades the
+ * signal when it is non-`safe` AND either:
+ *   - it carries a STRICTLY MORE SEVERE label (e.g. server `minor` over client
+ *     `nudity`), regardless of score — a worse category outranks raw confidence; or
+ *   - it carries the same-severity label with a strictly higher score.
+ * Otherwise the client signal stands.
  */
 function mergeSignals(
   client: { label: ModerationLabel; score: number },
   server: { label: ModerationLabel; score: number },
 ): { label: ModerationLabel; score: number } {
-  if (server.label !== 'safe' && server.score > client.score) {
+  if (server.label === 'safe') {
+    return client;
+  }
+  const serverSeverity = LABEL_SEVERITY[server.label] ?? 0;
+  const clientSeverity = LABEL_SEVERITY[client.label] ?? 0;
+  if (serverSeverity > clientSeverity) {
+    return server;
+  }
+  if (serverSeverity === clientSeverity && server.score > client.score) {
     return server;
   }
   return client;

@@ -78,10 +78,17 @@ export class ReviewService {
   }
 
   /**
-   * Resolve a review item: `resolved` (uphold) or `dismissed`. Moderator-only.
-   * Rejects any other target status and 404s an unknown id. NOTE: resolving does
-   * NOT reverse the auto-action (e.g. a ban) — reversal is an explicit
-   * `POST /admin/users/:id/unban` so the two actions stay auditable & separate.
+   * Resolve a review item: `resolved` (uphold) or `dismissed`.
+   *
+   * Upholding (`resolved`) leaves any auto-action in place. DISMISSING
+   * (`dismissed`) declares the flag a false positive — so if the auto-escalation
+   * had already SANCTIONED the user (`autoAction` of `ban` or `kick`; a `ban`
+   * flips `isBanned`), dismissing it must REVERSE that sanction, otherwise a
+   * cleared user stays banned. We therefore unban the flagged user on dismiss of
+   * a ban/kick row, via the same idempotent {@link AdminService.unbanUser} the
+   * manual `POST /admin/users/:id/unban` uses, so the reversal stays auditable.
+   *
+   * Moderator-only. Rejects any other target status and 404s an unknown id.
    */
   async resolve(eventId: string, status: ReportStatus): Promise<ReviewItem> {
     if (!RESOLVABLE_STATUSES.includes(status)) {
@@ -90,13 +97,22 @@ export class ReviewService {
     if (!Types.ObjectId.isValid(eventId)) {
       throw new NotFoundException('Review item not found');
     }
-    const updated = await this.eventModel
-      .findByIdAndUpdate(new Types.ObjectId(eventId), { $set: { status } }, { new: true })
-      .exec();
-    if (!updated) {
+    // Read first so we know the auto-action a dismiss may need to reverse.
+    const event = await this.eventModel.findById(new Types.ObjectId(eventId)).exec();
+    if (!event) {
       throw new NotFoundException('Review item not found');
     }
-    return this.toContract(updated);
+
+    // Dismiss = false positive. Reverse a sanction the auto-policy already
+    // applied (ban/kick), so a cleared user is actually un-banned. The unban
+    // runs FIRST (idempotent) so a dismissed ban-row always implies a real unban.
+    if (status === 'dismissed' && (event.autoAction === 'ban' || event.autoAction === 'kick')) {
+      await this.adminService.unbanUser(event.userId.toString());
+    }
+
+    event.status = status;
+    await event.save();
+    return this.toContract(event);
   }
 
   /**

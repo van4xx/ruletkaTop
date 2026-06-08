@@ -13,6 +13,9 @@ import { USER_DISCONNECT_CHANNEL } from './realtime-security.constants';
 /** Handler invoked with a user id that must be force-disconnected cluster-wide. */
 export type DisconnectHandler = (userId: string) => void;
 
+/** Backoff between the first and the (single) retry of a failed ban check. */
+const BAN_CHECK_RETRY_DELAY_MS = 150;
+
 /**
  * Shared WebSocket security helper for the realtime gateways.
  *
@@ -72,24 +75,47 @@ export class WsAuthService implements OnApplicationShutdown {
   /**
    * Whether the account is currently banned. Reads the `users` collection
    * directly. A missing user is treated as banned (their token can no longer
-   * correspond to a valid account). Read failures fail OPEN (return `false`) so
-   * a transient DB blip does not wrongly evict every connecting socket.
+   * correspond to a valid account).
+   *
+   * SECURITY: this gate decides whether a (possibly banned) account gets a live
+   * socket, so on a read error we fail CLOSED — after one brief retry to absorb a
+   * transient blip, an unresolved read returns `true` (deny). Failing OPEN here
+   * would let a banned user reconnect during any DB hiccup, which is exactly the
+   * window enforcement must not have.
    */
   async isBanned(userId: string): Promise<boolean> {
     if (!Types.ObjectId.isValid(userId)) {
       return true;
     }
-    try {
+    const objectId = new Types.ObjectId(userId);
+    const readOnce = async (): Promise<boolean> => {
       const doc = await this.connection
         .collection('users')
-        .findOne({ _id: new Types.ObjectId(userId) }, { projection: { isBanned: 1 } });
+        .findOne({ _id: objectId }, { projection: { isBanned: 1 } });
       if (!doc) {
         return true;
       }
       return (doc as { isBanned?: boolean }).isBanned === true;
-    } catch (err) {
-      this.logger.warn(`isBanned check failed for ${userId}: ${asMessage(err)}`);
-      return false;
+    };
+
+    try {
+      return await readOnce();
+    } catch (firstErr) {
+      this.logger.warn(
+        `isBanned check failed for ${userId}, retrying: ${asMessage(firstErr)}`,
+      );
+      // One brief retry to ride out a transient blip before failing closed.
+      await delay(BAN_CHECK_RETRY_DELAY_MS);
+      try {
+        return await readOnce();
+      } catch (retryErr) {
+        // Fail CLOSED: an unresolved ban check denies the socket (treat as banned).
+        this.logger.error(
+          `isBanned check failed for ${userId} after retry, failing closed (denying): ` +
+            asMessage(retryErr),
+        );
+        return true;
+      }
     }
   }
 
@@ -154,4 +180,9 @@ export class WsAuthService implements OnApplicationShutdown {
 /** Narrows an unknown thrown value to a printable message. */
 function asMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Resolve after `ms` milliseconds (used for the single ban-check retry backoff). */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

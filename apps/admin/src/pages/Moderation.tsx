@@ -1,7 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@ruletka/ui';
-import type { Block, Report, ReportReason, ReviewItem } from '@ruletka/shared-types';
+import type {
+  Appeal,
+  AppealStatus,
+  Block,
+  OpenReportCount,
+  Report,
+  ReportReason,
+  ReviewItem,
+} from '@ruletka/shared-types';
 
 import { adminApi } from '../lib/api';
 import {
@@ -155,6 +163,7 @@ function IdChip({ value }: { value: string }) {
 const TABS = [
   { key: 'reports', label: 'Репорты' },
   { key: 'review', label: 'AI-ревью' },
+  { key: 'appeals', label: 'Апелляции' },
   { key: 'bans', label: 'Баны' },
   { key: 'fingerprints', label: 'Fingerprint-баны' },
   { key: 'blocks', label: 'Блокировки' },
@@ -162,14 +171,14 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
-/** Moderation console — reports triage, AI-review queue, bans & blocks. */
+/** Moderation console — reports triage, AI-review queue, appeals, bans & blocks. */
 export function Moderation() {
   const [tab, setTab] = useState<TabKey>('reports');
   return (
     <div>
       <PageHeader
         title="Модерация"
-        subtitle="Жалобы, AI-флаги и санкции — единая консоль модерации."
+        subtitle="Жалобы, AI-флаги, апелляции и санкции — единая консоль модерации."
       />
       <Tabs
         items={TABS as unknown as { key: string; label: ReactNode }[]}
@@ -178,6 +187,7 @@ export function Moderation() {
       />
       {tab === 'reports' && <ReportsTab />}
       {tab === 'review' && <ReviewTab />}
+      {tab === 'appeals' && <AppealsTab />}
       {tab === 'bans' && <BansTab />}
       {tab === 'fingerprints' && <FingerprintsTab />}
       {tab === 'blocks' && <BlocksTab />}
@@ -225,9 +235,15 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant={s.variant}>{s.label}</Badge>;
 }
 
+/** Reasons that flag a report as a child-safety / high-severity case. */
+const CHILD_SAFETY_REASONS: ReportReason[] = ['minor', 'violence'];
+
 function ReportsTab() {
   const qc = useQueryClient();
   const [status, setStatus] = useState<(typeof REPORT_STATUS_FILTERS)[number]['key']>('open');
+  // Child-safety fast-lane: when on, only show high-severity (minor/violence)
+  // reports so a moderator can triage CSAM-risk cases ahead of everything else.
+  const [childSafetyOnly, setChildSafetyOnly] = useState(false);
   const [items, setItems] = useState<Report[]>([]);
 
   const q = useQuery({
@@ -253,8 +269,25 @@ function ReportsTab() {
   const resolveReport = useMutation({
     mutationFn: ({ id, decision }: { id: string; decision: 'resolved' | 'dismissed' }) =>
       modReqJson<Report>(`/reports/${id}/resolve`, { status: decision }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['mod-reports'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mod-reports'] });
+      qc.invalidateQueries({ queryKey: ['mod-report-counts'] });
+    },
   });
+
+  // Strongest action: uphold the report AND ban the reported user in one call.
+  const resolveBan = useMutation({
+    mutationFn: (id: string) => adminApi.reports.resolveBan(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['mod-reports'] });
+      qc.invalidateQueries({ queryKey: ['mod-report-counts'] });
+      qc.invalidateQueries({ queryKey: ['mod-banned-users'] });
+    },
+  });
+
+  const visibleItems = childSafetyOnly
+    ? items.filter((r) => CHILD_SAFETY_REASONS.includes(r.reason))
+    : items;
 
   const columns: Column<Report>[] = [
     {
@@ -300,8 +333,25 @@ function ReportsTab() {
             <ConfirmButton
               variant="danger"
               size="sm"
+              confirmTitle="Подтвердить и забанить"
+              confirmBody={
+                <>
+                  Жалоба будет подтверждена, а пользователь <code>{shortId(r.againstUserId)}</code>{' '}
+                  забанен (сессии отозваны, сокеты отключены). Отменить можно разбаном во вкладке
+                  «Баны».
+                </>
+              }
+              confirmLabel="Подтвердить и забанить"
+              loading={resolveBan.isPending}
+              onConfirm={() => resolveBan.mutate(r.id)}
+            >
+              Подтвердить и забанить
+            </ConfirmButton>
+            <ConfirmButton
+              variant="secondary"
+              size="sm"
               confirmTitle="Подтвердить жалобу"
-              confirmBody="Жалоба будет помечена как подтверждённая. Санкции к пользователю применяются отдельно во вкладке «Баны»."
+              confirmBody="Жалоба будет помечена как подтверждённая (без бана). Санкции применяются отдельно во вкладке «Баны»."
               confirmLabel="Подтвердить"
               loading={resolveReport.isPending}
               onConfirm={() => resolveReport.mutate({ id: r.id, decision: 'resolved' })}
@@ -324,20 +374,41 @@ function ReportsTab() {
 
   return (
     <div>
-      <Tabs
-        items={REPORT_STATUS_FILTERS as unknown as { key: string; label: ReactNode }[]}
-        value={status}
-        onChange={(k) => setStatus(k as typeof status)}
-      />
+      <MostReportedPanel />
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <Tabs
+          items={REPORT_STATUS_FILTERS as unknown as { key: string; label: ReactNode }[]}
+          value={status}
+          onChange={(k) => setStatus(k as typeof status)}
+        />
+        <Button
+          variant={childSafetyOnly ? 'danger' : 'ghost'}
+          size="sm"
+          onClick={() => setChildSafetyOnly((v) => !v)}
+          title="Показать только жалобы о детской безопасности и насилии"
+        >
+          {childSafetyOnly ? '✓ ' : ''}Только детская безопасность
+        </Button>
+      </div>
       <DataTable
         columns={columns}
-        rows={items}
+        rows={visibleItems}
         rowKey={(r) => r.id}
         loading={q.isLoading}
         error={q.isError ? errText(q.error, 'Не удалось загрузить жалобы.') : undefined}
-        empty={<EmptyState title="Жалоб нет" description="В этой категории пока пусто." />}
+        empty={
+          <EmptyState
+            title="Жалоб нет"
+            description={
+              childSafetyOnly
+                ? 'Нет жалоб о детской безопасности в этой категории.'
+                : 'В этой категории пока пусто.'
+            }
+          />
+        }
         footer={
-          q.data && items.length > 0 ? (
+          // The fast-lane filters client-side, so paginate only on the full list.
+          !childSafetyOnly && q.data && items.length > 0 ? (
             <Pagination
               hasMore={Boolean(q.data.nextCursor)}
               loading={loadMore.isPending}
@@ -348,6 +419,45 @@ function ReportsTab() {
         }
       />
     </div>
+  );
+}
+
+/* ──────────────────────── Most-reported users panel ───────────────────────── */
+/**
+ * Compact "hot list" of the users with the most still-open complaints
+ * (`GET /reports/open-counts`). Surfaces repeat-offenders the per-report queue
+ * would otherwise bury, so a moderator can prioritise them.
+ */
+function MostReportedPanel() {
+  const q = useQuery({
+    queryKey: ['mod-report-counts'],
+    queryFn: () => adminApi.reports.openCounts(10),
+  });
+
+  const rows: OpenReportCount[] = q.data ?? [];
+  if (q.isLoading || q.isError || rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card className="mb-4">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-sm font-medium">Чаще всего жалуются</span>
+        <Badge variant="muted">{rows.length}</Badge>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {rows.map((row) => (
+          <div
+            key={row.againstUserId}
+            className="flex items-center gap-2 rounded-lg bg-glass px-2.5 py-1.5"
+            title={`${row.openReports} открытых жалоб`}
+          >
+            <IdChip value={row.againstUserId} />
+            <Badge variant={row.openReports >= 3 ? 'danger' : 'warning'}>{row.openReports}</Badge>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -524,6 +634,184 @@ function ReviewTab() {
           <p className="text-sm text-muted-foreground">Кадр недоступен.</p>
         )}
       </Modal>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════ Апелляции ════════════════════════════════ */
+const APPEAL_STATUS_FILTERS = [
+  { key: 'pending', label: 'На рассмотрении' },
+  { key: 'accepted', label: 'Приняты' },
+  { key: 'rejected', label: 'Отклонены' },
+] as const;
+
+const APPEAL_STATUS_BADGE: Record<AppealStatus, { label: string; variant: BadgeVariant }> = {
+  pending: { label: 'На рассмотрении', variant: 'info' },
+  accepted: { label: 'Принята (разбан)', variant: 'success' },
+  rejected: { label: 'Отклонена', variant: 'muted' },
+};
+
+/**
+ * Ban-appeals triage: banned users submit appeals via the public credential-
+ * verified endpoint, and this is the ONLY moderator surface for them. `accept`
+ * lifts the ban (server-side unban) and `reject` leaves it in place; both stamp
+ * the deciding moderator. Lists via `GET /moderation/appeals?status=…`.
+ */
+function AppealsTab() {
+  const qc = useQueryClient();
+  const [status, setStatus] =
+    useState<(typeof APPEAL_STATUS_FILTERS)[number]['key']>('pending');
+  const [items, setItems] = useState<Appeal[]>([]);
+
+  const q = useQuery({
+    queryKey: ['mod-appeals', status],
+    queryFn: async () => {
+      const page = await adminApi.appeals.list(status);
+      setItems(page.items);
+      return page;
+    },
+  });
+
+  const loadMore = useMutation({
+    mutationFn: () => adminApi.appeals.list(status, q.data?.nextCursor ?? undefined),
+    onSuccess: (page) => {
+      setItems((prev) => [...prev, ...page.items]);
+      qc.setQueryData(['mod-appeals', status], page);
+    },
+  });
+
+  const decide = useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: 'accepted' | 'rejected' }) =>
+      adminApi.appeals.resolve(id, decision),
+    onSuccess: (_res, vars) => {
+      // Decided appeals leave the pending list; an accept also unbans.
+      setItems((prev) => prev.filter((a) => a.id !== vars.id));
+      qc.invalidateQueries({ queryKey: ['mod-appeals'] });
+      qc.invalidateQueries({ queryKey: ['mod-banned-users'] });
+    },
+  });
+
+  const pending = status === 'pending';
+
+  const columns: Column<Appeal>[] = [
+    {
+      key: 'user',
+      header: 'Пользователь',
+      render: (a) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{a.nickname || '—'}</span>
+          <span className="text-xs text-muted-foreground">{a.email}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'banReason',
+      header: 'Причина бана',
+      render: (a) =>
+        a.banReason ? (
+          <span className="line-clamp-2 max-w-[14rem] text-muted-foreground" title={a.banReason}>
+            {a.banReason}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      key: 'message',
+      header: 'Апелляция',
+      render: (a) => (
+        <span className="line-clamp-3 max-w-sm text-muted-foreground" title={a.message}>
+          {a.message}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Статус',
+      render: (a) => {
+        const s = APPEAL_STATUS_BADGE[a.status];
+        return <Badge variant={s.variant}>{s.label}</Badge>;
+      },
+    },
+    {
+      key: 'when',
+      header: 'Подана',
+      render: (a) => <RelativeTime iso={a.createdAt} />,
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (a) =>
+        a.status === 'pending' ? (
+          <div className="flex justify-end gap-2">
+            <ConfirmButton
+              variant="secondary"
+              size="sm"
+              confirmTitle="Принять апелляцию"
+              confirmBody={
+                <>
+                  Бан будет снят с <code>{a.nickname || a.email}</code>. Пользователь сможет войти
+                  заново. Сессии не восстанавливаются.
+                </>
+              }
+              confirmLabel="Принять и разбанить"
+              loading={decide.isPending}
+              onConfirm={() => decide.mutate({ id: a.id, decision: 'accepted' })}
+            >
+              Принять
+            </ConfirmButton>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => decide.mutate({ id: a.id, decision: 'rejected' })}
+            >
+              Отклонить
+            </Button>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        ),
+    },
+  ];
+
+  return (
+    <div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Апелляции забаненных пользователей. «Принять» снимает бан, «Отклонить» оставляет его.
+      </p>
+      <Tabs
+        items={APPEAL_STATUS_FILTERS as unknown as { key: string; label: ReactNode }[]}
+        value={status}
+        onChange={(k) => setStatus(k as typeof status)}
+      />
+      <DataTable
+        columns={columns}
+        rows={items}
+        rowKey={(a) => a.id}
+        loading={q.isLoading}
+        error={q.isError ? errText(q.error, 'Не удалось загрузить апелляции.') : undefined}
+        empty={
+          <EmptyState
+            title="Апелляций нет"
+            description={
+              pending
+                ? 'Нет апелляций, ожидающих рассмотрения.'
+                : 'В этой категории пока пусто.'
+            }
+          />
+        }
+        footer={
+          q.data && items.length > 0 ? (
+            <Pagination
+              hasMore={Boolean(q.data.nextCursor)}
+              loading={loadMore.isPending}
+              loadedCount={items.length}
+              onLoadMore={() => loadMore.mutate()}
+            />
+          ) : undefined
+        }
+      />
     </div>
   );
 }

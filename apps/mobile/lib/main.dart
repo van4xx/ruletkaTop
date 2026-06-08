@@ -6,6 +6,7 @@ import 'core/di/di.dart';
 import 'core/router/router.dart';
 import 'core/theme/theme.dart';
 import 'core/widgets/intro_preloader.dart';
+import 'features/calls/presentation/direct_call_host.dart';
 
 /// App entry point.
 ///
@@ -78,6 +79,10 @@ class _RuletkaAppState extends ConsumerState<RuletkaApp> {
           child: Stack(
             children: [
               child ?? const SizedBox.shrink(),
+              // Global incoming/outgoing friend-call surface (the native twin of
+              // the web ModalHost call-invite listener). Mounted app-wide so a
+              // `call:invite` rings from anywhere; inert when signed out.
+              const DirectCallHost(),
               // The intro plays ONCE per install over the void; on finish we
               // drop the overlay to reveal the app beneath.
               if (_showIntro == true)

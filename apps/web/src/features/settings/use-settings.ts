@@ -8,8 +8,8 @@
  * Endpoints used (all live in the backend contract):
  *   GET   /settings                         → Settings
  *   PATCH /settings                         → Settings           (updateSettingsSchema)
- *   GET   /moderation/blocks                → Block[]
- *   DELETE /moderation/blocks/:blockedUserId
+ *   GET   /blocks                           → BlockedUser[]
+ *   DELETE /blocks/:blockedUserId
  *   PATCH /profile/me                       → PublicProfile      (updateProfileSchema)
  *
  * The change-password and delete-account flows target conventional endpoints

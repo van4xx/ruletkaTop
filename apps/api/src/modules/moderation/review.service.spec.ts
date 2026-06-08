@@ -49,11 +49,14 @@ function eventDoc(
 describe('ReviewService — admin review queue', () => {
   let service: ReviewService;
   let eventModel: { find: jest.Mock; findById: jest.Mock; findByIdAndUpdate: jest.Mock };
-  let adminService: { banUser: jest.Mock };
+  let adminService: { banUser: jest.Mock; unbanUser: jest.Mock };
 
   beforeEach(async () => {
     eventModel = { find: jest.fn(), findById: jest.fn(), findByIdAndUpdate: jest.fn() };
-    adminService = { banUser: jest.fn() };
+    adminService = {
+      banUser: jest.fn(),
+      unbanUser: jest.fn().mockResolvedValue({ userId: USER, isBanned: false }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -96,29 +99,59 @@ describe('ReviewService — admin review queue', () => {
   });
 
   it('resolve: upholds (resolved) an item and returns the updated ReviewItem', async () => {
-    eventModel.findByIdAndUpdate.mockReturnValue(
-      queryReturning(eventDoc('507f1f77bcf86cd799439012', { status: 'resolved' })),
-    );
+    const doc = eventDoc('507f1f77bcf86cd799439012', { autoAction: 'warn' });
+    eventModel.findById.mockReturnValue(queryReturning(doc));
 
     const item = await service.resolve('507f1f77bcf86cd799439012', 'resolved');
 
     expect(item.status).toBe('resolved');
-    const [, update] = eventModel.findByIdAndUpdate.mock.calls[0] as [
-      unknown,
-      Record<string, unknown>,
-    ];
-    expect(update).toEqual({ $set: { status: 'resolved' } });
+    expect(doc.status).toBe('resolved');
+    expect(doc.save).toHaveBeenCalledTimes(1);
+    // Upholding never reverses a sanction.
+    expect(adminService.unbanUser).not.toHaveBeenCalled();
+  });
+
+  it('resolve: dismissing a BAN-autoaction item UNBANS the user (false-positive reversal)', async () => {
+    const doc = eventDoc('507f1f77bcf86cd799439012', { autoAction: 'ban' });
+    eventModel.findById.mockReturnValue(queryReturning(doc));
+
+    const item = await service.resolve('507f1f77bcf86cd799439012', 'dismissed');
+
+    // The auto-ban is reversed before the row is closed.
+    expect(adminService.unbanUser).toHaveBeenCalledTimes(1);
+    expect(adminService.unbanUser).toHaveBeenCalledWith(USER);
+    expect(doc.status).toBe('dismissed');
+    expect(item.status).toBe('dismissed');
+  });
+
+  it('resolve: dismissing a KICK-autoaction item also unbans (kick may co-occur with a ban)', async () => {
+    const doc = eventDoc('507f1f77bcf86cd799439012', { autoAction: 'kick' });
+    eventModel.findById.mockReturnValue(queryReturning(doc));
+
+    await service.resolve('507f1f77bcf86cd799439012', 'dismissed');
+
+    expect(adminService.unbanUser).toHaveBeenCalledWith(USER);
+  });
+
+  it('resolve: dismissing a non-sanction (warn) item does NOT unban', async () => {
+    const doc = eventDoc('507f1f77bcf86cd799439012', { autoAction: 'warn' });
+    eventModel.findById.mockReturnValue(queryReturning(doc));
+
+    await service.resolve('507f1f77bcf86cd799439012', 'dismissed');
+
+    expect(adminService.unbanUser).not.toHaveBeenCalled();
+    expect(doc.status).toBe('dismissed');
   });
 
   it('resolve: rejects a non-terminal status', async () => {
     await expect(
       service.resolve('507f1f77bcf86cd799439012', 'open' as 'resolved'),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(eventModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(eventModel.findById).not.toHaveBeenCalled();
   });
 
   it('resolve: 404s an unknown id', async () => {
-    eventModel.findByIdAndUpdate.mockReturnValue(queryReturning(null));
+    eventModel.findById.mockReturnValue(queryReturning(null));
 
     await expect(service.resolve('507f1f77bcf86cd799439012', 'dismissed')).rejects.toBeInstanceOf(
       NotFoundException,
@@ -127,7 +160,7 @@ describe('ReviewService — admin review queue', () => {
 
   it('resolve: 404s an invalid (non-ObjectId) id without hitting the DB', async () => {
     await expect(service.resolve('nope', 'resolved')).rejects.toBeInstanceOf(NotFoundException);
-    expect(eventModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(eventModel.findById).not.toHaveBeenCalled();
   });
 
   describe('resolveWithBan', () => {

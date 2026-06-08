@@ -439,8 +439,19 @@ export class AuthService {
     // Ban-evasion gate: a device/IP tied to an active ban may not log in at all
     // (catches a banned user signing into a different, not-yet-banned account
     // from the same machine). Fails OPEN on storage errors.
+    //
+    // This is a DEVICE/network gate, NOT an account ban — give it a distinct
+    // 403 shape (`deviceBlocked: true`, and crucially NO `banned: true`) so the
+    // client does not misread it as "this account is banned" and route the user
+    // into the appeal flow (which would be a dead end — there is no account ban
+    // to appeal here). The account-ban 403 below carries `banned: true`.
     if (await this.fingerprintService.isBanned(ctx)) {
-      throw new ForbiddenException('Login is not allowed from this device or network');
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Login is not allowed from this device or network',
+        deviceBlocked: true,
+      });
     }
 
     const user = await this.usersService.findByEmailWithSecret(email);
@@ -466,13 +477,17 @@ export class AuthService {
     if (user.isBanned) {
       // 403 (not 401) carrying the ban REASON so the client can explain WHY the
       // account is blocked and offer the appeal flow. The body is a structured
-      // object (`{ statusCode, message, error, banReason }`); `banReason` is
+      // object (`{ statusCode, message, error, banned, banReason }`); `banned:
+      // true` is the DISCRIMINATOR the client matches on to distinguish a real
+      // ACCOUNT ban (appealable) from the device/network gate above (which is a
+      // 403 too, but carries `deviceBlocked` and no `banned`). `banReason` is
       // `null` for legacy bans recorded before reasons were captured. Surfaced
       // only here (the user-facing login), not on the background refresh paths.
       throw new ForbiddenException({
         statusCode: 403,
         error: 'Forbidden',
         message: 'Account is banned',
+        banned: true,
         banReason: user.banReason ?? null,
       });
     }
@@ -812,24 +827,50 @@ export class AuthService {
   /**
    * Revoke every OTHER live login of the caller, keeping only the family of the
    * presented `currentRefreshToken` (the requesting device's cookie) alive —
-   * "sign out everywhere else". If the current family can't be resolved (no/stale
-   * cookie) we still revoke nothing belonging to it (the filter excludes whatever
-   * family resolved, or none), so we never accidentally log the caller out of the
-   * device performing the action when the cookie is present. Idempotent.
+   * "sign out everywhere else".
+   *
+   * The cookie is meant to PROTECT the current device. So when a cookie IS
+   * presented but its family cannot be resolved (stale/rotated/foreign token),
+   * we must NOT silently fall back to revoking EVERYTHING — that would nuke the
+   * very device performing the action, the exact opposite of what the user
+   * asked for, surfacing as a surprise "session expired" on the current device.
+   * In that case we revoke nothing and let the caller (controller) treat it as a
+   * no-op / soft failure rather than claim the current device survived.
+   *
+   * Only when NO cookie was presented at all (`currentRefreshToken` is
+   * empty/absent) do we behave like a true "log out everywhere" and revoke all
+   * live sessions. Returns whether the current family was resolved, so the
+   * caller can avoid optimistically asserting the current device survived. Idempotent.
    */
-  async revokeOtherSessions(userId: string, currentRefreshToken?: string): Promise<void> {
+  async revokeOtherSessions(
+    userId: string,
+    currentRefreshToken?: string,
+  ): Promise<{ currentPreserved: boolean }> {
     if (!Types.ObjectId.isValid(userId)) {
-      return;
+      return { currentPreserved: false };
     }
-    const currentFamily = await this.resolveCurrentFamily(userId, currentRefreshToken);
+
     const filter: Record<string, unknown> = {
       userId: new Types.ObjectId(userId),
       revokedAt: null,
     };
-    if (currentFamily !== null) {
+
+    if (currentRefreshToken) {
+      const currentFamily = await this.resolveCurrentFamily(userId, currentRefreshToken);
+      if (currentFamily === null) {
+        // A cookie was presented but maps to no live family. Do NOT fall back to
+        // revoke-ALL (that would log the caller out of the device they're on).
+        // Revoke nothing and report that the current device was not preserved.
+        return { currentPreserved: false };
+      }
       filter.family = { $ne: currentFamily };
+      await this.sessionModel.updateMany(filter, { $set: { revokedAt: new Date() } }).exec();
+      return { currentPreserved: true };
     }
+
+    // No cookie at all → true "log out everywhere": revoke every live session.
     await this.sessionModel.updateMany(filter, { $set: { revokedAt: new Date() } }).exec();
+    return { currentPreserved: false };
   }
 
   /**

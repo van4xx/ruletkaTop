@@ -61,3 +61,27 @@ export const CoinTransactionSchema = SchemaFactory.createForClass(CoinTransactio
 // ── Indexes (PROJECT_SPEC §6) ──────────────────────────────────────────────
 // Per-user ledger reads, newest first (history endpoint + reconciliation).
 CoinTransactionSchema.index({ userId: 1, createdAt: -1 });
+
+/**
+ * IDEMPOTENCY GUARD (P0 money bug): at most ONE ledger row per
+ * (`type`, `refId`) when a `refId` is present. The originating-entity refId is
+ * the natural idempotency key for every fulfilment side effect:
+ *  - `purchase` keyed by the payment `invoiceId` (a redelivered CloudPayments
+ *    `Pay`, or a fulfilment that crashed/rolled-back and was retried, would
+ *    otherwise credit the coins twice),
+ *  - `refund`  keyed by `refund:<invoiceId>` (a redelivered `Refund` webhook
+ *    would otherwise debit the coins back twice),
+ *  - `gift_in`/`gift_out`/`top`/`cover` keyed by the gift-/placement-/cover-tx
+ *    id (a retried economy write would otherwise double-apply).
+ *
+ * The index is PARTIAL — restricted to rows where `refId` is a string — so the
+ * many legitimately `refId: null` ledger rows (e.g. ad-hoc admin adjustments)
+ * are NOT forced unique and can coexist. `WalletService.credit`/`debit` insert
+ * the ledger row FIRST and treat a duplicate-key error here as "already
+ * applied", skipping the balance `$inc` so the credit/debit happens AT MOST
+ * ONCE per refId even under webhook redelivery / fulfilment retry.
+ */
+CoinTransactionSchema.index(
+  { type: 1, refId: 1 },
+  { unique: true, partialFilterExpression: { refId: { $type: 'string' } } },
+);

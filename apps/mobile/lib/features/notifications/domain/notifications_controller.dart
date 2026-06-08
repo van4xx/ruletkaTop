@@ -63,9 +63,18 @@ class NotificationsController extends AsyncNotifier<NotificationsState> {
 
   @override
   Future<NotificationsState> build() async {
+    // Subscribe the realtime listener exactly ONCE per provider lifetime and
+    // dispose it on teardown. `build` runs once (pull-to-refresh calls
+    // [_fetchFirstPage] only), so this never leaks duplicate listeners.
     final disposer = _socket.onNotification(_onRealtime);
     ref.onDispose(disposer);
 
+    return _fetchFirstPage();
+  }
+
+  /// Load the first page + unread count. Pure data fetch — no listener wiring —
+  /// so [refresh] can re-run it without leaking the `notif:new` subscription.
+  Future<NotificationsState> _fetchFirstPage() async {
     final page = await _repo.list(limit: _pageSize);
     // The unread count is best-effort: fall back to the derivable count if the
     // dedicated endpoint is unavailable so the badge still works.
@@ -122,10 +131,11 @@ class NotificationsController extends AsyncNotifier<NotificationsState> {
     }
   }
 
-  /// Pull-to-refresh: reload the first page (and unread count) from scratch.
+  /// Pull-to-refresh: reload the first page (and unread count) WITHOUT re-running
+  /// `build` (which would re-subscribe the `notif:new` listener and leak it).
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(build);
+    state = await AsyncValue.guard(_fetchFirstPage);
   }
 
   /// Optimistically mark one notification read; reconcile with the server.

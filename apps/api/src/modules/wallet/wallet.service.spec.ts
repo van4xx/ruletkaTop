@@ -142,6 +142,73 @@ describe('WalletService — debit atomicity & insufficient funds', () => {
     await expect(service.getBalance(userId)).resolves.toBe(0);
   });
 
+  it('credits AT MOST ONCE per refId: a duplicate ledger row (redelivery) is compensated, not double-credited', async () => {
+    // P0 idempotency: a redelivered CloudPayments Pay (or a rolled-back-then-
+    // retried fulfilment) re-invokes credit() with the SAME (type, refId). The
+    // first credit appends the ledger row; the second hits the unique
+    // `(type, refId)` partial index and throws E11000 — we must then UNDO the
+    // speculative balance $inc so the coins are credited exactly once.
+    //
+    // Call 1: $inc → 600, ledger insert succeeds.
+    // Call 2: $inc → 1200 (speculative), ledger insert dup-keys, compensating
+    //         $inc(-600) → 600. Net: balance stays 600.
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 600 })) // call 1 credit
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 1200 })) // call 2 speculative credit
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 600 })); // call 2 compensation
+
+    coinTxModel.create
+      .mockResolvedValueOnce([{ _id: 'tx1' }])
+      .mockRejectedValueOnce(
+        Object.assign(new Error('E11000 duplicate key error'), { code: 11000 }),
+      );
+
+    const first = await service.credit(userId, 600, 'purchase', 'inv-dup');
+    const second = await service.credit(userId, 600, 'purchase', 'inv-dup');
+
+    expect(first).toBe(600);
+    // The duplicate delivery returns the UNCHANGED balance (no second credit).
+    expect(second).toBe(600);
+
+    // Exactly one ledger row was actually written; the dup attempt was caught.
+    expect(coinTxModel.create).toHaveBeenCalledTimes(2);
+    // The compensating $inc reverses the speculative credit by exactly -600.
+    const compensation = walletModel.findOneAndUpdate.mock.calls[2] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(compensation[1]).toEqual({ $inc: { balanceCoins: -600 } });
+  });
+
+  it('debits AT MOST ONCE per refId: a duplicate refund ledger row is compensated, not double-debited', async () => {
+    // A redelivered Refund webhook reverses the same invoice twice. The guarded
+    // debit subtracts speculatively, the dup ledger insert is caught, and the
+    // compensating $inc adds the coins back so the debit happens once.
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 400 })) // call 1 debit (1000-600)
+      .mockReturnValueOnce(queryReturning({ balanceCoins: -200 })) // call 2 speculative debit
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 400 })); // call 2 compensation
+
+    coinTxModel.create
+      .mockResolvedValueOnce([{ _id: 'tx1' }])
+      .mockRejectedValueOnce(
+        Object.assign(new Error('E11000 duplicate key error'), { code: 11000 }),
+      );
+
+    const first = await service.debit(userId, 600, 'refund', 'refund:inv-dup');
+    const second = await service.debit(userId, 600, 'refund', 'refund:inv-dup');
+
+    expect(first).toBe(400);
+    expect(second).toBe(400);
+    expect(coinTxModel.create).toHaveBeenCalledTimes(2);
+    // Compensation re-adds the coins (+600) for the duplicate debit.
+    const compensation = walletModel.findOneAndUpdate.mock.calls[2] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(compensation[1]).toEqual({ $inc: { balanceCoins: 600 } });
+  });
+
   it('does NOT oversell under concurrency: of two debits, only the guarded match succeeds', async () => {
     // Wallet has 80 coins; two debits of 50 race. The balance-guarded
     // findOneAndUpdate is itself atomic, so exactly ONE can match a balance
@@ -285,6 +352,20 @@ describe('CoinTransaction ledger — type enum is the zod single source of truth
 
   it('mirrors coinTxTypeSchema.options exactly (no drift, same order)', () => {
     expect(ledgerTypeEnum()).toEqual([...coinTxTypeSchema.options]);
+  });
+
+  it('declares a PARTIAL unique index on (type, refId) for refId-keyed idempotency', () => {
+    // P0: at most one ledger row per (type, refId) when refId is a string, so a
+    // redelivered fulfilment cannot double-credit/-debit. The index MUST be
+    // partial (refId: $type string) so the many legit refId:null rows coexist.
+    const idx = CoinTransactionSchema.indexes().find(([fields]) => {
+      const f = fields as Record<string, unknown>;
+      return f.type === 1 && f.refId === 1;
+    });
+    expect(idx).toBeDefined();
+    const [, options] = idx as [Record<string, number>, Record<string, unknown>];
+    expect(options.unique).toBe(true);
+    expect(options.partialFilterExpression).toEqual({ refId: { $type: 'string' } });
   });
 
   it('accepts a `cover` row and rejects an unknown type under enum validation', () => {

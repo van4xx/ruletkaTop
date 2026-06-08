@@ -377,6 +377,23 @@ export class PaymentsService {
       }
 
       const plan = await this.planFromRecurrent(n, userId);
+
+      // IDEMPOTENCY GATE (P0): claim the renewal by inserting its completed
+      // Payment row under a DETERMINISTIC, unique `invoiceId` derived from
+      // (subscriptionId, transactionId) BEFORE activating. A concurrent or
+      // redelivered `Active` webhook for the SAME charge loses the unique-index
+      // race (dup-key) and short-circuits here — so premium is activated, and
+      // revenue counted, EXACTLY ONCE per renewal charge.
+      const claimed = await this.claimRenewalPayment(n, userId, plan);
+      if (!claimed) {
+        this.logger.warn(
+          `Recurrent Active for user ${userId} is a duplicate (subscription ` +
+            `${n.SubscriptionId ?? '(none)'}, tx ${n.TransactionId ?? '(none)'}) — ` +
+            'already renewed; skipping re-activation.',
+        );
+        return ACK_OK;
+      }
+
       const periodEnd = await this.computePeriodEnd(plan);
       await this.premium.activate(
         userId,
@@ -385,9 +402,6 @@ export class PaymentsService {
         n.Token ?? undefined,
         n.SubscriptionId ?? undefined,
       );
-      // Record the renewal as a completed Payment (revenue ledger). Best-effort:
-      // a ledger hiccup must not fail the webhook (entitlement already renewed).
-      await this.recordRenewalPayment(n, userId, plan);
       this.logger.log(`Renewed premium for user ${userId} (plan ${plan})`);
     } else if (RECURRENT_TERMINAL.has(status)) {
       await this.premium.cancel(userId);
@@ -619,41 +633,38 @@ export class PaymentsService {
   }
 
   /**
-   * Record a successful recurring renewal as a `completed` Payment row so the
-   * revenue ledger + admin payment list reflect every renewal (not just the
-   * first charge). Idempotent on the provider `TransactionId` (a redelivered
-   * Recurrent webhook for the same charge does not create a duplicate row).
-   * Best-effort: failures are logged, never thrown (entitlement already renewed).
+   * Atomically CLAIM a recurring renewal by inserting its `completed` Payment
+   * row under a DETERMINISTIC, unique `invoiceId` of the form
+   * `renewal:<subscriptionId>:<transactionId>`. This row is both the revenue
+   * ledger entry AND the idempotency token: because `invoiceId` is unique
+   * (schema index), a concurrent or redelivered `Active` webhook for the SAME
+   * charge fails with a duplicate-key error, which we treat as "already renewed"
+   * and report by returning `false` — letting {@link handleRecurrent} skip the
+   * re-activation. The winner returns `true`.
+   *
+   * When the provider sends NO `TransactionId` (so we cannot derive a stable
+   * key), we fall back to a random invoiceId and always claim (`true`) — a
+   * keyless renewal can't be reliably de-duplicated, so we err on the side of
+   * honouring the charge rather than dropping a real renewal.
+   *
+   * Any non-duplicate insert error is logged and treated as a claim (`true`) so
+   * a transient ledger hiccup does NOT silently skip a real renewal's
+   * activation (the entitlement matters more than the audit row).
    */
-  private async recordRenewalPayment(
+  private async claimRenewalPayment(
     n: CloudPaymentsNotification,
     userId: string,
     plan: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    const found = await this.premium.findPlanByCode(plan);
+    const amount =
+      n.Amount !== undefined && Number.isFinite(n.Amount) ? n.Amount : (found?.priceRub ?? 0);
+
     try {
-      // De-dupe by provider transaction id when present.
-      if (n.TransactionId !== undefined) {
-        const existing = await this.paymentModel
-          .findOne({ transactionId: n.TransactionId })
-          .select('_id')
-          .exec();
-        if (existing) {
-          return;
-        }
-      }
-
-      const found = await this.premium.findPlanByCode(plan);
-      const amount =
-        n.Amount !== undefined && Number.isFinite(n.Amount)
-          ? n.Amount
-          : (found?.priceRub ?? 0);
-
       await this.paymentModel.create({
         userId: new Types.ObjectId(userId),
         provider: 'cloudpayments',
-        // Renewals have no checkout-minted invoice; synthesise a unique one so
-        // the `invoiceId` unique index is satisfied and the row is traceable.
-        invoiceId: `renewal:${n.SubscriptionId ?? 'sub'}:${n.TransactionId ?? randomUUID()}`,
+        invoiceId: this.renewalInvoiceId(n),
         transactionId: n.TransactionId ?? null,
         subscriptionId: n.SubscriptionId ?? null,
         subscriptionToken: n.Token ?? null,
@@ -667,11 +678,43 @@ export class PaymentsService {
       this.logger.log(
         `Recorded renewal payment for user ${userId} (plan ${plan}, amount ${amount})`,
       );
+      return true;
     } catch (err) {
+      if (this.isDuplicateKeyError(err)) {
+        // A renewal row for this (subscriptionId, transactionId) already exists:
+        // a redelivered / concurrent webhook lost the unique-index race.
+        return false;
+      }
       this.logger.error(
         `Failed to record renewal payment for user ${userId}: ${(err as Error).message}`,
       );
+      // Non-duplicate failure: do not drop a real renewal — let activation proceed.
+      return true;
     }
+  }
+
+  /**
+   * Deterministic, unique invoice id for a recurring renewal charge, derived
+   * from `(SubscriptionId, TransactionId)` so the same charge always maps to the
+   * same key (and thus de-duplicates via the `invoiceId` unique index). When the
+   * provider omits `TransactionId` we cannot build a stable key, so we fall back
+   * to a random UUID (no reliable de-dup possible for a keyless renewal).
+   */
+  private renewalInvoiceId(n: CloudPaymentsNotification): string {
+    if (n.TransactionId !== undefined && n.TransactionId !== null) {
+      return `renewal:${n.SubscriptionId ?? 'sub'}:${n.TransactionId}`;
+    }
+    return `renewal:${n.SubscriptionId ?? 'sub'}:${randomUUID()}`;
+  }
+
+  /** True for a MongoDB duplicate-key error (code 11000 / E11000). */
+  private isDuplicateKeyError(err: unknown): boolean {
+    if (typeof err !== 'object' || err === null) {
+      return false;
+    }
+    const code = (err as { code?: number | string }).code;
+    const message = (err as { message?: string }).message ?? '';
+    return code === 11000 || code === 11001 || /E11000 duplicate key/i.test(message);
   }
 
   /**

@@ -105,7 +105,22 @@ export class WalletService {
         )
         .exec();
 
-      await this.appendLedger(_id, coins, type, refId, updated.balanceCoins, session);
+      // Append the ledger row guarded by the unique `(type, refId)` index. If a
+      // row already exists for this refId, this credit was already applied (a
+      // redelivered webhook / retried fulfilment): undo the `$inc` we just did
+      // and return the balance WITHOUT the duplicate credit. AT-MOST-ONCE.
+      const applied = await this.appendLedger(
+        _id,
+        coins,
+        type,
+        refId,
+        updated.balanceCoins,
+        session,
+      );
+      if (!applied) {
+        const reverted = await this.compensateBalance(_id, -coins, session);
+        return reverted;
+      }
       return updated.balanceCoins;
     });
   }
@@ -143,14 +158,42 @@ export class WalletService {
         throw new InsufficientFundsException();
       }
 
-      await this.appendLedger(_id, -coins, type, refId, updated.balanceCoins, session);
+      // Append the ledger row guarded by the unique `(type, refId)` index. A
+      // duplicate means this debit was already applied (e.g. a redelivered
+      // `Refund` webhook reversing the same invoice): undo the `$inc` and return
+      // the unchanged balance so the debit happens AT MOST ONCE per refId.
+      const applied = await this.appendLedger(
+        _id,
+        -coins,
+        type,
+        refId,
+        updated.balanceCoins,
+        session,
+      );
+      if (!applied) {
+        const reverted = await this.compensateBalance(_id, coins, session);
+        return reverted;
+      }
       return updated.balanceCoins;
     });
   }
 
   // ── internals ─────────────────────────────────────────────────────────────
 
-  /** Append a single immutable ledger row reflecting a balance mutation. */
+  /**
+   * Append a single immutable ledger row reflecting a balance mutation.
+   *
+   * Returns `true` when the row was written, `false` when a row for this
+   * (`type`, `refId`) already exists (duplicate-key on the partial unique
+   * index) — i.e. the mutation was already applied and the caller must NOT
+   * re-credit/-debit. With `refId: null` the unique index does not apply, so a
+   * write always proceeds (returns `true`).
+   *
+   * The duplicate-key error is swallowed (not rethrown) so that inside a
+   * transaction it does not abort the surrounding `withTransaction`; the caller
+   * compensates the balance `$inc` it speculatively performed, keeping the net
+   * effect zero. Any other error propagates.
+   */
   private async appendLedger(
     userId: Types.ObjectId,
     delta: number,
@@ -158,11 +201,53 @@ export class WalletService {
     refId: string | null,
     balanceAfter: number,
     session?: ClientSession,
-  ): Promise<void> {
-    await this.coinTxModel.create(
-      [{ userId, delta, type, refId: refId ?? null, balanceAfter }],
-      session ? { session } : {},
-    );
+  ): Promise<boolean> {
+    try {
+      await this.coinTxModel.create(
+        [{ userId, delta, type, refId: refId ?? null, balanceAfter }],
+        session ? { session } : {},
+      );
+      return true;
+    } catch (err) {
+      if (this.isDuplicateKeyError(err)) {
+        this.logger.warn(
+          `Idempotent skip: ledger row for (type=${type}, refId=${String(refId)}) already ` +
+            'exists — the credit/debit was already applied; compensating the balance.',
+        );
+        return false;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Reverse a speculative balance `$inc` when the ledger insert turned out to be
+   * a duplicate (the mutation was already applied for this refId). Returns the
+   * post-compensation balance (i.e. the balance WITHOUT this duplicate's effect).
+   */
+  private async compensateBalance(
+    userId: Types.ObjectId,
+    delta: number,
+    session?: ClientSession,
+  ): Promise<number> {
+    const reverted = await this.walletModel
+      .findOneAndUpdate(
+        { userId },
+        { $inc: { balanceCoins: delta } },
+        { new: true, ...(session ? { session } : {}) },
+      )
+      .exec();
+    return reverted?.balanceCoins ?? 0;
+  }
+
+  /** True for a MongoDB duplicate-key error (code 11000 / E11000). */
+  private isDuplicateKeyError(err: unknown): boolean {
+    if (typeof err !== 'object' || err === null) {
+      return false;
+    }
+    const code = (err as { code?: number | string }).code;
+    const message = (err as { message?: string }).message ?? '';
+    return code === 11000 || code === 11001 || /E11000 duplicate key/i.test(message);
   }
 
   /**

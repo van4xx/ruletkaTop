@@ -344,6 +344,66 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     expect(premium.cancel).not.toHaveBeenCalled();
   });
 
+  it('activates premium EXACTLY ONCE across a redelivered Recurrent "Active" (dup-key claim)', async () => {
+    // planFromRecurrent lookup returns null on every call (plan via Data).
+    paymentModel.findOne.mockReturnValue(sortableQueryReturning(null));
+
+    // The renewal Payment row carries a DETERMINISTIC unique invoiceId derived
+    // from (SubscriptionId, TransactionId). The first claim inserts it; the
+    // redelivered webhook's insert hits the unique index and throws E11000.
+    const dupKeyErr = Object.assign(new Error('E11000 duplicate key error'), { code: 11000 });
+    paymentModel.create
+      .mockResolvedValueOnce({ _id: 'renewal-1' })
+      .mockRejectedValueOnce(dupKeyErr);
+
+    const notification = {
+      SubscriptionId: 'sc_dup',
+      TransactionId: 9100,
+      Amount: 399,
+      AccountId: userId,
+      Status: 'Active',
+      Token: 'tok',
+      Data: JSON.stringify({ purpose: 'premium', plan: 'monthly', userId }),
+    };
+
+    const ack1 = await service.handleRecurrent(notification);
+    const ack2 = await service.handleRecurrent(notification);
+
+    expect(ack1).toEqual({ code: 0 });
+    expect(ack2).toEqual({ code: 0 });
+
+    // Critical invariant: premium activated (and revenue counted) exactly ONCE
+    // despite two identical Recurrent deliveries.
+    expect(premium.activate).toHaveBeenCalledTimes(1);
+    expect(paymentModel.create).toHaveBeenCalledTimes(2); // both attempted to claim
+    // The claimed renewal row uses the deterministic (sub, tx) invoiceId.
+    const [firstRow] = paymentModel.create.mock.calls[0] as [Record<string, unknown>];
+    expect(firstRow).toMatchObject({
+      invoiceId: 'renewal:sc_dup:9100',
+      status: 'completed',
+      purpose: 'premium',
+    });
+  });
+
+  it('claims renewal BEFORE activating: a dup-key claim skips activation entirely', async () => {
+    paymentModel.findOne.mockReturnValue(sortableQueryReturning(null));
+    const dupKeyErr = Object.assign(new Error('E11000 duplicate key error'), { code: 11000 });
+    paymentModel.create.mockRejectedValueOnce(dupKeyErr);
+
+    const ack = await service.handleRecurrent({
+      SubscriptionId: 'sc_x',
+      TransactionId: 7,
+      Amount: 399,
+      AccountId: userId,
+      Status: 'Active',
+      Data: JSON.stringify({ purpose: 'premium', plan: 'monthly', userId }),
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    // Lost the claim race ⇒ no activation, no revenue double-count.
+    expect(premium.activate).not.toHaveBeenCalled();
+  });
+
   it('cancels premium on a Recurrent terminal status', async () => {
     const ack = await service.handleRecurrent({
       SubscriptionId: 'sc_1',

@@ -73,8 +73,16 @@ class AuthController extends Notifier<AuthState> {
   SocketService get _socket => ref.read(socketServiceProvider);
   PushController get _push => ref.read(pushControllerProvider);
 
+  /// Removes the global `mod:action` listener; set while a session is live.
+  VoidCallback? _modActionDisposer;
+
   @override
-  AuthState build() => const AuthState();
+  AuthState build() {
+    // The session controller lives for the whole app, so clean the global
+    // moderation listener up if the provider is ever torn down.
+    ref.onDispose(_teardownModActionListener);
+    return const AuthState();
+  }
 
   /// Restore a session on launch. Idempotent; safe to call once from `main`.
   Future<void> bootstrap() async {
@@ -137,8 +145,29 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState(status: AuthStatus.authenticated, user: user);
     // Bring the realtime layer online with the fresh access token.
     _socket.connect();
+    // Listen for server-forced moderation on the ALWAYS-ALIVE `/mm` socket so a
+    // BAN invalidates the session even when the roulette screen isn't mounted.
+    _wireModActionListener();
     // Register for push (no-op without Firebase config; non-throwing).
     unawaited(_push.start());
+  }
+
+  /// Subscribe (once) to `mod:action` on the primary socket. A BAN means the
+  /// session is no longer valid server-side, so we sign the user out here — the
+  /// auth layer owns the socket, so this fires regardless of which screen is up.
+  /// warn/kick/blur/none are call-scoped and handled by the roulette screen.
+  void _wireModActionListener() {
+    _teardownModActionListener();
+    _modActionDisposer = _socket.onModAction((payload) {
+      if (payload.action == ModerationAction.ban && state.isAuthenticated) {
+        unawaited(logout());
+      }
+    });
+  }
+
+  void _teardownModActionListener() {
+    _modActionDisposer?.call();
+    _modActionDisposer = null;
   }
 
   /// Refresh the cached [AuthUser] (e.g. after a profile/premium change).
@@ -175,6 +204,7 @@ class AuthController extends Notifier<AuthState> {
     // (best-effort; needs the access token, so do it before clearing).
     await _push.stop();
     await _tokens.clear();
+    _teardownModActionListener();
     _socket.disconnect();
     state = const AuthState(status: AuthStatus.unauthenticated);
   }

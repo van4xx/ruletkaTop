@@ -648,9 +648,13 @@ describe('AuthService.login', () => {
     expect(err).toBeInstanceOf(ForbiddenException);
     const body = (err as ForbiddenException).getResponse() as {
       message: string;
+      banned: boolean;
       banReason: string | null;
     };
     expect(body.message).toBe('Account is banned');
+    // The `banned: true` DISCRIMINATOR is what the client matches on to route
+    // into the (appealable) account-ban flow — distinct from the device gate.
+    expect(body.banned).toBe(true);
     expect(body.banReason).toBe('Upheld abuse report');
     expect(m.sessionModel.create).not.toHaveBeenCalled();
   });
@@ -678,6 +682,16 @@ describe('AuthService.login', () => {
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(ForbiddenException);
+    // The device/network gate carries a DISTINCT discriminator (`deviceBlocked`)
+    // and crucially NO `banned: true`, so the client never routes it into the
+    // dead-end account-ban appeal flow.
+    const body = (err as ForbiddenException).getResponse() as {
+      message: string;
+      deviceBlocked?: boolean;
+      banned?: boolean;
+    };
+    expect(body.deviceBlocked).toBe(true);
+    expect(body.banned).toBeUndefined();
     // The evasion gate short-circuits before the credential lookup + session mint.
     expect(m.usersService.findByEmailWithSecret).not.toHaveBeenCalled();
     expect(m.sessionModel.create).not.toHaveBeenCalled();
@@ -1621,13 +1635,14 @@ describe('AuthService session management (devices surface)', () => {
   });
 
   describe('revokeOtherSessions', () => {
-    it('revokes every live family EXCEPT the current one', async () => {
+    it('revokes every live family EXCEPT the current one and reports it preserved', async () => {
       const m = buildMocks('commit');
       stubCurrentFamily(m, FAM_CURRENT);
       const service = makeService(m);
 
-      await service.revokeOtherSessions(USER_ID, CURRENT_TOKEN);
+      const result = await service.revokeOtherSessions(USER_ID, CURRENT_TOKEN);
 
+      expect(result).toEqual({ currentPreserved: true });
       expect(m.sessionModel.updateMany).toHaveBeenCalledTimes(1);
       const [filter, update] = m.sessionModel.updateMany.mock.calls[0] as [
         Record<string, unknown>,
@@ -1638,24 +1653,40 @@ describe('AuthService session management (devices surface)', () => {
       expect(update.$set.revokedAt).toBeInstanceOf(Date);
     });
 
-    it('revokes ALL live sessions when the current family cannot be resolved (no cookie)', async () => {
+    it('revokes ALL live sessions when NO cookie is supplied (true log-out-everywhere)', async () => {
       const m = buildMocks('commit');
       const service = makeService(m);
 
       // No token → no family exclusion; behaves like revokeAllSessions.
-      await service.revokeOtherSessions(USER_ID);
+      const result = await service.revokeOtherSessions(USER_ID);
 
+      expect(result).toEqual({ currentPreserved: false });
       const [filter] = m.sessionModel.updateMany.mock.calls[0] as [Record<string, unknown>];
       expect(filter).toMatchObject({ revokedAt: null });
       expect(filter).not.toHaveProperty('family');
       expect(m.sessionModel.findOne).not.toHaveBeenCalled();
     });
 
+    it('REVOKES NOTHING when a cookie IS presented but its family cannot be resolved (never nukes the current device)', async () => {
+      const m = buildMocks('commit');
+      // A cookie is sent but it maps to no live family (stale/rotated/foreign).
+      stubCurrentFamily(m, null);
+      const service = makeService(m);
+
+      // The OLD bug: this fell back to revoking ALL — logging the caller out of
+      // the very device performing the action. It must now be a safe no-op.
+      const result = await service.revokeOtherSessions(USER_ID, 'stale-or-foreign-token');
+
+      expect(result).toEqual({ currentPreserved: false });
+      expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
+    });
+
     it('is a no-op for an invalid user id', async () => {
       const m = buildMocks('commit');
       const service = makeService(m);
 
-      await service.revokeOtherSessions('not-an-objectid', CURRENT_TOKEN);
+      const result = await service.revokeOtherSessions('not-an-objectid', CURRENT_TOKEN);
+      expect(result).toEqual({ currentPreserved: false });
       expect(m.sessionModel.updateMany).not.toHaveBeenCalled();
     });
   });

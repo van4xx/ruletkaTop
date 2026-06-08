@@ -250,6 +250,23 @@ const MATCH_TIMEOUT_MS = 30_000;
 /** Auto-requeue delay after a peer hangs up. */
 const REQUEUE_DELAY_MS = 1_200;
 
+/**
+ * True when the negotiation watchdog should LEAVE a peer alone (it has connected
+ * or is plainly healthy) rather than tearing it down at the 30s deadline.
+ *
+ * The aggregate `connectionState` is the primary signal, but it is coarser and
+ * slower than `iceConnectionState` on some browsers (which can flap only the ICE
+ * state while leaving `connectionState` lagging on 'connecting'). Treating an ICE
+ * state of 'connected'/'completed' as healthy too means the watchdog can't kill a
+ * call whose media is actually flowing just because the coarse state hasn't caught
+ * up — while still firing on a genuinely stuck/half-open negotiation.
+ */
+function isPeerHealthy(peer: PeerConnectionManager): boolean {
+  if (peer.connectionState === 'connected') return true;
+  const ice = peer.iceConnectionState;
+  return ice === 'connected' || ice === 'completed';
+}
+
 // ── Reconnection (ICE-restart) tuning ──
 /**
  * On `iceConnectionState === 'disconnected'` we wait this long for the link to
@@ -752,8 +769,10 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       clearMatchTimeout();
       // Negotiation timeout: if media never connects, skip this match cleanly
       // (server-side teardown + re-queue) rather than leaving a half-open room.
+      // `isPeerHealthy` spares a call whose media is flowing even if the coarse
+      // `connectionState` hasn't caught up, so the watchdog can't kill it.
       matchTimeoutRef.current = setTimeout(() => {
-        if (peerRef.current && peerRef.current.connectionState !== 'connected') {
+        if (peerRef.current && !isPeerHealthy(peerRef.current)) {
           nextRef.current();
         }
       }, MATCH_TIMEOUT_MS);
@@ -837,9 +856,10 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
       roomIdRef.current = p.callId;
       isInitiatorRef.current = true;
       // Negotiation watchdog: if media never connects, end the direct call
-      // cleanly rather than hanging on a half-open room.
+      // cleanly rather than hanging on a half-open room. `isPeerHealthy` keeps a
+      // call whose media is flowing even when the coarse `connectionState` lags.
       matchTimeoutRef.current = setTimeout(() => {
-        if (peerRef.current && peerRef.current.connectionState !== 'connected') {
+        if (peerRef.current && !isPeerHealthy(peerRef.current)) {
           stopRef.current();
         }
       }, MATCH_TIMEOUT_MS);
@@ -882,7 +902,45 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
           description: t('wsError.slowDownDescription'),
           duration: 4000,
         });
+        // A throttled `mm:next` leaves us stranded: `next()` already tore down
+        // the old peer and reflected 'searching', but the server refused to
+        // re-queue us — so without recovery we'd spin on 'searching' forever.
+        // Re-issue `mm:join` (after a short backoff so we clear the cooldown)
+        // to rejoin the pool. Only do this while we're an active, peer-less,
+        // non-direct session that's still waiting for a match.
+        if (
+          p.event === 'mm:next' &&
+          startedRef.current &&
+          !directCallRef.current &&
+          !peerRef.current &&
+          !roomIdRef.current
+        ) {
+          clearRequeueTimeout();
+          requeueTimeoutRef.current = setTimeout(() => {
+            if (!startedRef.current || directCallRef.current || peerRef.current || roomIdRef.current) {
+              return;
+            }
+            joinedRef.current = true;
+            socket.emit('mm:join', { type, filters: filtersRef.current });
+            clearMatchTimeout();
+            matchTimeoutRef.current = setTimeout(() => {
+              dispatch({ type: 'WAITING', positionHint: null });
+            }, MATCH_TIMEOUT_MS);
+          }, REQUEUE_DELAY_MS);
+        }
         return;
+      }
+      // A rejected DIRECT-CALL invite (callee offline / blocked us / over the
+      // invite rate-limit) otherwise leaves the caller ringing on 'calling'
+      // until the 30s ring watchdog fires. We are the caller and have no peer
+      // yet, so resolve the ring immediately (and still surface the toast).
+      if (
+        (code === 'forbidden' || code === 'rate_limited') &&
+        p.event === 'call:invite' &&
+        directCallRef.current?.role === 'caller' &&
+        !peerRef.current
+      ) {
+        handleDirectEndedRef.current();
       }
       const titleKey =
         code === 'rate_limited'
@@ -1103,7 +1161,7 @@ export function useRoulette({ type, token }: UseRouletteOptions): UseRouletteRes
           track('match_started');
           clearMatchTimeout();
           matchTimeoutRef.current = setTimeout(() => {
-            if (peerRef.current && peerRef.current.connectionState !== 'connected') {
+            if (peerRef.current && !isPeerHealthy(peerRef.current)) {
               handleDirectEndedRef.current();
             }
           }, MATCH_TIMEOUT_MS);

@@ -758,14 +758,27 @@ class RouletteController extends Notifier<RouletteState> {
     state = state.copyWith(micMuted: willMute);
   }
 
+  /// Toggle the local camera. Tracks the user's INTENT in [RouletteState.cameraOff]
+  /// and only physically re-enables the outbound video track when screening
+  /// isn't currently suppressing it — otherwise turning the camera back "on"
+  /// would push screening-flagged frames to the peer. When the screening flag
+  /// later clears, [_onScreeningChanged] restores the track honoring this intent.
   void toggleCamera() {
     final stream = _localStream;
     if (stream == null) return;
     final video = stream.getVideoTracks();
     if (video.isEmpty) return;
-    final willTurnOff = video.first.enabled; // currently on → turning off
+    // Derive the new intent from the current state, NOT the track's enabled flag
+    // (the track may be disabled by screening while the user intends it on).
+    final willTurnOff = !state.cameraOff; // off → on toggles intent
+    final screeningSuppressed = _videoCutByScreening && (_screening?.flagged ?? false);
     for (final t in video) {
-      t.enabled = !willTurnOff;
+      if (willTurnOff) {
+        t.enabled = false;
+      } else if (!screeningSuppressed) {
+        // Only re-enable when screening isn't actively cutting the feed.
+        t.enabled = true;
+      }
     }
     state = state.copyWith(cameraOff: willTurnOff);
   }

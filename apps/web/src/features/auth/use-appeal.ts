@@ -15,20 +15,29 @@ import type { Appeal, CreateAppealDto } from '@ruletka/shared-types';
 import { api, ApiClientError } from '@/lib/api';
 
 /**
- * Extract the ban reason from a failed-login error, if present. The API returns
- * a `403` with a structured body (`{ statusCode, message, error, banReason }`)
- * for a banned account; everything else yields `null`. `banReason` is an
+ * True when a failed login means "this ACCOUNT is banned" (an appealable ban),
+ * as opposed to the device/network ban-evasion gate which is ALSO a 403 but is
+ * NOT appealable here. The API discriminates the two: an account ban carries
+ * `banned: true` in its 403 body; the device/network gate carries
+ * `deviceBlocked: true` and no `banned`. We require the `banned` flag so the
+ * device gate never routes the user into a dead-end appeal flow.
+ */
+export function isBannedError(error: unknown): boolean {
+  if (!(error instanceof ApiClientError) || error.status !== 403) return false;
+  const body = error.body as { banned?: unknown } | undefined;
+  return body?.banned === true;
+}
+
+/**
+ * Extract the ban reason from a failed-login error, if present. Only an ACCOUNT
+ * ban (a `403` with `{ banned: true, banReason }`) carries a reason; the
+ * device/network gate and everything else yield `null`. `banReason` is an
  * additive field on the error body, so we read it defensively off `body`.
  */
 export function banReasonOf(error: unknown): string | null {
-  if (!(error instanceof ApiClientError) || error.status !== 403) return null;
-  const body = error.body as { banReason?: unknown } | undefined;
+  if (!isBannedError(error)) return null;
+  const body = (error as ApiClientError).body as { banReason?: unknown } | undefined;
   return typeof body?.banReason === 'string' && body.banReason.length > 0 ? body.banReason : null;
-}
-
-/** True when a failed login means "this account is banned" (a 403). */
-export function isBannedError(error: unknown): boolean {
-  return error instanceof ApiClientError && error.status === 403;
 }
 
 /**

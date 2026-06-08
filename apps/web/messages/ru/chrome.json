@@ -139,6 +139,8 @@
       "creditedTitle": "Готово!",
       "creditedDescription": "Баланс пополнен{amount}. Спасибо!",
       "creditedAmount": " на {amount}",
+      "unconfirmedTitle": "Платёж принят",
+      "unconfirmedDescription": "Оплата прошла, но зачисление пока не подтвердилось. Монеты появятся на балансе в течение нескольких минут — обновите страницу немного позже.",
       "thanks": "Отлично",
       "errorTitle": "Платёж не прошёл",
       "errorDescription": "Что-то пошло не так. Попробуйте ещё раз.",

@@ -14,7 +14,7 @@
  *   POST /blocks             → block the peer
  *   POST /friends/request    → send a friend request to the peer
  */
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateBlockDto,
   CreateReportDto,
@@ -27,6 +27,7 @@ import type {
 } from '@ruletka/shared-types';
 
 import { api } from '@/lib/api';
+import { BLOCKS_KEY } from '@/features/settings/use-settings';
 import type { TurnCredentials } from '@/lib/webrtc';
 
 /**
@@ -70,9 +71,15 @@ export function useReportUser() {
 }
 
 export function useBlockUser() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (dto: CreateBlockDto) =>
       api.request<void>('/blocks', { method: 'POST', json: dto }),
+    // A block created mid-call must show up in Settings → Blocked users, so
+    // refresh that cached list (otherwise the settings tab is stale until reload).
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: BLOCKS_KEY });
+    },
   });
 }
 

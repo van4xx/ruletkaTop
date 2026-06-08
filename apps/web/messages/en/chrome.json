@@ -139,6 +139,8 @@
       "creditedTitle": "Done!",
       "creditedDescription": "Your balance has been topped up{amount}. Thank you!",
       "creditedAmount": " by {amount}",
+      "unconfirmedTitle": "Payment accepted",
+      "unconfirmedDescription": "Your payment went through, but we couldn't confirm the credit just yet. The coins should land on your balance within a few minutes — please refresh a little later.",
       "thanks": "Great",
       "errorTitle": "Payment failed",
       "errorDescription": "Something went wrong. Please try again.",

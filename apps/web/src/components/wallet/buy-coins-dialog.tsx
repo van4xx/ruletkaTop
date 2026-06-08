@@ -123,16 +123,18 @@ export function BuyCoinsDialog({ open, onOpenChange }: BuyCoinsDialogProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Post-checkout narration (pending → credited / error). On success we
-          also close the storefront so the user lands back on their wallet. */}
+      {/* Post-checkout narration (pending → credited / unconfirmed / error).
+          Once the charge has settled either way (coins observed, or accepted
+          but unconfirmed) we close the storefront so the user lands back on
+          their wallet to check the balance. */}
       <CheckoutStatusDialog
         phase={buy.phase}
         pkg={buy.activePackage}
         error={buy.error}
         onClose={() => {
-          const wasCredited = buy.phase === 'credited';
+          const settled = buy.phase === 'credited' || buy.phase === 'unconfirmed';
           buy.reset();
-          if (wasCredited) onOpenChange(false);
+          if (settled) onOpenChange(false);
         }}
         onRetry={() => buy.activePackage && buy.buy(buy.activePackage)}
       />
