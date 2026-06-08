@@ -37,8 +37,14 @@
 1. Provision the 🔑 keys above on the server `.env`.
 2. Merge `polish/web-dark-default` → `main` (carries: dark theme + new logo/preloader + design-system unification + P0/P1 waves 1–2).
 3. Auto-deploy (server-side systemd pull-deploy) → smoke-test each subdomain (web / api / admin).
-4. Run the §2 checks on production with a small allow-list / soft launch.
-5. Open to people.
+4. **DB index migration (one-off, REQUIRED).** Production runs with `autoIndex` OFF, so indexes are reconciled explicitly. On a fresh DB just boot the API once with `RUN_INDEX_SYNC=true` (creates every schema index, then unset it). On an EXISTING DB two index changes are destructive and must be de-duped first or the loud `syncIndexes()` will (correctly) abort boot:
+   - **Payments** — `transactionId` is promoted to `{unique, sparse}`. Find collisions, resolve, then let `RUN_INDEX_SYNC=true` drop+recreate it:
+     `db.payments.aggregate([{$match:{transactionId:{$ne:null}}},{$group:{_id:"$transactionId",n:{$sum:1}}},{$match:{n:{$gt:1}}}])`
+   - **Appeals** — new partial-unique `{userId}` over `status:"pending"`. Resolve any user with two open appeals first:
+     `db.moderation_appeals.aggregate([{$match:{status:"pending"}},{$group:{_id:"$userId",n:{$sum:1}}},{$match:{n:{$gt:1}}}])`
+   - Then boot once with `RUN_INDEX_SYNC=true` (it AWAITS + throws loudly on any remaining conflict — boot aborts rather than shipping green-but-unprotected), confirm "Mongo index sync complete." in logs, and unset the flag for normal boots.
+5. Run the §2 checks on production with a small allow-list / soft launch.
+6. Open to people.
 
 ## 4. Known infra note — RF access
 

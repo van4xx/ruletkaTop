@@ -196,6 +196,7 @@ class ApiClient {
     String path,
     T Function(Map<String, dynamic>) decoder, {
     Map<String, dynamic>? query,
+    Map<String, dynamic>? headers,
     bool skipAuth = false,
     CancelToken? cancelToken,
   }) async {
@@ -203,7 +204,7 @@ class ApiClient {
       () => _dio.get<dynamic>(path,
           queryParameters: query,
           cancelToken: cancelToken,
-          options: _opts(skipAuth)),
+          options: _opts(skipAuth, headers: headers)),
     );
     final data = res.data;
     if (data is! List) return <T>[];
@@ -263,6 +264,7 @@ class ApiClient {
     String path, {
     Object? body,
     Map<String, dynamic>? query,
+    Map<String, dynamic>? headers,
     bool skipAuth = false,
     CancelToken? cancelToken,
   }) async {
@@ -272,7 +274,7 @@ class ApiClient {
         data: body,
         queryParameters: query,
         cancelToken: cancelToken,
-        options: _opts(skipAuth, method: method),
+        options: _opts(skipAuth, method: method, headers: headers),
       ),
     );
   }
@@ -309,8 +311,9 @@ class ApiClient {
     return decoder(_asMap(res.data));
   }
 
-  Options _opts(bool skipAuth, {String? method}) => Options(
+  Options _opts(bool skipAuth, {String? method, Map<String, dynamic>? headers}) => Options(
         method: method,
+        headers: headers,
         extra: {if (skipAuth) _skipAuthKey: true},
       );
 

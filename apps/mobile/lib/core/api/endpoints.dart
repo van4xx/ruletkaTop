@@ -84,17 +84,35 @@ extension ApiEndpoints on ApiClient {
 
   // ── Active sessions / device management ──
   /// `GET /auth/sessions` — the caller's active sessions, the requesting device
-  /// flagged `current`.
-  Future<List<AuthSession>> sessions() =>
-      getList('/auth/sessions', AuthSession.fromJson);
+  /// flagged `current`. Mobile has no cookie jar, so the stored refresh token is
+  /// sent via the `x-refresh-token` header; without it the server cannot resolve
+  /// which row is the current device and flags every session `current:false`.
+  Future<List<AuthSession>> sessions() async {
+    final refresh = await tokens.readRefreshToken();
+    return getList(
+      '/auth/sessions',
+      AuthSession.fromJson,
+      headers: refresh == null ? null : {'x-refresh-token': refresh},
+    );
+  }
 
   /// `DELETE /auth/sessions/:id` — revoke one session (sign out that device).
   Future<void> revokeSession(String sessionId) =>
       sendVoid('DELETE', '/auth/sessions/$sessionId');
 
-  /// `DELETE /auth/sessions` — revoke all OTHER sessions (keep the current
-  /// device).
-  Future<void> revokeOtherSessions() => sendVoid('DELETE', '/auth/sessions');
+  /// `DELETE /auth/sessions` — revoke all OTHER sessions (KEEP the current
+  /// device). The current-device refresh token rides the `x-refresh-token`
+  /// header so the server takes the protective "revoke others" branch instead
+  /// of the cookie-less "log out everywhere" path that would also kill THIS
+  /// device's session and force a re-login.
+  Future<void> revokeOtherSessions() async {
+    final refresh = await tokens.readRefreshToken();
+    return sendVoid(
+      'DELETE',
+      '/auth/sessions',
+      headers: refresh == null ? null : {'x-refresh-token': refresh},
+    );
+  }
 
   // ─────────────────────────────── Profiles ───────────────────────────────
   /// `GET /profiles/:id`.

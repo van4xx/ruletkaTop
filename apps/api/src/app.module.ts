@@ -78,8 +78,14 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
             level: isProd ? 'info' : 'debug',
             // Pretty, human-readable logs in dev; raw JSON in production.
             transport: isProd ? undefined : { target: 'pino-pretty' },
-            // Avoid logging secrets (auth headers / cookies) verbatim.
-            redact: ['req.headers.authorization', 'req.headers.cookie'],
+            // Avoid logging secrets (auth headers / cookies) verbatim. The
+            // `x-refresh-token` header carries the refresh credential from non-
+            // browser clients (mobile has no cookie jar), so redact it too.
+            redact: [
+              'req.headers.authorization',
+              'req.headers.cookie',
+              'req.headers["x-refresh-token"]',
+            ],
             autoLogging: true,
           },
         };
@@ -97,6 +103,16 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
         ),
         // Fail fast if no primary is selectable, instead of hanging bootstrap.
         serverSelectionTimeoutMS: 8000,
+        // PROD INDEX SAFETY: never auto-(re)build indexes in production. Mongoose
+        // emits index-build failures (e.g. an IndexOptionsConflict when an index's
+        // options change, or an E11000 when promoting an existing index to unique
+        // over duplicate data) as an ASYNC 'index' event — it does NOT throw at
+        // boot — so with autoIndex on, a failed build is silently swallowed and the
+        // app boots green while the constraint is absent. In prod, indexes are
+        // managed by an EXPLICIT, awaited reconciliation step (RUN_INDEX_SYNC=true →
+        // see main.ts) that fails LOUDLY. Dev/test keep autoIndex on so schema/index
+        // changes surface immediately during local + CI runs.
+        autoIndex: config.get<string>('NODE_ENV') !== 'production',
       }),
     }),
 

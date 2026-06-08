@@ -351,14 +351,25 @@ export class AuthController {
   }
 
   /**
-   * Read the refresh token, preferring the httpOnly cookie and falling back to
-   * a legacy request body so clients mid-migration don't break.
+   * Read the refresh token, preferring the httpOnly cookie, then an
+   * `x-refresh-token` header, then a legacy request body.
+   *
+   * The header path exists for non-browser clients (the Flutter app has no
+   * cookie jar): it lets GET/DELETE session-management routes — which carry no
+   * body — identify the requesting device so `current` is flagged correctly and
+   * "revoke other sessions" preserves the caller's own session instead of
+   * falling through to the cookie-less "log out everywhere" branch. The header
+   * is redacted in logs (see the pino `redact` config in AppModule).
    */
   private readRefreshToken(req: Request, dto: Partial<RefreshDto>): string | null {
     const cookies = (req as Request & { cookies?: Record<string, unknown> }).cookies;
     const fromCookie = cookies?.[REFRESH_COOKIE];
     if (typeof fromCookie === 'string' && fromCookie.length > 0) {
       return fromCookie;
+    }
+    const fromHeader = req.headers['x-refresh-token'];
+    if (typeof fromHeader === 'string' && fromHeader.length > 0) {
+      return fromHeader;
     }
     if (typeof dto.refreshToken === 'string' && dto.refreshToken.length > 0) {
       return dto.refreshToken;

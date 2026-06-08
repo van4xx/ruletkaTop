@@ -7,6 +7,7 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { getConnectionToken } from '@nestjs/mongoose';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
@@ -14,6 +15,7 @@ import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import type { Connection } from 'mongoose';
 
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
@@ -303,6 +305,33 @@ async function bootstrap(): Promise<void> {
     SwaggerModule.setup(`${globalPrefix}/docs`, app, document, {
       swaggerOptions: { persistAuthorization: true },
     });
+  }
+
+  // ── One-time Mongo index reconciliation (opt-in migration step) ─────────
+  // autoIndex is OFF in production (see app.module.ts) so index builds never run
+  // silently on the hot path. Setting RUN_INDEX_SYNC=true runs an EXPLICIT,
+  // AWAITED syncIndexes() that creates missing indexes and reconciles changed
+  // ones — e.g. promoting Payment.transactionId to {unique,sparse} or adding the
+  // partial-unique appeal index. Unlike the swallowed async 'index' event, this
+  // throws LOUDLY on an IndexOptionsConflict / E11000-over-duplicate-data build
+  // error, ABORTING boot so a broken migration never ships green-but-unprotected.
+  // Resolve any pre-existing duplicate data FIRST (see LAUNCH-CHECKLIST.md). Run
+  // it once per deploy that changes indexes (cheap no-op when already in sync).
+  if (config.get<string>('RUN_INDEX_SYNC') === 'true') {
+    const connection = app.get<Connection>(getConnectionToken());
+    logger.log('RUN_INDEX_SYNC=true → reconciling Mongo indexes (syncIndexes)…', 'Bootstrap');
+    try {
+      await connection.syncIndexes();
+      logger.log('Mongo index sync complete.', 'Bootstrap');
+    } catch (err) {
+      const e = err as Error;
+      logger.error(
+        `Mongo index sync FAILED — aborting boot. Resolve duplicate data, then retry. ${e.message}`,
+        e.stack,
+        'Bootstrap',
+      );
+      throw err;
+    }
   }
 
   // ── Listen ───────────────────────────────────────────────────────────────
