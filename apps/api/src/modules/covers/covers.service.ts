@@ -88,8 +88,19 @@ export class CoversService {
       throw new ConflictException('Cover already owned');
     }
 
+    // The wallet ledger's idempotency index is GLOBAL on (type, refId), so the
+    // refId MUST uniquely identify THIS operation. The bare catalogue `coverId`
+    // is a code-defined constant shared by every buyer — using it as the refId
+    // collided across users: the second buyer's debit hit the first buyer's
+    // ledger row, self-refunded, and the cover was still granted (a paid cover
+    // for free). Key the ledger by the (user, cover) pair instead: globally
+    // unique per buyer, while still idempotent for THIS user+cover (so a
+    // concurrent double-buy that slips past the ownsCover check above charges at
+    // most once). The compensating refund reuses the SAME ref so it pairs up.
+    const ledgerRef = `${userId}:${coverId}`;
+
     // Step 4: charge first. Throws InsufficientFundsException (422) on shortfall.
-    await this.walletService.debit(userId, cover.priceCoins, 'cover', coverId);
+    await this.walletService.debit(userId, cover.priceCoins, 'cover', ledgerRef);
 
     // Step 5: grant ownership + activate; compensate the debit on a write failure.
     try {
@@ -106,7 +117,7 @@ export class CoversService {
       return this.toInventory(updated);
     } catch (err) {
       await this.walletService
-        .credit(userId, cover.priceCoins, 'refund', coverId)
+        .credit(userId, cover.priceCoins, 'refund', ledgerRef)
         .catch((refundErr: unknown) =>
           this.logger.error(
             `Failed to refund ${cover.priceCoins} coins to ${userId} after cover ` +

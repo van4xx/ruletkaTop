@@ -97,16 +97,18 @@ describe('CoversService', () => {
   });
 
   describe('purchase', () => {
-    it('debits (cover, referencing the cover id) and grants + activates the cover', async () => {
+    it('debits (cover, keyed by the user:cover pair) and grants + activates the cover', async () => {
       profileModel.findOneAndUpdate.mockReturnValue(
         queryReturning(profileDoc({ activeCover: 'sunset', ownedCovers: ['sunset'] })),
       );
 
       const inv = await service.purchase(userId, 'sunset');
 
-      // Charged the catalogue price as a `cover` debit keyed by the cover id.
+      // Charged the catalogue price as a `cover` debit keyed by the (user, cover)
+      // pair — NOT the bare catalogue id, which is a global constant that would
+      // collide across buyers on the global (type, refId) ledger index.
       expect(wallet.debit).toHaveBeenCalledTimes(1);
-      expect(wallet.debit).toHaveBeenCalledWith(userId, 120, 'cover', 'sunset');
+      expect(wallet.debit).toHaveBeenCalledWith(userId, 120, 'cover', `${userId}:sunset`);
 
       // Granted via $addToSet AND set active in a single update.
       expect(profileModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
@@ -175,9 +177,10 @@ describe('CoversService', () => {
       await expect(service.purchase(userId, 'mint')).rejects.toBe(writeErr);
 
       // The earlier debit is reversed with a `refund` credit for the same amount,
-      // keyed by the same cover id — so we never charge without recording ownership.
+      // keyed by the SAME (user, cover) ref as the debit — so the compensation
+      // pairs up and we never charge without recording ownership.
       expect(wallet.credit).toHaveBeenCalledTimes(1);
-      expect(wallet.credit).toHaveBeenCalledWith(userId, 200, 'refund', 'mint');
+      expect(wallet.credit).toHaveBeenCalledWith(userId, 200, 'refund', `${userId}:mint`);
     });
 
     it('still surfaces the original write error even if the compensating refund also fails', async () => {
@@ -198,7 +201,25 @@ describe('CoversService', () => {
       await expect(service.purchase(userId, 'mint')).rejects.toBeInstanceOf(NotFoundException);
 
       // The debit is compensated so we don't charge for a cover we couldn't grant.
-      expect(wallet.credit).toHaveBeenCalledWith(userId, 200, 'refund', 'mint');
+      expect(wallet.credit).toHaveBeenCalledWith(userId, 200, 'refund', `${userId}:mint`);
+    });
+
+    it('keys the ledger by (user, cover) so two DIFFERENT buyers of the same cover are BOTH charged with distinct refIds (regression: paid covers were free after the first buyer)', async () => {
+      const userA = '507f1f77bcf86cd799439011';
+      const userB = '507f1f77bcf86cd799439abc';
+      profileModel.findOneAndUpdate.mockReturnValue(
+        queryReturning(profileDoc({ activeCover: 'noir', ownedCovers: ['noir'] })),
+      );
+
+      await service.purchase(userA, 'noir');
+      await service.purchase(userB, 'noir');
+
+      // Each buyer is debited under a refId scoped to THEIR userId, so neither
+      // collides with the other on the global (type, refId) ledger index — the
+      // second buyer is charged for real instead of silently self-refunded.
+      expect(wallet.debit).toHaveBeenNthCalledWith(1, userA, 500, 'cover', `${userA}:noir`);
+      expect(wallet.debit).toHaveBeenNthCalledWith(2, userB, 500, 'cover', `${userB}:noir`);
+      expect(`${userA}:noir`).not.toBe(`${userB}:noir`);
     });
   });
 
