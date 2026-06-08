@@ -72,6 +72,8 @@
     "notificationsLabel": "Уведомления",
     "notificationsTitle": "Уведомления",
     "notificationsEmpty": "Здесь появятся новые события — заявки, подарки и звонки.",
+    "notificationsErrorTitle": "Не удалось загрузить уведомления",
+    "notificationsErrorDesc": "Список уведомлений временно недоступен.",
     "markRead": "Отметить прочитанным",
     "giftsLabel": "Подарки",
     "giftsTitle": "Мои подарки",

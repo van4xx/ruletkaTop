@@ -181,6 +181,10 @@ function ToastCard({
   return (
     <motion.div
       layout
+      // Danger/error toasts interrupt (assertive); the rest defer to the
+      // surrounding polite live region. `alert` carries an implicit
+      // aria-live="assertive"; `status` is polite.
+      role={t.variant === 'danger' ? 'alert' : 'status'}
       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: offset, scale: 0.96 }}
       animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, x: 24 }}

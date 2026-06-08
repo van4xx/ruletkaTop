@@ -81,8 +81,12 @@ export async function generateMetadata(): Promise<Metadata> {
       index: true,
       follow: true,
     },
+    // PWA web app manifest (app/manifest.ts) — installable, standalone.
+    manifest: '/manifest.webmanifest',
     icons: {
       icon: '/favicon.svg',
+      // Generated 180×180 neon mark (app/apple-icon.tsx) for the iOS home screen.
+      apple: '/apple-icon',
     },
   };
 }
@@ -95,6 +99,10 @@ export const viewport: Viewport = {
   colorScheme: 'dark light',
   width: 'device-width',
   initialScale: 1,
+  // Draw under the device safe-area insets (notch / home indicator) so the app's
+  // own `env(safe-area-inset-*)` padding can take over — required for the
+  // edge-to-edge chrome to look right on iOS / Android PWAs.
+  viewportFit: 'cover',
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

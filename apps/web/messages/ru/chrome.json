@@ -20,10 +20,10 @@
   },
   "notifications": {
     "triggerAria": "Уведомления",
-    "triggerAriaCount": "Уведомления, {count} новых",
+    "triggerAriaCount": "Уведомления, {count, plural, one {# новое} few {# новых} many {# новых} other {# новых}}",
     "panelAria": "Уведомления",
     "title": "Уведомления",
-    "unreadBadge": "{count} новых",
+    "unreadBadge": "{count, plural, one {# новое} few {# новых} many {# новых} other {# новых}}",
     "empty": "Здесь появятся новые события — заявки, подарки и звонки.",
     "viewAll": "Все уведомления"
   },

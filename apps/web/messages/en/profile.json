@@ -2,6 +2,8 @@
   "meta": {
     "publicTitle": "Profile",
     "publicDescription": "Public profile of a ruletka.top user.",
+    "publicTitleNamed": "{name} — profile",
+    "publicDescriptionNamed": "{name}'s profile on ruletka.top. Check their status, gifts and send one of your own.",
     "myTitle": "My profile",
     "myDescription": "Your profile, gifts and settings.",
     "editTitle": "Edit profile"
@@ -58,7 +60,7 @@
     "viewsCountSuffix": "profile views",
     "viewsRollingNote": "The full list of visitors with names is coming soon — we're already counting every visit.",
     "viewsLockedReason": "Find out who visited your profile.",
-    "viewsLockedCaption": "{count} views · unlock with Premium",
+    "viewsLockedCaption": "{count, plural, one {{count} view} other {{count} views}} · unlock with Premium",
     "badge": "Premium",
     "upsellTitlePrefix": "Unlock",
     "upsellTitleHighlight": "Premium",

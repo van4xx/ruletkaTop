@@ -100,7 +100,10 @@ function ChatBody({
         )}
       </div>
 
-      <form onSubmit={submit} className="flex items-center gap-2 border-t border-border/60 p-3">
+      <form
+        onSubmit={submit}
+        className="flex items-center gap-2 border-t border-border/60 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      >
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

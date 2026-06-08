@@ -73,7 +73,7 @@
 
   "interlocutor": "Собеседник",
   "noMessages": "Нет сообщений",
-  "unreadCount": "{count} непрочитанных",
+  "unreadCount": "{count, plural, one {# непрочитанное} few {# непрочитанных} many {# непрочитанных} other {# непрочитанных}}",
 
   "messageNotSent": "Не отправлено",
   "messageSending": "Отправляется",

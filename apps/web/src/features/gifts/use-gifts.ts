@@ -22,11 +22,15 @@ const RARITY_ORDER: Record<Rarity, number> = {
   legendary: 3,
 };
 
-/** Gift catalogue (public). */
-export function useGifts() {
+/**
+ * Gift catalogue (public). Pass `enabled: false` to keep a mounted-but-idle
+ * consumer (e.g. a closed dialog) from subscribing/fetching the catalogue.
+ */
+export function useGifts({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: economyKeys.gifts(),
     queryFn: economyApi.gifts,
+    enabled,
   });
 }
 

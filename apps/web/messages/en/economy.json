@@ -1,4 +1,14 @@
 {
+  "pageMeta": {
+    "topTitle": "Live Top",
+    "topDescription": "A live feed of ruletka.top's most eye-catching members. Buy a spot in the Top and everyone entering the roulette will see you.",
+    "giftsTitle": "Gifts",
+    "giftsDescription": "Send colorful gifts to the people you meet — from common to legendary. Show some love to whoever caught your eye.",
+    "premiumTitle": "Premium",
+    "premiumDescription": "ruletka.top Premium: filters, no ads, priority in search and a standout status.",
+    "walletTitle": "Wallet",
+    "walletDescription": "Your coin balance and full transaction history on ruletka.top. Top up your wallet to send gifts and buy a spot in the Top."
+  },
   "states": {
     "errorTitle": "Something went wrong",
     "errorDescription": "We couldn't load the data. Please try again."
@@ -150,7 +160,7 @@
     "cadenceWeekly": "per week",
     "cadenceEveryWeeks": "for {count} wk.",
     "cadenceDaily": "per day",
-    "cadenceEveryDays": "for {count} days",
+    "cadenceEveryDays": "for {count} d.",
     "current": "Current plan",
     "subscribe": "Subscribe"
   },
@@ -182,7 +192,9 @@
     "cancelError": "Couldn't cancel the subscription",
     "confirmTitle": "Cancel premium?",
     "confirmDescription": "Your subscription won't renew. Premium features stay available until the end of the paid period{periodSuffix}.",
-    "keepPremium": "Keep premium"
+    "keepPremium": "Keep premium",
+    "errorTitle": "Couldn't load your subscription",
+    "errorDescription": "Your subscription status is temporarily unavailable. Please try again."
   },
   "top": {
     "eyebrow": "Top on air",

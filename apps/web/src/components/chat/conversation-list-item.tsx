@@ -6,7 +6,7 @@
  * row links into the thread.
  */
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { Conversation, OnlineStatus, PublicProfile } from '@ruletka/shared-types';
 import { Avatar, Skeleton } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -24,6 +24,7 @@ export function ConversationListItem({
   active?: boolean;
 }) {
   const t = useTranslations('social');
+  const locale = useLocale();
   const unread = conversation.unreadCount > 0;
 
   return (
@@ -61,7 +62,7 @@ export function ConversationListItem({
                 unread ? 'font-semibold text-[var(--color-neon-cyan)]' : 'text-muted-foreground',
               )}
             >
-              {formatRelativeTime(conversation.lastMessageAt, t)}
+              {formatRelativeTime(conversation.lastMessageAt, t, locale)}
             </time>
           )}
         </div>

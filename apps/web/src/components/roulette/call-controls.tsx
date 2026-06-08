@@ -135,7 +135,8 @@ export function CallControls(props: CallControlsProps) {
     <TooltipProvider delayDuration={300}>
       <div
         className={cn(
-          'glass-panel pointer-events-auto mx-auto flex w-full max-w-fit items-center gap-2 rounded-full p-2 shadow-xl sm:gap-3',
+          'glass-panel pointer-events-auto mx-auto flex w-full max-w-fit flex-wrap items-center justify-center gap-2 rounded-full p-2 shadow-xl sm:gap-3',
+          'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
         )}
       >
         {/* Media toggles (only while a session is active) */}

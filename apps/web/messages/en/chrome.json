@@ -20,10 +20,10 @@
   },
   "notifications": {
     "triggerAria": "Notifications",
-    "triggerAriaCount": "Notifications, {count} new",
+    "triggerAriaCount": "Notifications, {count, plural, one {# new} other {# new}}",
     "panelAria": "Notifications",
     "title": "Notifications",
-    "unreadBadge": "{count} new",
+    "unreadBadge": "{count, plural, one {# new} other {# new}}",
     "empty": "New events will show up here — requests, gifts and calls.",
     "viewAll": "All notifications"
   },

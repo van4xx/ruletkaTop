@@ -5,8 +5,9 @@
  * delivery ticks (sending → sent → read); inbound bubbles use a glass surface.
  * Failed optimistic sends expose a retry affordance.
  */
+import { memo } from 'react';
 import { motion } from 'framer-motion';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertCircle, Check, CheckCheck, Clock, RotateCw } from 'lucide-react';
 import type { ChatRejectReason } from '@ruletka/shared-types';
 import { cn } from '@/lib/cn';
@@ -55,7 +56,7 @@ function Ticks({ message }: { message: ChatMessage }) {
   return <Check className="h-3.5 w-3.5 opacity-80" aria-label={t('messageSent')} />;
 }
 
-export function MessageBubble({
+function MessageBubbleImpl({
   message,
   mine,
   showTail,
@@ -68,6 +69,7 @@ export function MessageBubble({
   onRetry?: (message: ChatMessage) => void;
 }) {
   const t = useTranslations('social');
+  const locale = useLocale();
   return (
     <motion.div
       layout="position"
@@ -104,7 +106,7 @@ export function MessageBubble({
             mine ? 'text-white/70' : 'text-muted-foreground',
           )}
         >
-          <time dateTime={message.createdAt}>{formatClock(message.createdAt)}</time>
+          <time dateTime={message.createdAt}>{formatClock(message.createdAt, locale)}</time>
           {mine && <Ticks message={message} />}
         </div>
 
@@ -122,3 +124,10 @@ export function MessageBubble({
     </motion.div>
   );
 }
+
+/**
+ * Memoised so a re-render of the thread (e.g. a presence tick or a new sibling
+ * message) doesn't re-render every existing bubble — only those whose props
+ * actually changed. Bubbles are stable once delivered.
+ */
+export const MessageBubble = memo(MessageBubbleImpl);

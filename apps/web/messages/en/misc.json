@@ -72,6 +72,8 @@
     "notificationsLabel": "Notifications",
     "notificationsTitle": "Notifications",
     "notificationsEmpty": "New events will show up here — requests, gifts and calls.",
+    "notificationsErrorTitle": "Couldn't load notifications",
+    "notificationsErrorDesc": "The notifications list is temporarily unavailable.",
     "markRead": "Mark as read",
     "giftsLabel": "Gifts",
     "giftsTitle": "My gifts",

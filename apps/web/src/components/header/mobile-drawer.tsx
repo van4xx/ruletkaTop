@@ -24,6 +24,7 @@ import { Avatar } from '@ruletka/ui';
 import { MOBILE_NAV, PRIMARY_NAV } from '@/config/nav';
 import { cn } from '@/lib/cn';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageSwitcher } from '@/components/language-switcher';
 import { isRouteActive } from './lib';
 import { AuthCta } from './auth-cta';
 import { openCommandPalette } from './command-palette';
@@ -261,10 +262,13 @@ export function MobileDrawer({
             </nav>
 
             {/* Footer actions */}
-            <div className="border-t border-border/60 px-3 py-3">
+            <div className="border-t border-border/60 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {isAuthenticated ? (
                 <div className="flex items-center justify-between gap-2">
-                  <ThemeToggle />
+                  <div className="flex items-center gap-2">
+                    <ThemeToggle />
+                    <LanguageSwitcher />
+                  </div>
                   <button
                     type="button"
                     onClick={handleLogout}
@@ -280,7 +284,10 @@ export function MobileDrawer({
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2">
-                  <ThemeToggle />
+                  <div className="flex items-center gap-2">
+                    <ThemeToggle />
+                    <LanguageSwitcher />
+                  </div>
                   <AuthCta />
                 </div>
               )}

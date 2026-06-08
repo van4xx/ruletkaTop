@@ -23,6 +23,7 @@ import {
   toast,
 } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
+import { ErrorState } from '@/components/economy/states';
 import { formatDateTime } from '@/features/economy/format';
 import { useCancelPremium } from '@/features/premium/use-premium';
 
@@ -31,6 +32,10 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 export interface SubscriptionStatusProps {
   subscription: Subscription | null | undefined;
   isLoading: boolean;
+  /** The subscription read failed — show an inline error with a retry. */
+  isError?: boolean;
+  /** Retry the subscription read (wired to the query's `refetch`). */
+  onRetry?: () => void;
   /** Hide when unauthenticated (no point showing an empty state). */
   authenticated: boolean;
 }
@@ -38,6 +43,8 @@ export interface SubscriptionStatusProps {
 export function SubscriptionStatus({
   subscription,
   isLoading,
+  isError,
+  onRetry,
   authenticated,
 }: SubscriptionStatusProps) {
   const t = useTranslations('economy');
@@ -52,6 +59,18 @@ export function SubscriptionStatus({
         <Skeleton className="h-5 w-40" />
         <Skeleton className="mt-3 h-4 w-64" />
       </div>
+    );
+  }
+
+  // The subscription read failed — surface an inline, retryable error rather
+  // than silently hiding the banner (which would look like "no subscription").
+  if (isError) {
+    return (
+      <ErrorState
+        title={t('subscriptionStatus.errorTitle')}
+        description={t('subscriptionStatus.errorDescription')}
+        onRetry={onRetry}
+      />
     );
   }
 

@@ -8,12 +8,14 @@
  * read-all endpoint and clears the unread counter.
  */
 import { AnimatePresence, motion } from 'framer-motion';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Bell, BellRing, Gift, MessageCircle, Phone, Sparkles, UserPlus } from 'lucide-react';
 import type { AppNotification } from '@ruletka/shared-types';
 import type { LucideIcon } from 'lucide-react';
-import { formatRelativeTime } from '@/features/chat/lib/format';
+import { Skeleton } from '@ruletka/ui';
+import { formatRelativeTime } from '@/components/notifications/notification-meta';
 import { useNotificationsPreview } from '@/hooks/dashboard/use-notifications-preview';
+import { ErrorState } from '@/components/economy/states';
 import { DashboardCard, WidgetHeader } from './dashboard-card';
 
 interface KindStyle {
@@ -31,7 +33,8 @@ const KIND: Record<AppNotification['kind'], KindStyle> = {
 
 export function NotificationsWidget() {
   const t = useTranslations('misc');
-  const { items, unread, markAllRead } = useNotificationsPreview();
+  const locale = useLocale();
+  const { items, unread, isLoading, isError, refetch, markAllRead } = useNotificationsPreview();
 
   return (
     <DashboardCard label={t('dashboard.notificationsLabel')}>
@@ -48,7 +51,25 @@ export function NotificationsWidget() {
         count={unread > 0 ? unread : null}
       />
 
-      {items.length === 0 ? (
+      {isError ? (
+        <ErrorState
+          title={t('dashboard.notificationsErrorTitle')}
+          description={t('dashboard.notificationsErrorDesc')}
+          onRetry={refetch}
+        />
+      ) : isLoading ? (
+        <ul className="-mx-2 space-y-0.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <li key={i} className="flex items-start gap-3 rounded-2xl p-2">
+              <Skeleton className="h-8 w-8 shrink-0 rounded-xl" />
+              <div className="flex-1 space-y-2 pt-0.5">
+                <Skeleton className="h-3.5 w-28" />
+                <Skeleton className="h-3 w-44" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : items.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 py-7 text-center">
           <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-card/60 text-muted-foreground ring-1 ring-border/60">
             <Bell className="h-5 w-5" aria-hidden="true" />
@@ -87,7 +108,7 @@ export function NotificationsWidget() {
                       <div className="flex items-baseline justify-between gap-2">
                         <p className="truncate text-sm font-semibold">{n.title}</p>
                         <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">
-                          {formatRelativeTime(n.createdAt)}
+                          {formatRelativeTime(n.createdAt, t, locale)}
                         </span>
                       </div>
                       <p className="truncate text-xs text-muted-foreground">{n.body}</p>

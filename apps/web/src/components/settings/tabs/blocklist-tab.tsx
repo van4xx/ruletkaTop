@@ -9,17 +9,17 @@
  * (nickname + avatar), so each row shows the real person. If a profile is
  * missing (deleted account), the row gracefully falls back to a shortened id.
  */
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Ban, UserRoundX } from 'lucide-react';
 import type { BlockedUser } from '@ruletka/shared-types';
 import { Avatar, Button, Skeleton, toast } from '@ruletka/ui';
 import { useBlocks, useUnblock } from '@/features/settings/use-settings';
 import { SettingsSection } from '../primitives';
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function shortId(id: string): string {
@@ -34,6 +34,7 @@ function blockedLabel(block: BlockedUser): string {
 export function BlocklistTab() {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
+  const locale = useLocale();
   const { data: blocks, isLoading, isError, error, refetch } = useBlocks();
   const unblock = useUnblock();
 
@@ -108,7 +109,7 @@ export function BlocklistTab() {
                   {label}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {t('blocklist.blockedOn', { date: formatDate(block.createdAt) })}
+                  {t('blocklist.blockedOn', { date: formatDate(block.createdAt, locale) })}
                 </p>
               </div>
               <Button

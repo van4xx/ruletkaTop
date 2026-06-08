@@ -1,24 +1,26 @@
+import { type ClassValue, clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
 /**
- * Minimal, dependency-free className combiner.
+ * Merge class names with conflict resolution.
  *
- * Accepts strings, falsy values and string→boolean maps, returning a single
- * space-separated class string. Intentionally light: the design-system package
- * (`@ruletka/ui`) owns the richer `cn` with tailwind-merge for its primitives;
- * the shell only needs conditional concatenation.
+ * Combines {@link https://github.com/lukeed/clsx | clsx} (conditional class
+ * composition) with {@link https://github.com/dcastil/tailwind-merge | tailwind-merge}
+ * (last-wins resolution of conflicting Tailwind utilities). Use it everywhere a
+ * component accepts a `className` so callers can override defaults safely:
+ *
+ * ```tsx
+ * <div className={cn('px-3 py-2 text-sm', isActive && 'text-accent', className)} />
+ * ```
+ *
+ * Critically this lets a caller-supplied `hidden` win over a component's
+ * hard-coded `inline-flex` (naive concatenation kept both, leaking utility
+ * clusters onto small screens and causing site-wide horizontal scroll). It
+ * mirrors the design-system `cn` in `@ruletka/ui` so behaviour is identical
+ * across the shell and its primitives.
  */
-export type ClassValue = string | number | false | null | undefined | Record<string, boolean>;
+export type { ClassValue };
 
 export function cn(...inputs: ClassValue[]): string {
-  const out: string[] = [];
-  for (const input of inputs) {
-    if (!input) continue;
-    if (typeof input === 'string' || typeof input === 'number') {
-      out.push(String(input));
-    } else {
-      for (const [key, value] of Object.entries(input)) {
-        if (value) out.push(key);
-      }
-    }
-  }
-  return out.join(' ');
+  return twMerge(clsx(inputs));
 }

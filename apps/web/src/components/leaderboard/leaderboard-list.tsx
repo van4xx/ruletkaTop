@@ -5,6 +5,7 @@
  * rank number, avatar + name + meta, and the metric score — links to the
  * profile. The caller's own row is highlighted. Includes a matching skeleton.
  */
+import { memo } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
@@ -86,7 +87,10 @@ function MetricCaption({ metric, score: _score }: { metric: LeaderboardMetric; s
   );
 }
 
-export function LeaderboardRow({
+// Memoized: ranked lists can render dozens of rows; the props are primitives +
+// a stable entry object, so a shallow compare keeps untouched rows from
+// re-rendering when the parent updates (e.g. the caller's own row toggles).
+export const LeaderboardRow = memo(function LeaderboardRow({
   entry,
   metric,
   isMe,
@@ -143,7 +147,7 @@ export function LeaderboardRow({
       </Link>
     </motion.li>
   );
-}
+});
 
 export function LeaderboardListSkeleton({ count = 6 }: { count?: number }) {
   return (

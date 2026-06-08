@@ -589,7 +589,7 @@ export function RouletteStage({ type }: { type: MatchType }) {
       )}
 
       {/* ── In-call chat ────────────────────────────────────────── */}
-      <div className="pointer-events-none absolute bottom-24 left-3 z-30 sm:bottom-28 sm:left-6">
+      <div className="pointer-events-none absolute bottom-24 left-3 z-30 w-[calc(100vw-1.5rem)] max-w-sm sm:bottom-28 sm:left-6">
         <CallChat
           open={r.chatOpen && hasPeer}
           onClose={() => r.setChatOpen(false)}
@@ -603,7 +603,7 @@ export function RouletteStage({ type }: { type: MatchType }) {
       {topRightCluster}
 
       {/* ── Bottom control bar ──────────────────────────────────── */}
-      <div className="absolute inset-x-0 bottom-0 z-30 flex justify-center p-3 sm:p-5">
+      <div className="absolute inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-5 sm:pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <CallControls
           status={r.status}
           isVideo={isVideo}
@@ -748,7 +748,7 @@ function StageFrame({
         className={cn(
           'relative isolate overflow-hidden bg-background-base',
           fullscreen
-            ? 'fixed inset-0 z-50 h-screen w-screen rounded-none border-0'
+            ? 'fixed inset-0 z-50 h-dvh w-screen rounded-none border-0'
             : 'rounded-3xl border border-border/60 h-[calc(100dvh-5.5rem)] min-h-[30rem] sm:h-[calc(100dvh-7rem)]',
           cursorHidden && 'cursor-none',
         )}

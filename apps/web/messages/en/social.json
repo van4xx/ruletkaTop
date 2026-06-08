@@ -73,7 +73,7 @@
 
   "interlocutor": "Contact",
   "noMessages": "No messages",
-  "unreadCount": "{count} unread",
+  "unreadCount": "{count, plural, one {# unread} other {# unread}}",
 
   "messageNotSent": "Not sent",
   "messageSending": "Sending",

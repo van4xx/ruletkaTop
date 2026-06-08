@@ -7,8 +7,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { animate, motion, useReducedMotion } from 'framer-motion';
-import { TrendingUp, Wallet as WalletIcon } from 'lucide-react';
-import { CoinIcon, Skeleton } from '@ruletka/ui';
+import { RefreshCw, TrendingUp, Wallet as WalletIcon } from 'lucide-react';
+import { Button, CoinIcon, Skeleton } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/features/economy/format';
 
@@ -48,11 +48,20 @@ export interface BalanceHeroProps {
   balance: number | null;
   isLoading: boolean;
   isError: boolean;
+  /** Retry the wallet read (wired to the query's `refetch`). */
+  onRetry?: () => void;
   className?: string;
 }
 
-export function BalanceHero({ balance, isLoading, isError, className }: BalanceHeroProps) {
+export function BalanceHero({
+  balance,
+  isLoading,
+  isError,
+  onRetry,
+  className,
+}: BalanceHeroProps) {
   const t = useTranslations('economy');
+  const tc = useTranslations('common');
   const ready = !isLoading && !isError && balance != null;
   const display = useCountUp(balance ?? 0, ready);
 
@@ -94,7 +103,21 @@ export function BalanceHero({ balance, isLoading, isError, className }: BalanceH
               {t('balanceHero.coinsSuffix')}
             </span>
           </div>
-          {isError && <p className="mt-2 text-sm text-destructive">{t('balanceHero.error')}</p>}
+          {isError && (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <p className="text-sm text-destructive">{t('balanceHero.error')}</p>
+              {onRetry && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leadingIcon={<RefreshCw className="h-4 w-4" />}
+                  onClick={onRetry}
+                >
+                  {tc('retry')}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="inline-flex items-center gap-2 self-start rounded-2xl border border-border/60 bg-card/40 px-4 py-3 text-sm text-muted-foreground sm:self-auto">

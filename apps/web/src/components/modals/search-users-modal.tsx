@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Gift, Search, UserPlus, UserRound } from 'lucide-react';
+import { Gift, RefreshCw, Search, UserPlus, UserRound } from 'lucide-react';
 import { objectIdSchema, type PublicProfile } from '@ruletka/shared-types';
 import {
   Avatar,
@@ -70,6 +70,7 @@ function useDebounced<T>(value: T, ms: number): T {
 export function SearchUsersModal() {
   const { open } = useModal();
   const t = useTranslations('chrome');
+  const tc = useTranslations('common');
   const [term, setTerm] = useState('');
   const debounced = useDebounced(term, 350);
   const isIdLike = useMemo(() => objectIdSchema.safeParse(debounced.trim()).success, [debounced]);
@@ -112,9 +113,19 @@ export function SearchUsersModal() {
           Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
 
         {results.isError && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            {t('modals.searchUsers.searchError')}
-          </p>
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              {t('modals.searchUsers.searchError')}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              leadingIcon={<RefreshCw className="h-4 w-4" />}
+              onClick={() => results.refetch()}
+            >
+              {tc('retry')}
+            </Button>
+          </div>
         )}
 
         {showEmpty && (

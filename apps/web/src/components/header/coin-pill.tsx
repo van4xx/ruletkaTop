@@ -9,16 +9,17 @@
  * distinct targets. A subtle key-bump animates the number whenever it changes
  * (a purchase landing).
  *
- * States: skeleton shimmer while the balance is unknown; formatted `ru-RU`
+ * States: skeleton shimmer while the balance is unknown; locale-formatted
  * number once loaded. Memoised on the numeric value.
  */
 import { memo } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Coins, Plus } from 'lucide-react';
 import { ROUTES } from '@/config/nav';
 import { cn } from '@/lib/cn';
+import { formatNumber } from '@/features/economy/format';
 import { useModal } from '@/lib/stores/modal-store';
 
 interface CoinPillProps {
@@ -29,9 +30,10 @@ interface CoinPillProps {
 
 function CoinPillImpl({ balance, className }: CoinPillProps) {
   const t = useTranslations('chrome');
+  const locale = useLocale();
   const { open } = useModal();
   const reduceMotion = useReducedMotion();
-  const display = balance === null ? null : new Intl.NumberFormat('ru-RU').format(balance);
+  const display = balance === null ? null : formatNumber(balance, locale);
 
   return (
     <div

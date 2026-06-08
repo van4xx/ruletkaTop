@@ -9,7 +9,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ChevronDown, Phone, Video } from 'lucide-react';
 import type { PublicProfile, OnlineStatus } from '@ruletka/shared-types';
@@ -40,21 +40,22 @@ const STATUS_LABEL_KEY: Record<OnlineStatus, string> = {
 };
 
 /** Group consecutive messages by local day for separators. */
-function useGrouped(messages: ChatMessage[], t: Translate) {
+function useGrouped(messages: ChatMessage[], t: Translate, locale: string) {
   return useMemo(() => {
     const groups: { key: number; label: string; items: ChatMessage[] }[] = [];
     for (const m of messages) {
       const k = dayKey(m.createdAt);
       const last = groups[groups.length - 1];
       if (last && last.key === k) last.items.push(m);
-      else groups.push({ key: k, label: formatDayLabel(m.createdAt, t), items: [m] });
+      else groups.push({ key: k, label: formatDayLabel(m.createdAt, t, locale), items: [m] });
     }
     return groups;
-  }, [messages, t]);
+  }, [messages, t, locale]);
 }
 
 export function ChatThread({ conversationId }: { conversationId: string }) {
   const t = useTranslations('social');
+  const locale = useLocale();
   const { user, isAuthenticated, isReady } = useAuth();
   const selfId = user?.id ?? null;
 
@@ -69,7 +70,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
   const peerStatus: OnlineStatus = (peerId && presence[peerId]) || 'offline';
 
   const thread = useThread(conversationId, selfId);
-  const groups = useGrouped(thread.messages, t);
+  const groups = useGrouped(thread.messages, t, locale);
 
   // ── Scroll management ──
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -153,7 +154,10 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
   const canCall = peerStatus === 'online' || peerStatus === 'away';
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col">
+    // Fill the available column height. `flex-1 min-h-0` lets the thread shrink to
+    // whatever the page chrome (header + verify-email banner) leaves, keeping the
+    // composer in view; the `dvh` height is a fallback for non-flex parents.
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-1 flex-col">
       {/* Header */}
       <header className="glass-panel z-10 flex items-center gap-3 border-x-0 border-t-0 px-3 py-2.5 sm:px-4">
         <IconButton
@@ -232,7 +236,12 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
               />
             </div>
           ) : (
-            <div className="mx-auto flex max-w-2xl flex-col gap-1.5">
+            <div
+              className="mx-auto flex max-w-2xl flex-col gap-1.5"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+            >
               <div ref={topSentinelRef} aria-hidden="true" />
 
               {thread.isLoadingOlder && (
@@ -307,7 +316,7 @@ export function ChatThread({ conversationId }: { conversationId: string }) {
       </div>
 
       {/* Composer */}
-      <div className="px-3 pb-4 pt-2 sm:px-6">
+      <div className="px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
         <div className="mx-auto max-w-2xl">
           <MessageComposer onSend={thread.send} onTyping={thread.notifyTyping} />
         </div>

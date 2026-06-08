@@ -32,6 +32,9 @@ const PREVIEW_LIMIT = 12;
 export interface NotificationsPreview {
   items: StoredNotification[];
   unread: number;
+  isLoading: boolean;
+  isError: boolean;
+  refetch: () => void;
   markAllRead: () => void;
 }
 
@@ -82,9 +85,19 @@ export function useNotificationsPreview(): NotificationsPreview {
   });
 
   const items = useMemo(() => query.data ?? [], [query.data]);
+  const refetch = useCallback(() => {
+    void query.refetch();
+  }, [query]);
   const markAllRead = useCallback(() => {
     if (unread > 0) markAllReadMutation.mutate();
   }, [unread, markAllReadMutation]);
 
-  return { items, unread, markAllRead };
+  return {
+    items,
+    unread,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    refetch,
+    markAllRead,
+  };
 }

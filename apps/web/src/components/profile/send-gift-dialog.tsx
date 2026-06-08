@@ -46,7 +46,9 @@ export function SendGiftDialog({
   const tc = useTranslations('common');
   const tEconomy = useTranslations('economy');
   const { isPremium } = useAuth();
-  const giftsQuery = useGifts();
+  // Only subscribe/fetch the catalogue while the dialog is open — closed
+  // instances (e.g. one per search card) stay idle.
+  const giftsQuery = useGifts({ enabled: open });
   const grouped = useGiftsByRarity(giftsQuery.data);
   const sendGift = useSendGift();
 

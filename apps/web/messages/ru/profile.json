@@ -2,6 +2,8 @@
   "meta": {
     "publicTitle": "Профиль",
     "publicDescription": "Публичный профиль пользователя ruletka.top.",
+    "publicTitleNamed": "{name} — профиль",
+    "publicDescriptionNamed": "Профиль {name} на ruletka.top. Посмотрите статус, подарки и отправьте свой.",
     "myTitle": "Мой профиль",
     "myDescription": "Ваш профиль, подарки и настройки.",
     "editTitle": "Редактирование профиля"
@@ -58,7 +60,7 @@
     "viewsCountSuffix": "просмотров профиля",
     "viewsRollingNote": "Полный список посетителей с именами скоро появится — мы уже считаем каждый визит.",
     "viewsLockedReason": "Узнайте, кто заходил в ваш профиль.",
-    "viewsLockedCaption": "{count} просмотров · откройте с Премиумом",
+    "viewsLockedCaption": "{count, plural, one {{count} просмотр} few {{count} просмотра} many {{count} просмотров} other {{count} просмотров}} · откройте с Премиумом",
     "badge": "Премиум",
     "upsellTitlePrefix": "Откройте",
     "upsellTitleHighlight": "Премиум",

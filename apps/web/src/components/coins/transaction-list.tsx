@@ -15,7 +15,7 @@ import {
   RotateCcw,
   ShoppingCart,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { CoinTransaction, CoinTxType } from '@ruletka/shared-types';
 import { Badge, Button, Skeleton, Spinner } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
@@ -34,6 +34,7 @@ const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: 'in' | 'out' }> = {
 
 function TxRow({ tx }: { tx: CoinTransaction }) {
   const t = useTranslations('economy');
+  const locale = useLocale();
   const meta = TX_META[tx.type];
   const Icon = meta.icon;
   const positive = tx.delta > 0;
@@ -50,7 +51,7 @@ function TxRow({ tx }: { tx: CoinTransaction }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{t(`txType.${tx.type}`)}</p>
-        <p className="text-xs text-muted-foreground">{formatDateTime(tx.createdAt)}</p>
+        <p className="text-xs text-muted-foreground">{formatDateTime(tx.createdAt, locale)}</p>
       </div>
       <div className="flex flex-col items-end">
         <span
@@ -65,10 +66,10 @@ function TxRow({ tx }: { tx: CoinTransaction }) {
             <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
           )}
           {positive ? '+' : ''}
-          {formatNumber(tx.delta)}
+          {formatNumber(tx.delta, locale)}
         </span>
         <span className="text-[0.6875rem] text-muted-foreground tabular-nums">
-          {t('transactionList.balanceLine', { amount: formatNumber(tx.balanceAfter) })}
+          {t('transactionList.balanceLine', { amount: formatNumber(tx.balanceAfter, locale) })}
         </span>
       </div>
     </li>

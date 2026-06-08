@@ -9,10 +9,11 @@
  * shaped so that swap is a one-line change.
  */
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Coins, Plus } from 'lucide-react';
 import { ROUTES } from '@/config/nav';
 import { cn } from '@/lib/cn';
+import { formatNumber } from '@/features/economy/format';
 
 export interface CoinBalanceProps {
   /** Current coin balance. `null` while unknown (renders a subtle skeleton). */
@@ -22,7 +23,8 @@ export interface CoinBalanceProps {
 
 export function CoinBalance({ balance = null, className }: CoinBalanceProps) {
   const t = useTranslations('economy');
-  const display = balance === null ? null : new Intl.NumberFormat('ru-RU').format(balance);
+  const locale = useLocale();
+  const display = balance === null ? null : formatNumber(balance, locale);
 
   return (
     <Link

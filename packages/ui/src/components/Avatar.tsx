@@ -121,7 +121,13 @@ function AvatarInner({
   return (
     <>
       {src && (
-        <AvatarPrimitive.Image src={src} alt={alt ?? ''} className="size-full object-cover" />
+        <AvatarPrimitive.Image
+          src={src}
+          alt={alt ?? ''}
+          loading="lazy"
+          decoding="async"
+          className="size-full object-cover"
+        />
       )}
       <AvatarPrimitive.Fallback
         delayMs={src ? 300 : 0}

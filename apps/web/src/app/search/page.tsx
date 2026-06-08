@@ -14,11 +14,13 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { Compass, SearchX, UserSearch, Users } from 'lucide-react';
+import type { PublicProfile } from '@ruletka/shared-types';
 import { Button } from '@ruletka/ui';
 import { EconomyShell } from '@/components/economy/economy-shell';
 import { EmptyState, ErrorState } from '@/components/economy/states';
 import { SearchFilters } from '@/components/search/search-filters';
 import { PersonCard, PersonCardSkeleton } from '@/components/search/person-card';
+import { SendGiftDialog } from '@/components/profile/send-gift-dialog';
 import {
   useDiscoveryPeople,
   useProfileSearch,
@@ -33,6 +35,9 @@ export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [gender, setGender] = useState<GenderFilter>('any');
   const [country, setCountry] = useState<PeopleFilters['country']>(null);
+  // One hoisted gift dialog for the whole grid — cards open it via onSendGift
+  // instead of each mounting their own (closed) dialog instance.
+  const [giftTarget, setGiftTarget] = useState<PublicProfile | null>(null);
 
   const isSearching = query.trim().length > 0;
   const filters: PeopleFilters = { gender, country };
@@ -106,7 +111,12 @@ export default function SearchPage() {
                   className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
                 >
                   {search.people.map((profile, i) => (
-                    <PersonCard key={profile.id} profile={profile} index={i} />
+                    <PersonCard
+                      key={profile.id}
+                      profile={profile}
+                      index={i}
+                      onSendGift={setGiftTarget}
+                    />
                   ))}
                 </motion.div>
                 {search.hasMore && (
@@ -174,13 +184,27 @@ export default function SearchPage() {
                 className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
               >
                 {discovery.people.map((profile, i) => (
-                  <PersonCard key={profile.id} profile={profile} index={i} />
+                  <PersonCard
+                    key={profile.id}
+                    profile={profile}
+                    index={i}
+                    onSendGift={setGiftTarget}
+                  />
                 ))}
               </motion.div>
             )}
           </section>
         )}
       </div>
+
+      <SendGiftDialog
+        open={giftTarget !== null}
+        onOpenChange={(next) => {
+          if (!next) setGiftTarget(null);
+        }}
+        recipientId={giftTarget?.id ?? ''}
+        recipientName={giftTarget?.nickname ?? ''}
+      />
     </EconomyShell>
   );
 }
