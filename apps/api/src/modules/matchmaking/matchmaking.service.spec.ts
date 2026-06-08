@@ -450,17 +450,21 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
     expect(result).toBeNull();
   });
 
-  it('defaults whoCanCall to friends-only when a candidate has no settings row', async () => {
+  it('defaults a settings-less candidate to whoCanCall:everyone so default/new users stay matchable', async () => {
     seat(waiter({ userId: PEER_OID }));
     const joiner = waiter({ userId: JOINER_OID });
     seat(joiner);
-    // No settings document for anyone → default 'friends'; not friends → no match.
+    // No settings document for anyone → must default to the PERMISSIVE 'everyone'
+    // (NOT 'friends'); otherwise every brand-new / settings-less user is silently
+    // un-matchable in the random roulette (the core flow breaks). Regression for
+    // the whoCanCall default bug caught by the live 2-peer test.
     settingsFindOne.mockResolvedValue(null);
     friends.areFriends.mockResolvedValue(false);
 
     const result = await service.tryMatch(joiner, alwaysConnected);
 
-    expect(result).toBeNull();
+    expect(result?.peer.userId).toBe(PEER_OID);
+    expect(friends.areFriends).not.toHaveBeenCalled();
   });
 
   it('reads each whoCanCall at most once per pass (memoised across candidates)', async () => {

@@ -486,20 +486,23 @@ export class MatchmakingService {
   }
 
   /**
-   * Read a user's `whoCanCall` privacy directly from the `settings` collection
-   * (defaulting to the schema default `friends`). Read directly — rather than
-   * via a hard DI dependency on the settings module — mirroring how
-   * {@link ChatService} reads `whoCanMessage`.
+   * Read a user's `whoCanCall` privacy directly from the `settings` collection,
+   * defaulting to the permissive `everyone` (consistent with `whoCanMessage` /
+   * `whoCanViewProfile`): a user who never opted into a restriction MUST stay
+   * matchable in the random roulette — otherwise every default / settings-less
+   * user can never be paired (the roulette's core flow silently breaks). Read
+   * directly — rather than via a hard DI dependency on the settings module —
+   * mirroring how {@link ChatService} reads `whoCanMessage`.
    */
   private async getWhoCanCall(userId: string): Promise<Visibility> {
     if (!Types.ObjectId.isValid(userId)) {
-      return 'friends';
+      return 'everyone';
     }
     const doc = await this.connection
       .collection('settings')
       .findOne({ userId: new Types.ObjectId(userId) }, { projection: { 'privacy.whoCanCall': 1 } });
     const value = (doc?.privacy as { whoCanCall?: Visibility } | undefined)?.whoCanCall;
-    return value ?? 'friends';
+    return value ?? 'everyone';
   }
 
   // ── Internals ────────────────────────────────────────────────────────────────

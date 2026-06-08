@@ -6,7 +6,7 @@ export type Visibility = z.infer<typeof visibilitySchema>;
 
 export const privacySettingsSchema = z.object({
   whoCanMessage: visibilitySchema.default('everyone'),
-  whoCanCall: visibilitySchema.default('friends'),
+  whoCanCall: visibilitySchema.default('everyone'),
   whoCanViewProfile: visibilitySchema.default('everyone'),
   showOnlineStatus: z.boolean().default(true),
 });

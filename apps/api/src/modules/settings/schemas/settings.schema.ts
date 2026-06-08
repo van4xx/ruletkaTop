@@ -23,7 +23,7 @@ export class PrivacySettingsEntity implements PrivacySettings {
   @Prop({ required: true, enum: VISIBILITY, default: 'everyone', type: String })
   whoCanMessage!: Visibility;
 
-  @Prop({ required: true, enum: VISIBILITY, default: 'friends', type: String })
+  @Prop({ required: true, enum: VISIBILITY, default: 'everyone', type: String })
   whoCanCall!: Visibility;
 
   @Prop({ required: true, enum: VISIBILITY, default: 'everyone', type: String })
