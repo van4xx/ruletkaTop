@@ -1,5 +1,11 @@
 plugins {
     id("com.android.application")
+    // Kotlin Android plugin — REQUIRED so the `kotlin { compilerOptions { … } }`
+    // block below resolves. It is declared `apply false` in settings.gradle.kts and
+    // applied here; without it the build fails with "Unresolved reference
+    // 'compilerOptions'/'jvmTarget'" under AGP 9 / Kotlin 2.3. Must come BEFORE the
+    // Flutter Gradle plugin (per the line below).
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
