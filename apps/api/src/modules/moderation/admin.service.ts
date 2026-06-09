@@ -1,8 +1,20 @@
-import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import type { Redis } from 'ioredis';
 import { Connection, Model, Types } from 'mongoose';
 
+import { runAccountTeardown } from '../../common/account-teardown';
+import {
+  PAYMENTS_CANCEL_PORT,
+  type PaymentsCancelPort,
+} from '../../common/payments-cancel.port';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { AuditService } from '../admin/audit.service';
 import { AuthService } from '../auth/auth.service';
@@ -83,6 +95,12 @@ export class AdminService {
     private readonly fingerprintService: FingerprintService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly auditService: AuditService,
+    // Best-effort upstream billing cancel for a ban (a banned user must not keep
+    // being billed). Optional so the module wires up even where CloudPayments
+    // isn't bound; absent ⇒ the LOCAL terminal-state drive still runs.
+    @Optional()
+    @Inject(PAYMENTS_CANCEL_PORT)
+    private readonly paymentsCancelPort?: PaymentsCancelPort,
   ) {}
 
   /**
@@ -106,6 +124,19 @@ export class AdminService {
     await this.fingerprintService.recordForUser(userId);
     await this.authService.revokeAllSessions(userId);
     await this.forceDisconnect(userId);
+    // REVERSIBLE billing/feed teardown for the ban: force-cancel the subscription
+    // (a banned user must not keep being billed) and expire any active paid Top
+    // placement so their promotion stops showing immediately — but LEAVE the
+    // wallet intact (an unban restores the account). Best-effort: a teardown
+    // hiccup must NEVER abort the ban (steps above already make it effective).
+    await runAccountTeardown(this.connection, updated._id, 'ban', {
+      onWarn: (m) => this.logger.warn(m),
+      cancelUpstream: this.paymentsCancelPort
+        ? (subscriptionId) => this.paymentsCancelPort!.cancelSubscription(subscriptionId)
+        : undefined,
+    }).catch((err: unknown) =>
+      this.logger.warn(`banUser: account teardown failed for ${userId}: ${(err as Error).message}`),
+    );
     // Append the privileged sanction to the audit trail (best-effort; never fails
     // the ban). `callerId` is the acting moderator for a manual/report/review ban,
     // or `null` for the AI-escalation path (no human actor).

@@ -19,17 +19,19 @@ function findSortReturning(docs: unknown[]): {
 }
 
 /**
- * Mongoose `Connection` stub whose `collection('profiles').find().toArray()`
- * resolves to `profileRows` — the single batched `$in` join the feed performs.
- * Defaults to no rows (entries then carry `profile: null`).
+ * Mongoose `Connection` stub for the feed reads. `collection('profiles')` joins
+ * `profileRows` (the batched `$in`); `collection('users')` returns `deadUserRows`
+ * — the tombstone/ban guard's source-of-truth `$in` (each row a `{ _id }` of a
+ * torn-down / banned owner). Both default to no rows (all owners live; entries
+ * with no profile are dropped).
  */
-function connectionReturning(profileRows: unknown[] = []): Connection {
+function connectionReturning(profileRows: unknown[] = [], deadUserRows: unknown[] = []): Connection {
   return {
-    collection: jest.fn().mockReturnValue({
+    collection: jest.fn((name: string) => ({
       find: jest.fn().mockReturnValue({
-        toArray: jest.fn().mockResolvedValue(profileRows),
+        toArray: jest.fn().mockResolvedValue(name === 'users' ? deadUserRows : profileRows),
       }),
-    }),
+    })),
   } as unknown as Connection;
 }
 
@@ -228,11 +230,11 @@ describe('TopService.getActiveFeed', () => {
   let placementModel: { create: jest.Mock; find: jest.Mock };
   let wallet: { debit: jest.Mock; credit: jest.Mock };
 
-  /** Rebuild the service with a profiles-join connection returning `profileRows`. */
-  function buildService(profileRows: unknown[] = []): void {
+  /** Rebuild the service with a profiles-join connection (+ optional dead owners). */
+  function buildService(profileRows: unknown[] = [], deadUserRows: unknown[] = []): void {
     service = new TopService(
       placementModel as unknown as Model<TopPlacementDocument>,
-      connectionReturning(profileRows),
+      connectionReturning(profileRows, deadUserRows),
       wallet as unknown as WalletService,
     );
   }
@@ -244,6 +246,7 @@ describe('TopService.getActiveFeed', () => {
   });
 
   it('groups active placements into the two lanes, querying each lane with the active window', async () => {
+    const uid = '507f1f77bcf86cd799439011'; // the default placementDoc owner
     const leftDocs = [
       placementDoc({ _id: { toString: () => 'L1' }, lane: 'left', priority: 200, coinsSpent: 200 }),
       placementDoc({ _id: { toString: () => 'L2' }, lane: 'left', priority: 50, coinsSpent: 50 }),
@@ -256,6 +259,11 @@ describe('TopService.getActiveFeed', () => {
     placementModel.find
       .mockReturnValueOnce(findSortReturning(leftDocs))
       .mockReturnValueOnce(findSortReturning(rightDocs));
+
+    // Owner is LIVE and has a profile → all cards survive the read-time guards.
+    buildService([
+      { userId: { toString: () => uid }, nickname: 'mira', avatarUrl: null, isPremium: false },
+    ]);
 
     const feed = await service.getActiveFeed();
 
@@ -324,15 +332,50 @@ describe('TopService.getActiveFeed', () => {
     expect(feed.right[0]?.profile).toMatchObject({ id: uid, nickname: 'mira' });
   });
 
-  it('falls back to profile: null when the promoted user has no profile', async () => {
+  it('drops the card when the promoted user has no resolvable profile', async () => {
     placementModel.find
       .mockReturnValueOnce(findSortReturning([placementDoc({ _id: { toString: () => 'L1' } })]))
       .mockReturnValueOnce(findSortReturning([]));
-    // Default connection returns no profile rows.
+    // Default connection returns no profile rows → the card is dropped entirely
+    // (defence-in-depth: a scrubbed/erased owner's placement never shows).
 
     const feed = await service.getActiveFeed();
 
-    expect(feed.left[0]?.profile).toBeNull();
+    expect(feed.left).toEqual([]);
+  });
+
+  it("drops a banned (or tombstoned) owner's placement even when their profile still resolves", async () => {
+    const liveUid = '507f1f77bcf86cd799439011';
+    const bannedUid = '507f1f77bcf86cd799439022';
+    placementModel.find
+      .mockReturnValueOnce(
+        findSortReturning([
+          placementDoc({ _id: { toString: () => 'L1' }, userId: { toString: () => liveUid } }),
+          placementDoc({ _id: { toString: () => 'L2' }, userId: { toString: () => bannedUid } }),
+        ]),
+      )
+      .mockReturnValueOnce(findSortReturning([]));
+
+    // Both owners still have a profile row…
+    buildService(
+      [
+        { userId: { toString: () => liveUid }, nickname: 'live', avatarUrl: null, isPremium: false },
+        {
+          userId: { toString: () => bannedUid },
+          nickname: 'banned',
+          avatarUrl: null,
+          isPremium: false,
+        },
+      ],
+      // …but the `users` source-of-truth marks bannedUid as banned → dropped.
+      [{ _id: { toString: () => bannedUid } }],
+    );
+
+    const feed = await service.getActiveFeed();
+
+    // Only the live owner's card survives; the banned owner's is suppressed.
+    expect(feed.left.map((p) => p.id)).toEqual(['L1']);
+    expect(feed.left[0]?.userId).toBe(liveUid);
   });
 });
 

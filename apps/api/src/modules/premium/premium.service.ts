@@ -135,8 +135,18 @@ export class PremiumService implements OnModuleInit {
    * activation, optionally persists the recurring-charge `token`, clears any
    * pending cancellation, and mirrors entitlement onto the profile.
    *
+   * STACKED RENEWAL: `currentPeriodEnd` carries the freshly-paid interval
+   * measured from now (i.e. `now + intervalDays`). When the user already has
+   * paid time left (an early renewal / re-subscribe), resetting to that absolute
+   * end would BURN the remaining days. Instead we EXTEND: the new end is the
+   * incoming end plus whatever future time was left on the existing record —
+   * equivalently `max(existingFutureEnd, now) + intervalDays` — so each paid
+   * charge adds exactly one interval and no paid day is ever lost. (The
+   * per-charge idempotency that guarantees one `activate` per unique charge lives
+   * in the payments layer's renewal claim; this method only does the stacking.)
+   *
    * @param plan plan code (e.g. `monthly`).
-   * @param currentPeriodEnd end of the paid period (entitlement window).
+   * @param currentPeriodEnd end of the freshly-paid interval (`now + intervalDays`).
    * @param token optional CloudPayments recurring-charge token.
    * @param subscriptionId optional CloudPayments subscription id (persisted so a
    *        later user cancellation can stop billing upstream).
@@ -150,10 +160,20 @@ export class PremiumService implements OnModuleInit {
   ): Promise<void> {
     const _id = new Types.ObjectId(userId);
 
+    // Stack onto any remaining paid time. Read the current record's end and, if
+    // it is still in the future, add the leftover onto the freshly-paid interval
+    // so an early renewal extends rather than truncates the entitlement window.
+    const existing = await this.subscriptionModel
+      .findOne({ userId: _id })
+      .select('currentPeriodEnd')
+      .lean()
+      .exec();
+    const periodEnd = this.stackPeriodEnd(currentPeriodEnd, existing?.currentPeriodEnd ?? null);
+
     const set: Record<string, unknown> = {
       plan,
       status: 'active',
-      currentPeriodEnd,
+      currentPeriodEnd: periodEnd,
       cancelAtPeriodEnd: false,
     };
     if (token !== undefined) {
@@ -180,7 +200,28 @@ export class PremiumService implements OnModuleInit {
       .updateOne({ userId: _id, startedAt: null }, { $set: { startedAt: new Date() } })
       .exec();
 
-    await this.syncProfilePremium(_id, true, currentPeriodEnd);
+    await this.syncProfilePremium(_id, true, periodEnd);
+  }
+
+  /**
+   * Compute the stacked end of a paid period: the freshly-paid interval (carried
+   * in `paidEnd` as `now + intervalDays`) extended by any unexpired remainder on
+   * the existing record. If the existing end is `null` or already in the past
+   * (a first subscription or a lapsed one), there is nothing to stack and the
+   * freshly-paid end stands. Otherwise the leftover `existingEnd - now` is added,
+   * yielding `max(existingEnd, now) + intervalDays` — every charge adds exactly
+   * one interval, never burning paid days.
+   */
+  private stackPeriodEnd(paidEnd: Date, existingEnd: Date | null): Date {
+    const now = Date.now();
+    if (existingEnd === null) {
+      return paidEnd;
+    }
+    const remainingMs = existingEnd.getTime() - now;
+    if (remainingMs <= 0) {
+      return paidEnd;
+    }
+    return new Date(paidEnd.getTime() + remainingMs);
   }
 
   /**

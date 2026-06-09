@@ -53,6 +53,34 @@ export function callRoom(callId: string): string {
 }
 
 /**
+ * STRING key indexing an ACCEPTED (in-progress) 1:1 friend call by its UNORDERED
+ * participant pair → `callId`. Written when a call is accepted and cleared on
+ * teardown, so a freshly-created block (`block:enforce`) can find and tear down a
+ * call already in progress between the two users without knowing its `callId`.
+ * The pair is sorted so `(a,b)` and `(b,a)` resolve to the same key.
+ */
+export function activeCallPairKey(userA: string, userB: string): string {
+  const [lo, hi] = userA < userB ? [userA, userB] : [userB, userA];
+  return `mm:activecall:pair:${lo}:${hi}`;
+}
+
+/**
+ * STRING key (JSON `{ a, b }`) mapping an ACCEPTED call's `callId` back to its
+ * participant pair, so the by-callId teardown path can also delete the matching
+ * {@link activeCallPairKey} without re-deriving the pair from membership.
+ */
+export function activeCallIdKey(callId: string): string {
+  return `mm:activecall:id:${callId}`;
+}
+
+/**
+ * TTL (seconds) for the accepted-call index entries. Bounds an orphaned index
+ * entry should a teardown be missed, while comfortably outlasting any realistic
+ * call. Mirrors {@link ROOM_TTL_SECONDS} for the same reason rooms have one.
+ */
+export const ACTIVE_CALL_TTL_SECONDS = 6 * 60 * 60;
+
+/**
  * TTL (seconds) for a pending (ringing) call — the ring timeout. After this the
  * pending-call key self-expires so a never-answered invite cannot linger; the
  * caller's UI also auto-cancels on its own timer.

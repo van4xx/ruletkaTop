@@ -297,9 +297,15 @@ export class AuthService {
     };
     const tokens = await this.issueSession({ sub: userId, role, isPremium }, randomUUID(), ctx);
 
-    // Fire the verification email — BEST-EFFORT: a mail outage (or no SMTP in
-    // dev) must NEVER fail registration. Mint a token + send, swallowing errors.
-    await this.requestEmailVerification(userId, email);
+    // Fire the verification email FIRE-AND-FORGET — BEST-EFFORT and decoupled
+    // from the signup RESPONSE: a mail outage (or no SMTP in dev) must NEVER
+    // fail registration, and a slow/hung SMTP host must NEVER stall it. We do
+    // NOT await the mint+send so the response returns as soon as the account +
+    // session exist; the email is dispatched in the background.
+    // `requestEmailVerification` owns its own try/catch and never rejects, so
+    // the trailing `.catch` is only belt-and-braces against an unexpected
+    // synchronous throw (mirrors `dispatchPasswordResetEmail`).
+    void this.requestEmailVerification(userId, email).catch(() => undefined);
 
     return { user: authUser, tokens };
   }

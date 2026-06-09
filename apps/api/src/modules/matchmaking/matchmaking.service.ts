@@ -380,6 +380,11 @@ export class MatchmakingService {
       matchId,
       userA: peer.userId,
       userB: joiner.userId,
+      // Bind each side to the SINGLE socket that won this pairing (userA = peer,
+      // userB = joiner), so `mm:matched`/`rtc:*` route to exactly one device per
+      // user and a second device of the same user can't double-initiate the call.
+      socketA: peer.socketId,
+      socketB: joiner.socketId,
       createdAt: Date.now(),
     };
     const joinerPointer: UserRoomPointer = {
@@ -445,6 +450,50 @@ export class MatchmakingService {
     }
     if (room.userB === userId) {
       return room.userA;
+    }
+    return null;
+  }
+
+  /**
+   * The single socket id `userId` is bound to in `roomId` — the device that won
+   * the pairing — for direct `mm:matched`/`rtc:*` routing, or `null` if not a
+   * member / no room / the room predates socket binding (the gateway then falls
+   * back to the per-user room, preserving prior behaviour).
+   */
+  async getBoundSocket(roomId: string, userId: string): Promise<string | null> {
+    const room = await this.getRoom(roomId);
+    if (!room) {
+      return null;
+    }
+    if (room.userA === userId) {
+      return room.socketA ?? null;
+    }
+    if (room.userB === userId) {
+      return room.socketB ?? null;
+    }
+    return null;
+  }
+
+  /**
+   * Resolve the peer AND both bound sockets for `roomId` in ONE room read, so a
+   * signaling relay can route to the peer's bound socket (and verify the sender's
+   * own bound socket) without three separate `getRoom` round-trips. Returns
+   * `null` when `userId` is not a member / the room is gone. `peerSocket` /
+   * `selfSocket` are `null` on rooms persisted before socket binding existed.
+   */
+  async getRelayTarget(
+    roomId: string,
+    userId: string,
+  ): Promise<{ peerUserId: string; peerSocket: string | null; selfSocket: string | null } | null> {
+    const room = await this.getRoom(roomId);
+    if (!room) {
+      return null;
+    }
+    if (room.userA === userId) {
+      return { peerUserId: room.userB, peerSocket: room.socketB ?? null, selfSocket: room.socketA ?? null };
+    }
+    if (room.userB === userId) {
+      return { peerUserId: room.userA, peerSocket: room.socketA ?? null, selfSocket: room.socketB ?? null };
     }
     return null;
   }

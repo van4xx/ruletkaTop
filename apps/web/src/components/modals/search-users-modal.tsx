@@ -3,12 +3,11 @@
 /**
  * Find people.
  *
- * ── Contract gap (flagged for the integrator) ────────────────────────────
- * There is no text user-search endpoint yet. We attempt `GET /profile/search?q=`
- * (the natural future route) and, if it isn't there (404/501), gracefully fall
- * back to a direct id lookup via the existing `GET /profile/:id` when the query
- * looks like a 24-char ObjectId. Once a real search endpoint lands, only the
- * `searchUsers` call below needs to change.
+ * Free-text nickname search backed by the real paginated `GET /profiles/search`
+ * endpoint (the same one the /search page uses). As a pure convenience, a query
+ * that is itself a 24-char ObjectId is also resolved via `GET /profiles/:id`, so
+ * pasting a user id always lands the right person even if it falls outside the
+ * nickname-prefix window.
  *
  * Results link to the public profile and offer quick actions (add friend / gift)
  * via the modal store.
@@ -19,6 +18,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Gift, RefreshCw, Search, UserPlus, UserRound } from 'lucide-react';
 import { objectIdSchema, type PublicProfile } from '@ruletka/shared-types';
+import type { QueryFunctionContext } from '@tanstack/react-query';
 import {
   Avatar,
   Badge,
@@ -33,29 +33,32 @@ import {
 import { api, ApiClientError } from '@/lib/api';
 import { useModal } from '@/lib/stores/modal-store';
 
-/** Best-effort search: text endpoint first, id lookup as a fallback. */
-async function searchUsers(query: string): Promise<PublicProfile[]> {
+/**
+ * Free-text people search via the real paginated `GET /profiles/search`. When
+ * the query is itself an ObjectId we also resolve it directly via
+ * `GET /profiles/:id` (a pure convenience) and surface that profile first.
+ */
+async function searchUsers(
+  query: string,
+  signal?: AbortSignal,
+): Promise<PublicProfile[]> {
   const q = query.trim();
   if (!q) return [];
-  try {
-    return await api.request<PublicProfile[]>('/profile/search', { query: { q } });
-  } catch (err) {
-    // Endpoint missing/not implemented → fall back to a direct id lookup.
-    if (err instanceof ApiClientError && [404, 405, 501].includes(err.status)) {
-      if (objectIdSchema.safeParse(q).success) {
-        try {
-          const profile = await api.profile.byId(q);
-          return [profile];
-        } catch (inner) {
-          if (inner instanceof ApiClientError && inner.status === 404) return [];
-          throw inner;
-        }
-      }
-      // No text search available and the query isn't an id.
-      return [];
+
+  const page = await api.profiles.search({ q }, signal);
+  const items = page.items;
+
+  if (objectIdSchema.safeParse(q).success && !items.some((p) => p.id === q)) {
+    try {
+      const profile = await api.profile.byId(q);
+      return [profile, ...items];
+    } catch (err) {
+      if (err instanceof ApiClientError && err.status === 404) return items;
+      throw err;
     }
-    throw err;
   }
+
+  return items;
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -77,7 +80,7 @@ export function SearchUsersModal() {
 
   const results = useQuery({
     queryKey: ['search-users', debounced.trim()],
-    queryFn: () => searchUsers(debounced),
+    queryFn: ({ signal }: QueryFunctionContext) => searchUsers(debounced, signal),
     enabled: debounced.trim().length >= 2,
     staleTime: 30_000,
   });

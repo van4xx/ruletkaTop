@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
 
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model, Types } from 'mongoose';
 
 import type {
   CheckoutWidgetParams,
@@ -87,6 +94,12 @@ export class PaymentsService {
     @Inject(COIN_PACKAGES_SERVICE)
     private readonly coinPackages: CoinPackagesServiceContract,
     private readonly cloudPayments: CloudPaymentsClient,
+    // Shared connection, used ONLY to read the `users` source-of-truth so a
+    // tombstoned (`deletedAt`) / banned account can never be (re-)entitled by a
+    // webhook. Optional so the service still instantiates where no connection is
+    // bound (e.g. focused unit tests) — when absent the guard fails OPEN (the
+    // amount/idempotency guards above remain the primary defence).
+    @Optional() @InjectConnection() private readonly connection?: Connection,
   ) {
     this.publicId = this.config.get<string>('CLOUDPAYMENTS_PUBLIC_ID', '');
   }
@@ -255,6 +268,19 @@ export class PaymentsService {
       return ACK_OK;
     }
 
+    // Defence-in-depth: a tombstoned (`deletedAt`) / banned account must never be
+    // entitled. Best-effort cancel any upstream subscription so a torn-down card
+    // stops being billed, then ack WITHOUT crediting/activating. The Payment is
+    // left pending (audit) — it is never fulfilled for a dead account.
+    if (await this.isAccountTorndown(payment.userId.toString())) {
+      this.logger.warn(
+        `Pay for invoice ${payment.invoiceId} refused: account ${payment.userId.toString()} ` +
+          'is deleted/banned — not entitling.',
+      );
+      await this.cancelUpstreamBestEffort(n);
+      return ACK_OK;
+    }
+
     // Atomically claim the Payment: only the winner of pending→completed runs
     // fulfilment, making concurrent/duplicate webhooks credit exactly once.
     const claimed = await this.paymentModel
@@ -366,6 +392,20 @@ export class PaymentsService {
 
     const status = n.Status ?? '';
     if (status === RECURRENT_ACTIVE) {
+      // Defence-in-depth: a tombstoned (`deletedAt`) / banned account must never
+      // be re-entitled by a renewal charge that landed after teardown. Cancel
+      // local entitlement + best-effort upstream cancel so the card stops being
+      // billed, then ack WITHOUT activating.
+      if (await this.isAccountTorndown(userId)) {
+        this.logger.warn(
+          `Recurrent Active for user ${userId} ignored: account is deleted/banned. ` +
+            'Cancelling upstream.',
+        );
+        await this.premium.cancel(userId);
+        await this.cancelUpstreamBestEffort(n);
+        return ACK_OK;
+      }
+
       // Refuse to re-activate a subscription the user has cancelled.
       if (await this.premium.hasCanceledRenewal(userId)) {
         this.logger.warn(
@@ -715,6 +755,42 @@ export class PaymentsService {
     const code = (err as { code?: number | string }).code;
     const message = (err as { message?: string }).message ?? '';
     return code === 11000 || code === 11001 || /E11000 duplicate key/i.test(message);
+  }
+
+  /**
+   * Defence-in-depth tombstone/ban gate: resolve the `users` row and report
+   * whether the account is TORN-DOWN (`deletedAt != null`) or BANNED
+   * (`isBanned === true`). Such an account must NEVER be (re-)entitled by a
+   * webhook — a renewal charge or redelivered Pay landing after teardown could
+   * otherwise resurrect premium/coins on a dead account.
+   *
+   * Reads the `users` collection by name via the shared connection (same
+   * read-by-name pattern the economy services use). Fails OPEN when the
+   * connection is unavailable or the read errors (the amount + idempotency
+   * guards remain the primary defence), and treats an UNKNOWN userId as
+   * not-dead so a legitimate buyer is never blocked by a transient miss.
+   */
+  private async isAccountTorndown(userId: string): Promise<boolean> {
+    if (!this.connection || !Types.ObjectId.isValid(userId)) {
+      return false;
+    }
+    try {
+      const row = (await this.connection
+        .collection('users')
+        .findOne(
+          { _id: new Types.ObjectId(userId) },
+          { projection: { deletedAt: 1, isBanned: 1 } },
+        )) as { deletedAt?: Date | null; isBanned?: boolean } | null;
+      if (!row) {
+        return false;
+      }
+      return row.deletedAt != null || row.isBanned === true;
+    } catch (err) {
+      this.logger.warn(
+        `Failed to check teardown state for user ${userId}; failing open: ${(err as Error).message}`,
+      );
+      return false;
+    }
   }
 
   /**

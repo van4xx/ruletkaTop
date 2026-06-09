@@ -15,6 +15,7 @@ import 'package:ruletka/core/api/api.dart';
 import 'package:ruletka/core/di/di.dart';
 import 'package:ruletka/core/models/models.dart';
 import 'package:ruletka/core/socket/socket.dart';
+import 'package:ruletka/features/calls/application/pending_direct_call.dart';
 import 'package:ruletka/features/calls/domain/direct_call_controller.dart';
 import 'package:ruletka/features/chat/domain/chat_thread_controller.dart';
 
@@ -99,7 +100,8 @@ void main() {
   });
 
   group('DirectCallController — incoming (callee)', () {
-    test('an incoming invite rings, and accept emits call:accept + launches', () {
+    test('an incoming invite rings, and accept launches the callee stage '
+        'WITHOUT emitting call:accept (the engine emits it after building the PC)', () {
       final socket = _FakeSocket();
       final c = _container(socket);
       // Force the controller to build (wiring the listeners).
@@ -119,10 +121,14 @@ void main() {
 
       c.read(directCallControllerProvider.notifier).accept();
       state = c.read(directCallControllerProvider);
-      expect(socket.emitted, contains('accept:call-1'));
+      // The accept handshake is DEFERRED to the roulette engine (it emits
+      // call:accept only after the answerer PC exists), so none is emitted here.
+      expect(socket.emitted, isNot(contains('accept:call-1')));
       expect(state.hasRing, isFalse);
       expect(state.launch, isNotNull);
       expect(state.launch!.type, MatchType.video);
+      expect(state.launch!.role, DirectCallLaunchRole.callee);
+      expect(state.launch!.callId, 'call-1');
     });
 
     test('decline emits call:decline and clears the ring', () {
@@ -160,6 +166,7 @@ void main() {
       expect(state.hasRing, isFalse);
       expect(state.launch, isNotNull);
       expect(state.launch!.peerUserId, 'friend-3');
+      expect(state.launch!.role, DirectCallLaunchRole.caller);
       expect(state.launch!.callId, 'call-3');
     });
 
@@ -187,6 +194,32 @@ void main() {
       socket.ended!(const CallResponsePayload(callId: 'call-5'));
 
       expect(c.read(directCallControllerProvider).hasRing, isFalse);
+    });
+  });
+
+  group('PendingDirectCall — roulette hand-off (one-shot)', () {
+    test('set records a launch; consume returns it once then null', () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final notifier = c.read(pendingDirectCallProvider.notifier);
+
+      expect(c.read(pendingDirectCallProvider), isNull);
+      expect(notifier.consume(), isNull);
+
+      const launch = DirectCallLaunch(
+        type: MatchType.video,
+        peerUserId: 'friend-9',
+        role: DirectCallLaunchRole.callee,
+        callId: 'call-9',
+      );
+      notifier.set(launch);
+      expect(c.read(pendingDirectCallProvider), launch);
+
+      // Drained exactly once: the second read yields null so a re-running
+      // initState can't replay the hand-off into a second call.
+      expect(notifier.consume(), same(launch));
+      expect(c.read(pendingDirectCallProvider), isNull);
+      expect(notifier.consume(), isNull);
     });
   });
 }

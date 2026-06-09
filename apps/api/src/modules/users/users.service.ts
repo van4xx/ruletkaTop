@@ -1,11 +1,16 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Connection, Model, Types } from 'mongoose';
 
 import type { Role } from '@ruletka/shared-types';
 
+import { runAccountTeardown } from '../../common/account-teardown';
+import {
+  PAYMENTS_CANCEL_PORT,
+  type PaymentsCancelPort,
+} from '../../common/payments-cancel.port';
 import { User, UserDocument } from './schemas/user.schema';
 
 /** Input accepted by {@link UsersService.createUser}. */
@@ -54,6 +59,12 @@ export class UsersService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     @InjectConnection() private readonly connection: Connection,
+    // Best-effort upstream billing cancel for account teardown. Optional so the
+    // module wires up even where CloudPayments isn't bound; absent ⇒ the LOCAL
+    // subscription terminal-state drive still runs (see PaymentsCancelPort docs).
+    @Optional()
+    @Inject(PAYMENTS_CANCEL_PORT)
+    private readonly paymentsCancelPort?: PaymentsCancelPort,
   ) {}
 
   /** Resolve an account by its Mongo id, or `null` if not found. */
@@ -257,6 +268,18 @@ export class UsersService {
     } catch (err) {
       this.warnScrub('messages', err);
     }
+
+    // 6) Billing + leaderboard/Top teardown (legal/GDPR + revenue-integrity):
+    //    force-cancel the subscription (local terminal state + best-effort
+    //    upstream CloudPayments cancel), zero the forfeit wallet balance, and
+    //    expire any active paid Top placement. Best-effort throughout — a
+    //    teardown hiccup must NEVER abort the erasure above.
+    await runAccountTeardown(this.connection, objectId, 'erase', {
+      onWarn: (m) => this.logger.warn(m),
+      cancelUpstream: this.paymentsCancelPort
+        ? (subscriptionId) => this.paymentsCancelPort!.cancelSubscription(subscriptionId)
+        : undefined,
+    }).catch((err: unknown) => this.warnScrub('account-teardown', err));
 
     this.logger.log(
       `Erased account ${userId} (sessions=${sessionsDeleted}, messages=${messagesRedacted})`,

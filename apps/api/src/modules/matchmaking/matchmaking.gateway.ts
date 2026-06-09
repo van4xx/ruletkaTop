@@ -96,7 +96,12 @@ const NOTIFICATION_NEW_CHANNEL = 'notif:new';
 const BLOCK_ENFORCE_CHANNEL = 'block:enforce';
 import { WsRateLimiterService } from '../realtime-security/ws-rate-limiter.service';
 import { CallService } from './call.service';
-import { callRoom } from './matchmaking.constants';
+import {
+  ACTIVE_CALL_TTL_SECONDS,
+  activeCallIdKey,
+  activeCallPairKey,
+  callRoom,
+} from './matchmaking.constants';
 import {
   type ConnectionVerifier,
   type MatchResult,
@@ -603,6 +608,18 @@ export class MatchmakingGateway
       // Already answered / declined / rang out, or not addressed to this user.
       return;
     }
+    // Re-check the block AFTER consuming the pending call: a block may have been
+    // created during the ring (between `call:invite`'s gate and this accept). If
+    // either party blocked the other, ABORT — never join them to the call room.
+    // Tell BOTH sides the call ended so the caller's "calling…" UI and the
+    // callee's incoming-call modal both resolve. The pending call is already
+    // consumed, so no further teardown of it is needed.
+    if (await this.matchmaking.isBlockedEitherWay(call.fromUserId, call.toUserId)) {
+      this.server.to(userRoom(call.fromUserId)).emit('call:end', { callId: call.callId });
+      this.server.to(userRoom(call.toUserId)).emit('call:end', { callId: call.callId });
+      this.logger.debug(`call:accept aborted (blocked) call=${call.callId}`);
+      return;
+    }
     // Put BOTH users' sockets (every device, on every replica) into the call
     // room so `rtc:*` relays between them. `socketsJoin` is fanned out by the
     // Redis adapter, so a participant connected to another node joins too. AWAIT
@@ -614,6 +631,12 @@ export class MatchmakingGateway
       this.server.in(userRoom(call.fromUserId)).socketsJoin(room),
       this.server.in(userRoom(call.toUserId)).socketsJoin(room),
     ]);
+    // Index this now-active call by its participant pair so a block created mid
+    // call (`block:enforce`) can find + tear it down without knowing the callId.
+    // Best-effort: a failed index write must not block a healthy accept (the call
+    // ring TTL + room teardown still bound any leak). Mirrors AuditService.log's
+    // awaited-but-swallowed side-effect.
+    await this.indexActiveCall(call.callId, call.fromUserId, call.toUserId);
     // Tell the caller the call was accepted so they begin WebRTC negotiation.
     this.server.to(userRoom(call.fromUserId)).emit('call:accept', { callId: call.callId });
   }
@@ -802,27 +825,34 @@ export class MatchmakingGateway
    * Emit `mm:matched` to each peer with the OTHER's info. The joiner is the
    * initiator (creates the SDP offer) — exactly one `isInitiator` is true.
    *
-   * Delivery uses per-user rooms (every device joins `mm:user:<id>` on connect),
-   * so each side is reached on whichever node holds its socket via the Redis
-   * adapter. Authorization for the ensuing signaling is enforced against the
-   * Redis room state ({@link MatchmakingService.getPeerOf}), so no Socket.io
-   * pair room is needed.
+   * Delivery targets the SINGLE socket each side joined the pool on — the one
+   * bound into the room state ({@link MatchResult.peer.socketId} for the peer,
+   * `joiner.socketId` for the joiner). Routing to the bound socket (reached on
+   * any node by `server.to(socketId)`, since a socket id is itself a room) rather
+   * than the per-user room means a user running the roulette on several devices
+   * only ever has ONE device enter this call — preventing the multi-device
+   * double-initiate where two devices of the same user both answer/offer.
+   * Authorization for the ensuing signaling is enforced against the Redis room
+   * state ({@link MatchmakingService.getRelayTarget}), so no Socket.io pair room
+   * is needed.
    */
   private deliverMatch(joiner: WaiterEntry, result: MatchResult): void {
-    const peerId = result.peer.userId;
+    const peer = result.peer;
 
     // One pairing made — bump the matches counter (fires exactly once per match,
     // on the joiner side that won the pairing).
     this.metrics.matchCreated();
 
-    // Joiner is the initiator; the waiting peer answers.
-    this.server.to(userRoom(joiner.userId)).emit('mm:matched', {
+    // Joiner is the initiator; the waiting peer answers. `server.to(socketId)`
+    // is the single bound device for each side (a socket id IS a room name); the
+    // Redis adapter still fans it to the node holding that socket.
+    this.server.to(joiner.socketId).emit('mm:matched', {
       roomId: result.roomId,
       type: result.type,
       peer: result.peerInfoForJoiner,
       isInitiator: true,
     });
-    this.server.to(userRoom(peerId)).emit('mm:matched', {
+    this.server.to(peer.socketId).emit('mm:matched', {
       roomId: result.roomId,
       type: result.type,
       peer: result.peerInfoForPeer,
@@ -958,7 +988,10 @@ export class MatchmakingGateway
       if (!parsed) {
         return;
       }
+      // A block must cut BOTH room kinds the two users could share: the durable
+      // matchmaking room AND an accepted 1:1 friend call (indexed by pair).
       void this.endRoomBetween(parsed.userId, parsed.blockedUserId);
+      void this.endCallBetween(parsed.userId, parsed.blockedUserId);
     });
     try {
       await sub.subscribe(BLOCK_ENFORCE_CHANNEL);
@@ -1036,22 +1069,16 @@ export class MatchmakingGateway
   }
 
   /**
-   * Resolve the caller's peer in `roomId`, enforcing that the caller is a
-   * member. Returns the peer user id, or `null` (caller not a member / no room).
-   */
-  private async authorizedPeer(client: MmSocket, roomId: string): Promise<string | null> {
-    const userId = client.data.userId;
-    if (!userId) {
-      return null;
-    }
-    return this.matchmaking.getPeerOf(roomId, userId);
-  }
-
-  /**
    * Relay a `rtc:*` signal to the other party of `roomId`, generalised over BOTH
    * room kinds the gateway hosts:
    *  - a MATCHMAKING room — authorise via the authoritative Redis room state and
-   *    emit to the peer's per-user room (delivered cross-replica by the adapter);
+   *    emit to the peer's BOUND socket (the single device that won the pairing),
+   *    delivered cross-replica by the adapter. A signal from a socket that is NOT
+   *    the sender's bound device for this room is DROPPED — so a user's second
+   *    device (same user id, different socket) can't inject offers/answers into a
+   *    call the first device owns (the multi-device double-initiate). Rooms
+   *    persisted before socket binding (`selfSocket`/`peerSocket` null) fall back
+   *    to per-user-room routing, preserving prior behaviour.
    *  - a FRIEND-CALL room (`call:<callId>`) — authorise by the sender actually
    *    being a member of the Socket.io room and broadcast to the OTHER members.
    * A socket that belongs to neither (spoofed / stale `roomId`) gets nothing.
@@ -1062,10 +1089,25 @@ export class MatchmakingGateway
     event: 'rtc:offer' | 'rtc:answer' | 'rtc:ice-candidate',
     payload: RtcOfferPayload | RtcAnswerPayload | RtcIcePayload,
   ): Promise<void> {
-    const peerId = await this.authorizedPeer(client, roomId);
-    if (peerId) {
-      this.server.to(userRoom(peerId)).emit(event, payload as never);
-      return;
+    const userId = client.data.userId;
+    if (userId) {
+      const target = await this.matchmaking.getRelayTarget(roomId, userId);
+      if (target) {
+        // Reject a signal from a non-bound socket: only the device bound into the
+        // room may drive this call. `selfSocket` null = legacy room → no binding
+        // to enforce, so allow (prior behaviour).
+        if (target.selfSocket !== null && target.selfSocket !== client.id) {
+          this.logger.debug(
+            `dropped ${event} from non-bound socket ${client.id} for user=${userId} room=${roomId}`,
+          );
+          return;
+        }
+        // Route to the peer's bound device; fall back to their per-user room on a
+        // legacy room where no socket was bound.
+        const dest = target.peerSocket ?? userRoom(target.peerUserId);
+        this.server.to(dest).emit(event, payload as never);
+        return;
+      }
     }
     if (this.isInCallRoom(client, roomId)) {
       // `client.to(room)` excludes the sender → goes to the other member(s) only.
@@ -1081,14 +1123,96 @@ export class MatchmakingGateway
   /**
    * Detach every socket (on any replica) from a friend-call room once the call
    * ends, so a stale `call:<callId>` membership can never relay future signals.
-   * `socketsLeave` is fanned out cluster-wide by the Redis adapter.
+   * `socketsLeave` is fanned out cluster-wide by the Redis adapter. Also clears
+   * the accepted-call index for this call so a later block can't resurrect a
+   * torn-down call from a stale pair entry.
    */
   private async teardownCallRoom(callId: string): Promise<void> {
     try {
       await this.calls.clearPending(callId);
+      await this.clearActiveCallIndex(callId);
       this.server.in(callRoom(callId)).socketsLeave(callRoom(callId));
     } catch (err) {
       this.logger.debug(`teardownCallRoom failed for ${callId}: ${asMessage(err)}`);
+    }
+  }
+
+  /**
+   * Index an ACCEPTED 1:1 friend call so a block created mid-call
+   * ({@link BLOCK_ENFORCE_CHANNEL}) can find and tear it down without knowing its
+   * `callId`. Writes two TTL'd keys: the unordered participant pair →
+   * {@link activeCallPairKey} → `callId`, and the reverse `callId` →
+   * {@link activeCallIdKey} → `{a,b}` so teardown can clear the pair entry without
+   * re-deriving it. Best-effort: a failed index write must not block a healthy
+   * accept — the call ring TTL + room teardown still bound any leak.
+   */
+  private async indexActiveCall(
+    callId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<void> {
+    try {
+      await this.redis
+        .multi()
+        .set(activeCallPairKey(fromUserId, toUserId), callId, 'EX', ACTIVE_CALL_TTL_SECONDS)
+        .set(
+          activeCallIdKey(callId),
+          JSON.stringify({ a: fromUserId, b: toUserId }),
+          'EX',
+          ACTIVE_CALL_TTL_SECONDS,
+        )
+        .exec();
+    } catch (err) {
+      this.logger.debug(`indexActiveCall failed for ${callId}: ${asMessage(err)}`);
+    }
+  }
+
+  /**
+   * Clear the accepted-call index for `callId` (both the reverse `callId`→pair
+   * key and the pair→`callId` key). Reads the reverse key to learn the pair, then
+   * deletes both. Idempotent: a missing/expired index is a cheap no-op.
+   */
+  private async clearActiveCallIndex(callId: string): Promise<void> {
+    try {
+      const raw = await this.redis.get(activeCallIdKey(callId));
+      const pipeline = this.redis.multi().del(activeCallIdKey(callId));
+      if (raw) {
+        const pair = JSON.parse(raw) as { a?: unknown; b?: unknown };
+        if (typeof pair.a === 'string' && typeof pair.b === 'string') {
+          pipeline.del(activeCallPairKey(pair.a, pair.b));
+        }
+      }
+      await pipeline.exec();
+    } catch (err) {
+      this.logger.debug(`clearActiveCallIndex failed for ${callId}: ${asMessage(err)}`);
+    }
+  }
+
+  /**
+   * Force-end any ACCEPTED friend call in progress between `userA` and `userB`
+   * when a block is created. Looks the call up by the unordered participant pair
+   * ({@link activeCallPairKey}); if one exists, tells BOTH sides the call ended
+   * (`call:end` for the call UI, `rtc:hangup` reason `reported` for the WebRTC
+   * teardown) and detaches every socket from the `call:<callId>` room
+   * cluster-wide via {@link teardownCallRoom}. Idempotent + best-effort: no
+   * indexed call (the common case) is a cheap no-op. Runs regardless of which
+   * node holds the sockets — the emits + `socketsLeave` are fanned out by the
+   * Redis adapter.
+   */
+  private async endCallBetween(userA: string, userB: string): Promise<void> {
+    try {
+      const callId = await this.redis.get(activeCallPairKey(userA, userB));
+      if (!callId) {
+        return;
+      }
+      this.server.to(userRoom(userA)).emit('call:end', { callId });
+      this.server.to(userRoom(userB)).emit('call:end', { callId });
+      this.server.to(userRoom(userA)).emit('rtc:hangup', { roomId: callRoom(callId), reason: 'reported' });
+      this.server.to(userRoom(userB)).emit('rtc:hangup', { roomId: callRoom(callId), reason: 'reported' });
+      await this.teardownCallRoom(callId);
+      this.logger.debug(`block force-ended friend call ${callId} between ${userA} and ${userB}`);
+    } catch (err) {
+      this.logger.debug(`endCallBetween(${userA},${userB}) failed: ${asMessage(err)}`);
     }
   }
 

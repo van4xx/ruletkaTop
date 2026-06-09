@@ -9,6 +9,8 @@ import '../../../core/di/di.dart';
 import '../../../core/models/models.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/widgets/widgets.dart';
+import '../../calls/application/pending_direct_call.dart';
+import '../../calls/domain/direct_call_controller.dart';
 import '../domain/roulette_state.dart';
 import 'roulette_controller.dart';
 import 'widgets/call_action_dialogs.dart';
@@ -73,6 +75,26 @@ class _RouletteScreenState extends ConsumerState<RouletteScreen> {
     // performs the call teardown on kick/ban; we only do the messaging here
     // (mirrors the web `useModerationAction`).
     _controller.onModeration = _handleModeration;
+
+    // Direct (friend) call hand-off. If the global DirectCallHost routed us here
+    // for an accepted 1:1 call, drain the one-shot launch and start a DIRECT call
+    // (bypassing the random queue) — connecting to the friend over the
+    // `call:<callId>` room. The screen does NOT auto-start otherwise; this is the
+    // ONLY place the handoff fires, deferred to post-frame so the engine kicks
+    // off after the first build (and we read the provider off `ref` safely).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final launch = ref.read(pendingDirectCallProvider.notifier).consume();
+      if (launch == null || launch.type != _type) return;
+      final role = launch.role == DirectCallLaunchRole.caller
+          ? DirectCallRole.caller
+          : DirectCallRole.callee;
+      _controller.startDirectCall(
+        role: role,
+        peerUserId: launch.peerUserId,
+        callId: launch.callId,
+      );
+    });
   }
 
   @override

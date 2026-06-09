@@ -61,17 +61,27 @@ export class LeaderboardService {
   ): Promise<LeaderboardResponse> {
     const scored = await this.topScores(query.metric, query.limit);
 
+    // Defence-in-depth: drop tombstoned (`deletedAt`) / banned accounts from the
+    // board so a torn-down or sanctioned user can never surface in a public
+    // ranking even if their source-collection rows (wallet/gifts/placements)
+    // still carry score. Resolved against the `users` source-of-truth in one $in.
+    const dead = await this.deadUserIds(scored.map((s) => s.userId));
+
     // Join the display profile for the ranked slice in one batched $in.
     const profiles = await this.loadProfiles(scored.map((s) => s.userId));
     const entries: LeaderboardEntry[] = [];
-    scored.forEach((row, idx) => {
+    scored.forEach((row) => {
+      if (dead.has(row.userId)) {
+        // Tombstoned / banned → excluded from the public board entirely.
+        return;
+      }
       const profile = profiles.get(row.userId);
       if (!profile) {
         // Skip users whose profile no longer resolves rather than break ranks.
         return;
       }
       entries.push({
-        rank: idx + 1,
+        rank: entries.length + 1,
         userId: row.userId,
         nickname: profile.nickname,
         avatarUrl: profile.avatarUrl,
@@ -171,6 +181,10 @@ export class LeaderboardService {
     if (slice.some((e) => e.userId === callerUserId)) {
       return null;
     }
+    // A tombstoned / banned caller never gets a public `me` rank either.
+    if ((await this.deadUserIds([callerUserId])).has(callerUserId)) {
+      return null;
+    }
 
     const myScore = await this.scoreForUser(metric, callerUserId);
     if (myScore <= 0) {
@@ -250,6 +264,41 @@ export class LeaderboardService {
       ])
       .toArray();
     return rows[0]?.count ?? 0;
+  }
+
+  // ── Tombstone / ban guard ────────────────────────────────────────────────────
+
+  /**
+   * Resolve, in ONE `$in` query against the `users` source-of-truth, which of
+   * the given ids belong to a TORN-DOWN (`deletedAt != null`) or BANNED
+   * (`isBanned === true`) account — those must never appear on a public board.
+   * Returns a set of the offending userId strings (empty when all are live).
+   */
+  private async deadUserIds(userIds: readonly string[]): Promise<Set<string>> {
+    const dead = new Set<string>();
+    const objectIds = userIds
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (objectIds.length === 0) {
+      return dead;
+    }
+    const docs = await this.connection
+      .collection('users')
+      .find(
+        {
+          _id: { $in: objectIds },
+          $or: [{ deletedAt: { $ne: null } }, { isBanned: true }],
+        },
+        { projection: { _id: 1 } },
+      )
+      .toArray();
+    for (const doc of docs) {
+      const id = (doc as { _id?: Types.ObjectId })._id;
+      if (id) {
+        dead.add(id.toString());
+      }
+    }
+    return dead;
   }
 
   // ── Profile join ─────────────────────────────────────────────────────────────

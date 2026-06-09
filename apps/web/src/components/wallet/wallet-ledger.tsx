@@ -9,7 +9,7 @@
  * and "load more" states in the product's glass aesthetic.
  */
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import {
   ArrowDownLeft,
@@ -52,6 +52,7 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 function TxRow({ tx, index }: { tx: CoinTransaction; index: number }) {
   const t = useTranslations('economy');
+  const locale = useLocale();
   const meta = TX_META[tx.type];
   const Icon = meta.icon;
   const positive = tx.delta > 0;
@@ -79,7 +80,9 @@ function TxRow({ tx, index }: { tx: CoinTransaction; index: number }) {
             {meta.tone === 'in' ? t('walletLedger.badgeIn') : t('walletLedger.badgeOut')}
           </Badge>
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(tx.createdAt)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatDateTime(tx.createdAt, locale)}
+        </p>
       </div>
 
       <div className="flex flex-col items-end">

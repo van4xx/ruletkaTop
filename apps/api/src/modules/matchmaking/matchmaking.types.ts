@@ -42,6 +42,17 @@ export interface RoomState {
   matchId: string;
   userA: string;
   userB: string;
+  /**
+   * The ONE socket id each participant is bound to for this session — the socket
+   * that joined the pool and won the pairing. `mm:matched` is delivered to, and
+   * every `rtc:*` is relayed to / accepted from, ONLY this socket, so a user with
+   * the roulette open on several devices can't have two of them negotiate the
+   * same call (a double-initiate). `socketA` is {@link userA}'s, `socketB` is
+   * {@link userB}'s. Absent on rooms persisted before this field existed — the
+   * gateway then falls back to the per-user room (prior behaviour).
+   */
+  socketA?: string;
+  socketB?: string;
   createdAt: number;
 }
 

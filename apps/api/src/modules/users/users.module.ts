@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import {
+  CloudPaymentsCancelPort,
+  PAYMENTS_CANCEL_PORT,
+} from '../../common/payments-cancel.port';
+import { CloudPaymentsClient } from '../payments/cloudpayments.client';
 import { User, UserSchema } from './schemas/user.schema';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -17,7 +22,15 @@ import { UsersService } from './users.service';
 @Module({
   imports: [MongooseModule.forFeature([{ name: User.name, schema: UserSchema }])],
   controllers: [UsersController],
-  providers: [UsersService],
+  providers: [
+    UsersService,
+    // Account-teardown's best-effort upstream billing cancel. The port + its
+    // CloudPayments client depend only on the global ConfigService, so they are
+    // provided LOCALLY (no PaymentsModule import / DI cycle); when CloudPayments
+    // is unconfigured the port no-ops and only the LOCAL terminal-state drive runs.
+    CloudPaymentsClient,
+    { provide: PAYMENTS_CANCEL_PORT, useClass: CloudPaymentsCancelPort },
+  ],
   exports: [UsersService, MongooseModule],
 })
 export class UsersModule {}

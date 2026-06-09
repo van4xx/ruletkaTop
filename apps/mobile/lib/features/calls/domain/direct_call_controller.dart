@@ -54,16 +54,37 @@ class DirectCallRing {
       );
 }
 
+/// Who we are in the direct call we're about to launch onto the roulette stage.
+enum DirectCallLaunchRole {
+  /// We placed the call (rang the callee); we drive the WebRTC offer.
+  caller,
+
+  /// We answered an incoming call; we answer the caller's offer.
+  callee,
+}
+
 /// A one-shot signal that an accepted direct call should now open its stage,
-/// consumed once by the [DirectCallHost] to navigate. Carries the modality so
-/// the host opens `/video` or `/voice`.
+/// consumed once by the [DirectCallHost] to hand the call off to the roulette
+/// engine. Carries the modality (so the host routes to `/video` or `/voice`),
+/// our [role] (so the engine knows whether to offer or answer) and the
+/// server-minted [callId] that scopes the `call:<callId>` signaling room.
+///
+/// By the time a launch is produced the call is ALREADY accepted server-side
+/// (both the caller's and callee's paths only launch post-accept), so [callId]
+/// is always present.
 @immutable
 class DirectCallLaunch {
-  const DirectCallLaunch({required this.type, required this.peerUserId, this.callId});
+  const DirectCallLaunch({
+    required this.type,
+    required this.peerUserId,
+    required this.role,
+    required this.callId,
+  });
 
   final MatchType type;
   final String peerUserId;
-  final String? callId;
+  final DirectCallLaunchRole role;
+  final String callId;
 }
 
 /// Immutable view-state for the global direct-call host: the active ring (if
@@ -178,8 +199,11 @@ class DirectCallController extends Notifier<DirectCallState> {
     );
   }
 
-  /// The callee answered our outgoing invite — launch the call stage (the
-  /// engine drives the offer over the `call:<callId>` room).
+  /// The callee answered our outgoing invite — launch the call stage as the
+  /// CALLER (the roulette engine drives the offer over the `call:<callId>`
+  /// room). The server relayed the minted `callId` with the accept, which the
+  /// launch carries so the engine can scope its signaling AND so a later cancel
+  /// can be routed by it (`call:end { callId }`).
   void _onAccepted(CallResponsePayload p) {
     final ring = state.ring;
     if (ring == null || ring.isIncoming) return;
@@ -189,6 +213,7 @@ class DirectCallController extends Notifier<DirectCallState> {
       launch: DirectCallLaunch(
         type: ring.type,
         peerUserId: ring.peerUserId,
+        role: DirectCallLaunchRole.caller,
         callId: p.callId,
       ),
     );
@@ -211,25 +236,44 @@ class DirectCallController extends Notifier<DirectCallState> {
   }
 
   // ───────────────────────────── User actions ─────────────────────────────
-  /// Accept the incoming call: emit `call:accept` and launch the matching stage.
+  /// Accept the incoming call: launch the matching stage as the CALLEE.
+  ///
+  /// We DELIBERATELY do NOT emit `call:accept` here. The roulette engine emits it
+  /// only AFTER it has built the answerer peer connection (see
+  /// `RouletteController.startDirectCall`), which closes a race: the server tells
+  /// the caller to offer the instant we accept, and that offer must not arrive on
+  /// our socket before our `rtc:offer` handler + PC exist. We can't accept
+  /// without the [callId] the invite carried, so bail (the ring will time out)
+  /// if it's somehow missing.
   void accept() {
     final ring = state.ring;
     if (ring == null || ring.isOutgoing) return;
     final callId = ring.callId;
+    if (callId == null) return; // an incoming invite always carries a callId
     _clearRingTimeout();
-    if (callId != null) _socket.callAccept(callId);
     state = state.copyWith(
       clearRing: true,
       launch: DirectCallLaunch(
         type: ring.type,
         peerUserId: ring.peerUserId,
+        role: DirectCallLaunchRole.callee,
         callId: callId,
       ),
     );
   }
 
-  /// Decline the incoming call (or cancel our own outgoing ring): emit the right
-  /// `call:*` event and clear the ring.
+  /// Decline the incoming call (or cancel our own outgoing ring): notify the
+  /// server so the OTHER party's ring resolves, then clear our ring.
+  ///
+  ///  * Incoming (callee) → `call:decline { callId }` (we always hold the
+  ///    callId), so the caller's "вызов…" UI resolves immediately.
+  ///  * Outgoing (caller) → `call:end { callId }` to cancel the ringing invite
+  ///    server-side so the callee stops ringing at once. The server mints the
+  ///    callId and only relays it to the caller on `call:accept`, so pre-accept
+  ///    we genuinely have no id to route by — the server's ring TTL resolves the
+  ///    callee in that window (this matches the web client). Once `call:accept`
+  ///    has arrived the launch owns the callId and teardown is the roulette
+  ///    engine's `stop()` (`call:end { callId }`), not this ring.
   void decline() {
     final ring = state.ring;
     if (ring == null) return;
@@ -238,8 +282,6 @@ class DirectCallController extends Notifier<DirectCallState> {
     if (ring.isIncoming) {
       if (callId != null) _socket.callDecline(callId);
     } else {
-      // Cancel an outgoing ring. The callId may be unknown until accept, so we
-      // can only signal `call:end` when we have it; otherwise just drop locally.
       if (callId != null) _socket.callEnd(callId);
     }
     state = state.copyWith(clearRing: true);

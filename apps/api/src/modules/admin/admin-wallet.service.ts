@@ -83,10 +83,21 @@ export class AdminWalletService {
       throw new BadRequestException('Amount must be a non-zero integer');
     }
 
+    // The coin ledger's idempotency index is GLOBAL on `(type, refId)`, so the
+    // refId MUST uniquely identify THIS adjustment. A constant `'admin-adjust'`
+    // collided across every adjustment of the same sign: the first credit (or
+    // debit) wrote the lone `('bonus','admin-adjust')` (or `('refund',…)`) row,
+    // and every later same-sign adjustment hit that existing row, was treated as
+    // "already applied", self-compensated its speculative `$inc`, and silently
+    // no-op'd the balance (a false 200 + audit-success). Mint a globally-unique
+    // refId per adjustment (mirrors CoversService keying the ledger per-op) so
+    // each adjustment is its own ledger row and always moves the balance.
+    const ref = `admin-adjust:${userId}:${new Types.ObjectId().toString()}`;
+
     const balanceCoins =
       amount > 0
-        ? await this.walletService.credit(userId, amount, 'bonus', 'admin-adjust')
-        : await this.walletService.debit(userId, -amount, 'refund', 'admin-adjust');
+        ? await this.walletService.credit(userId, amount, 'bonus', ref)
+        : await this.walletService.debit(userId, -amount, 'refund', ref);
 
     return { userId, balanceCoins, delta: amount };
   }

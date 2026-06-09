@@ -1185,7 +1185,16 @@ describe('AuthService.revokeAllSessions', () => {
 // ── register: best-effort verification email ──────────────────────────────────
 
 describe('AuthService.register — verification email (best-effort)', () => {
-  it('mints a verification token and sends the verify email on the happy path', async () => {
+  /**
+   * The mint + SMTP send are dispatched FIRE-AND-FORGET (decoupled from the
+   * signup response) so a slow/hung SMTP host can never stall registration.
+   * Flushing the microtask queue lets that background work settle so we can
+   * assert it eventually ran without the caller having awaited it (mirrors the
+   * `requestPasswordReset` spec).
+   */
+  const flushMicrotasks = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  it('mints a verification token and sends the verify email on the happy path (in the background)', async () => {
     const m = buildMocks('commit');
     const service = makeService(m);
 
@@ -1193,6 +1202,10 @@ describe('AuthService.register — verification email (best-effort)', () => {
 
     // A fresh account is reported unverified.
     expect(res.user.emailVerified).toBe(false);
+
+    // The verify email is dispatched fire-and-forget — let the background work
+    // settle before asserting it ran.
+    await flushMicrotasks();
 
     // An `email_verify` token row was created and the verify email was sent to
     // the (lower-cased) address.
@@ -1212,6 +1225,28 @@ describe('AuthService.register — verification email (best-effort)', () => {
     expect(sha256(sentToken)).toBe(tokenRow.tokenHash);
   });
 
+  it('does NOT await the verification SMTP send: register() resolves BEFORE the email dispatch completes (a hung SMTP host cannot stall signup)', async () => {
+    const m = buildMocks('commit');
+    // A send that never settles would block the response IF it were awaited.
+    let resolveSend!: () => void;
+    m.mailerService.sendVerificationEmail.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSend = resolve;
+      }) as never,
+    );
+    const service = makeService(m);
+
+    // register() must resolve with a full token pair even though the SMTP send
+    // is still pending → the send is fire-and-forget, not awaited.
+    const res = await service.register(makeRegisterDto());
+    expect(res.tokens.accessToken).toBeTruthy();
+    expect(res.tokens.refreshToken).toBeTruthy();
+    expect(m.sessionModel.create).toHaveBeenCalledTimes(1);
+
+    resolveSend(); // let the background dispatch finish (no dangling promise).
+    await flushMicrotasks();
+  });
+
   it('still succeeds when the verify email fails to send (mail outage never fails signup)', async () => {
     const m = buildMocks('commit');
     m.mailerService.sendVerificationEmail.mockRejectedValue(new Error('smtp down'));
@@ -1221,6 +1256,10 @@ describe('AuthService.register — verification email (best-effort)', () => {
     const res = await service.register(makeRegisterDto());
     expect(res.tokens.accessToken).toBeTruthy();
     expect(m.sessionModel.create).toHaveBeenCalledTimes(1);
+
+    // The background dispatch swallows the SMTP failure (best-effort .catch);
+    // flush so the internal catch runs and no unhandled rejection escapes.
+    await flushMicrotasks();
   });
 });
 

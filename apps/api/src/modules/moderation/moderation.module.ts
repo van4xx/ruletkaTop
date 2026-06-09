@@ -2,8 +2,13 @@ import { Module, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import {
+  CloudPaymentsCancelPort,
+  PAYMENTS_CANCEL_PORT,
+} from '../../common/payments-cancel.port';
 import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
+import { CloudPaymentsClient } from '../payments/cloudpayments.client';
 import { UsersModule } from '../users/users.module';
 import { AdminController } from './admin.controller';
 import { AdminEconomyController } from './admin-economy.controller';
@@ -91,6 +96,13 @@ import { Report, ReportSchema } from './schemas/report.schema';
     AdminEconomyService,
     ModerationService,
     ReviewService,
+    // Account-teardown's best-effort upstream billing cancel for ban / admin
+    // delete. The port + its CloudPayments client depend only on the global
+    // ConfigService, so they are provided LOCALLY (no extra DI cycle); when
+    // CloudPayments is unconfigured the port no-ops and only the LOCAL
+    // terminal-state drive runs.
+    CloudPaymentsClient,
+    { provide: PAYMENTS_CANCEL_PORT, useClass: CloudPaymentsCancelPort },
     // Pluggable server-side frame classifier. Defaults to the no-op (keyless);
     // `FRAME_SCORER=provider` selects the env-gated provider stub.
     {

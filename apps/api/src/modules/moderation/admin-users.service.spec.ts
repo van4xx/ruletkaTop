@@ -429,4 +429,82 @@ describe('AdminUsersService — audit trail for privileged actions', () => {
       targetId: USER_A,
     });
   });
+
+  it('deleteUser cancels the upstream subscription + drives billing/feed teardown', async () => {
+    const userDoc = {
+      _id: new Types.ObjectId(USER_A),
+      deletedAt: null,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    const userModel = {
+      findById: jest.fn(() => ({ exec: jest.fn().mockResolvedValue(userDoc) })),
+    } as unknown as Model<UserDocument>;
+
+    // A connection whose `subscriptions.findOne` yields a stored id (so the port
+    // is exercised) and whose every write resolves.
+    const byName: Record<string, Record<string, jest.Mock>> = {};
+    const connection = {
+      collection: jest.fn((name: string) => {
+        if (!byName[name]) {
+          byName[name] = {
+            findOne: jest.fn().mockResolvedValue(
+              name === 'subscriptions' ? { subscriptionId: 'sub_del' } : null,
+            ),
+            updateOne: jest.fn().mockResolvedValue({}),
+            updateMany: jest.fn().mockResolvedValue({}),
+            deleteMany: jest.fn().mockResolvedValue({}),
+          };
+        }
+        return byName[name];
+      }),
+    } as unknown as Connection;
+
+    const cancelSubscription = jest.fn().mockResolvedValue(undefined);
+    const auth = { revokeAllSessions: jest.fn() } as unknown as AuthService;
+    const service = new AdminUsersService(userModel, connection, auth, auditStub(), {
+      cancelSubscription,
+    });
+
+    await service.deleteUser(USER_A, ADMIN);
+
+    // Upstream subscription cancelled by its stored id, local sub terminated,
+    // wallet zeroed, and active Top placements expired.
+    expect(cancelSubscription).toHaveBeenCalledWith('sub_del');
+    expect(byName.subscriptions!.updateOne).toHaveBeenCalled();
+    expect(byName.wallets!.updateOne).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ $set: expect.objectContaining({ balanceCoins: 0 }) }),
+    );
+    expect(byName.topplacements!.updateMany).toHaveBeenCalled();
+  });
+
+  it('deleteUser still succeeds when the billing teardown throws (best-effort)', async () => {
+    const userDoc = {
+      _id: new Types.ObjectId(USER_A),
+      deletedAt: null,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    const userModel = {
+      findById: jest.fn(() => ({ exec: jest.fn().mockResolvedValue(userDoc) })),
+    } as unknown as Model<UserDocument>;
+    const connection = {
+      collection: jest.fn(() => ({
+        findOne: jest.fn().mockResolvedValue({ subscriptionId: 'sub_x' }),
+        updateOne: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({}),
+      })),
+    } as unknown as Connection;
+    const auth = { revokeAllSessions: jest.fn() } as unknown as AuthService;
+    const audit = auditStub();
+    // The upstream cancel rejects — must be swallowed; delete still completes.
+    const service = new AdminUsersService(userModel, connection, auth, audit, {
+      cancelSubscription: jest.fn().mockRejectedValue(new Error('provider down')),
+    });
+
+    await expect(service.deleteUser(USER_A, ADMIN)).resolves.toEqual({ ok: true });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'user.delete', targetId: USER_A }),
+    );
+  });
 });

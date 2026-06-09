@@ -137,6 +137,9 @@ describe('PremiumService.activate', () => {
   let m: Mocks;
   beforeEach(() => {
     m = makeService();
+    // activate pre-reads the existing record to stack onto remaining paid time.
+    // Default: no prior record (first activation), so the paid end stands as-is.
+    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning(null));
   });
 
   it('upserts the subscription to active for the paid period', async () => {
@@ -196,6 +199,50 @@ describe('PremiumService.activate', () => {
     // The authoritative subscription write succeeded; the mirror error is swallowed.
     await expect(m.service.activate(userId, 'monthly', periodEnd)).resolves.toBeUndefined();
     expect(m.subscriptionModel.updateOne).toHaveBeenCalled();
+  });
+
+  it('EXTENDS (stacks) onto remaining paid time on an early renewal — never resets', async () => {
+    // The user still has ~20 days left, and a fresh 30-day interval is paid.
+    const remainingMs = 20 * 24 * 60 * 60 * 1000;
+    const existingEnd = new Date(Date.now() + remainingMs);
+    // The caller passes the freshly-paid interval measured from now (now + 30d).
+    const paidEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning({ currentPeriodEnd: existingEnd }));
+
+    await m.service.activate(userId, 'monthly', paidEnd, 'tok_renew');
+
+    const [, update] = m.subscriptionModel.updateOne.mock.calls[0] as [
+      unknown,
+      Record<string, any>,
+    ];
+    const written = update.$set.currentPeriodEnd as Date;
+    // Stacked end ≈ paidEnd + remaining (≈ existingEnd + 30d). It MUST be strictly
+    // later than the bare paid end (i.e. the leftover days were NOT burned).
+    expect(written.getTime()).toBeGreaterThan(paidEnd.getTime());
+    // And it equals paidEnd + remaining within a small (recompute-of-now) tolerance.
+    const expected = paidEnd.getTime() + remainingMs;
+    expect(Math.abs(written.getTime() - expected)).toBeLessThan(2000);
+    // The profile mirror is set to the SAME stacked end.
+    const [, profileUpdate] = m.profilesCollection.updateOne.mock.calls[0] as [
+      unknown,
+      Record<string, any>,
+    ];
+    expect((profileUpdate.$set.premiumUntil as Date).getTime()).toBe(written.getTime());
+  });
+
+  it('does NOT stack when the existing period has already lapsed (uses the paid end as-is)', async () => {
+    const lapsedEnd = new Date(Date.now() - 24 * 60 * 60 * 1000); // expired yesterday
+    const paidEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning({ currentPeriodEnd: lapsedEnd }));
+
+    await m.service.activate(userId, 'monthly', paidEnd);
+
+    const [, update] = m.subscriptionModel.updateOne.mock.calls[0] as [
+      unknown,
+      Record<string, any>,
+    ];
+    // A lapsed record contributes no remainder — the fresh paid end stands.
+    expect((update.$set.currentPeriodEnd as Date).getTime()).toBe(paidEnd.getTime());
   });
 });
 

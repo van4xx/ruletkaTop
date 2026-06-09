@@ -6,6 +6,7 @@ import '../../../core/router/router.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/widgets/widgets.dart';
 import '../../chat/data/chat_repository.dart';
+import '../application/pending_direct_call.dart';
 import '../domain/direct_call_controller.dart';
 
 /// The GLOBAL direct-call host — the native twin of the web `ModalHost`'s
@@ -66,9 +67,16 @@ class _DirectCallHostState extends ConsumerState<DirectCallHost> {
     );
   }
 
+  /// Hand the accepted call off to the roulette engine. We record the launch in
+  /// the one-shot [pendingDirectCallProvider] BEFORE navigating, then route to
+  /// the matching stage; the freshly-mounted `RouletteScreen` drains it in
+  /// `initState` and invokes `startDirectCall`, so the call connects to the
+  /// friend over the `call:<callId>` room instead of dropping into the random
+  /// matchmaking queue (a bare `router.go` lost the call context entirely).
   void _openStage(DirectCallLaunch launch) {
+    ref.read(pendingDirectCallProvider.notifier).set(launch);
     final router = ref.read(routerProvider);
-    router.go(launch.type == MatchType.video ? '/video' : '/voice');
+    router.go(launch.type == MatchType.video ? AppRoutes.video : AppRoutes.voice);
   }
 
   void _showToast(String message) {

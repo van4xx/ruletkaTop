@@ -7,6 +7,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   forwardRef,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
@@ -21,6 +22,11 @@ import type {
   Role,
 } from '@ruletka/shared-types';
 
+import { runAccountTeardown } from '../../common/account-teardown';
+import {
+  PAYMENTS_CANCEL_PORT,
+  type PaymentsCancelPort,
+} from '../../common/payments-cancel.port';
 import { AuditService } from '../admin/audit.service';
 import { AuthService } from '../auth/auth.service';
 import { User, UserDocument } from '../users/schemas/user.schema';
@@ -68,6 +74,12 @@ export class AdminUsersService {
     @InjectConnection() private readonly connection: Connection,
     @Inject(forwardRef(() => AuthService)) private readonly authService: AuthService,
     private readonly auditService: AuditService,
+    // Best-effort upstream billing cancel for admin account deletion. Optional so
+    // the module wires up even where CloudPayments isn't bound; absent ⇒ the LOCAL
+    // subscription terminal-state drive still runs (see PaymentsCancelPort docs).
+    @Optional()
+    @Inject(PAYMENTS_CANCEL_PORT)
+    private readonly paymentsCancelPort?: PaymentsCancelPort,
   ) {}
 
   /**
@@ -326,6 +338,22 @@ export class AdminUsersService {
           `deleteUser: failed to delete sessions for ${targetUserId}: ${(err as Error).message}`,
         ),
       );
+
+    // 4) Billing + leaderboard/Top teardown — same permanent-erasure effect as
+    //    the user's own right-to-be-forgotten: force-cancel the subscription
+    //    (local terminal state + best-effort upstream CloudPayments cancel),
+    //    zero the forfeit wallet, and expire any active paid Top placement.
+    //    Best-effort — a teardown hiccup must NEVER abort the delete.
+    await runAccountTeardown(this.connection, objectId, 'delete', {
+      onWarn: (m) => this.logger.warn(m),
+      cancelUpstream: this.paymentsCancelPort
+        ? (subscriptionId) => this.paymentsCancelPort!.cancelSubscription(subscriptionId)
+        : undefined,
+    }).catch((err: unknown) =>
+      this.logger.warn(
+        `deleteUser: account teardown failed for ${targetUserId}: ${(err as Error).message}`,
+      ),
+    );
 
     await this.auditService.log({
       actorId: callerUserId ?? null,

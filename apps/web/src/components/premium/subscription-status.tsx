@@ -6,7 +6,7 @@
  * Hidden entirely when the viewer has no subscription (`status: 'none'`).
  */
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { CalendarClock, Crown, ShieldCheck, TriangleAlert } from 'lucide-react';
 import type { Subscription } from '@ruletka/shared-types';
@@ -48,6 +48,7 @@ export function SubscriptionStatus({
   authenticated,
 }: SubscriptionStatusProps) {
   const t = useTranslations('economy');
+  const locale = useLocale();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const cancel = useCancelPremium();
 
@@ -92,7 +93,9 @@ export function SubscriptionStatus({
       onSuccess: () => {
         toast.success(t('subscriptionStatus.cancelSuccess'), {
           description: currentPeriodEnd
-            ? t('subscriptionStatus.cancelSuccessUntil', { date: formatDateTime(currentPeriodEnd) })
+            ? t('subscriptionStatus.cancelSuccessUntil', {
+                date: formatDateTime(currentPeriodEnd, locale),
+              })
             : t('subscriptionStatus.cancelSuccessGeneric'),
         });
         setConfirmOpen(false);
@@ -149,7 +152,7 @@ export function SubscriptionStatus({
               {isCanceled
                 ? t('subscriptionStatus.accessUntil')
                 : t('subscriptionStatus.renewal')}{' '}
-              {formatDateTime(currentPeriodEnd)}
+              {formatDateTime(currentPeriodEnd, locale)}
             </p>
           )}
         </div>
@@ -167,7 +170,9 @@ export function SubscriptionStatus({
             <DialogTitle>{t('subscriptionStatus.confirmTitle')}</DialogTitle>
             <DialogDescription>
               {t('subscriptionStatus.confirmDescription', {
-                periodSuffix: currentPeriodEnd ? ` (${formatDateTime(currentPeriodEnd)})` : '',
+                periodSuffix: currentPeriodEnd
+                  ? ` (${formatDateTime(currentPeriodEnd, locale)})`
+                  : '',
               })}
             </DialogDescription>
           </DialogHeader>

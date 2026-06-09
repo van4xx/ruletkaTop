@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 
 import { ConfigService } from '@nestjs/config';
-import { getModelToken } from '@nestjs/mongoose';
+import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 import type { ExecutionContext } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
@@ -527,5 +527,198 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
 
     await expect(service.refundByAdmin('507f1f77bcf86cd799439011')).rejects.toThrow();
     expect(cloudPayments.refundPayment).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentsService — tombstone/ban guard (a dead account is never re-entitled)', () => {
+  const userId = '507f1f77bcf86cd799439011';
+  const invoiceId = 'inv-dead-1';
+
+  let service: PaymentsService;
+  let paymentModel: {
+    findOne: jest.Mock;
+    findById: jest.Mock;
+    findOneAndUpdate: jest.Mock;
+    updateOne: jest.Mock;
+    create: jest.Mock;
+  };
+  let wallet: { credit: jest.Mock; debit: jest.Mock; getBalance: jest.Mock };
+  let premium: {
+    activate: jest.Mock;
+    cancel: jest.Mock;
+    isPremium: jest.Mock;
+    hasCanceledRenewal: jest.Mock;
+    findPlanByCode: jest.Mock;
+  };
+  let coinPackages: { findByCode: jest.Mock };
+  let cloudPayments: {
+    isConfigured: jest.Mock;
+    cancelSubscription: jest.Mock;
+    refundPayment: jest.Mock;
+  };
+  /** `users.findOne(...)` result — the tombstone/ban source-of-truth row. */
+  let userRow: { deletedAt?: Date | null; isBanned?: boolean } | null;
+
+  /** Build the service with a `users` collection returning `userRow`. */
+  async function build(): Promise<void> {
+    const connection = {
+      collection: jest.fn(() => ({
+        findOne: jest.fn().mockImplementation(() => Promise.resolve(userRow)),
+      })),
+    };
+    const config = {
+      get: jest.fn((key: string, def?: unknown) =>
+        key === 'CLOUDPAYMENTS_PUBLIC_ID' ? 'pk_test' : def,
+      ),
+    } as unknown as ConfigService;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PaymentsService,
+        { provide: getModelToken(Payment.name), useValue: paymentModel },
+        { provide: ConfigService, useValue: config },
+        { provide: WALLET_SERVICE, useValue: wallet },
+        { provide: PREMIUM_SERVICE, useValue: premium },
+        { provide: COIN_PACKAGES_SERVICE, useValue: coinPackages },
+        { provide: CloudPaymentsClient, useValue: cloudPayments },
+        { provide: getConnectionToken(), useValue: connection },
+      ],
+    }).compile();
+    service = moduleRef.get(PaymentsService);
+  }
+
+  beforeEach(async () => {
+    wallet = {
+      credit: jest.fn().mockResolvedValue(600),
+      debit: jest.fn().mockResolvedValue(0),
+      getBalance: jest.fn().mockResolvedValue(0),
+    };
+    premium = {
+      activate: jest.fn().mockResolvedValue(undefined),
+      cancel: jest.fn().mockResolvedValue(undefined),
+      isPremium: jest.fn().mockResolvedValue(false),
+      hasCanceledRenewal: jest.fn().mockResolvedValue(false),
+      findPlanByCode: jest.fn().mockResolvedValue({
+        code: 'monthly',
+        title: 'Premium Monthly',
+        priceRub: 399,
+        intervalDays: 30,
+        perks: [],
+      }),
+    };
+    coinPackages = {
+      findByCode: jest.fn().mockResolvedValue({
+        code: 'coins_550',
+        coins: 500,
+        bonusCoins: 100,
+        priceRub: 449,
+      }),
+    };
+    cloudPayments = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      cancelSubscription: jest.fn().mockResolvedValue(undefined),
+      refundPayment: jest.fn().mockResolvedValue(undefined),
+    };
+    paymentModel = {
+      findOne: jest.fn(),
+      findById: jest.fn(),
+      findOneAndUpdate: jest.fn(),
+      updateOne: jest.fn().mockReturnValue(queryReturning({ acknowledged: true })),
+      create: jest.fn().mockResolvedValue({ _id: 'created' }),
+    };
+    userRow = null;
+  });
+
+  it('Pay: REFUSES to credit a coins purchase for a tombstoned (deletedAt) account', async () => {
+    userRow = { deletedAt: new Date(), isBanned: true };
+    await build();
+
+    paymentModel.findOne.mockReturnValue(
+      queryReturning({
+        _id: 'pay-dead',
+        invoiceId,
+        status: 'pending',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    const ack = await service.handlePay({
+      InvoiceId: invoiceId,
+      TransactionId: 4242,
+      Amount: 449,
+      SubscriptionId: 'sc_dead',
+      AccountId: userId,
+    });
+
+    // Ack so CloudPayments stops retrying, but NO credit + NO pending→completed claim.
+    expect(ack).toEqual({ code: 0 });
+    expect(wallet.credit).not.toHaveBeenCalled();
+    expect(paymentModel.findOneAndUpdate).not.toHaveBeenCalled();
+    // Best-effort upstream cancel so a torn-down card stops being billed.
+    expect(cloudPayments.cancelSubscription).toHaveBeenCalledWith('sc_dead');
+  });
+
+  it('Recurrent "Active": REFUSES to re-activate premium for a banned account', async () => {
+    userRow = { deletedAt: null, isBanned: true };
+    await build();
+    paymentModel.findOne.mockReturnValue(sortableQueryReturning(null));
+
+    const ack = await service.handleRecurrent({
+      SubscriptionId: 'sc_banned',
+      TransactionId: 9,
+      Amount: 399,
+      AccountId: userId,
+      Status: 'Active',
+      Token: 'tok',
+      Data: JSON.stringify({ purpose: 'premium', plan: 'monthly', userId }),
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    // No re-activation + no revenue claim; local cancel + upstream stop-billing.
+    expect(premium.activate).not.toHaveBeenCalled();
+    expect(paymentModel.create).not.toHaveBeenCalled();
+    expect(premium.cancel).toHaveBeenCalledWith(userId);
+    expect(cloudPayments.cancelSubscription).toHaveBeenCalledWith('sc_banned');
+  });
+
+  it('Pay: still fulfils for a LIVE account (guard does not block legitimate buyers)', async () => {
+    userRow = { deletedAt: null, isBanned: false };
+    await build();
+
+    paymentModel.findOne.mockReturnValue(
+      queryReturning({
+        _id: 'pay-live',
+        invoiceId,
+        status: 'pending',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+    paymentModel.findOneAndUpdate.mockReturnValue(
+      queryReturning({
+        _id: 'pay-live',
+        invoiceId,
+        status: 'completed',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    const ack = await service.handlePay({
+      InvoiceId: invoiceId,
+      TransactionId: 4242,
+      Amount: 449,
+      AccountId: userId,
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    expect(wallet.credit).toHaveBeenCalledWith(userId, 600, 'purchase', invoiceId);
   });
 });

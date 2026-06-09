@@ -68,14 +68,64 @@ export class TopService {
       this.activeForLane('right', now),
     ]);
 
+    // Defence-in-depth: resolve which promoted owners are TORN-DOWN
+    // (`deletedAt`) or BANNED so their paid placement never shows even if the
+    // write-time expiry teardown missed it. One $in over the `users` source.
+    const dead = await this.deadUserIds([...left, ...right].map((p) => p.userId));
+
     // ONE batched profile lookup for every promoted user across both lanes.
     const profiles = await this.loadPromotedProfiles([...left, ...right]);
-    const withProfile = (p: TopPlacementContract): TopPlacementContract => ({
-      ...p,
-      profile: profiles.get(p.userId) ?? null,
-    });
 
-    return { left: left.map(withProfile), right: right.map(withProfile) };
+    // A card is shown only when its owner is LIVE and their public profile still
+    // resolves — a placement whose profile is gone (deleted/scrubbed) is dropped
+    // entirely rather than shown as an empty `profile: null` card.
+    const presentable = (p: TopPlacementContract): TopPlacementContract | null => {
+      if (dead.has(p.userId)) {
+        return null;
+      }
+      const profile = profiles.get(p.userId);
+      if (!profile) {
+        return null;
+      }
+      return { ...p, profile };
+    };
+    const keep = (lane: TopPlacementContract[]): TopPlacementContract[] =>
+      lane.map(presentable).filter((p): p is TopPlacementContract => p !== null);
+
+    return { left: keep(left), right: keep(right) };
+  }
+
+  /**
+   * Resolve, in ONE `$in` query against the `users` source-of-truth, which of
+   * the given promoted owners belong to a TORN-DOWN (`deletedAt != null`) or
+   * BANNED (`isBanned === true`) account — those placements must never show.
+   * Returns a set of the offending userId strings (empty when all are live).
+   */
+  private async deadUserIds(userIds: readonly string[]): Promise<Set<string>> {
+    const dead = new Set<string>();
+    const objectIds = Array.from(new Set(userIds))
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (objectIds.length === 0) {
+      return dead;
+    }
+    const docs = await this.connection
+      .collection('users')
+      .find(
+        {
+          _id: { $in: objectIds },
+          $or: [{ deletedAt: { $ne: null } }, { isBanned: true }],
+        },
+        { projection: { _id: 1 } },
+      )
+      .toArray();
+    for (const doc of docs) {
+      const id = (doc as { _id?: Types.ObjectId })._id;
+      if (id) {
+        dead.add(id.toString());
+      }
+    }
+    return dead;
   }
 
   /**

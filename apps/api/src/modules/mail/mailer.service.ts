@@ -172,6 +172,14 @@ export class MailerService {
       // 465 ⇒ implicit TLS; otherwise STARTTLS upgrade on the submission port.
       secure: port === 465,
       auth: this.resolveAuth(),
+      // Bound every phase of the SMTP exchange so a slow/hung host can never
+      // stall a caller indefinitely. Without these nodemailer waits on the OS
+      // socket defaults (minutes), which — since the verification email is sent
+      // on the signup path — could hang registration. The send helper already
+      // swallows the resulting timeout error into a best-effort `false`.
+      connectionTimeout: 5_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 10_000,
     });
   }
 

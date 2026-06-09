@@ -25,6 +25,8 @@ function connectionWith(handlers: {
   profiles?: Partial<{ find: jest.Mock; findOne: jest.Mock }>;
   wallets?: Partial<{ findOne: jest.Mock; countDocuments: jest.Mock }>;
   topplacements?: Partial<{ aggregate: jest.Mock }>;
+  /** The `users` source-of-truth $in for the tombstone/ban guard. */
+  users?: Partial<{ find: jest.Mock }>;
 }): { connection: Connection; collection: jest.Mock } {
   const collection = jest.fn((name: string) => {
     const h = (handlers as Record<string, Record<string, jest.Mock>>)[name] ?? {};
@@ -104,6 +106,40 @@ describe('LeaderboardService.getLeaderboard', () => {
 
     expect(res.entries).toHaveLength(1);
     expect(res.entries[0]!.userId).toBe(USER_A);
+  });
+
+  it('excludes a tombstoned (deletedAt) user from the board and closes the rank gap', async () => {
+    // USER_A out-scores USER_B, but USER_A is torn down → dropped; USER_B takes
+    // rank 1 (no gap left by the excluded leader).
+    const giftsAggregate = jest.fn(() =>
+      cursor([
+        { _id: new Types.ObjectId(USER_A), score: 900 },
+        { _id: new Types.ObjectId(USER_B), score: 100 },
+      ]),
+    );
+    const profilesFind = jest.fn(() =>
+      cursor([
+        { userId: new Types.ObjectId(USER_A), nickname: 'A', avatarUrl: null, isPremium: false },
+        { userId: new Types.ObjectId(USER_B), nickname: 'B', avatarUrl: null, isPremium: false },
+      ]),
+    );
+    // The `users` guard reports USER_A as dead (deletedAt set).
+    const usersFind = jest.fn(() => cursor([{ _id: new Types.ObjectId(USER_A) }]));
+    const { connection, collection } = connectionWith({
+      gifttransactions: { aggregate: giftsAggregate },
+      profiles: { find: profilesFind },
+      users: { find: usersFind },
+    });
+
+    const service = new LeaderboardService(connection);
+    const res = await service.getLeaderboard({ metric: 'gifts', limit: 50 }, CALLER);
+
+    // USER_A is gone; USER_B is the sole entry and is re-ranked to 1.
+    expect(res.entries).toEqual([
+      { rank: 1, userId: USER_B, nickname: 'B', avatarUrl: null, isPremium: false, score: 100 },
+    ]);
+    // The guard consulted the `users` source-of-truth.
+    expect(collection).toHaveBeenCalledWith('users');
   });
 
   it("computes the caller's own rank as `me` when they fall outside the slice", async () => {

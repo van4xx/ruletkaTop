@@ -35,6 +35,31 @@ const int _kMaxIceRestarts = 2;
 /// (up to [_kMaxIceRestarts]) or fall back to re-queueing.
 const Duration _kIceRestartTimeout = Duration(seconds: 8);
 
+/// Which side of a direct (friend) call we are on (mirrors the web
+/// `directCallRef.role`).
+enum DirectCallRole {
+  /// We placed the invite and, once the callee accepts (`call:accept`), drive
+  /// the SDP offer.
+  caller,
+
+  /// We accepted an incoming invite (so we already hold the `callId`) and
+  /// answer the caller's offer.
+  callee,
+}
+
+/// The live marker for a direct (friend) call in flight — the native twin of
+/// the web `directCallRef`. Non-null only while THIS session is a 1:1 friend
+/// call (not the random queue). A direct call NEVER requeues: a peer hangup /
+/// decline / cancel ends it. For a caller, [callId] is filled in when the
+/// server relays `call:accept`.
+class _DirectCall {
+  _DirectCall({required this.role, required this.peerUserId, this.callId});
+
+  final DirectCallRole role;
+  final String peerUserId;
+  String? callId;
+}
+
 /// The orchestration engine behind /video and /voice — the Dart port of the
 /// web's `useRoulette` hook.
 ///
@@ -69,6 +94,10 @@ class RouletteController extends Notifier<RouletteState> {
   PeerConnectionManager? _peer;
   String? _roomId;
   List<IceServerConfig>? _iceServers;
+
+  /// Non-null while THIS session is a direct (friend) call rather than a random
+  /// queue session. Drives the no-requeue + `call:*` wiring below.
+  _DirectCall? _directCall;
 
   /// Whether *we* are the offerer for the current match — only the initiator
   /// drives ICE restarts (the answerer responds to the relayed offer).
@@ -188,6 +217,15 @@ class RouletteController extends Notifier<RouletteState> {
     // Server-forced moderation (warn / kick / ban) for THIS session.
     _subs.add(_socket.onModAction(_onModeration));
 
+    // Direct (friend) call teardown signaling. A `call:decline` (the callee
+    // rejected / rang out) or `call:end` (the other party hung up / cancelled)
+    // ends THIS direct call WITHOUT requeueing. No-ops for a random-queue session
+    // (`_directCall == null`). The accept handshake already completed in the
+    // global DirectCallController before this session was launched, so we do not
+    // listen for `call:accept` here.
+    _subs.add(_socket.onCallDecline((_) => _onDirectCallResolved()));
+    _subs.add(_socket.onCallEnd((_) => _onDirectCallResolved()));
+
     // Drive (re)connect / disconnect off the service's status notifier (the
     // foundation exposes connection lifecycle this way, not as raw socket
     // callbacks). The queue join is driven off connect: emit `mm:join`
@@ -206,8 +244,19 @@ class RouletteController extends Notifier<RouletteState> {
     state = state.copyWith(socketConnected: connected);
 
     if (connected) {
-      if (_started && _peer == null && _roomId == null) _emitJoin();
+      // A DIRECT (friend) call is NEVER a queue join: skip `mm:join` entirely so
+      // a (re)connect mid-ring can't dump the caller into the random pool.
+      if (_started && _directCall == null && _peer == null && _roomId == null) {
+        _emitJoin();
+      }
     } else if (prev == SocketStatus.connected) {
+      // A DIRECT call can't survive a socket drop: a pending invite (ringing,
+      // pre-accept) is lost server-side, and a mid-call drop has no queue to
+      // fall back to. End it (no requeue) the moment the socket goes down.
+      if (_started && _directCall != null) {
+        _handleDirectEnded();
+        return;
+      }
       // A mid-call disconnect ends the current match; the socket auto-reconnects
       // and the reconnect (peer == null) requeues.
       if (_started && _peer != null) _handlePeerGone();
@@ -294,13 +343,19 @@ class RouletteController extends Notifier<RouletteState> {
       if (_peer != null && !connected && !state.reconnecting) next();
     });
 
-    await _beginNegotiation(p);
+    await _beginNegotiation(isInitiator: p.isInitiator);
   }
 
-  Future<void> _beginNegotiation(MmMatchedPayload matched) async {
+  /// Build the per-match peer connection and kick off negotiation. Generalised
+  /// over BOTH a matchmaking match (`mm:matched`) and a direct (friend) call
+  /// (`call:*`): both reduce to "we have a roomId + who offers first", and the
+  /// ensuing `rtc:*` signaling is identical (the server relays it for a
+  /// `call:<callId>` room exactly like a matchmaking room). The caller has
+  /// already pinned `_roomId` before invoking this.
+  Future<void> _beginNegotiation({required bool isInitiator}) async {
     if (!_started) return; // stale match for a closed session
     final iceServers = _iceServers ?? kFallbackIceServers;
-    _isInitiator = matched.isInitiator;
+    _isInitiator = isInitiator;
 
     final manager = PeerConnectionManager(
       iceServers,
@@ -349,12 +404,12 @@ class RouletteController extends Notifier<RouletteState> {
     );
     _peer = manager;
 
-    await manager.init(isInitiator: matched.isInitiator, withChat: true);
+    await manager.init(isInitiator: isInitiator, withChat: true);
 
     final local = _localStream;
     if (local != null) await manager.addLocalStream(local);
 
-    if (matched.isInitiator) {
+    if (isInitiator) {
       final sdp = await manager.createOffer();
       final room = _roomId;
       if (room != null && _started) _socket.rtcOffer(room, sdp);
@@ -531,6 +586,16 @@ class RouletteController extends Notifier<RouletteState> {
   /// re-`mm:join` (not `mm:next`) since the room is already gone server-side.
   void _handlePeerGone() {
     if (!_started) return;
+    // A DIRECT (friend) call has no queue to fall back to: the peer left, so the
+    // call is simply over. Surface "ended" and STOP — do NOT re-`mm:join` (that
+    // would silently drop the user into the random pool of strangers).
+    if (_directCall != null) {
+      _directCall = null;
+      _closePeer();
+      _clearRequeueTimer();
+      state = state.copyWith(status: RouletteStatus.ended, clearRemoteStream: true);
+      return;
+    }
     _closePeer();
     state = state.copyWith(status: RouletteStatus.ended, clearRemoteStream: true);
     _clearRequeueTimer();
@@ -691,11 +756,182 @@ class RouletteController extends Notifier<RouletteState> {
     }
   }
 
+  // ────────────────────────── Direct (friend) call ─────────────────────────
+  /// Begin a DIRECT (friend) call instead of joining the random queue — the
+  /// native twin of the web `startDirectCall`. Bypasses `mm:join` and runs a 1:1
+  /// call over the existing `call:*` + `rtc:*` contract: the server relays
+  /// `rtc:*` for a `call:<callId>` room exactly like a matchmaking room, so the
+  /// SAME [PeerConnectionManager] + signaling handlers drive it.
+  ///
+  /// IMPORTANT: by the time this runs the call has ALREADY been accepted — the
+  /// global [DirectCallController] ran the `call:invite`/`call:accept` handshake
+  /// (the caller rang it; the callee answered it) and handed us a [callId]. So we
+  /// do NOT re-invite/re-accept; we go straight to WebRTC over `call:<callId>`:
+  ///   caller — become the INITIATOR now: build the PC + send the first offer.
+  ///   callee — become the ANSWERER: build the PC, emit `call:accept` so the
+  ///            server tells the caller to offer, then answer the caller's offer.
+  ///            (We emit `call:accept` AFTER the PC exists so the caller's offer
+  ///            can never arrive before our `rtc:offer` handler is ready.)
+  ///
+  /// A direct call NEVER auto-requeues: a peer hangup / decline / cancel ends the
+  /// session (see [_handlePeerGone] / [_handleDirectEnded]).
+  Future<void> startDirectCall({
+    required DirectCallRole role,
+    required String peerUserId,
+    required String callId,
+  }) async {
+    if (_started || state.isStarting) return;
+
+    // Auth guard (mirrors [start]): a session token is required.
+    final authed = ref.read(authStateProvider).isAuthenticated;
+    if (!authed) {
+      state = state.copyWith(
+        status: RouletteStatus.error,
+        error: const RouletteError(kind: 'auth', message: 'Войдите в аккаунт, чтобы начать общение.'),
+      );
+      return;
+    }
+
+    _wireSocket();
+    state = state.copyWith(status: RouletteStatus.requesting, isStarting: true, clearError: true);
+
+    try {
+      // 1) Local media + 2) ICE servers — same pre-flight as a queue start.
+      await MediaPermissions.ensure(video: _isVideo);
+      final stream = await getLocalStream(video: _isVideo);
+      _localStream = stream;
+      await _ensureIceServers();
+
+      // 3) Resolve the peer's public profile for the call overlay (best-effort —
+      //    a hidden/missing profile still allows the call; we show a minimal
+      //    card). Adapted to the PeerInfo the overlay/grid already render.
+      final peer = await _fetchPeerInfo(peerUserId);
+
+      // 4) Pin the call room (= callId) and reflect "connecting" with the peer.
+      _started = true;
+      _directCall = _DirectCall(role: role, peerUserId: peerUserId, callId: callId);
+      _roomId = callId;
+      state = state.copyWith(
+        status: RouletteStatus.connecting,
+        roomId: callId,
+        peer: peer,
+        localStream: stream,
+        micMuted: false,
+        cameraOff: false,
+        isStarting: false,
+        clearError: true,
+        clearRemoteStream: true,
+      );
+
+      // Negotiation watchdog: if media never connects, end the direct call
+      // cleanly rather than hanging on a half-open room.
+      _clearMatchTimer();
+      _matchTimer = Timer(_kMatchTimeout, () {
+        final connected =
+            _peer?.connectionState == RTCPeerConnectionState.RTCPeerConnectionStateConnected;
+        if (_peer != null && !connected && !state.reconnecting) _handleDirectEnded();
+      });
+
+      // 5) Ensure the socket is connected. The status handler will NOT auto
+      //    `mm:join` for a direct call (it's gated on `_directCall == null`).
+      _socket.connect();
+
+      final isInitiator = role == DirectCallRole.caller;
+      await _beginNegotiation(isInitiator: isInitiator);
+      // The callee tells the server it's ready ONLY now (PC + offer handler are
+      // live) — this closes the race where the caller's offer could arrive before
+      // our answerer PC exists.
+      if (!isInitiator && _started) _socket.callAccept(callId);
+    } on MediaException catch (e) {
+      _abortDirectCall(role: role, callId: callId);
+      state = state.copyWith(
+        status: RouletteStatus.error,
+        isStarting: false,
+        error: RouletteError.fromMedia(e),
+      );
+    } catch (_) {
+      _abortDirectCall(role: role, callId: callId);
+      state = state.copyWith(
+        status: RouletteStatus.error,
+        isStarting: false,
+        error: const RouletteError(kind: 'unknown', message: 'Не удалось запустить. Попробуйте ещё раз.'),
+      );
+    }
+  }
+
+  /// Roll back a failed [startDirectCall]. Tell the OTHER party the call is over
+  /// (`call:end { callId }`) so their ring/stage resolves immediately instead of
+  /// hanging until the server ring TTL fires.
+  void _abortDirectCall({required DirectCallRole role, required String callId}) {
+    _started = false;
+    _directCall = null;
+    _clearMatchTimer();
+    _socket.callEnd(callId);
+  }
+
+  /// A `call:decline` / `call:end` arrived for THIS direct call: the callee
+  /// rejected, the ring timed out, or the other party hung up. End the session
+  /// without requeueing. No-op for a random-queue session.
+  void _onDirectCallResolved() {
+    if (_directCall == null) return;
+    _handleDirectEnded();
+  }
+
+  /// End a direct (friend) call (peer hung up, declined, cancelled, or the ring
+  /// timed out). Like [_handlePeerGone] but NEVER requeues: a friend call has no
+  /// fallback pool, so we surface "ended" and leave the marker cleared. The
+  /// user's controls (Stop / navigating away) then fully tear the session down.
+  void _handleDirectEnded() {
+    if (!_started) return;
+    _directCall = null;
+    _clearMatchTimer();
+    _clearRequeueTimer();
+    _closePeer();
+    state = state.copyWith(status: RouletteStatus.ended, clearRemoteStream: true);
+  }
+
+  /// Resolve a peer's [PeerInfo] (for the call overlay) from their public
+  /// profile, for a DIRECT call where there is no `mm:matched` payload to carry
+  /// it. Best-effort: a hidden / missing / un-fetchable profile yields a minimal
+  /// placeholder so the call still proceeds (media is what matters; the card
+  /// degrades to a generic name).
+  Future<PeerInfo> _fetchPeerInfo(String userId) async {
+    try {
+      final p = await ref.read(apiClientProvider).profileById(userId);
+      return PeerInfo(
+        userId: p.id,
+        nickname: p.nickname,
+        age: p.age,
+        gender: p.gender,
+        country: p.country,
+        avatarUrl: p.avatarUrl,
+        badges: p.badges,
+        isPremium: p.isPremium,
+      );
+    } catch (_) {
+      return PeerInfo(
+        userId: userId,
+        nickname: '',
+        age: 18,
+        gender: Gender.other,
+        country: 'RU',
+        avatarUrl: null,
+        badges: const [],
+        isPremium: false,
+      );
+    }
+  }
+
   /// Skip to the next partner. `mm:next` tears down the current room AND
   /// re-queues us with the same type/filters (server-remembered), so we do NOT
   /// emit `mm:join` here.
   Future<void> next() async {
     if (!_started) return;
+    // A DIRECT (friend) call has no "next peer" — Next acts as End (Stop) for it.
+    if (_directCall != null) {
+      await stop();
+      return;
+    }
     _clearRequeueTimer();
 
     final room = _roomId;
@@ -730,6 +966,16 @@ class RouletteController extends Notifier<RouletteState> {
   Future<void> stop() async {
     final room = _roomId;
     if (room != null) _socket.rtcHangup(room, reason: MatchEndReason.stop);
+
+    // DIRECT (friend) call teardown: `call:end { callId }` cancels a still-
+    // ringing invite (pre-accept) AND, post-accept, tells the other party to
+    // close + tears the `call:<callId>` room down server-side. (The `rtc:hangup`
+    // above already covers the in-room case; `call:end` additionally handles the
+    // pre-accept ring where no roomId/PC exists yet.) We only know the callId for
+    // the callee, or for the caller once `call:accept` arrived.
+    final direct = _directCall;
+    if (direct?.callId != null) _socket.callEnd(direct!.callId!);
+    _directCall = null;
 
     _started = false;
     _clearMatchTimer();
@@ -840,8 +1086,13 @@ class RouletteController extends Notifier<RouletteState> {
     }
     _subs.clear();
     final room = _roomId;
+    final direct = _directCall;
+    _directCall = null;
     try {
       if (room != null) _socket.rtcHangup(room, reason: MatchEndReason.stop);
+      // End a direct (friend) call cleanly on dispose too (cancel a ring / tear
+      // down the call room), mirroring stop().
+      if (direct?.callId != null) _socket.callEnd(direct!.callId!);
       _socket.mmLeave();
     } catch (_) {
       /* socket may already be down */
