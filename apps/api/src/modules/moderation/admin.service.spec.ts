@@ -24,14 +24,17 @@ describe('AdminService — ban / unban', () => {
   let service: AdminService;
   let userModel: { findByIdAndUpdate: jest.Mock };
   let authService: { revokeAllSessions: jest.Mock };
-  let fingerprintService: { recordForUser: jest.Mock };
+  let fingerprintService: { recordForUser: jest.Mock; clearForUser: jest.Mock };
   let redis: { publish: jest.Mock };
   let audit: { log: jest.Mock };
 
   beforeEach(async () => {
     userModel = { findByIdAndUpdate: jest.fn() };
     authService = { revokeAllSessions: jest.fn().mockResolvedValue(undefined) };
-    fingerprintService = { recordForUser: jest.fn().mockResolvedValue(undefined) };
+    fingerprintService = {
+      recordForUser: jest.fn().mockResolvedValue(undefined),
+      clearForUser: jest.fn().mockResolvedValue(undefined),
+    };
     redis = { publish: jest.fn().mockResolvedValue(1) };
     audit = { log: jest.fn().mockResolvedValue(undefined) };
     // AdminService now also injects the Mongoose Connection (for the banned-users /
@@ -122,7 +125,7 @@ describe('AdminService — ban / unban', () => {
     expect(fingerprintService.recordForUser).not.toHaveBeenCalled();
   });
 
-  it('unban: clears isBanned + banReason and does NOT revoke sessions or publish', async () => {
+  it('unban: clears isBanned + banReason, lifts ban-evasion fingerprints, and does NOT revoke sessions or publish', async () => {
     userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: false }));
 
     const result = await service.unbanUser(userId, ADMIN);
@@ -137,9 +140,41 @@ describe('AdminService — ban / unban', () => {
     expect(authService.revokeAllSessions).not.toHaveBeenCalled();
     expect(redis.publish).not.toHaveBeenCalled();
 
-    // The unban is recorded against the acting moderator.
+    // The exonerated account's ban-evasion fingerprints are lifted so it isn't
+    // silently stranded at register/login by a lingering row.
+    expect(fingerprintService.clearForUser).toHaveBeenCalledTimes(1);
+    expect(fingerprintService.clearForUser).toHaveBeenCalledWith(userId);
+
+    // The fingerprint clear is recorded as its own attributed action…
     expect(audit.log).toHaveBeenCalledWith({
       actorId: ADMIN,
+      action: 'fingerprint.clear',
+      targetType: 'user',
+      targetId: userId,
+    });
+    // …and the unban itself is recorded against the acting moderator.
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'user.unban',
+      targetType: 'user',
+      targetId: userId,
+    });
+  });
+
+  it('unban: AI-path reversal logs a NULL actor (not an attributed moderator) for both rows', async () => {
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: false }));
+
+    // No callerId → the AI false-positive reversal path.
+    await service.unbanUser(userId);
+
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: null,
+      action: 'fingerprint.clear',
+      targetType: 'user',
+      targetId: userId,
+    });
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: null,
       action: 'user.unban',
       targetType: 'user',
       targetId: userId,

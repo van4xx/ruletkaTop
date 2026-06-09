@@ -230,7 +230,10 @@ export function useAuth(): UseAuthResult {
     } finally {
       clear();
       disconnectSocket();
-      queryClient.removeQueries({ queryKey: CURRENT_USER_KEY });
+      // Wipe the ENTIRE React-Query cache, not just `/auth/me`: on a shared
+      // browser/tab the outgoing user's authenticated data (profiles, wallet,
+      // chats, …) must never outlive their session and bleed into the next one.
+      queryClient.clear();
     }
   }, [clear, queryClient]);
 

@@ -183,6 +183,15 @@ export class ReportsService {
   /**
    * Close a report as `resolved` or `dismissed`. Moderator-only (gated in the
    * controller). Rejects any other target status and 404s an unknown id.
+   *
+   * TERMINAL-STATE GUARD: the decision is an ATOMIC `findOneAndUpdate` scoped to
+   * a still-undecided report (`status ∈ {open, reviewing}`). A `resolved` /
+   * `dismissed` report is terminal and CANNOT be re-decided here — reversing a
+   * deliberate decision must go through the explicit, audited unban path, never
+   * by silently flipping a closed report's status. The atomicity also stops two
+   * concurrent moderators from both "winning": the loser's update matches no
+   * still-open row. A null result is then disambiguated by a second read —
+   * truly-missing ⇒ `404`, already-decided ⇒ `409 Conflict`.
    */
   async resolveReport(reportId: string, status: ReportStatus): Promise<ReportContract> {
     if (!RESOLVABLE_STATUSES.includes(status)) {
@@ -192,10 +201,23 @@ export class ReportsService {
       throw new NotFoundException('Report not found');
     }
     const updated = await this.reportModel
-      .findByIdAndUpdate(new Types.ObjectId(reportId), { $set: { status } }, { new: true })
+      .findOneAndUpdate(
+        { _id: new Types.ObjectId(reportId), status: { $in: OPEN_REPORT_STATUSES } },
+        { $set: { status } },
+        { new: true },
+      )
       .exec();
     if (!updated) {
-      throw new NotFoundException('Report not found');
+      // No still-open row matched: either the id is unknown (404) or the report
+      // was already decided (409) — distinguish with a plain existence check so
+      // a deliberate decision is never silently re-applied.
+      const exists = await this.reportModel
+        .exists({ _id: new Types.ObjectId(reportId) })
+        .exec();
+      if (!exists) {
+        throw new NotFoundException('Report not found');
+      }
+      throw new ConflictException('Report already decided');
     }
     return this.toContract(updated);
   }
@@ -207,14 +229,18 @@ export class ReportsService {
    * revokes sessions, force-disconnects sockets). Moderator-only (gated in the
    * controller). 404s an unknown report id.
    *
-   * Ordering: ban FIRST, then mark the report resolved — so if the ban write
-   * fails we don't leave a report marked resolved against an un-sanctioned user
-   * (the moderator sees the error and can retry). The ban is idempotent, so a
-   * retry after a transient failure is safe.
+   * TERMINAL-STATE GUARD: we ATOMICALLY claim the report (`findOneAndUpdate`
+   * `status ∈ {open, reviewing}` → `resolved`) BEFORE banning, so an
+   * already-decided report can never resurrect a ban and two concurrent
+   * upholders can't double-ban (only one claim matches the still-open row). A
+   * null claim is disambiguated: missing ⇒ `404`, already-decided ⇒ `409`.
    *
-   * The whole sanction is also recorded as a fresh moderation outcome (the ban
-   * reason embeds the report id) so the action stays auditable and is reversible
-   * via the existing explicit `POST /admin/users/:id/unban`.
+   * Ordering: the status flip therefore lands FIRST and the ban second. The ban
+   * is idempotent, so if its write fails the moderator retries the SAME id — the
+   * report is already `resolved`, the retry re-claims nothing, but the read
+   * below re-applies the (idempotent) ban so a resolved report always ends up
+   * implying a real ban. Reversal stays explicit + audited via
+   * `POST /admin/users/:id/unban`. The ban reason embeds the report id.
    */
   async resolveReportWithBan(
     reportId: string,
@@ -223,23 +249,36 @@ export class ReportsService {
     if (!Types.ObjectId.isValid(reportId)) {
       throw new NotFoundException('Report not found');
     }
-    const report = await this.reportModel.findById(new Types.ObjectId(reportId)).exec();
+    // Atomically claim the still-open report by flipping it to `resolved`. This
+    // is the locking step: only ONE concurrent caller can win it, and an
+    // already-decided report matches nothing (so a closed report can't be
+    // re-upheld into a fresh ban).
+    const report = await this.reportModel
+      .findOneAndUpdate(
+        { _id: new Types.ObjectId(reportId), status: { $in: OPEN_REPORT_STATUSES } },
+        { $set: { status: 'resolved' } },
+        { new: true },
+      )
+      .exec();
     if (!report) {
-      throw new NotFoundException('Report not found');
+      const exists = await this.reportModel
+        .exists({ _id: new Types.ObjectId(reportId) })
+        .exec();
+      if (!exists) {
+        throw new NotFoundException('Report not found');
+      }
+      throw new ConflictException('Report already decided');
     }
 
     const targetUserId = report.againstUserId.toString();
-    // Apply the sanction first so a resolved report always implies a real ban.
-    // `callerId` is threaded through to {@link AdminService.banUser} so the audit
-    // trail records the moderator who upheld the report.
+    // Apply the sanction. `callerId` is threaded through to
+    // {@link AdminService.banUser} so the audit trail records the moderator who
+    // upheld the report. The ban is idempotent (safe to retry).
     const ban = await this.adminService.banUser(
       targetUserId,
       `Upheld abuse report (${report.reason}) #${report._id.toString()}`,
       callerId,
     );
-
-    report.status = 'resolved';
-    await report.save();
 
     return { report: this.toContract(report), ban };
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
@@ -81,7 +82,8 @@ class _DirectCall {
 ///   stop()  → `mm:leave` + close peer + stop tracks + disconnect
 ///
 /// Everything is torn down deterministically on stop()/next()/dispose.
-class RouletteController extends Notifier<RouletteState> {
+class RouletteController extends Notifier<RouletteState>
+    with WidgetsBindingObserver {
   /// Riverpod 3.x family notifiers receive their family key via the constructor
   /// (the provider factory is `RouletteController Function(MatchType)`).
   RouletteController(this._type);
@@ -139,6 +141,15 @@ class RouletteController extends Notifier<RouletteState> {
   /// outbound video track, so we know to re-enable it on un-flag (unless the
   /// user separately turned their camera off).
   bool _videoCutByScreening = false;
+
+  /// True while the app is backgrounded (paused/inactive) and we have therefore
+  /// suspended outbound media + the screening/stats loops. Drives re-enabling
+  /// tracks (honoring user intent) and restarting the loops on resume.
+  bool _backgrounded = false;
+
+  /// Whether we registered the [WidgetsBindingObserver] (so we remove it exactly
+  /// once, and never against a binding we never attached to).
+  bool _lifecycleObserved = false;
 
   /// Host hook for server-forced moderation actions (`mod:action`). The screen
   /// sets this to surface the warn/kick/ban UX; the controller still performs
@@ -208,6 +219,15 @@ class RouletteController extends Notifier<RouletteState> {
     if (_wired) return;
     _wired = true;
 
+    // Observe app lifecycle so a backgrounded call doesn't keep the camera/mic,
+    // the NSFW screening loop, and the stats poll running (privacy + battery).
+    // Registered here (once per controller, on first start) and removed in
+    // [_disposeAll]. Guarded so we attach to the binding exactly once.
+    if (!_lifecycleObserved) {
+      WidgetsBinding.instance.addObserver(this);
+      _lifecycleObserved = true;
+    }
+
     _subs.add(_socket.onWaiting(_onWaiting));
     _subs.add(_socket.onMatched(_onMatched));
     _subs.add(_socket.onRtcOffer(_onOffer));
@@ -223,8 +243,13 @@ class RouletteController extends Notifier<RouletteState> {
     // (`_directCall == null`). The accept handshake already completed in the
     // global DirectCallController before this session was launched, so we do not
     // listen for `call:accept` here.
-    _subs.add(_socket.onCallDecline((_) => _onDirectCallResolved()));
-    _subs.add(_socket.onCallEnd((_) => _onDirectCallResolved()));
+    //
+    // Gate teardown on IDENTITY: the `/mm` socket is app-wide, so a stray
+    // `call:end`/`call:decline` for an UNRELATED call (a different ring/session)
+    // must NOT tear down the call we're actually in. Only resolve when the event's
+    // callId matches the live direct call's callId.
+    _subs.add(_socket.onCallDecline((p) => _onDirectCallEvent(p.callId)));
+    _subs.add(_socket.onCallEnd((p) => _onDirectCallEvent(p.callId)));
 
     // Drive (re)connect / disconnect off the service's status notifier (the
     // foundation exposes connection lifecycle this way, not as raw socket
@@ -687,6 +712,90 @@ class RouletteController extends Notifier<RouletteState> {
     state = state.copyWith(flagged: flagged);
   }
 
+  // ───────────────────────── App lifecycle (privacy/battery) ───────────────
+  /// React to the OS moving the app between foreground/background. While
+  /// backgrounded we must NOT keep capturing/sending camera+mic, running the
+  /// on-device NSFW screening loop, or polling connection stats — both a privacy
+  /// concern (the user can't see the call) and a battery drain.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        _suspendForBackground();
+        break;
+      case AppLifecycleState.resumed:
+        _resumeFromBackground();
+        break;
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
+
+  /// Backgrounded: cut outbound video+audio, halt the screening + stats loops.
+  /// Idempotent — `inactive`→`paused` can fire both edges. Leaves the peer
+  /// connection itself alive (a brief background blip shouldn't tear the call
+  /// down); only the live capture + polling loops are suspended.
+  void _suspendForBackground() {
+    if (_backgrounded) return;
+    _backgrounded = true;
+
+    // Disable outbound tracks so nothing leaves the device while hidden.
+    final stream = _localStream;
+    if (stream != null) {
+      for (final t in stream.getVideoTracks()) {
+        t.enabled = false;
+      }
+      for (final t in stream.getAudioTracks()) {
+        t.enabled = false;
+      }
+    }
+
+    // Stop the on-device screening sampling loop (it captures camera frames) and
+    // the periodic getStats() poll. Both restart on resume.
+    _screening?.update(stream: null, matchId: null, enabled: false);
+    _stopStatsPolling();
+  }
+
+  /// Foregrounded again: re-run screening sync, restart stats polling if a peer
+  /// is live, and re-enable outbound tracks HONORING user intent — never push
+  /// video while the camera is intentionally off or screening is suppressing it,
+  /// never un-mute audio the user muted.
+  void _resumeFromBackground() {
+    if (!_backgrounded) return;
+    _backgrounded = false;
+
+    final stream = _localStream;
+    if (stream != null) {
+      // Audio: respect the user's mute intent.
+      if (!state.micMuted) {
+        for (final t in stream.getAudioTracks()) {
+          t.enabled = true;
+        }
+      }
+      // Video: respect both the camera-off intent AND active screening
+      // suppression — only restore when the user wants it on and screening
+      // isn't currently cutting the feed.
+      final screeningSuppressed =
+          _videoCutByScreening && (_screening?.flagged ?? false);
+      if (!state.cameraOff && !screeningSuppressed) {
+        for (final t in stream.getVideoTracks()) {
+          t.enabled = true;
+        }
+      }
+    }
+
+    // Re-arm screening for the active (video) match, then resume stats polling
+    // when a peer is still live.
+    _syncScreening();
+    if (_peer != null &&
+        (state.status == RouletteStatus.connected ||
+            state.status == RouletteStatus.connecting)) {
+      _startStatsPolling();
+    }
+  }
+
   // ──────────────────────── ICE servers (cached) ──────────────────────────
   Future<void> _ensureIceServers() async {
     if (_iceServers != null) return;
@@ -869,11 +978,16 @@ class RouletteController extends Notifier<RouletteState> {
     _socket.callEnd(callId);
   }
 
-  /// A `call:decline` / `call:end` arrived for THIS direct call: the callee
-  /// rejected, the ring timed out, or the other party hung up. End the session
-  /// without requeueing. No-op for a random-queue session.
-  void _onDirectCallResolved() {
-    if (_directCall == null) return;
+  /// A `call:decline` / `call:end` arrived. End the session without requeueing
+  /// — but ONLY when the event targets THIS direct call. Gating on identity is
+  /// what stops a teardown for an unrelated call (a stale/parallel ring on the
+  /// shared `/mm` socket) from killing the call we're actually in. No-op for a
+  /// random-queue session, for a caller still pre-accept (no callId yet), or for
+  /// any mismatched callId.
+  void _onDirectCallEvent(String? callId) {
+    final direct = _directCall;
+    if (direct == null) return;
+    if (direct.callId == null || direct.callId != callId) return;
     _handleDirectEnded();
   }
 
@@ -978,6 +1092,10 @@ class RouletteController extends Notifier<RouletteState> {
     _directCall = null;
 
     _started = false;
+    // A new session must start "foregrounded" so the next background edge
+    // actually suspends (the flag would otherwise be stuck true if the user
+    // stopped while backgrounded).
+    _backgrounded = false;
     _clearMatchTimer();
     _clearRequeueTimer();
     _socket.mmLeave();
@@ -1075,6 +1193,11 @@ class RouletteController extends Notifier<RouletteState> {
   // ───────────────────────────── Teardown ─────────────────────────────────
   void _disposeAll() {
     _started = false;
+    if (_lifecycleObserved) {
+      WidgetsBinding.instance.removeObserver(this);
+      _lifecycleObserved = false;
+    }
+    _backgrounded = false;
     _clearMatchTimer();
     _clearRequeueTimer();
     _resetCallHealth();

@@ -198,7 +198,9 @@ export class AppealsService {
     let isBanned = true;
     if (status === 'accepted') {
       // Lift the ban first so an accepted appeal always implies a real unban.
-      const result = await this.adminService.unbanUser(targetUserId);
+      // `decidedBy` (the deciding moderator) is threaded through so the reversal
+      // is attributed in the audit trail rather than logged as a null actor.
+      const result = await this.adminService.unbanUser(targetUserId, decidedBy);
       isBanned = result.isBanned;
     }
 

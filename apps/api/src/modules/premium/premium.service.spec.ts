@@ -135,50 +135,76 @@ describe('PremiumService.isPremium', () => {
 
 describe('PremiumService.activate', () => {
   let m: Mocks;
+
+  /**
+   * The interval (ms) the activate pipeline `$add`s onto `max(existingEnd, now)`.
+   * The pipeline expression is `{ $add: [{ $max: [...] }, intervalMs] }`; this
+   * pulls that literal back out for assertion.
+   */
+  function intervalMsFromPipeline(pipeline: Array<{ $set: Record<string, any> }>): number {
+    const expr = pipeline[0]!.$set.currentPeriodEnd as { $add: [unknown, number] };
+    return expr.$add[1];
+  }
+
   beforeEach(() => {
     m = makeService();
-    // activate pre-reads the existing record to stack onto remaining paid time.
-    // Default: no prior record (first activation), so the paid end stands as-is.
-    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning(null));
+    // activate reads the atomically-computed end back AFTER the pipeline update
+    // (for the profile mirror). Default read-back: a far-future end so the mirror
+    // reflects an active entitlement.
+    m.subscriptionModel.findOne.mockReturnValue(
+      selectLeanReturning({ currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }),
+    );
   });
 
-  it('upserts the subscription to active for the paid period', async () => {
+  it('upserts the subscription to active via an atomic aggregation-pipeline update', async () => {
     const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     await m.service.activate(userId, 'monthly', periodEnd, 'tok_123');
 
-    // First updateOne is the upsert of the active subscription.
-    const [filter, update, options] = m.subscriptionModel.updateOne.mock.calls[0] as [
+    // The update is a PIPELINE (array) so the period stacking is server-atomic.
+    const [filter, pipeline, options] = m.subscriptionModel.updateOne.mock.calls[0] as [
       Record<string, unknown>,
-      Record<string, any>,
+      Array<{ $set: Record<string, any> }>,
       Record<string, unknown>,
     ];
     expect(filter).toHaveProperty('userId');
-    expect(update.$set).toMatchObject({
+    expect(Array.isArray(pipeline)).toBe(true);
+    const set = pipeline[0]!.$set;
+    expect(set).toMatchObject({
       plan: 'monthly',
       status: 'active',
-      currentPeriodEnd: periodEnd,
       cancelAtPeriodEnd: false,
     });
+    // currentPeriodEnd is computed server-side: max(existingEnd, now) + interval.
+    expect(set.currentPeriodEnd).toEqual({
+      $add: [{ $max: [{ $ifNull: ['$currentPeriodEnd', '$$NOW'] }, '$$NOW'] }, expect.any(Number)],
+    });
+    // startedAt is stamped once via $ifNull (insert OR an old null record).
+    expect(set.startedAt).toEqual({ $ifNull: ['$startedAt', '$$NOW'] });
     // The recurring token is persisted when supplied.
-    expect(update.$set.token).toBe('tok_123');
+    expect(set.token).toBe('tok_123');
     expect(options).toMatchObject({ upsert: true });
   });
 
-  it('omits the token from $set when none is supplied', async () => {
+  it('omits the token from the pipeline $set when none is supplied', async () => {
     const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     await m.service.activate(userId, 'monthly', periodEnd);
 
-    const [, update] = m.subscriptionModel.updateOne.mock.calls[0] as [
+    const [, pipeline] = m.subscriptionModel.updateOne.mock.calls[0] as [
       unknown,
-      Record<string, any>,
+      Array<{ $set: Record<string, any> }>,
     ];
-    expect(update.$set).not.toHaveProperty('token');
+    expect(pipeline[0]!.$set).not.toHaveProperty('token');
   });
 
-  it('mirrors premium onto the profile (isPremium + premium badge) on activation', async () => {
+  it('mirrors premium onto the profile (isPremium + premium badge) using the read-back end', async () => {
     const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // The mirror reflects the atomically-computed end read back from the DB.
+    const readBackEnd = new Date(Date.now() + 50 * 24 * 60 * 60 * 1000);
+    m.subscriptionModel.findOne.mockReturnValue(
+      selectLeanReturning({ currentPeriodEnd: readBackEnd }),
+    );
 
     await m.service.activate(userId, 'monthly', periodEnd);
 
@@ -188,7 +214,7 @@ describe('PremiumService.activate', () => {
       Record<string, unknown>,
       Record<string, any>,
     ];
-    expect(profileUpdate.$set).toMatchObject({ isPremium: true, premiumUntil: periodEnd });
+    expect(profileUpdate.$set).toMatchObject({ isPremium: true, premiumUntil: readBackEnd });
     expect(profileUpdate.$addToSet).toEqual({ badges: 'premium' });
   });
 
@@ -201,48 +227,39 @@ describe('PremiumService.activate', () => {
     expect(m.subscriptionModel.updateOne).toHaveBeenCalled();
   });
 
-  it('EXTENDS (stacks) onto remaining paid time on an early renewal — never resets', async () => {
-    // The user still has ~20 days left, and a fresh 30-day interval is paid.
-    const remainingMs = 20 * 24 * 60 * 60 * 1000;
-    const existingEnd = new Date(Date.now() + remainingMs);
+  it('STACKS server-side: the pipeline adds one interval onto max(existingEnd, $$NOW)', async () => {
     // The caller passes the freshly-paid interval measured from now (now + 30d).
     const paidEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning({ currentPeriodEnd: existingEnd }));
 
     await m.service.activate(userId, 'monthly', paidEnd, 'tok_renew');
 
-    const [, update] = m.subscriptionModel.updateOne.mock.calls[0] as [
+    const [, pipeline] = m.subscriptionModel.updateOne.mock.calls[0] as [
       unknown,
-      Record<string, any>,
+      Array<{ $set: Record<string, any> }>,
     ];
-    const written = update.$set.currentPeriodEnd as Date;
-    // Stacked end ≈ paidEnd + remaining (≈ existingEnd + 30d). It MUST be strictly
-    // later than the bare paid end (i.e. the leftover days were NOT burned).
-    expect(written.getTime()).toBeGreaterThan(paidEnd.getTime());
-    // And it equals paidEnd + remaining within a small (recompute-of-now) tolerance.
-    const expected = paidEnd.getTime() + remainingMs;
-    expect(Math.abs(written.getTime() - expected)).toBeLessThan(2000);
-    // The profile mirror is set to the SAME stacked end.
-    const [, profileUpdate] = m.profilesCollection.updateOne.mock.calls[0] as [
-      unknown,
-      Record<string, any>,
-    ];
-    expect((profileUpdate.$set.premiumUntil as Date).getTime()).toBe(written.getTime());
+    // The interval added is ≈ 30d (recovered from paidEnd - now); the $max takes
+    // the LATER of the existing end and the server clock, so any unexpired
+    // remainder is preserved (never burned) — the stacking is done atomically in
+    // the DB rather than via a lost-update-prone JS read-compute-write.
+    const interval = intervalMsFromPipeline(pipeline);
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(interval - thirtyDaysMs)).toBeLessThan(2000);
+    // The $max preserves remaining time: it compares the existing end to $$NOW.
+    const expr = pipeline[0]!.$set.currentPeriodEnd as { $add: [{ $max: unknown[] }, number] };
+    expect(expr.$add[0].$max).toEqual([{ $ifNull: ['$currentPeriodEnd', '$$NOW'] }, '$$NOW']);
   });
 
-  it('does NOT stack when the existing period has already lapsed (uses the paid end as-is)', async () => {
-    const lapsedEnd = new Date(Date.now() - 24 * 60 * 60 * 1000); // expired yesterday
-    const paidEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    m.subscriptionModel.findOne.mockReturnValue(selectLeanReturning({ currentPeriodEnd: lapsedEnd }));
+  it('floors a non-positive interval to 0 (never shrinks on a past/now paid end)', async () => {
+    // A paid end at/just-before now (clock skew) must not subtract from the period.
+    const paidEnd = new Date(Date.now() - 1000);
 
     await m.service.activate(userId, 'monthly', paidEnd);
 
-    const [, update] = m.subscriptionModel.updateOne.mock.calls[0] as [
+    const [, pipeline] = m.subscriptionModel.updateOne.mock.calls[0] as [
       unknown,
-      Record<string, any>,
+      Array<{ $set: Record<string, any> }>,
     ];
-    // A lapsed record contributes no remainder — the fresh paid end stands.
-    expect((update.$set.currentPeriodEnd as Date).getTime()).toBe(paidEnd.getTime());
+    expect(intervalMsFromPipeline(pipeline)).toBe(0);
   });
 });
 

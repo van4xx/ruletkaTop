@@ -309,7 +309,22 @@ export class ProfilesService {
   /**
    * Search profiles by optional nickname prefix + gender/country facets,
    * cursor-paginated by `_id`. Always EXCLUDES the caller and anyone in a block
-   * relationship with them (either direction). Returns the public projections.
+   * relationship with them (either direction).
+   *
+   * VISIBILITY-GATED: results are filtered by each owner's `whoCanViewProfile`
+   * EXACTLY as {@link getPublicProfileFor} would, so search never leaks a
+   * `friends`/`nobody` profile to a stranger (the audit found search bypassed
+   * the gate entirely). The gate is applied in BATCH so a page stays a couple of
+   * round-trips rather than O(page) reads:
+   *   - one `$in` over `settings` reads every page owner's `whoCanViewProfile`;
+   *   - `everyone` (and owners with NO settings doc — the default is `everyone`)
+   *     stay visible; `nobody` is always dropped;
+   *   - `friends`-only owners survive only when a single `$in` over `friendships`
+   *     (by {@link friendshipPairKey}, `status: 'accepted'`) confirms an accepted
+   *     friendship with the viewer.
+   * We OVER-FETCH and refill so a full page is still returned after filtering;
+   * the cursor advances by the last RAW row scanned (not the last visible one)
+   * so the next page resumes correctly even across dropped rows.
    */
   async searchProfiles(viewerId: string, query: ProfileSearchQuery): Promise<ProfileSearchResult> {
     if (!Types.ObjectId.isValid(viewerId)) {
@@ -321,14 +336,14 @@ export class ProfilesService {
       .filter((id) => Types.ObjectId.isValid(id))
       .map((id) => new Types.ObjectId(id));
 
-    const filter: QueryFilter<ProfileDocument> = {
+    const baseFilter: QueryFilter<ProfileDocument> = {
       userId: { $nin: excludedObjectIds },
     };
     if (query.gender) {
-      filter.gender = query.gender;
+      baseFilter.gender = query.gender;
     }
     if (query.country) {
-      filter.country = query.country;
+      baseFilter.country = query.country;
     }
     if (query.q) {
       // Anchored, escaped nickname PREFIX match (no ReDoS, no contains-scan).
@@ -339,36 +354,155 @@ export class ProfilesService {
       // planner cannot use a binary nickname index for a case-insensitive
       // regex). The charset is `[a-zA-Z0-9_]`, so collation case-folding yields
       // results identical to the previous `/i` match.
-      filter.nickname = { $regex: `^${escapeRegExp(query.q)}` };
-    }
-    // Cursor pagination on the monotonic `_id` (descending = newest profiles
-    // first). The cursor is the last seen profile's `_id`.
-    if (query.cursor && Types.ObjectId.isValid(query.cursor)) {
-      filter._id = { $lt: new Types.ObjectId(query.cursor) };
+      baseFilter.nickname = { $regex: `^${escapeRegExp(query.q)}` };
     }
 
-    // Fetch one extra row to compute `hasMore` without a second count query.
-    // The collation MUST match the `nickname_ci` index definition for the prefix
-    // query to be served by it; it also keeps any nickname comparison
-    // case-insensitive. `_id` sort/cursor bounds are binary ObjectIds and are
-    // unaffected by the collation.
-    const rows = await this.profileModel
-      .find(filter)
-      .collation({ locale: 'en', strength: 2 })
-      .sort({ _id: -1 })
-      .limit(query.limit + 1)
-      .exec();
+    // Over-fetch and refill: dropping `nobody`/non-friend `friends` profiles
+    // would otherwise hand back a short page. We scan in batches of `limit*2+1`
+    // from the cursor, visibility-filter each batch, and keep going until we have
+    // `limit+1` visible rows (the +1 detects `hasMore`) or the source is
+    // exhausted. The loop is bounded so a viewer surrounded by hidden profiles
+    // cannot make this scan unboundedly — it stops after a few batches and simply
+    // returns whatever it found (with a cursor to continue).
+    const visible: ProfileDocument[] = [];
+    let cursor = query.cursor && Types.ObjectId.isValid(query.cursor) ? query.cursor : null;
+    let rawHasMore = false;
+    let lastScannedId: string | null = null;
+    const batchSize = query.limit * 2 + 1;
+    const MAX_BATCHES = 5;
 
-    const hasMore = rows.length > query.limit;
-    const page = hasMore ? rows.slice(0, query.limit) : rows;
-    const last = page.at(-1);
-    const nextCursor = hasMore && last ? last._id.toString() : null;
+    for (let batch = 0; batch < MAX_BATCHES; batch += 1) {
+      const filter: QueryFilter<ProfileDocument> = { ...baseFilter };
+      // Cursor pagination on the monotonic `_id` (descending = newest first).
+      if (cursor) {
+        filter._id = { $lt: new Types.ObjectId(cursor) };
+      }
+
+      // The collation MUST match the `nickname_ci` index definition for the
+      // prefix query to be served by it; `_id` sort/cursor bounds are binary
+      // ObjectIds and are unaffected by the collation.
+      const rows = await this.profileModel
+        .find(filter)
+        .collation({ locale: 'en', strength: 2 })
+        .sort({ _id: -1 })
+        .limit(batchSize)
+        .exec();
+
+      rawHasMore = rows.length === batchSize;
+      if (rows.length > 0) {
+        const last = rows[rows.length - 1];
+        if (last) {
+          lastScannedId = last._id.toString();
+          cursor = lastScannedId;
+        }
+      }
+
+      const visibleRows = await this.filterVisible(viewerId, rows);
+      visible.push(...visibleRows);
+
+      // Stop once we can fill a page (+1 to know there's a next page) or the
+      // underlying source has no more rows to scan.
+      if (visible.length > query.limit || !rawHasMore) {
+        break;
+      }
+    }
+
+    const hasMore = visible.length > query.limit || rawHasMore;
+    const page = visible.slice(0, query.limit);
+    // The cursor advances by the last RAW row scanned so the next page resumes
+    // immediately AFTER everything we already examined (visible or filtered-out),
+    // never re-scanning dropped rows. Only emit a cursor when more may follow.
+    const nextCursor = hasMore && lastScannedId ? lastScannedId : null;
 
     return {
       items: page.map((doc) => this.toPublicProfile(doc)),
       nextCursor,
       hasMore,
     };
+  }
+
+  /**
+   * Filter a batch of profile docs down to those the `viewerId` may see under
+   * each owner's `whoCanViewProfile`, mirroring {@link getPublicProfileFor} but
+   * in BATCH (two `$in` reads for the whole batch, not per-row):
+   *   - the viewer always sees THEMSELVES (defensive — search already excludes
+   *     the caller, but this keeps the gate self-consistent);
+   *   - `everyone`, or NO settings doc (default visibility is `everyone`) → visible;
+   *   - `nobody` → always dropped;
+   *   - `friends` → visible only with an ACCEPTED friendship to the viewer.
+   * Input order is preserved. Reads the `settings` and `friendships` collections
+   * directly by name (no extra model / module dependency).
+   */
+  private async filterVisible(
+    viewerId: string,
+    rows: ProfileDocument[],
+  ): Promise<ProfileDocument[]> {
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const ownerObjectIds = rows.map((doc) => doc.userId);
+
+    // One read: every owner's whoCanViewProfile (absent doc ⇒ default 'everyone').
+    const settingsRows = await this.connection
+      .collection('settings')
+      .find(
+        { userId: { $in: ownerObjectIds } },
+        { projection: { userId: 1, 'privacy.whoCanViewProfile': 1 } },
+      )
+      .toArray();
+    const visibilityByOwner = new Map<string, string>();
+    for (const row of settingsRows) {
+      const ownerId = (row.userId as Types.ObjectId | undefined)?.toString();
+      const privacy = row.privacy as { whoCanViewProfile?: string } | undefined;
+      if (ownerId && privacy?.whoCanViewProfile) {
+        visibilityByOwner.set(ownerId, privacy.whoCanViewProfile);
+      }
+    }
+
+    // Owners whose visibility is `friends` need an accepted-friendship check.
+    // Resolve all of them in ONE `$in` over friendships by pairKey.
+    const friendCandidates = rows
+      .map((doc) => doc.userId.toString())
+      .filter((ownerId) => (visibilityByOwner.get(ownerId) ?? 'everyone') === 'friends');
+    const acceptedFriendOwners = new Set<string>();
+    if (friendCandidates.length > 0) {
+      const pairKeyToOwner = new Map<string, string>();
+      for (const ownerId of friendCandidates) {
+        // viewer === owner is impossible here (caller is excluded from search),
+        // but friendshipPairKey is order-independent regardless.
+        pairKeyToOwner.set(friendshipPairKey(viewerId, ownerId), ownerId);
+      }
+      const friendships = await this.connection
+        .collection('friendships')
+        .find(
+          { pairKey: { $in: [...pairKeyToOwner.keys()] }, status: 'accepted' },
+          { projection: { pairKey: 1 } },
+        )
+        .toArray();
+      for (const f of friendships) {
+        const owner = pairKeyToOwner.get(String(f.pairKey));
+        if (owner) {
+          acceptedFriendOwners.add(owner);
+        }
+      }
+    }
+
+    return rows.filter((doc) => {
+      const ownerId = doc.userId.toString();
+      if (ownerId === viewerId) {
+        return true;
+      }
+      const visibility = visibilityByOwner.get(ownerId) ?? 'everyone';
+      if (visibility === 'everyone') {
+        return true;
+      }
+      if (visibility === 'friends') {
+        return acceptedFriendOwners.has(ownerId);
+      }
+      // 'nobody' (or any unknown value) → hidden.
+      return false;
+    });
   }
 
   /**

@@ -430,9 +430,22 @@ export class MatchmakingGateway
       return;
     }
 
-    // Re-joining while already in a call: end the old room first (treated as a
-    // voluntary stop) so we never leak a room.
-    await this.endActiveRoom(userId, 'stop');
+    // Re-joining WHILE ALREADY IN A ROOM is a re-roll: it must be charged to the
+    // stricter `mm:next` skip throttle, not the laxer `MM_JOIN_LIMIT` outer guard
+    // consumed above. Otherwise a user in a room could `mm:join`-spam to re-roll
+    // far faster than the 10/10s `mm:next` ceiling allows — doubling the
+    // peer-fishing / deanonymization rate. The `MM_JOIN_LIMIT` consume stays as
+    // the outer first-join guard; this adds the skip-ceiling on the in-room path.
+    const inRoom = await this.matchmaking.getUserRoom(userId);
+    if (inRoom) {
+      if (!(await this.consumeSkipToken(client))) {
+        // Over the skip ceiling — keep the user in their current room (no
+        // teardown) so they can re-roll once the cooldown lapses.
+        return;
+      }
+      // End the old room (treated as a voluntary stop) so we never leak a room.
+      await this.endActiveRoom(userId, 'stop');
+    }
 
     await this.joinAndMatch(userId, client.id, parsed.data);
   }
@@ -448,13 +461,7 @@ export class MatchmakingGateway
     if (!userId) {
       return;
     }
-    const allowed = await this.matchmaking.consumeNextToken(userId);
-    if (!allowed) {
-      this.logger.debug(`mm:next rate-limited for ${userId}`);
-      // Tell the client so it can recover instead of stranding the user on
-      // 'searching' forever: the client keeps its current peer and re-issues
-      // `mm:next`/`mm:join` once the cooldown lapses.
-      emitWsError(client, { code: 'rate_limited', event: 'mm:next' });
+    if (!(await this.consumeSkipToken(client))) {
       return;
     }
 
@@ -620,6 +627,34 @@ export class MatchmakingGateway
       this.logger.debug(`call:accept aborted (blocked) call=${call.callId}`);
       return;
     }
+    // Index this now-active call by its participant pair BEFORE joining the
+    // sockets, so a block created mid-call (`block:enforce` → `endCallBetween`,
+    // which finds the call via the pair index) can never land in the window
+    // between the room going live and the index being written and so MISS the
+    // pair — which would leave an accepted call surviving a block. Best-effort: a
+    // failed index write must not block a healthy accept (the call ring TTL +
+    // room teardown still bound any leak). Mirrors AuditService.log's
+    // awaited-but-swallowed side-effect.
+    await this.indexActiveCall(call.callId, call.fromUserId, call.toUserId);
+    // RE-CHECK the block once more AFTER indexing: a block:enforce that fired in
+    // the gap between the first check and the index write would have looked up an
+    // empty pair index and done nothing, so close that race by re-reading the
+    // block now that the call is discoverable. If a block landed, tear the call
+    // down (call:end + rtc:hangup reason 'reported' + clear the index) instead of
+    // joining/accepting — both sides' UIs resolve and nothing is left live.
+    if (await this.matchmaking.isBlockedEitherWay(call.fromUserId, call.toUserId)) {
+      this.server.to(userRoom(call.fromUserId)).emit('call:end', { callId: call.callId });
+      this.server.to(userRoom(call.toUserId)).emit('call:end', { callId: call.callId });
+      this.server
+        .to(userRoom(call.fromUserId))
+        .emit('rtc:hangup', { roomId: callRoom(call.callId), reason: 'reported' });
+      this.server
+        .to(userRoom(call.toUserId))
+        .emit('rtc:hangup', { roomId: callRoom(call.callId), reason: 'reported' });
+      await this.teardownCallRoom(call.callId);
+      this.logger.debug(`call:accept aborted (blocked after index) call=${call.callId}`);
+      return;
+    }
     // Put BOTH users' sockets (every device, on every replica) into the call
     // room so `rtc:*` relays between them. `socketsJoin` is fanned out by the
     // Redis adapter, so a participant connected to another node joins too. AWAIT
@@ -631,12 +666,6 @@ export class MatchmakingGateway
       this.server.in(userRoom(call.fromUserId)).socketsJoin(room),
       this.server.in(userRoom(call.toUserId)).socketsJoin(room),
     ]);
-    // Index this now-active call by its participant pair so a block created mid
-    // call (`block:enforce`) can find + tear it down without knowing the callId.
-    // Best-effort: a failed index write must not block a healthy accept (the call
-    // ring TTL + room teardown still bound any leak). Mirrors AuditService.log's
-    // awaited-but-swallowed side-effect.
-    await this.indexActiveCall(call.callId, call.fromUserId, call.toUserId);
     // Tell the caller the call was accepted so they begin WebRTC negotiation.
     this.server.to(userRoom(call.fromUserId)).emit('call:accept', { callId: call.callId });
   }
@@ -781,6 +810,29 @@ export class MatchmakingGateway
   }
 
   // ── Internals ────────────────────────────────────────────────────────────────
+
+  /**
+   * Consume one `mm:next` skip token for this socket's user, the SINGLE throttle
+   * governing every re-roll: an explicit `mm:next`, AND an `mm:join` issued while
+   * already in a room (which is a re-roll in disguise). Returns `true` when within
+   * the {@link NEXT_MAX_PER_WINDOW}/{@link NEXT_WINDOW_SECONDS} budget; on `false`
+   * emits `ws:error({ code: 'rate_limited', event: 'mm:next' })` so the client can
+   * recover (keep its current peer, re-issue once the cooldown lapses) instead of
+   * stranding the user on 'searching'. Centralising both re-roll paths here stops
+   * `mm:join` from bypassing the stricter skip ceiling via the laxer join guard.
+   */
+  private async consumeSkipToken(client: MmSocket): Promise<boolean> {
+    const userId = client.data.userId;
+    if (!userId) {
+      return false;
+    }
+    if (!(await this.matchmaking.consumeNextToken(userId))) {
+      this.logger.debug(`mm:next rate-limited for ${userId}`);
+      emitWsError(client, { code: 'rate_limited', event: 'mm:next' });
+      return false;
+    }
+    return true;
+  }
 
   /**
    * Enqueue the user and attempt a match. On success wires the pair room and
@@ -1171,18 +1223,31 @@ export class MatchmakingGateway
    * Clear the accepted-call index for `callId` (both the reverse `callId`→pair
    * key and the pair→`callId` key). Reads the reverse key to learn the pair, then
    * deletes both. Idempotent: a missing/expired index is a cheap no-op.
+   *
+   * The pair key is deleted with a COMPARE-AND-DELETE keyed on THIS `callId`: a
+   * stale teardown of an OLD call between the same two users must not clobber the
+   * pair index of a NEWER live call that has since reused the (unordered) pair
+   * key — which would make a later block:enforce unable to find + tear down the
+   * newer call. The reverse `callId`→pair key is unique to this call, so it is
+   * deleted unconditionally.
    */
   private async clearActiveCallIndex(callId: string): Promise<void> {
     try {
       const raw = await this.redis.get(activeCallIdKey(callId));
-      const pipeline = this.redis.multi().del(activeCallIdKey(callId));
+      await this.redis.del(activeCallIdKey(callId));
       if (raw) {
         const pair = JSON.parse(raw) as { a?: unknown; b?: unknown };
         if (typeof pair.a === 'string' && typeof pair.b === 'string') {
-          pipeline.del(activeCallPairKey(pair.a, pair.b));
+          // Only delete the pair key if it STILL points at this callId; if a
+          // newer call already overwrote it, leave the newer entry intact.
+          await this.redis.eval(
+            COMPARE_AND_DEL_LUA,
+            1,
+            activeCallPairKey(pair.a, pair.b),
+            callId,
+          );
         }
       }
-      await pipeline.exec();
     } catch (err) {
       this.logger.debug(`clearActiveCallIndex failed for ${callId}: ${asMessage(err)}`);
     }
@@ -1453,3 +1518,15 @@ function parseBlockEnforceMessage(
 function asMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
+
+/**
+ * Lua: compare-and-delete. Delete KEYS[1] ONLY when its current value still
+ * equals ARGV[1], returning the number deleted (1) — otherwise touch nothing and
+ * return 0. Used so a stale call teardown only clears the active-call PAIR index
+ * when it still points at THAT call's id, never clobbering a newer live call that
+ * has since reused the (unordered) participant-pair key.
+ */
+const COMPARE_AND_DEL_LUA = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end
+return 0
+`;

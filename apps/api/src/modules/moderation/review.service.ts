@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, type QueryFilter, Types } from 'mongoose';
 
@@ -22,6 +27,15 @@ export interface ReviewResolvedWithBan {
 
 /** Terminal statuses a moderator may set when triaging a review item. */
 const RESOLVABLE_STATUSES: readonly ReportStatus[] = ['resolved', 'dismissed'];
+
+/**
+ * Statuses that mean an event has ALREADY been decided. Re-deciding a terminal
+ * event is rejected (`409`) so a `dismissed` row can't be flipped to `resolved`
+ * to resurrect a reversed sanction, a `resolved` row can't be re-banned, and two
+ * concurrent moderators can't double-action — reversals go through the explicit,
+ * audited unban path only.
+ */
+const TERMINAL_STATUSES: readonly ReportStatus[] = ['resolved', 'dismissed'];
 
 /**
  * Admin review queue over {@link ModerationEvent}s — the human-in-the-loop layer
@@ -89,8 +103,15 @@ export class ReviewService {
    * manual `POST /admin/users/:id/unban` uses, so the reversal stays auditable.
    *
    * Moderator-only. Rejects any other target status and 404s an unknown id.
+   * `callerId` is the acting moderator, threaded through to a dismiss-driven
+   * {@link AdminService.unbanUser} so the reversal is attributed (not logged as
+   * a null AI-path actor).
    */
-  async resolve(eventId: string, status: ReportStatus): Promise<ReviewItem> {
+  async resolve(
+    eventId: string,
+    status: ReportStatus,
+    callerId?: string | null,
+  ): Promise<ReviewItem> {
     if (!RESOLVABLE_STATUSES.includes(status)) {
       throw new BadRequestException('status must be resolved or dismissed');
     }
@@ -102,12 +123,19 @@ export class ReviewService {
     if (!event) {
       throw new NotFoundException('Review item not found');
     }
+    // TERMINAL-STATE GUARD: a decided event is final. Reject BEFORE any
+    // side-effect so we never reverse a deliberate decision (e.g. flip a
+    // `dismissed` row back to `resolved`, re-banning a cleared user) or let two
+    // moderators double-action the same row.
+    if (TERMINAL_STATUSES.includes(event.status)) {
+      throw new ConflictException('Review item already decided');
+    }
 
     // Dismiss = false positive. Reverse a sanction the auto-policy already
     // applied (ban/kick), so a cleared user is actually un-banned. The unban
     // runs FIRST (idempotent) so a dismissed ban-row always implies a real unban.
     if (status === 'dismissed' && (event.autoAction === 'ban' || event.autoAction === 'kick')) {
-      await this.adminService.unbanUser(event.userId.toString());
+      await this.adminService.unbanUser(event.userId.toString(), callerId);
     }
 
     event.status = status;
@@ -137,6 +165,12 @@ export class ReviewService {
     const event = await this.eventModel.findById(new Types.ObjectId(eventId)).exec();
     if (!event) {
       throw new NotFoundException('Review item not found');
+    }
+    // TERMINAL-STATE GUARD: refuse to (re-)ban on an already-decided event
+    // BEFORE the ban side-effect, so a closed item can't resurrect a sanction
+    // and concurrent upholders can't double-ban.
+    if (TERMINAL_STATUSES.includes(event.status)) {
+      throw new ConflictException('Review item already decided');
     }
 
     // `callerId` is threaded through to {@link AdminService.banUser} so the audit

@@ -28,6 +28,7 @@ import type {
 
 import { api } from '@/lib/api';
 import { BLOCKS_KEY } from '@/features/settings/use-settings';
+import { economyKeys } from '@/features/economy/api';
 import type { TurnCredentials } from '@/lib/webrtc';
 
 /**
@@ -57,9 +58,17 @@ export function useGifts(enabled: boolean) {
 }
 
 export function useSendGift() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (dto: SendGiftDto) =>
       api.request<GiftTransaction>('/gifts/send', { method: 'POST', json: dto }),
+    // Sending debits the caller's wallet server-side, so refresh the balance +
+    // ledger — otherwise the header coin pill stays stale after an in-call gift.
+    // Mirrors the canonical economy `useSendGift` (`useEconomyInvalidation`).
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: economyKeys.wallet() });
+      void queryClient.invalidateQueries({ queryKey: economyKeys.transactions() });
+    },
   });
 }
 

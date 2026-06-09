@@ -9,7 +9,7 @@
  * store live in the React/UI layer, while `lib/api.ts` is framework-agnostic and
  * must not import them. The api client instead emits an event
  * ({@link onSessionExpired}); this watcher — mounted once at the app root —
- * subscribes, clears auth, drops the socket + the cached `/auth/me`, and shows
+ * subscribes, clears auth, drops the socket + the ENTIRE query cache, and shows
  * the toast. The api client already cleared the in-memory token and de-duplicates
  * the signal, so a wave of concurrent 401s yields exactly one toast.
  *
@@ -22,7 +22,6 @@ import { toast } from '@ruletka/ui';
 import { onSessionExpired } from '@/lib/api';
 import { disconnectSocket } from '@/lib/socket';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { CURRENT_USER_KEY } from './use-auth';
 
 export function SessionExpiryWatcher(): null {
   const t = useTranslations('auth');
@@ -37,7 +36,10 @@ export function SessionExpiryWatcher(): null {
 
       useAuthStore.getState().clear();
       disconnectSocket();
-      queryClient.removeQueries({ queryKey: CURRENT_USER_KEY });
+      // Drop the WHOLE cache (not just `/auth/me`): an expired session must not
+      // leave any authenticated data behind for whoever signs in next on this
+      // browser/tab.
+      queryClient.clear();
 
       if (wasAuthenticated) {
         toast.error(t('session.expiredToast'), {

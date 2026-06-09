@@ -150,9 +150,28 @@ export class AdminService {
     return { userId: updated._id.toString(), isBanned: updated.isBanned };
   }
 
-  /** Unban a user: clear `isBanned`. Sessions are NOT restored (login afresh). */
+  /**
+   * Unban a user: clear `isBanned`. Sessions are NOT restored (login afresh).
+   *
+   * Also CLEARS the user's ban-evasion fingerprints (the inverse of the ban-time
+   * {@link FingerprintService.recordForUser}). Without this, an exonerated
+   * account would clear `isBanned` yet stay silently locked out of
+   * register/login by the lingering fingerprint row matching the gate. The clear
+   * is best-effort (it never throws) and is recorded as its own `fingerprint.clear`
+   * audit action so the reversal stays attributable.
+   */
   async unbanUser(userId: string, callerId?: string | null): Promise<BanResult> {
     const updated = await this.setBanned(userId, false);
+    // Lift the ban-evasion fingerprints so the cleared account is not stranded at
+    // register/login. Best-effort (swallows its own errors); the unban above is
+    // already effective via `isBanned`.
+    await this.fingerprintService.clearForUser(userId);
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'fingerprint.clear',
+      targetType: 'user',
+      targetId: userId,
+    });
     // Best-effort audit row (never fails the unban). `callerId` is the acting
     // moderator, or `null` for the AI false-positive reversal path (no human actor).
     await this.auditService.log({

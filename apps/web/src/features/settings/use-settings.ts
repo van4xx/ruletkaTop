@@ -34,6 +34,7 @@ import type {
 } from '@ruletka/shared-types';
 import { api, ApiClientError } from '@/lib/api';
 import { CURRENT_USER_KEY } from '@/features/auth/use-auth';
+import { chatKeys } from '@/features/chat/use-conversations';
 
 export const SETTINGS_KEY = ['settings'] as const;
 export const BLOCKS_KEY = ['moderation', 'blocks'] as const;
@@ -197,6 +198,10 @@ export function useUnblock(): UseMutationResult<void, ApiClientError, string> {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: BLOCKS_KEY });
+      // Mirror the block path: unblocking re-admits the peer's messages, so
+      // refresh the conversation inbox + any open thread (`chatKeys.all` covers
+      // both) instead of leaving them hidden until a reload.
+      queryClient.invalidateQueries({ queryKey: chatKeys.all });
     },
   });
 }

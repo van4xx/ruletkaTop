@@ -35,6 +35,7 @@ import type {
 } from '@ruletka/shared-types';
 
 import { api } from '@/lib/api';
+import { chatKeys } from '@/features/chat/use-conversations';
 
 export const friendsKeys = {
   all: ['friends'] as const,
@@ -218,8 +219,13 @@ export function useBlockUser() {
       const dto: CreateBlockDto = { blockedUserId };
       return api.request<Block>('/blocks', { method: 'POST', json: dto });
     },
+    // Blocking severs the friendship AND hides the peer's messages server-side,
+    // so also refresh the conversation inbox + any open thread — otherwise the
+    // blocked user's preview / messages linger until a manual reload. Invalidating
+    // `chatKeys.all` covers the inbox and every cached message thread in one go.
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: friendsKeys.list() });
+      void qc.invalidateQueries({ queryKey: chatKeys.all });
     },
   });
 }

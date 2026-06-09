@@ -122,9 +122,12 @@ export class ModerationController {
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
   async resolveReview(
     @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
     @Body(createZodValidationPipe(resolveReviewSchema)) dto: ResolveReviewDto,
   ): Promise<ReviewItem> {
-    return this.reviewService.resolve(id, dto.status);
+    // Thread the acting moderator so a dismiss-driven unban is attributed to them
+    // (not logged as a null AI-path actor).
+    return this.reviewService.resolve(id, dto.status, user.sub);
   }
 
   @Post('moderation/review/:id/resolve-ban')

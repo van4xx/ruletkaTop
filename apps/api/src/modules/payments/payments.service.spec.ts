@@ -722,3 +722,205 @@ describe('PaymentsService — tombstone/ban guard (a dead account is never re-en
     expect(wallet.credit).toHaveBeenCalledWith(userId, 600, 'purchase', invoiceId);
   });
 });
+
+describe('PaymentsService — post-claim teardown re-check (renewal races account teardown)', () => {
+  const userId = '507f1f77bcf86cd799439011';
+  const invoiceId = 'inv-race-1';
+
+  let service: PaymentsService;
+  let paymentModel: {
+    findOne: jest.Mock;
+    findById: jest.Mock;
+    findOneAndUpdate: jest.Mock;
+    updateOne: jest.Mock;
+    create: jest.Mock;
+  };
+  let wallet: { credit: jest.Mock; debit: jest.Mock; getBalance: jest.Mock };
+  let premium: {
+    activate: jest.Mock;
+    cancel: jest.Mock;
+    isPremium: jest.Mock;
+    hasCanceledRenewal: jest.Mock;
+    findPlanByCode: jest.Mock;
+  };
+  let coinPackages: { findByCode: jest.Mock };
+  let cloudPayments: {
+    isConfigured: jest.Mock;
+    cancelSubscription: jest.Mock;
+    refundPayment: jest.Mock;
+  };
+  /** `users.findOne(...)` SEQUENCE: the gate is re-checked, so it is read twice. */
+  let usersFindOne: jest.Mock;
+
+  /**
+   * Build the service whose `users.findOne` returns a SEQUENCE of rows, so the
+   * pre-claim gate (call 1) and the post-claim gate (call 2) can disagree — the
+   * exact race the re-check defends: teardown commits the tombstone in the window
+   * between the first gate passing and fulfilment.
+   */
+  async function build(rows: Array<{ deletedAt?: Date | null; isBanned?: boolean } | null>): Promise<void> {
+    let i = 0;
+    usersFindOne = jest.fn().mockImplementation(() => Promise.resolve(rows[i++] ?? rows[rows.length - 1]));
+    const connection = { collection: jest.fn(() => ({ findOne: usersFindOne })) };
+    const config = {
+      get: jest.fn((key: string, def?: unknown) =>
+        key === 'CLOUDPAYMENTS_PUBLIC_ID' ? 'pk_test' : def,
+      ),
+    } as unknown as ConfigService;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PaymentsService,
+        { provide: getModelToken(Payment.name), useValue: paymentModel },
+        { provide: ConfigService, useValue: config },
+        { provide: WALLET_SERVICE, useValue: wallet },
+        { provide: PREMIUM_SERVICE, useValue: premium },
+        { provide: COIN_PACKAGES_SERVICE, useValue: coinPackages },
+        { provide: CloudPaymentsClient, useValue: cloudPayments },
+        { provide: getConnectionToken(), useValue: connection },
+      ],
+    }).compile();
+    service = moduleRef.get(PaymentsService);
+  }
+
+  beforeEach(() => {
+    wallet = {
+      credit: jest.fn().mockResolvedValue(600),
+      debit: jest.fn().mockResolvedValue(0),
+      getBalance: jest.fn().mockResolvedValue(0),
+    };
+    premium = {
+      activate: jest.fn().mockResolvedValue(undefined),
+      cancel: jest.fn().mockResolvedValue(undefined),
+      isPremium: jest.fn().mockResolvedValue(false),
+      hasCanceledRenewal: jest.fn().mockResolvedValue(false),
+      findPlanByCode: jest.fn().mockResolvedValue({
+        code: 'monthly',
+        title: 'Premium Monthly',
+        priceRub: 399,
+        intervalDays: 30,
+        perks: [],
+      }),
+    };
+    coinPackages = {
+      findByCode: jest.fn().mockResolvedValue({
+        code: 'coins_550',
+        coins: 500,
+        bonusCoins: 100,
+        priceRub: 449,
+      }),
+    };
+    cloudPayments = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      cancelSubscription: jest.fn().mockResolvedValue(undefined),
+      refundPayment: jest.fn().mockResolvedValue(undefined),
+    };
+    paymentModel = {
+      findOne: jest.fn(),
+      findById: jest.fn(),
+      findOneAndUpdate: jest.fn(),
+      updateOne: jest.fn().mockReturnValue(queryReturning({ acknowledged: true })),
+      create: jest.fn().mockResolvedValue({ _id: 'created' }),
+    };
+  });
+
+  it('Pay: account torn down AFTER the claim → rolls the claim back to pending, never fulfils', async () => {
+    // Gate 1 (pre-claim): live. Gate 2 (post-claim): torn down — the race.
+    await build([{ deletedAt: null, isBanned: false }, { deletedAt: new Date(), isBanned: false }]);
+
+    paymentModel.findOne.mockReturnValue(
+      queryReturning({
+        _id: 'pay-race',
+        invoiceId,
+        status: 'pending',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+    // The claim wins (pending→completed).
+    paymentModel.findOneAndUpdate.mockReturnValue(
+      queryReturning({
+        _id: 'pay-race',
+        invoiceId,
+        status: 'completed',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    const ack = await service.handlePay({
+      InvoiceId: invoiceId,
+      TransactionId: 4242,
+      Amount: 449,
+      SubscriptionId: 'sc_race',
+      AccountId: userId,
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    // The gate was re-checked AFTER the claim.
+    expect(usersFindOne).toHaveBeenCalledTimes(2);
+    // No credit despite winning the claim — the dead account is never entitled.
+    expect(wallet.credit).not.toHaveBeenCalled();
+    // The claim was rolled BACK to pending (audit: never fulfilled for a dead account).
+    const rollback = paymentModel.updateOne.mock.calls.find(
+      ([, update]) => (update as { $set?: { status?: string } }).$set?.status === 'pending',
+    );
+    expect(rollback).toBeDefined();
+    // Best-effort upstream cancel so a torn-down card stops being billed.
+    expect(cloudPayments.cancelSubscription).toHaveBeenCalledWith('sc_race');
+  });
+
+  it('Recurrent "Active": account torn down AFTER the renewal claim → never re-activates', async () => {
+    // Gate 1 (pre-claim): live. Gate 2 (post-claim): torn down — the race.
+    await build([{ deletedAt: null, isBanned: false }, { deletedAt: null, isBanned: true }]);
+    // planFromRecurrent lookup returns null (plan via Data); the renewal claim wins.
+    paymentModel.findOne.mockReturnValue(sortableQueryReturning(null));
+
+    const ack = await service.handleRecurrent({
+      SubscriptionId: 'sc_race',
+      TransactionId: 9101,
+      Amount: 399,
+      AccountId: userId,
+      Status: 'Active',
+      Token: 'tok',
+      Data: JSON.stringify({ purpose: 'premium', plan: 'monthly', userId }),
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    // The gate was re-checked AFTER the renewal claim.
+    expect(usersFindOne).toHaveBeenCalledTimes(2);
+    // The renewal row was still claimed (revenue/audit), but premium was NOT
+    // (re-)activated for the now-dead account.
+    expect(paymentModel.create).toHaveBeenCalledTimes(1);
+    expect(premium.activate).not.toHaveBeenCalled();
+    expect(premium.cancel).toHaveBeenCalledWith(userId);
+    expect(cloudPayments.cancelSubscription).toHaveBeenCalledWith('sc_race');
+  });
+
+  it('Recurrent "Active": still re-activates when the account stays live across BOTH gate checks', async () => {
+    await build([
+      { deletedAt: null, isBanned: false },
+      { deletedAt: null, isBanned: false },
+    ]);
+    paymentModel.findOne.mockReturnValue(sortableQueryReturning(null));
+
+    const ack = await service.handleRecurrent({
+      SubscriptionId: 'sc_ok',
+      TransactionId: 9102,
+      Amount: 399,
+      AccountId: userId,
+      Status: 'Active',
+      Token: 'tok',
+      Data: JSON.stringify({ purpose: 'premium', plan: 'monthly', userId }),
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    expect(usersFindOne).toHaveBeenCalledTimes(2);
+    expect(premium.activate).toHaveBeenCalledTimes(1);
+    expect(premium.cancel).not.toHaveBeenCalled();
+  });
+});

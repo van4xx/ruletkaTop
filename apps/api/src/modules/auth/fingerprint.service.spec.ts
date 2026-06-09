@@ -30,6 +30,7 @@ interface Mocks {
   bannedFingerprintModel: {
     findOne: jest.Mock;
     updateOne: jest.Mock;
+    deleteMany: jest.Mock;
     find: jest.Mock;
   };
   sessionModel: { find: jest.Mock };
@@ -40,6 +41,7 @@ function buildMocks(): Mocks {
     bannedFingerprintModel: {
       findOne: jest.fn(),
       updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({}) }),
+      deleteMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ deletedCount: 0 }) }),
       find: jest.fn(),
     },
     sessionModel: {
@@ -208,5 +210,40 @@ describe('FingerprintService.recordForUser', () => {
     await expect(
       service.recordForUser(USER_ID, { context: { ip: '1.1.1.1', userAgent: 'UA' } }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('FingerprintService.clearForUser', () => {
+  it('deletes EVERY ban-evasion row tied to the user (inverse of recordForUser)', async () => {
+    const m = buildMocks();
+    const service = makeService(m);
+
+    await service.clearForUser(USER_ID);
+
+    expect(m.bannedFingerprintModel.deleteMany).toHaveBeenCalledTimes(1);
+    const [filter] = m.bannedFingerprintModel.deleteMany.mock.calls[0] as [
+      Record<string, unknown>,
+    ];
+    // Scoped to the owning userId; the stored ObjectId stringifies back to it.
+    expect(String(filter.userId)).toBe(USER_ID);
+  });
+
+  it('ignores an invalid user id without touching storage', async () => {
+    const m = buildMocks();
+    const service = makeService(m);
+
+    await service.clearForUser('not-an-objectid');
+
+    expect(m.bannedFingerprintModel.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('never throws on a storage error (best-effort, mirrors recordForUser)', async () => {
+    const m = buildMocks();
+    m.bannedFingerprintModel.deleteMany.mockReturnValue({
+      exec: jest.fn().mockRejectedValue(new Error('mongo down')),
+    });
+    const service = makeService(m);
+
+    await expect(service.clearForUser(USER_ID)).resolves.toBeUndefined();
   });
 });

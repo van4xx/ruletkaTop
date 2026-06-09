@@ -136,14 +136,16 @@ export class PremiumService implements OnModuleInit {
    * pending cancellation, and mirrors entitlement onto the profile.
    *
    * STACKED RENEWAL: `currentPeriodEnd` carries the freshly-paid interval
-   * measured from now (i.e. `now + intervalDays`). When the user already has
-   * paid time left (an early renewal / re-subscribe), resetting to that absolute
-   * end would BURN the remaining days. Instead we EXTEND: the new end is the
-   * incoming end plus whatever future time was left on the existing record —
-   * equivalently `max(existingFutureEnd, now) + intervalDays` — so each paid
-   * charge adds exactly one interval and no paid day is ever lost. (The
-   * per-charge idempotency that guarantees one `activate` per unique charge lives
-   * in the payments layer's renewal claim; this method only does the stacking.)
+   * measured from now (i.e. `now + intervalDays`); we recover the interval width
+   * and stack it ATOMICALLY on the server as `max(existingEnd, now) + interval`.
+   * When the user already has paid time left (an early renewal / re-subscribe),
+   * resetting to the absolute paid end would BURN the remaining days — instead
+   * each paid charge adds exactly one interval and no paid day is ever lost. The
+   * stacking runs as a single aggregation-pipeline `updateOne` (evaluated against
+   * the server clock `$$NOW`), so concurrent renewals and the admin grant path
+   * cannot lose an interval to a read-compute-write race. (The per-charge
+   * idempotency that guarantees one `activate` per unique charge lives in the
+   * payments layer's renewal claim; this method only does the stacking.)
    *
    * @param plan plan code (e.g. `monthly`).
    * @param currentPeriodEnd end of the freshly-paid interval (`now + intervalDays`).
@@ -160,21 +162,27 @@ export class PremiumService implements OnModuleInit {
   ): Promise<void> {
     const _id = new Types.ObjectId(userId);
 
-    // Stack onto any remaining paid time. Read the current record's end and, if
-    // it is still in the future, add the leftover onto the freshly-paid interval
-    // so an early renewal extends rather than truncates the entitlement window.
-    const existing = await this.subscriptionModel
-      .findOne({ userId: _id })
-      .select('currentPeriodEnd')
-      .lean()
-      .exec();
-    const periodEnd = this.stackPeriodEnd(currentPeriodEnd, existing?.currentPeriodEnd ?? null);
+    // The caller passes the freshly-paid interval as an absolute end measured
+    // from now (`now + intervalDays`); recover the interval length so the DB can
+    // stack it onto any remaining paid time ATOMICALLY. A non-positive width
+    // (clock skew / already-past end) is floored to 0 so we never shrink.
+    const intervalMs = Math.max(0, currentPeriodEnd.getTime() - Date.now());
 
+    // Stack onto remaining paid time inside a SERVER-SIDE aggregation-pipeline
+    // update: `currentPeriodEnd = max(existingEnd, now) + intervalMs`, evaluated
+    // against `$$NOW` on the server. This is atomic — concurrent renewals and the
+    // admin grant path each add exactly one interval (a JS read-compute-write
+    // could lose an interval to a lost update). `$max` ignores a null/absent
+    // existing end, so a first activation yields `now + intervalMs`. `startedAt`
+    // is stamped once via `$ifNull` (covers both insert and an old null record).
     const set: Record<string, unknown> = {
       plan,
       status: 'active',
-      currentPeriodEnd: periodEnd,
       cancelAtPeriodEnd: false,
+      currentPeriodEnd: {
+        $add: [{ $max: [{ $ifNull: ['$currentPeriodEnd', '$$NOW'] }, '$$NOW'] }, intervalMs],
+      },
+      startedAt: { $ifNull: ['$startedAt', '$$NOW'] },
     };
     if (token !== undefined) {
       set.token = token;
@@ -184,44 +192,17 @@ export class PremiumService implements OnModuleInit {
     }
 
     await this.subscriptionModel
-      .updateOne(
-        { userId: _id },
-        {
-          $set: set,
-          // Stamp the start only when the record is first created.
-          $setOnInsert: { userId: _id, startedAt: new Date() },
-        },
-        { upsert: true },
-      )
+      .updateOne({ userId: _id }, [{ $set: set }], { upsert: true })
       .exec();
 
-    // Ensure `startedAt` exists even when re-activating an old (null) record.
-    await this.subscriptionModel
-      .updateOne({ userId: _id, startedAt: null }, { $set: { startedAt: new Date() } })
+    // Read the atomically-computed end back for the profile mirror (the pipeline
+    // owns the stacking; we only reflect the result).
+    const written = await this.subscriptionModel
+      .findOne({ userId: _id })
+      .select('currentPeriodEnd')
+      .lean()
       .exec();
-
-    await this.syncProfilePremium(_id, true, periodEnd);
-  }
-
-  /**
-   * Compute the stacked end of a paid period: the freshly-paid interval (carried
-   * in `paidEnd` as `now + intervalDays`) extended by any unexpired remainder on
-   * the existing record. If the existing end is `null` or already in the past
-   * (a first subscription or a lapsed one), there is nothing to stack and the
-   * freshly-paid end stands. Otherwise the leftover `existingEnd - now` is added,
-   * yielding `max(existingEnd, now) + intervalDays` — every charge adds exactly
-   * one interval, never burning paid days.
-   */
-  private stackPeriodEnd(paidEnd: Date, existingEnd: Date | null): Date {
-    const now = Date.now();
-    if (existingEnd === null) {
-      return paidEnd;
-    }
-    const remainingMs = existingEnd.getTime() - now;
-    if (remainingMs <= 0) {
-      return paidEnd;
-    }
-    return new Date(paidEnd.getTime() + remainingMs);
+    await this.syncProfilePremium(_id, true, written?.currentPeriodEnd ?? currentPeriodEnd);
   }
 
   /**

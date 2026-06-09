@@ -139,6 +139,32 @@ export class FingerprintService {
   }
 
   /**
+   * Clear EVERY ban-evasion fingerprint recorded against a user — the inverse of
+   * {@link recordForUser}. Called from the unban flow so an exonerated account is
+   * not left silently locked out of register/login by a lingering fingerprint
+   * row (the `User.isBanned` flag is cleared, but the device/IP fingerprint would
+   * otherwise persist and keep matching the register/login gate).
+   *
+   * Best-effort — never throws (mirrors {@link recordForUser}): the unban is
+   * already effective via `User.isBanned`, and the gate is OFF by default, so a
+   * storage hiccup here must never abort the unban.
+   */
+  async clearForUser(userId: string): Promise<void> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return;
+    }
+    try {
+      await this.bannedFingerprintModel
+        .deleteMany({ userId: new Types.ObjectId(userId) })
+        .exec();
+    } catch (err) {
+      this.logger.warn(
+        `Failed to clear ban-evasion fingerprints for ${userId}: ${asMessage(err)}`,
+      );
+    }
+  }
+
+  /**
    * Gather the distinct fingerprint hashes for a user from their persisted
    * refresh sessions (which store `ip` + `userAgent`) plus the optional current
    * request context.

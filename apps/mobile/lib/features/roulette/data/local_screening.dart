@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:image/image.dart' as img;
 
 import '../../../core/models/models.dart';
 import 'nsfw_classifier.dart';
@@ -29,6 +30,16 @@ const Duration _kViolationCooldown = Duration(seconds: 8);
 
 /// Minimum gap between evidence POSTs, so we don't spam the API on a bad stream.
 const Duration _kReportMinGap = Duration(seconds: 5);
+
+/// Longest edge (px) of the downscaled EVIDENCE frame — mirrors the web's
+/// `MAX_EDGE` (apps/web/src/features/moderation/capture.ts). The raw captured
+/// frame is full camera resolution; we shrink it so the POST body fits the
+/// server's `/moderation/frame` evidence size cap.
+const int _kEvidenceMaxEdge = 224;
+
+/// JPEG quality for the downscaled evidence thumbnail — mirrors the web's
+/// `EVIDENCE_QUALITY` (0.6 → image package's 0–100 scale).
+const int _kEvidenceJpegQuality = 60;
 
 /// Decide whether a classification result is a reportable violation under the
 /// conservative thresholds. Returns null when the frame is acceptable.
@@ -205,13 +216,12 @@ class LocalScreeningController extends ChangeNotifier {
     if (now.difference(_lastReportAt) < _kReportMinGap) return;
     _lastReportAt = now;
 
-    // The captured frame is already a JPEG; encode as a data-URL for evidence
-    // (mirrors the web's downscaled JPEG data-URL). Guard the size — the API
-    // caps evidence at ~2 MB.
-    String? evidence;
-    if (frameJpeg.lengthInBytes <= 1_500_000) {
-      evidence = 'data:image/jpeg;base64,${base64Encode(frameJpeg)}';
-    }
+    // The captured frame is full camera resolution; DOWNSCALE it to a compact
+    // thumbnail (longest edge ≤ 224px, JPEG q60) before building the data-URL,
+    // mirroring the web evidence pipeline so the payload fits the server's
+    // `/moderation/frame` size contract. A re-encode failure simply drops the
+    // evidence (the violation is still reported, just without a frame).
+    final evidence = _encodeEvidence(frameJpeg);
 
     unawaited(
       reportFrame(
@@ -221,8 +231,42 @@ class LocalScreeningController extends ChangeNotifier {
           score: result.score,
           evidence: evidence,
         ),
-      ).catchError((_) {}),
+      ).catchError((Object e, StackTrace _) {
+        // Best-effort, but DON'T silently swallow: a failing evidence upload is
+        // a moderation gap worth surfacing in logs (mirrors the web reporter,
+        // which logs the failure rather than dropping it on the floor).
+        if (kDebugMode) {
+          debugPrint('[screening] evidence report failed: $e');
+        }
+      }),
     );
+  }
+
+  /// Downscale [frameJpeg] (a full-size camera JPEG from `captureFrame()`) to a
+  /// compact evidence data-URL — longest edge ≤ [_kEvidenceMaxEdge]px, re-encoded
+  /// at [_kEvidenceJpegQuality]. Returns null when the frame can't be decoded /
+  /// re-encoded, so the caller reports without evidence rather than shipping an
+  /// oversized payload. Never throws.
+  String? _encodeEvidence(Uint8List frameJpeg) {
+    try {
+      if (frameJpeg.isEmpty) return null;
+      final decoded = img.decodeJpg(frameJpeg);
+      if (decoded == null) return null;
+
+      // Preserve aspect ratio: only shrink the longest edge down to the cap.
+      final longest =
+          decoded.width > decoded.height ? decoded.width : decoded.height;
+      final resized = longest <= _kEvidenceMaxEdge
+          ? decoded
+          : (decoded.width >= decoded.height
+              ? img.copyResize(decoded, width: _kEvidenceMaxEdge)
+              : img.copyResize(decoded, height: _kEvidenceMaxEdge));
+
+      final jpeg = img.encodeJpg(resized, quality: _kEvidenceJpegQuality);
+      return 'data:image/jpeg;base64,${base64Encode(jpeg)}';
+    } catch (_) {
+      return null; // never throw out of the screening loop
+    }
   }
 
   @override

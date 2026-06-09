@@ -42,7 +42,7 @@ describe('ReportsService', () => {
     create: jest.Mock;
     find: jest.Mock;
     findById: jest.Mock;
-    findByIdAndUpdate: jest.Mock;
+    findOneAndUpdate: jest.Mock;
     aggregate: jest.Mock;
   };
   let usersService: { findById: jest.Mock };
@@ -54,7 +54,7 @@ describe('ReportsService', () => {
       create: jest.fn(),
       find: jest.fn(),
       findById: jest.fn(),
-      findByIdAndUpdate: jest.fn(),
+      findOneAndUpdate: jest.fn(),
       aggregate: jest.fn(),
     };
     usersService = { findById: jest.fn() };
@@ -178,31 +178,63 @@ describe('ReportsService', () => {
       await expect(service.resolveReport('not-an-id', 'resolved')).rejects.toBeInstanceOf(
         NotFoundException,
       );
-      expect(reportModel.findByIdAndUpdate).not.toHaveBeenCalled();
+      expect(reportModel.findOneAndUpdate).not.toHaveBeenCalled();
     });
 
-    it('404s an unknown report', async () => {
-      reportModel.findByIdAndUpdate.mockReturnValue(queryReturning(null));
+    it('404s an unknown report (no still-open match AND no row exists)', async () => {
+      reportModel.findOneAndUpdate.mockReturnValue(queryReturning(null));
+      reportModel.exists.mockReturnValue(queryReturning(null));
       await expect(
         service.resolveReport('507f1f77bcf86cd799439013', 'dismissed'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('sets the status and returns the updated report', async () => {
-      reportModel.findByIdAndUpdate.mockReturnValue(
+    it('sets the status atomically (scoped to a still-open report) and returns it', async () => {
+      reportModel.findOneAndUpdate.mockReturnValue(
         queryReturning(reportDoc({ status: 'resolved' })),
       );
 
       const result = await service.resolveReport('507f1f77bcf86cd799439013', 'resolved');
 
-      const [, update, options] = reportModel.findByIdAndUpdate.mock.calls[0] as [
-        unknown,
+      const [filter, update, options] = reportModel.findOneAndUpdate.mock.calls[0] as [
+        Record<string, unknown>,
         Record<string, unknown>,
         Record<string, unknown>,
       ];
+      // The guard: only an open/reviewing report is eligible to be decided.
+      expect(filter.status).toEqual({ $in: ['open', 'reviewing'] });
       expect(update).toEqual({ $set: { status: 'resolved' } });
       expect(options).toMatchObject({ new: true });
       expect(result.status).toBe('resolved');
+      // No existence disambiguation needed on the happy path.
+      expect(reportModel.exists).not.toHaveBeenCalled();
+    });
+
+    it('409s an ALREADY-DECIDED report (terminal-state guard, no re-decide)', async () => {
+      // The atomic update matches no still-open row…
+      reportModel.findOneAndUpdate.mockReturnValue(queryReturning(null));
+      // …but the row DOES exist (already resolved/dismissed) → Conflict, not 404.
+      reportModel.exists.mockReturnValue(queryReturning({ _id: 'report-1' }));
+
+      await expect(
+        service.resolveReport('507f1f77bcf86cd799439013', 'dismissed'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('concurrent double-decide: only the first caller wins, the loser 409s', async () => {
+      // First caller claims the still-open report.
+      reportModel.findOneAndUpdate
+        .mockReturnValueOnce(queryReturning(reportDoc({ status: 'resolved' })))
+        // Second caller's atomic update matches nothing (already decided).
+        .mockReturnValueOnce(queryReturning(null));
+      reportModel.exists.mockReturnValue(queryReturning({ _id: 'report-1' }));
+
+      const first = await service.resolveReport('507f1f77bcf86cd799439013', 'resolved');
+      expect(first.status).toBe('resolved');
+
+      await expect(
+        service.resolveReport('507f1f77bcf86cd799439013', 'dismissed'),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
   });
 
@@ -211,25 +243,48 @@ describe('ReportsService', () => {
       await expect(service.resolveReportWithBan('not-an-id')).rejects.toBeInstanceOf(
         NotFoundException,
       );
-      expect(reportModel.findById).not.toHaveBeenCalled();
+      expect(reportModel.findOneAndUpdate).not.toHaveBeenCalled();
       expect(adminService.banUser).not.toHaveBeenCalled();
     });
 
     it('404s an unknown report without banning', async () => {
-      reportModel.findById.mockReturnValue(queryReturning(null));
+      // No still-open row claimed AND the row does not exist at all.
+      reportModel.findOneAndUpdate.mockReturnValue(queryReturning(null));
+      reportModel.exists.mockReturnValue(queryReturning(null));
       await expect(
         service.resolveReportWithBan('507f1f77bcf86cd799439013'),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(adminService.banUser).not.toHaveBeenCalled();
     });
 
-    it('bans the reported user (with a reason + moderator id) THEN resolves the report', async () => {
+    it('409s an ALREADY-DECIDED report WITHOUT re-banning (terminal-state guard)', async () => {
+      // The atomic claim matches no still-open row…
+      reportModel.findOneAndUpdate.mockReturnValue(queryReturning(null));
+      // …but the report exists (already resolved/dismissed) → Conflict, no ban.
+      reportModel.exists.mockReturnValue(queryReturning({ _id: 'report-1' }));
+
+      await expect(
+        service.resolveReportWithBan('507f1f77bcf86cd799439013'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      // CRITICAL: a closed report must never resurrect a ban.
+      expect(adminService.banUser).not.toHaveBeenCalled();
+    });
+
+    it('atomically claims the still-open report (→ resolved) THEN bans the reported user', async () => {
       const MODERATOR = '507f1f77bcf86cd7994390c0';
-      const doc = reportDoc();
-      reportModel.findById.mockReturnValue(queryReturning(doc));
+      const doc = reportDoc({ status: 'resolved' });
+      reportModel.findOneAndUpdate.mockReturnValue(queryReturning(doc));
       adminService.banUser.mockResolvedValue({ userId: AGAINST, isBanned: true });
 
       const result = await service.resolveReportWithBan('507f1f77bcf86cd799439013', MODERATOR);
+
+      // The claim is scoped to a still-open report and flips it to resolved.
+      const [filter, update] = reportModel.findOneAndUpdate.mock.calls[0] as [
+        Record<string, unknown>,
+        Record<string, unknown>,
+      ];
+      expect(filter.status).toEqual({ $in: ['open', 'reviewing'] });
+      expect(update).toEqual({ $set: { status: 'resolved' } });
 
       // Ban applied to the REPORTED user, with a reason embedding the report id,
       // and the acting moderator id threaded through for the audit trail.
@@ -242,24 +297,24 @@ describe('ReportsService', () => {
       expect(bannedId).toBe(AGAINST);
       expect(reason).toContain('report-1');
       expect(callerId).toBe(MODERATOR);
-      // Report flipped to resolved + persisted.
-      expect(doc.status).toBe('resolved');
-      expect(doc.save).toHaveBeenCalledTimes(1);
       expect(result.report.status).toBe('resolved');
       expect(result.ban).toEqual({ userId: AGAINST, isBanned: true });
     });
 
-    it('does NOT resolve the report if the ban write fails', async () => {
-      const doc = reportDoc();
-      reportModel.findById.mockReturnValue(queryReturning(doc));
-      adminService.banUser.mockRejectedValue(new Error('ban failed'));
+    it('concurrent double-uphold: only the first claim bans, the loser 409s without a second ban', async () => {
+      reportModel.findOneAndUpdate
+        .mockReturnValueOnce(queryReturning(reportDoc({ status: 'resolved' })))
+        .mockReturnValueOnce(queryReturning(null));
+      reportModel.exists.mockReturnValue(queryReturning({ _id: 'report-1' }));
+      adminService.banUser.mockResolvedValue({ userId: AGAINST, isBanned: true });
 
+      await service.resolveReportWithBan('507f1f77bcf86cd799439013', '507f1f77bcf86cd7994390c0');
       await expect(
-        service.resolveReportWithBan('507f1f77bcf86cd799439013'),
-      ).rejects.toThrow('ban failed');
-      // Ban-first ordering: a failed ban must leave the report unresolved.
-      expect(doc.save).not.toHaveBeenCalled();
-      expect(doc.status).toBe('open');
+        service.resolveReportWithBan('507f1f77bcf86cd799439013', '507f1f77bcf86cd7994390c1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      // Exactly one ban — no double-ban from the second concurrent caller.
+      expect(adminService.banUser).toHaveBeenCalledTimes(1);
     });
   });
 

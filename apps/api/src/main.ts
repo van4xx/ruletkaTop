@@ -24,6 +24,90 @@ import { AvatarStorageService } from './modules/profiles/avatar-storage.service'
 import { RedisIoAdapter } from './realtime/redis-io.adapter';
 
 /**
+ * Global JSON body cap. Deliberately SMALL: every authenticated mutation on the
+ * API carries a compact JSON payload (auth, wallet, settings, chat text, …), so
+ * a tight ceiling shrinks the request-size attack surface. The handful of routes
+ * that legitimately carry a large body (the moderation evidence frame — a
+ * downscaled-JPEG data-URL up to the 2,000,000-char zod max) opt INTO a larger
+ * limit per-route via {@link EVIDENCE_BODY_LIMIT}, so the wide limit never
+ * applies globally.
+ */
+const GLOBAL_JSON_BODY_LIMIT = '256kb';
+
+/**
+ * Per-route JSON body cap for the evidence-bearing endpoints. The evidence is a
+ * data-URL string bounded by zod to 2,000,000 chars (~2MB); a 3MB ceiling leaves
+ * headroom for the surrounding JSON envelope while still bounding the body. Only
+ * the two evidence routes below are mounted with this parser; all other routes
+ * keep {@link GLOBAL_JSON_BODY_LIMIT}.
+ */
+const EVIDENCE_BODY_LIMIT = '3mb';
+
+/**
+ * Routes (AFTER the global prefix) that carry a large evidence data-URL and so
+ * need {@link EVIDENCE_BODY_LIMIT} rather than the tight {@link GLOBAL_JSON_BODY_LIMIT}:
+ *   - `POST /moderation/frame` — on-device AI-moderation violation + evidence frame;
+ *   - `POST /reports`          — abuse report with an optional retained evidence frame.
+ * Both cap the data-URL at the 2,000,000-char zod max, which 413s under a 100kb
+ * (or 256kb) global JSON limit. Scoped per-path so the wider limit is NOT a
+ * global attack surface.
+ */
+const EVIDENCE_ROUTES: readonly string[] = ['moderation/frame', 'reports'];
+
+/**
+ * Wire the JSON body parsers: a TIGHT global cap plus a per-route LARGER cap on
+ * exactly the evidence endpoints. Exported so the body-limit behaviour can be
+ * exercised in isolation (see `main.body-parser.spec.ts`) against the SAME code
+ * the entrypoint runs — not a copy.
+ *
+ * ORDER MATTERS: this MUST run before `app.listen()` → `app.init()`, where Nest
+ * registers its default global `express.json()`. Express runs middleware in
+ * registration order and `express.json()` is a no-op once a prior parser has
+ * populated `req.body` (it sets `req._body`). So for the two evidence paths the
+ * LARGE parser (mounted here first, path-scoped) wins; the later tight global
+ * parser sees the body is parsed and skips it. Every OTHER path is untouched
+ * here → only the tight global parser applies, so the wide limit is strictly
+ * per-route and NOT a global attack surface.
+ *
+ * `app.useBodyParser('json', …)` names its middleware `jsonParser`, which makes
+ * Nest's own `registerParserMiddleware()` (during init) skip adding a second,
+ * larger default json parser — so the tight global limit is the effective one.
+ *
+ * rawBody is PRESERVED end to end: `useBodyParser` re-applies Nest's rawBody
+ * `verify` hook automatically (NestApplication forwards the app-level
+ * `rawBody: true`), and the route-scoped parser is mounted with the SAME hook,
+ * so `req.rawBody` (consumed by CloudPaymentsSignatureGuard on the webhook
+ * routes — which are NOT evidence routes) is never dropped.
+ */
+export function configureBodyParsers(app: NestExpressApplication, globalPrefix: string): void {
+  const bodyPrefix = globalPrefix.replace(/^\/+|\/+$/g, '');
+  // `express.json` is resolved through @nestjs/platform-express's own dependency
+  // (express is its transitive dep, not a direct dep of this package under pnpm),
+  // so we don't add a new top-level import that wouldn't resolve at runtime.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const expressModulePath = require.resolve('express', {
+    paths: [require('path').dirname(require.resolve('@nestjs/platform-express'))],
+  });
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { json: expressJson } = require(expressModulePath) as typeof import('express');
+  // Re-apply Nest's rawBody capture on the route-scoped parser so the larger
+  // limit never silently strips `req.rawBody`.
+  const evidenceJsonParser = expressJson({
+    limit: EVIDENCE_BODY_LIMIT,
+    verify: (req: Request & { rawBody?: Buffer }, _res: Response, buffer: Buffer) => {
+      if (Buffer.isBuffer(buffer)) {
+        req.rawBody = buffer;
+      }
+    },
+  });
+  for (const route of EVIDENCE_ROUTES) {
+    app.use(`/${bodyPrefix}/${route}`, evidenceJsonParser);
+  }
+  // Tight global default for everything else (rawBody verify auto-applied by Nest).
+  app.useBodyParser('json', { limit: GLOBAL_JSON_BODY_LIMIT });
+}
+
+/**
  * Public, unauthenticated catalogue GETs that are safe to cache at the edge /
  * in the browser. These return slow-moving reference data (storefront pricing,
  * gift catalogue, the public top feed) and carry NO per-user payload, so a
@@ -97,6 +181,15 @@ async function bootstrap(): Promise<void> {
   // Populates `req.cookies` so AuthController can read the httpOnly refresh
   // cookie (`ruletka_rt`) on /auth/refresh and /auth/logout.
   app.use(cookieParser());
+
+  // ── JSON body limits (tight global + per-route evidence override) ───────
+  // A TIGHT global JSON cap shrinks the request-size attack surface (the whole
+  // API except the evidence routes carries compact JSON), while POST
+  // /<prefix>/moderation/frame and POST /<prefix>/reports carry a downscaled-JPEG
+  // data-URL up to the 2,000,000-char zod max and get a per-route LARGER cap so
+  // they don't silently 413. See {@link configureBodyParsers} for the ordering
+  // + rawBody-preservation rationale. MUST run before `app.listen()`/`app.init()`.
+  configureBodyParsers(app, config.get<string>('API_GLOBAL_PREFIX', 'api'));
 
   // ── HTTP response compression (gzip/deflate/br) ─────────────────────────
   // Shrinks JSON payloads on the wire (catalogues, feeds, profiles) for a large
@@ -345,4 +438,9 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-void bootstrap();
+// Auto-boot ONLY when run as the entrypoint (`node dist/main`). Guarding on
+// `require.main === module` lets a test import the exported `configureBodyParsers`
+// helper without triggering a full app boot (Mongo/Redis/etc.) as a side effect.
+if (require.main === module) {
+  void bootstrap();
+}

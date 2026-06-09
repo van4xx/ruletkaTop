@@ -81,11 +81,15 @@ const DEFAULT_REFRESH_MAX_AGE_S = 30 * 24 * 60 * 60; // 30 days
  * The REFRESH token is delivered ONLY as an httpOnly, SameSite=Lax cookie
  * (Secure in production), path-scoped to the auth routes — it is never readable
  * from JavaScript, so an XSS payload can't exfiltrate it. (Lax, not Strict — see
- * `refreshCookieOptions` for why Strict breaks the cross-subdomain refresh.) The response body
- * carries only the short-lived ACCESS token (the body's `tokens.refreshToken`
- * is intentionally blanked). `/auth/refresh` reads the token from the cookie,
- * with a legacy fallback to a request body for mid-migration clients, and
- * rotates the cookie. `/auth/logout` clears the cookie.
+ * `refreshCookieOptions` for why Strict breaks the cross-subdomain refresh.) For
+ * a BROWSER the response body carries only the short-lived ACCESS token (the
+ * body's `tokens.refreshToken` is intentionally blanked — the browser re-reads
+ * the refresh token from the httpOnly cookie). `/auth/refresh` reads the token
+ * from the cookie, with a fallback to an `x-refresh-token` header / request body
+ * for cookie-less (non-browser) clients, and rotates it. For a COOKIE-LESS
+ * client (the Flutter app has no cookie jar) the refresh ROTATION is echoed in
+ * the JSON body, because that client cannot read the rotated cookie and would
+ * otherwise replay the now-burned old token. `/auth/logout` clears the cookie.
  *
  * `register`, `login` and `refresh` are public; `logout` and `me` require a
  * valid access token. Each session-minting route captures best-effort client
@@ -151,12 +155,19 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponse> {
-    const token = this.readRefreshToken(req, dto);
-    if (!token) {
+    const resolved = this.resolveRefreshToken(req, dto);
+    if (!resolved) {
       throw new UnauthorizedException('Missing refresh token');
     }
-    const result = await this.authService.refresh(token, this.contextFrom(req));
-    return this.withRefreshCookie(res, result);
+    const result = await this.authService.refresh(resolved.token, this.contextFrom(req));
+    // Transport-aware rotation: the refresh token is rotated server-side. A
+    // browser presents (and re-reads) it via the httpOnly cookie, so the body
+    // copy is blanked. A non-browser client (the Flutter app has NO cookie jar)
+    // presented it via the body/`x-refresh-token` header — for that client we
+    // MUST return the rotated token in the JSON body, otherwise it keeps the old
+    // token and the next refresh REUSE-burns the rotation family (every native
+    // session dying ~15min in). `resolved.fromCookie` distinguishes the two.
+    return this.withRefreshCookie(res, result, { exposeRefreshInBody: !resolved.fromCookie });
   }
 
   @Post('logout')
@@ -331,14 +342,27 @@ export class AuthController {
   /**
    * Set the refresh token as an httpOnly cookie and return the response with
    * the refresh token STRIPPED from the JSON body (only the access token is
-   * exposed to JavaScript).
+   * exposed to JavaScript) — UNLESS `exposeRefreshInBody` is set.
+   *
+   * The body copy is blanked for browsers: an XSS payload must not be able to
+   * read the refresh token, and the browser re-reads it from the httpOnly cookie
+   * anyway. But a non-browser client (the Flutter app has no cookie jar) can only
+   * see the cookie-less body, so for the cookie-less refresh path we MUST keep
+   * the rotated `refreshToken` in the body — see {@link refresh}.
    */
-  private withRefreshCookie(res: Response, result: AuthResponse): AuthResponse {
+  private withRefreshCookie(
+    res: Response,
+    result: AuthResponse,
+    options: { exposeRefreshInBody?: boolean } = {},
+  ): AuthResponse {
     res.cookie(REFRESH_COOKIE, result.tokens.refreshToken, this.refreshCookieOptions());
     res.cookie(PRESENCE_COOKIE, '1', this.presenceCookieOptions());
     return {
       user: result.user,
-      tokens: { accessToken: result.tokens.accessToken, refreshToken: '' },
+      tokens: {
+        accessToken: result.tokens.accessToken,
+        refreshToken: options.exposeRefreshInBody ? result.tokens.refreshToken : '',
+      },
     };
   }
 
@@ -362,17 +386,31 @@ export class AuthController {
    * is redacted in logs (see the pino `redact` config in AppModule).
    */
   private readRefreshToken(req: Request, dto: Partial<RefreshDto>): string | null {
+    return this.resolveRefreshToken(req, dto)?.token ?? null;
+  }
+
+  /**
+   * Like {@link readRefreshToken}, but also reports the credential's SOURCE so a
+   * caller can choose its response transport. `fromCookie` is true only when the
+   * token came from the httpOnly cookie (browser); the header/body sources are a
+   * cookie-less (non-browser) client. {@link refresh} uses this to decide whether
+   * the rotated token must be echoed in the JSON body.
+   */
+  private resolveRefreshToken(
+    req: Request,
+    dto: Partial<RefreshDto>,
+  ): { token: string; fromCookie: boolean } | null {
     const cookies = (req as Request & { cookies?: Record<string, unknown> }).cookies;
     const fromCookie = cookies?.[REFRESH_COOKIE];
     if (typeof fromCookie === 'string' && fromCookie.length > 0) {
-      return fromCookie;
+      return { token: fromCookie, fromCookie: true };
     }
     const fromHeader = req.headers['x-refresh-token'];
     if (typeof fromHeader === 'string' && fromHeader.length > 0) {
-      return fromHeader;
+      return { token: fromHeader, fromCookie: false };
     }
     if (typeof dto.refreshToken === 'string' && dto.refreshToken.length > 0) {
-      return dto.refreshToken;
+      return { token: dto.refreshToken, fromCookie: false };
     }
     return null;
   }

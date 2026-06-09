@@ -166,7 +166,8 @@ describe('AppealsService', () => {
 
     const result = await service.resolve(APPEAL, 'accepted', USER);
 
-    expect(adminService.unbanUser).toHaveBeenCalledWith(USER);
+    // The unban is attributed to the deciding moderator (threaded through).
+    expect(adminService.unbanUser).toHaveBeenCalledWith(USER, USER);
     expect(result.ban).toEqual({ userId: USER, isBanned: false });
     expect(doc.status).toBe('accepted');
     expect(doc.resolvedAt).toBeInstanceOf(Date);

@@ -304,6 +304,26 @@ export class PaymentsService {
       return ACK_OK;
     }
 
+    // Re-assert the teardown gate AFTER winning the claim and immediately before
+    // fulfilment. The pre-claim check above leaves a window in which an account
+    // teardown can commit its tombstone between the gate and the claim; this
+    // re-check closes it so a webhook that races teardown can never entitle a
+    // dead account. Roll the claim back to pending (audit: never fulfilled for a
+    // dead account), best-effort cancel any local premium + upstream subscription
+    // so the torn-down card stops being billed, then ack WITHOUT crediting.
+    if (await this.isAccountTorndown(claimed.userId.toString())) {
+      this.logger.warn(
+        `Pay for invoice ${claimed.invoiceId} refused post-claim: account ` +
+          `${claimed.userId.toString()} was torn down (deleted/banned) — not entitling.`,
+      );
+      await this.paymentModel
+        .updateOne({ _id: claimed._id }, { $set: { status: 'pending' } })
+        .exec();
+      await this.premium.cancel(claimed.userId.toString()).catch(() => undefined);
+      await this.cancelUpstreamBestEffort(n);
+      return ACK_OK;
+    }
+
     try {
       if (claimed.purpose === 'coins') {
         await this.fulfilCoins(claimed);
@@ -431,6 +451,23 @@ export class PaymentsService {
             `${n.SubscriptionId ?? '(none)'}, tx ${n.TransactionId ?? '(none)'}) — ` +
             'already renewed; skipping re-activation.',
         );
+        return ACK_OK;
+      }
+
+      // Re-assert the teardown gate AFTER the renewal claim and immediately
+      // before activation. The pre-claim check above leaves a window in which an
+      // account teardown can commit its tombstone between the gate and the claim;
+      // this re-check closes it so a renewal that races teardown can never
+      // re-entitle a dead account. Best-effort cancel local premium + upstream
+      // subscription so the torn-down card stops being billed, then ack WITHOUT
+      // activating (the just-claimed Payment row stays as the revenue/audit record).
+      if (await this.isAccountTorndown(userId)) {
+        this.logger.warn(
+          `Recurrent Active for user ${userId} refused post-claim: account was torn ` +
+            'down (deleted/banned) — not re-activating. Cancelling upstream.',
+        );
+        await this.premium.cancel(userId).catch(() => undefined);
+        await this.cancelUpstreamBestEffort(n);
         return ACK_OK;
       }
 

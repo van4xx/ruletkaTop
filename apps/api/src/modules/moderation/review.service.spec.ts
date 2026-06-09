@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
@@ -111,17 +111,43 @@ describe('ReviewService — admin review queue', () => {
     expect(adminService.unbanUser).not.toHaveBeenCalled();
   });
 
-  it('resolve: dismissing a BAN-autoaction item UNBANS the user (false-positive reversal)', async () => {
+  it('resolve: dismissing a BAN-autoaction item UNBANS the user (false-positive reversal), attributed to the caller', async () => {
+    const MODERATOR = '507f1f77bcf86cd7994390c0';
     const doc = eventDoc('507f1f77bcf86cd799439012', { autoAction: 'ban' });
     eventModel.findById.mockReturnValue(queryReturning(doc));
 
-    const item = await service.resolve('507f1f77bcf86cd799439012', 'dismissed');
+    const item = await service.resolve('507f1f77bcf86cd799439012', 'dismissed', MODERATOR);
 
-    // The auto-ban is reversed before the row is closed.
+    // The auto-ban is reversed before the row is closed, and the reversal is
+    // attributed to the acting moderator (not the null AI-path actor).
     expect(adminService.unbanUser).toHaveBeenCalledTimes(1);
-    expect(adminService.unbanUser).toHaveBeenCalledWith(USER);
+    expect(adminService.unbanUser).toHaveBeenCalledWith(USER, MODERATOR);
     expect(doc.status).toBe('dismissed');
     expect(item.status).toBe('dismissed');
+  });
+
+  it('resolve: 409s an ALREADY-DECIDED event WITHOUT reversing a sanction (terminal-state guard)', async () => {
+    // A dismissed row cannot be flipped to resolved (which would resurrect a
+    // sanction), nor re-dismissed.
+    const doc = eventDoc('507f1f77bcf86cd799439012', { autoAction: 'ban', status: 'dismissed' });
+    eventModel.findById.mockReturnValue(queryReturning(doc));
+
+    await expect(
+      service.resolve('507f1f77bcf86cd799439012', 'resolved'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    // No side-effect: the guard fires before any unban.
+    expect(adminService.unbanUser).not.toHaveBeenCalled();
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it('resolve: 409s a re-decide of a RESOLVED event', async () => {
+    const doc = eventDoc('507f1f77bcf86cd799439012', { autoAction: 'ban', status: 'resolved' });
+    eventModel.findById.mockReturnValue(queryReturning(doc));
+
+    await expect(
+      service.resolve('507f1f77bcf86cd799439012', 'dismissed'),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(adminService.unbanUser).not.toHaveBeenCalled();
   });
 
   it('resolve: dismissing a KICK-autoaction item also unbans (kick may co-occur with a ban)', async () => {
@@ -130,7 +156,8 @@ describe('ReviewService — admin review queue', () => {
 
     await service.resolve('507f1f77bcf86cd799439012', 'dismissed');
 
-    expect(adminService.unbanUser).toHaveBeenCalledWith(USER);
+    // No caller supplied here → the userId is the first arg (callerId undefined).
+    expect(adminService.unbanUser.mock.calls[0][0]).toBe(USER);
   });
 
   it('resolve: dismissing a non-sanction (warn) item does NOT unban', async () => {
@@ -212,6 +239,18 @@ describe('ReviewService — admin review queue', () => {
       );
       expect(doc.save).not.toHaveBeenCalled();
       expect(doc.status).toBe('open');
+    });
+
+    it('409s an ALREADY-DECIDED item WITHOUT re-banning (terminal-state guard)', async () => {
+      const doc = eventDoc('507f1f77bcf86cd799439012', { status: 'resolved' });
+      eventModel.findById.mockReturnValue(queryReturning(doc));
+
+      await expect(service.resolveWithBan('507f1f77bcf86cd799439012')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      // A closed item must never resurrect a ban.
+      expect(adminService.banUser).not.toHaveBeenCalled();
+      expect(doc.save).not.toHaveBeenCalled();
     });
   });
 });

@@ -21,6 +21,10 @@ function useSessionEstablisher() {
   const queryClient = useQueryClient();
 
   return (res: AuthResponse) => {
+    // A new identity must start from an empty cache: wipe everything BEFORE we
+    // seed this session, so no authenticated data from a previously signed-in
+    // user on a shared browser/tab survives into the new one.
+    queryClient.clear();
     setSession({ user: res.user, tokens: res.tokens });
     queryClient.setQueryData(CURRENT_USER_KEY, res.user);
     connectSocket(res.tokens.accessToken);
