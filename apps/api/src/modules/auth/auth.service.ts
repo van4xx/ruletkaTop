@@ -26,7 +26,9 @@ import type {
   RegisterDto,
 } from '@ruletka/shared-types';
 
+import { MetricsService } from '../../observability/metrics.service';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
+import { AuditService } from '../admin/audit.service';
 // The admin live-flag store (registration / matchmaking kill-switches +
 // maintenance). Aliased to avoid colliding with the per-user privacy
 // `SettingsService` in `modules/settings`.
@@ -224,6 +226,12 @@ export class AuthService {
     @InjectConnection() private readonly connection: Connection,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly liveFlags: LiveFlagsService,
+    // Observability (added last so existing positional test-constructors that
+    // omit them still compile — both are best-effort and never break login):
+    // the append-only audit trail surfaces failed/locked logins on the admin
+    // security feed, and the metrics service exposes durable, alertable counters.
+    private readonly auditService: AuditService,
+    private readonly metrics: MetricsService,
   ) {}
 
   // ── Registration ──────────────────────────────────────────────────────────
@@ -1370,8 +1378,9 @@ export class AuthService {
    */
   private async registerFailedAttempt(email: string, ip?: string | null): Promise<void> {
     const identity = this.loginIdentity(email, ip);
+    let count: number | null = null;
     try {
-      const count = (await this.redis.eval(
+      count = (await this.redis.eval(
         LOGIN_ATTEMPT_LUA,
         2,
         LOGIN_ATTEMPT_KEY_PREFIX + identity,
@@ -1385,6 +1394,66 @@ export class AuthService {
       }
     } catch (err) {
       this.logger.warn(`Failed to record login attempt: ${asMessage(err)}`);
+    }
+
+    // OBSERVABILITY (best-effort / fail-open). A logging or metrics blip must
+    // NEVER break the login path, so every emit is wrapped: bump the failed-login
+    // counter + write an audit row, and on crossing the lockout threshold bump
+    // the lockout counter + write the distinct `auth.login.locked` audit row that
+    // the admin security feed surfaces. The `count` is the post-INCR attempt
+    // number (or `null` if the Redis INCR itself failed above — we still record
+    // the failure for the brute-force volume signal).
+    await this.emitFailedLoginSignals(email, ip, count);
+  }
+
+  /**
+   * Emit the failed-login observability signals (metrics + audit). Fully
+   * fail-open: a metrics/audit hiccup is swallowed so it can never break login.
+   * `count` is the post-increment attempt number, or `null` when the underlying
+   * Redis INCR failed (we still record the attempt + bump the counter).
+   *
+   * The audit rows carry `userId: null` (the lockout is keyed by email+IP, and a
+   * failed attempt often has no resolvable user — e.g. an unknown email), with
+   * the email/ip/count in `meta`. On crossing {@link MAX_LOGIN_ATTEMPTS} we ALSO
+   * write `auth.login.locked` so {@link AdminSecurityService} can surface the
+   * lockout in `GET /admin/security/events`.
+   */
+  private async emitFailedLoginSignals(
+    email: string,
+    ip: string | null | undefined,
+    count: number | null,
+  ): Promise<void> {
+    try {
+      this.metrics.loginFailed();
+    } catch {
+      // never break login on a metrics blip
+    }
+    // AuditService.log is already best-effort (swallows storage errors), but we
+    // belt-and-braces the await so even an unexpected rejection can't bubble up
+    // and break the login path.
+    await this.auditService
+      .log({
+        action: 'auth.login.failed',
+        targetType: 'user',
+        targetId: null,
+        meta: { email, ip: ip ?? null, count },
+      })
+      .catch(() => undefined);
+
+    if (count !== null && count >= MAX_LOGIN_ATTEMPTS) {
+      try {
+        this.metrics.loginLocked();
+      } catch {
+        // never break login on a metrics blip
+      }
+      await this.auditService
+        .log({
+          action: 'auth.login.locked',
+          targetType: 'user',
+          targetId: null,
+          meta: { email, ip: ip ?? null, count },
+        })
+        .catch(() => undefined);
     }
   }
 

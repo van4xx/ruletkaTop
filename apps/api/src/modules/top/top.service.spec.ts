@@ -5,7 +5,7 @@ import type { TopPurchaseDto } from '@ruletka/shared-types';
 
 import type { WalletService } from '../wallet/wallet.service';
 import type { TopPlacementDocument } from './schemas/top-placement.schema';
-import { MIN_TOP_PLACEMENT_COINS, TopService } from './top.service';
+import { durationHoursForCoins, MIN_TOP_PLACEMENT_COINS, TopService } from './top.service';
 
 /** A chainable `find().sort().exec()` stub resolving to `docs`. */
 function findSortReturning(docs: unknown[]): {
@@ -50,6 +50,33 @@ function placementDoc(over: Partial<Record<string, unknown>> = {}): unknown {
     ...over,
   };
 }
+
+describe('durationHoursForCoins — spend-derived window (tier table)', () => {
+  it('caps the floor spend at the SHORTEST window (50 coins ≠ 720h)', () => {
+    const hours = durationHoursForCoins(MIN_TOP_PLACEMENT_COINS);
+    expect(hours).toBe(24);
+    expect(hours).not.toBe(720);
+  });
+
+  it('escalates the window as spend climbs the tiers', () => {
+    expect(durationHoursForCoins(50)).toBe(24); // floor tier
+    expect(durationHoursForCoins(200)).toBe(72); // 3 days
+    expect(durationHoursForCoins(500)).toBe(168); // 7 days
+    expect(durationHoursForCoins(1000)).toBe(720); // 30-day ceiling, top spend only
+  });
+
+  it('returns the lower tier just below a threshold', () => {
+    expect(durationHoursForCoins(199)).toBe(24);
+    expect(durationHoursForCoins(499)).toBe(72);
+    expect(durationHoursForCoins(999)).toBe(168);
+  });
+
+  it('only the top tier (>=1000 coins) ever unlocks the 720h ceiling', () => {
+    expect(durationHoursForCoins(999)).not.toBe(720);
+    expect(durationHoursForCoins(1000)).toBe(720);
+    expect(durationHoursForCoins(100_000)).toBe(720);
+  });
+});
 
 describe('TopService.purchase', () => {
   const userId = '507f1f77bcf86cd799439011';
@@ -105,7 +132,9 @@ describe('TopService.purchase', () => {
     expect(row.coinsSpent).toBe(100);
     expect((row._id as { toString: () => string }).toString()).toBe(debRef);
 
-    // expiresAt is durationHours into the future relative to startsAt.
+    // expiresAt is the SPEND-DERIVED window into the future relative to startsAt.
+    // 100 coins falls in the floor tier (>=50, <200) → 24h, NOT the client-sent
+    // durationHours (which is no longer authoritative).
     const startsAt = row.startsAt as Date;
     const expiresAt = row.expiresAt as Date;
     expect(startsAt.getTime()).toBeGreaterThanOrEqual(before);
@@ -146,20 +175,31 @@ describe('TopService.purchase', () => {
     expect(row.lane).toBe('right');
   });
 
-  it('honours durationHours when computing expiry (1h vs 720h)', async () => {
-    // coins kept at/above the placement floor; this case exercises duration only.
-    await service.purchase(userId, { lane: 'left', durationHours: 1, coins: 50 });
-    const [shortDocs] = placementModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
-    const shortRow = shortDocs[0]!;
-    expect((shortRow.expiresAt as Date).getTime() - (shortRow.startsAt as Date).getTime()).toBe(
-      60 * 60 * 1000,
-    );
+  it('DERIVES the window from spend, ignoring a client-supplied durationHours', async () => {
+    // The 50-coin floor sends durationHours: 720 (the DTO ceiling) but only the
+    // top tier (>=1000 coins) buys 720h — so the floor must yield the SHORT 24h
+    // window, never the 30-day window the client asked for. This is the verified
+    // bypass: spend now gates the lifetime server-side.
+    await service.purchase(userId, {
+      lane: 'left',
+      durationHours: 720,
+      coins: MIN_TOP_PLACEMENT_COINS,
+    });
+    const [floorDocs] = placementModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
+    const floorRow = floorDocs[0]!;
+    const floorWindowMs =
+      (floorRow.expiresAt as Date).getTime() - (floorRow.startsAt as Date).getTime();
+    // 24h, NOT the 720h the client requested.
+    expect(floorWindowMs).toBe(24 * 60 * 60 * 1000);
+    expect(floorWindowMs).not.toBe(720 * 60 * 60 * 1000);
 
+    // A valid top-tier spend DOES unlock the full 720h window — even though it
+    // sends a SHORT durationHours: the derived window is bought, not declared.
     placementModel.create.mockClear();
-    await service.purchase(userId, { lane: 'left', durationHours: 720, coins: 50 });
-    const [longDocs] = placementModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
-    const longRow = longDocs[0]!;
-    expect((longRow.expiresAt as Date).getTime() - (longRow.startsAt as Date).getTime()).toBe(
+    await service.purchase(userId, { lane: 'left', durationHours: 1, coins: 1000 });
+    const [topDocs] = placementModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
+    const topRow = topDocs[0]!;
+    expect((topRow.expiresAt as Date).getTime() - (topRow.startsAt as Date).getTime()).toBe(
       720 * 60 * 60 * 1000,
     );
   });

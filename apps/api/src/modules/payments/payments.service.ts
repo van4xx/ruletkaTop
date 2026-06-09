@@ -19,6 +19,7 @@ import type {
   CoinsCheckoutDto,
 } from '@ruletka/shared-types';
 
+import { MetricsService } from '../../observability/metrics.service';
 import { CloudPaymentsClient } from './cloudpayments.client';
 import {
   COIN_PACKAGES_SERVICE,
@@ -122,6 +123,10 @@ export class PaymentsService {
     // bound (e.g. focused unit tests) — when absent the guard fails OPEN (the
     // amount/idempotency guards above remain the primary defence).
     @Optional() @InjectConnection() private readonly connection?: Connection,
+    // OBSERVABILITY (emit-only): durable, alertable money counters. Optional so
+    // focused unit tests that don't wire MetricsService still instantiate; every
+    // emit is best-effort and NEVER alters the payment flow.
+    @Optional() private readonly metrics?: MetricsService,
   ) {
     this.publicId = this.config.get<string>('CLOUDPAYMENTS_PUBLIC_ID', '');
   }
@@ -359,6 +364,8 @@ export class PaymentsService {
       await this.paymentModel
         .updateOne({ _id: claimed._id }, { $set: { status: 'pending' } })
         .exec();
+      // PAGE signal: a paid buyer was not entitled (rolled back for retry).
+      this.emit((m) => m.fulfilmentRolledBack(claimed.purpose));
       this.logger.error(
         `Fulfilment failed for invoice ${claimed.invoiceId}; rolled back to pending: ${
           (err as Error).message
@@ -366,6 +373,9 @@ export class PaymentsService {
       );
       throw err;
     }
+
+    // Fulfilment succeeded: count the completed payment (money-in success signal).
+    this.emit((m) => m.paymentCompleted(claimed.purpose));
 
     return ACK_OK;
   }
@@ -384,6 +394,8 @@ export class PaymentsService {
           { $set: { status: 'failed', rawPayload: { ...n } } },
         )
         .exec();
+      // Count the charge failure (money-in failure signal).
+      this.emit((m) => m.paymentFailed());
     }
     return ACK_OK;
   }
@@ -501,6 +513,8 @@ export class PaymentsService {
         n.Token ?? undefined,
         n.SubscriptionId ?? undefined,
       );
+      // A renewal charge is a completed premium payment (money-in success signal).
+      this.emit((m) => m.paymentCompleted('premium'));
       this.logger.log(`Renewed premium for user ${userId} (plan ${plan})`);
     } else if (RECURRENT_TERMINAL.has(status)) {
       await this.premium.cancel(userId);
@@ -537,6 +551,11 @@ export class PaymentsService {
     if (!claimed) {
       return ACK_OK;
     }
+
+    // Count the reversal exactly once (the winner of the atomic claim). Emitted
+    // here — before the reversal logic below (owned elsewhere) — so it counts
+    // every claimed refund regardless of how the clawback resolves.
+    this.emit((m) => m.refundRecorded());
 
     // Only reverse fulfilment that actually happened (the payment had completed).
     if (payment.status === 'completed') {
@@ -608,6 +627,10 @@ export class PaymentsService {
 
     // 3) Reverse fulfilment (best-effort — the money is already back).
     if (claimed) {
+      // Count the reversal once (the winner of the atomic claim). The provider
+      // Refund webhook that may follow is idempotent (already-refunded → early
+      // return) so it won't double-count.
+      this.emit((m) => m.refundRecorded());
       try {
         if (claimed.purpose === 'coins') {
           await this.reverseCoins(claimed);
@@ -628,6 +651,22 @@ export class PaymentsService {
   }
 
   // ── internals ───────────────────────────────────────────────────────────────
+
+  /**
+   * Best-effort metric emit. Wraps the (optional) MetricsService so a counter
+   * bump can NEVER throw into the payment flow — the money path is authoritative,
+   * the metric is a side-effect. No-op when MetricsService isn't wired.
+   */
+  private emit(fn: (m: MetricsService) => void): void {
+    if (!this.metrics) {
+      return;
+    }
+    try {
+      fn(this.metrics);
+    } catch {
+      // a metrics blip must never affect payment processing
+    }
+  }
 
   /** Credit purchased coins (base + bonus) keyed by invoiceId for idempotency. */
   private async fulfilCoins(payment: PaymentDocument): Promise<void> {

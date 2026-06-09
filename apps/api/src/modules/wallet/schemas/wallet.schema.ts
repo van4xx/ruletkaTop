@@ -41,9 +41,35 @@ export class Wallet {
    * Non-negative. Increased when a short reversal sets {@link economyHold};
    * drawn down (and, at zero, the hold lifts) as the balance recovers and the
    * debt is repaid. Defaults to `0`.
+   *
+   * NOTE: `heldCoins` is NOT a ledger-backed balance — it is an off-ledger debt
+   * COUNTER. The accounting invariant `balanceCoins == Σ(ledger deltas)` ignores
+   * it. When the debt is repaid, the recovered `balanceCoins` is DEBITED and a
+   * matching `refund` ledger row is written (see
+   * {@link WalletService.maybeReleaseHold}) so the invariant keeps holding.
    */
   @Prop({ required: true, default: 0, min: 0, type: Number })
   heldCoins!: number;
+
+  /**
+   * Refund refIds that have ALREADY contributed to {@link heldCoins}. Used to
+   * make the debt `$inc` IDEMPOTENT: a redelivered refund webhook re-invokes the
+   * hold for the same refId, but the `$addToSet`/`$ne`-guarded update only adds
+   * the debt the FIRST time the refId is seen — so a redelivery cannot double the
+   * debt. Mirrors the ledger's at-most-once `(type, refId)` idempotency.
+   */
+  @Prop({ required: true, default: [], type: [String] })
+  heldRefIds!: string[];
+
+  /**
+   * The originating refund refId whose unrecovered shortfall created the current
+   * hold. Used to NAMESPACE the repayment ledger rows written as the debt is
+   * drawn down (`holdrepay:<originalRefId>`), so each repayment row is unique and
+   * the debt-clearing debits are themselves idempotent / auditable. `null` when
+   * no hold is active.
+   */
+  @Prop({ required: false, default: null, type: String })
+  holdRefId!: string | null;
 
   // `createdAt` / `updatedAt` added by `timestamps: true`.
 }

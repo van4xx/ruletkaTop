@@ -24,6 +24,42 @@ const HOUR_MS = 60 * 60 * 1000;
  */
 export const MIN_TOP_PLACEMENT_COINS = 50;
 
+/**
+ * SERVER-SIDE coins→duration tier table. The shared DTO bounds `durationHours`
+ * to 1..720 but does NOT tie the window to spend, so a client could request the
+ * full 720-hour (30-day) window for the 50-coin floor. We therefore DERIVE the
+ * active window from coins spent here and ignore the client-supplied duration:
+ * a placement's lifetime is bought, not declared. `priority` still equals coins,
+ * so spend continues to drive in-lane ranking independently of the window.
+ *
+ * Each tier is the inclusive minimum coins that unlocks its `hours`; the longest
+ * tier whose `minCoins` the spend meets wins. Ordered HIGHEST-first so the
+ * resolver returns the first match. The cap (720h, the DTO ceiling) requires the
+ * top tier — the 50-coin floor can only ever buy the shortest window.
+ */
+export const TOP_DURATION_TIERS: ReadonlyArray<{ minCoins: number; hours: number }> = [
+  { minCoins: 1000, hours: 720 }, // 30 days — the DTO ceiling, top spend only
+  { minCoins: 500, hours: 168 }, // 7 days
+  { minCoins: 200, hours: 72 }, // 3 days
+  { minCoins: MIN_TOP_PLACEMENT_COINS, hours: 24 }, // 1 day — the floor tier
+];
+
+/**
+ * Resolve the active-window hours a given spend buys from {@link TOP_DURATION_TIERS}.
+ * Returns the highest tier whose `minCoins` `coins` meets. Callers must already
+ * have enforced the {@link MIN_TOP_PLACEMENT_COINS} floor, so a match always
+ * exists; the floor tier is the defensive fallback.
+ */
+export function durationHoursForCoins(coins: number): number {
+  for (const tier of TOP_DURATION_TIERS) {
+    if (coins >= tier.minCoins) {
+      return tier.hours;
+    }
+  }
+  // Unreachable once the floor is enforced; fall back to the shortest window.
+  return TOP_DURATION_TIERS[TOP_DURATION_TIERS.length - 1]!.hours;
+}
+
 /** The two top-feed lanes of currently-active placements. */
 export interface TopFeed {
   left: TopPlacementContract[];
@@ -176,16 +212,22 @@ export class TopService {
   }
 
   /**
-   * Purchase a placement in `dto.lane` for `dto.durationHours`, spending
-   * `dto.coins`.
+   * Purchase a placement in `dto.lane`, spending `dto.coins`.
+   *
+   * The active-window length is DERIVED from the spend via
+   * {@link durationHoursForCoins} ({@link TOP_DURATION_TIERS}) — the client's
+   * `dto.durationHours` is NOT trusted, so the {@link MIN_TOP_PLACEMENT_COINS}
+   * floor can never buy the full 720-hour window. `priority` still equals coins
+   * so spend drives in-lane ranking independently of the window.
    *
    * Order of operations (auditable + safe):
    *  1. enforce the minimum placement spend ({@link MIN_TOP_PLACEMENT_COINS}) —
    *     `400` before charging;
    *  2. atomically DEBIT the buyer (`top`) — throws 422 on low balance — using
    *     the pre-allocated placement id as the ledger `refId`;
-   *  3. create the {@link TopPlacement} (active from now for `durationHours`).
-   *     On a write failure after a successful debit, the coins are refunded.
+   *  3. create the {@link TopPlacement} (active from now for the spend-derived
+   *     duration). On a write failure after a successful debit, the coins are
+   *     refunded.
    *
    * @returns the created placement in the shared contract shape.
    */
@@ -204,7 +246,12 @@ export class TopService {
     // Step 2: create the placement; compensate on failure.
     try {
       const startsAt = new Date();
-      const expiresAt = new Date(startsAt.getTime() + dto.durationHours * HOUR_MS);
+      // The window is DERIVED from spend server-side (see TOP_DURATION_TIERS),
+      // NOT taken from the client-supplied `dto.durationHours` — otherwise the
+      // 50-coin floor could buy the full 720-hour window. The client value is
+      // accepted by the DTO but never authoritative for the lifetime.
+      const durationHours = durationHoursForCoins(dto.coins);
+      const expiresAt = new Date(startsAt.getTime() + durationHours * HOUR_MS);
       const docs = await this.placementModel.create([
         {
           _id: placementId,

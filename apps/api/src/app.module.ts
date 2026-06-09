@@ -81,10 +81,18 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
             // Avoid logging secrets (auth headers / cookies) verbatim. The
             // `x-refresh-token` header carries the refresh credential from non-
             // browser clients (mobile has no cookie jar), so redact it too.
+            //
+            // RESPONSE side: pino-http's autoLogging serializes the response and
+            // its headers (from `res.getHeaders()`) under `res.headers`. The
+            // rotated refresh-token JWT is set as a `Set-Cookie` RESPONSE header
+            // on /auth/refresh|login|register, so WITHOUT this it would be logged
+            // in plaintext. Header names are lowercased in the serialized shape,
+            // hence `res.headers["set-cookie"]`.
             redact: [
               'req.headers.authorization',
               'req.headers.cookie',
               'req.headers["x-refresh-token"]',
+              'res.headers["set-cookie"]',
             ],
             autoLogging: true,
           },

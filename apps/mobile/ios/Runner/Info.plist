@@ -15,12 +15,20 @@
 		<string>audio</string>
 		<string>voip</string>
 	</array>
-	<!-- DEV ONLY: allow cleartext to the local API (http://localhost:4000). Remove for production HTTPS. -->
+	<!--
+	  App Transport Security: enforce HTTPS for all remote traffic. The previous
+	  NSAllowsArbitraryLoads let an attacker on a hostile network HTTP-downgrade
+	  and MITM the API/token traffic; it has been removed. Production talks to
+	  https://api.ruletka.top (injected via --dart-define, see ApiConfig), so no
+	  arbitrary cleartext is needed in release.
+
+	  NSAllowsLocalNetworking is kept (DEV ONLY): it permits cleartext to local /
+	  loopback hosts (http://localhost:4000) for the simulator without weakening
+	  ATS for any routable internet host.
+	-->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
-		<true/>
-		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
 	<key>CFBundleDevelopmentRegion</key>

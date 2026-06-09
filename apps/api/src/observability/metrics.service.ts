@@ -28,6 +28,35 @@ import { MATCH_TYPES, matchmakingPoolKey, METRIC_PREFIX } from './metrics.consta
  *   startup), per queue. A non-zero value means a sweep may be UNSCHEDULED on
  *   this node — alert on it.
  *
+ * Security / abuse / money signals (durable, alertable — added in the wave-3
+ * observability pass so these surfaces are no longer silent):
+ * - `ruletka_auth_login_failed_total` (counter) — failed login attempts
+ *   (brute-force volume signal).
+ * - `ruletka_auth_login_locked_total` (counter) — identities that crossed the
+ *   lockout threshold (a sustained rate here means a credential-stuffing run).
+ * - `ruletka_webhook_signature_failures_total{provider}` (counter) — rejected
+ *   webhook requests that failed signature/IP verification, by provider. A spike
+ *   means a forged-webhook attempt or a misconfigured secret — alert on the rate.
+ * - `ruletka_payments_completed_total{purpose}` (counter) — payments fulfilled
+ *   (coins/premium), the money-in success signal.
+ * - `ruletka_payments_failed_total` (counter) — `Fail` webhooks recorded.
+ * - `ruletka_fulfilment_rollback_total{purpose}` (counter) — fulfilment writes
+ *   that threw and were rolled back to `pending` for retry. A non-zero RATE here
+ *   means buyers paid but were not entitled — page on it.
+ * - `ruletka_refunds_total` (counter) — payments reversed (webhook + admin).
+ * - `ruletka_bans_total` / `ruletka_unbans_total` (counter) — moderation
+ *   sanctions applied / lifted (abuse-enforcement volume).
+ *
+ * ── Prometheus alerting ────────────────────────────────────────────────────
+ * These are all monotonic counters, so alert on the windowed RATE, never the
+ * raw value, e.g.:
+ *   - `rate(ruletka_fulfilment_rollback_total[5m]) > 0` — PAGE (paid-but-not-
+ *     entitled buyers).
+ *   - `rate(ruletka_webhook_signature_failures_total[5m]) > 0` — forged webhook
+ *     or broken secret.
+ *   - `rate(ruletka_auth_login_locked_total[5m])` above a baseline — credential-
+ *     stuffing run in progress.
+ *
  * Always-on and Sentry-independent: this is cheap and safe to run with error
  * tracking disabled.
  */
@@ -44,6 +73,17 @@ export class MetricsService implements OnModuleInit {
   private readonly queueJobsCompleted: Counter<string>;
   private readonly queueJobsFailed: Counter<string>;
   private readonly queueRegisterFailures: Counter<string>;
+
+  // ── Security / abuse / money counters ──────────────────────────────────────
+  private readonly authLoginFailed: Counter<string>;
+  private readonly authLoginLocked: Counter<string>;
+  private readonly webhookSignatureFailures: Counter<string>;
+  private readonly paymentsCompleted: Counter<string>;
+  private readonly paymentsFailed: Counter<string>;
+  private readonly fulfilmentRollbacks: Counter<string>;
+  private readonly refunds: Counter<string>;
+  private readonly bans: Counter<string>;
+  private readonly unbans: Counter<string>;
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {
     // ── Live socket connections (per node) ────────────────────────────────
@@ -112,6 +152,63 @@ export class MetricsService implements OnModuleInit {
       labelNames: ['queue'],
       registers: [this.registry],
     });
+
+    // ── Security / abuse counters ─────────────────────────────────────────
+    // Label-free where the dimension would be unbounded (an email/IP is high
+    // cardinality and must NEVER become a Prometheus label); only closed enums
+    // (`provider`, `purpose`) are used as labels below.
+    this.authLoginFailed = new Counter({
+      name: `${METRIC_PREFIX}auth_login_failed_total`,
+      help: 'Failed login attempts since process start (brute-force volume signal).',
+      registers: [this.registry],
+    });
+    this.authLoginLocked = new Counter({
+      name: `${METRIC_PREFIX}auth_login_locked_total`,
+      help: 'Identities that crossed the failed-login lockout threshold (credential-stuffing signal).',
+      registers: [this.registry],
+    });
+    this.webhookSignatureFailures = new Counter({
+      name: `${METRIC_PREFIX}webhook_signature_failures_total`,
+      help: 'Webhook requests rejected by signature/IP verification, by provider (forged-webhook signal).',
+      labelNames: ['provider'],
+      registers: [this.registry],
+    });
+
+    // ── Money counters ────────────────────────────────────────────────────
+    this.paymentsCompleted = new Counter({
+      name: `${METRIC_PREFIX}payments_completed_total`,
+      help: 'Payments fulfilled since process start, by purpose (coins/premium).',
+      labelNames: ['purpose'],
+      registers: [this.registry],
+    });
+    this.paymentsFailed = new Counter({
+      name: `${METRIC_PREFIX}payments_failed_total`,
+      help: 'Payment charge failures (Fail webhook) recorded since process start.',
+      registers: [this.registry],
+    });
+    this.fulfilmentRollbacks = new Counter({
+      name: `${METRIC_PREFIX}fulfilment_rollback_total`,
+      help: 'Fulfilment writes that threw and were rolled back to pending, by purpose (paid-but-not-entitled — PAGE).',
+      labelNames: ['purpose'],
+      registers: [this.registry],
+    });
+    this.refunds = new Counter({
+      name: `${METRIC_PREFIX}refunds_total`,
+      help: 'Payments reversed (webhook + admin-initiated refunds) since process start.',
+      registers: [this.registry],
+    });
+
+    // ── Moderation counters ───────────────────────────────────────────────
+    this.bans = new Counter({
+      name: `${METRIC_PREFIX}bans_total`,
+      help: 'Account bans applied since process start (abuse-enforcement volume).',
+      registers: [this.registry],
+    });
+    this.unbans = new Counter({
+      name: `${METRIC_PREFIX}unbans_total`,
+      help: 'Account bans lifted (unbans) since process start.',
+      registers: [this.registry],
+    });
   }
 
   /**
@@ -169,6 +266,64 @@ export class MetricsService implements OnModuleInit {
    */
   queueRegisterFailed(queue: string): void {
     this.queueRegisterFailures.inc({ queue });
+  }
+
+  // ── Security / abuse counters ─────────────────────────────────────────────
+
+  /** A login attempt failed (wrong password / unknown email). */
+  loginFailed(): void {
+    this.authLoginFailed.inc();
+  }
+
+  /** A failed-login identity crossed the lockout threshold. */
+  loginLocked(): void {
+    this.authLoginLocked.inc();
+  }
+
+  /**
+   * A webhook request was rejected by signature/IP verification, by `provider`
+   * (a closed enum — currently only `cloudpayments`). A spike means a forged
+   * webhook or a misconfigured secret.
+   */
+  webhookSignatureFailed(provider: string): void {
+    this.webhookSignatureFailures.inc({ provider });
+  }
+
+  // ── Money counters ─────────────────────────────────────────────────────────
+
+  /** A payment was fulfilled, by `purpose` (`coins`/`premium` — closed enum). */
+  paymentCompleted(purpose: string): void {
+    this.paymentsCompleted.inc({ purpose });
+  }
+
+  /** A payment charge failed (`Fail` webhook). */
+  paymentFailed(): void {
+    this.paymentsFailed.inc();
+  }
+
+  /**
+   * A fulfilment write threw and was rolled back to `pending` for retry, by
+   * `purpose`. A non-zero RATE means buyers paid but were not entitled — PAGE.
+   */
+  fulfilmentRolledBack(purpose: string): void {
+    this.fulfilmentRollbacks.inc({ purpose });
+  }
+
+  /** A payment was reversed (refund webhook or admin-initiated refund). */
+  refundRecorded(): void {
+    this.refunds.inc();
+  }
+
+  // ── Moderation counters ────────────────────────────────────────────────────
+
+  /** An account was banned. */
+  banApplied(): void {
+    this.bans.inc();
+  }
+
+  /** An account ban was lifted (unban). */
+  banLifted(): void {
+    this.unbans.inc();
   }
 
   // ── Scrape surface (used by MetricsController) ───────────────────────────

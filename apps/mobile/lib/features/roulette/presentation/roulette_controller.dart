@@ -581,16 +581,32 @@ class RouletteController extends Notifier<RouletteState>
       state = state.copyWith(reconnecting: true, quality: ConnectionQuality.poor);
       _armIceRestartBackstop();
     }
-    await manager.setRemoteDescription('offer', p.sdp);
-    final sdp = await manager.createAnswer();
-    final room = _roomId;
-    if (room != null) _socket.rtcAnswer(room, sdp);
+    try {
+      // setRemoteDescription resolves offer-glare internally (perfect
+      // negotiation): if it returns false this is a colliding offer our impolite
+      // side is ignoring (our own restart offer stands), so we must NOT answer.
+      final applied = await manager.setRemoteDescription('offer', p.sdp);
+      if (!applied) return; // glare: impolite peer keeps its own offer
+      if (!_started || _peer != manager) return; // torn down mid-await
+      final sdp = await manager.createAnswer();
+      final room = _roomId;
+      if (room != null && _peer == manager) _socket.rtcAnswer(room, sdp);
+    } catch (_) {
+      // A residual SDP race can throw; swallow it and leave recovery to the
+      // existing ICE-restart backstop / peer-gone path.
+    }
   }
 
   Future<void> _onAnswer(RtcSdpPayload p) async {
     final manager = _peer;
     if (manager == null || p.roomId != _roomId) return;
-    await manager.setRemoteDescription('answer', p.sdp);
+    try {
+      // setRemoteDescription guards against a stale answer (wrong signaling
+      // state) internally, so a late/duplicate answer can't break the call.
+      await manager.setRemoteDescription('answer', p.sdp);
+    } catch (_) {
+      // Benign renegotiation/teardown race; the ICE-restart backstop covers it.
+    }
   }
 
   Future<void> _onIce(RtcIcePayload p) async {

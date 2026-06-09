@@ -6,6 +6,7 @@ import { Test } from '@nestjs/testing';
 import type { ExecutionContext } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
 
+import { MetricsService } from '../../observability/metrics.service';
 import { CloudPaymentsClient } from './cloudpayments.client';
 import { CloudPaymentsSignatureGuard } from './cloudpayments-signature.guard';
 import { COIN_PACKAGES_SERVICE, PREMIUM_SERVICE, WALLET_SERVICE } from './payments.contracts';
@@ -35,6 +36,19 @@ describe('CloudPaymentsSignatureGuard — Content-HMAC verification', () => {
   function guardFor(secret: string): CloudPaymentsSignatureGuard {
     const config = { get: jest.fn().mockReturnValue(secret) } as unknown as ConfigService;
     return new CloudPaymentsSignatureGuard(config);
+  }
+
+  /** A guard wired with a spyable MetricsService (for the signature-failure counter). */
+  function guardWithMetrics(secret: string): {
+    guard: CloudPaymentsSignatureGuard;
+    metrics: { webhookSignatureFailed: jest.Mock };
+  } {
+    const config = { get: jest.fn().mockReturnValue(secret) } as unknown as ConfigService;
+    const metrics = { webhookSignatureFailed: jest.fn() };
+    return {
+      guard: new CloudPaymentsSignatureGuard(config, metrics as unknown as MetricsService),
+      metrics,
+    };
   }
 
   function contextWith(
@@ -100,6 +114,24 @@ describe('CloudPaymentsSignatureGuard — Content-HMAC verification', () => {
     const ctx = contextWith(Buffer.from(body), { 'content-hmac': sign(body, '') });
     expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
   });
+
+  it('OBSERVABILITY: a rejected webhook bumps ruletka_webhook_signature_failures_total{provider=cloudpayments}', () => {
+    const { guard, metrics } = guardWithMetrics(SECRET);
+    // A tampered body fails verification → the counter is bumped once before the throw.
+    const signed = sign('Amount=99', SECRET);
+    const ctx = contextWith(Buffer.from('Amount=9900'), { 'content-hmac': signed });
+    expect(() => guard.canActivate(ctx)).toThrow(UnauthorizedException);
+    expect(metrics.webhookSignatureFailed).toHaveBeenCalledTimes(1);
+    expect(metrics.webhookSignatureFailed).toHaveBeenCalledWith('cloudpayments');
+  });
+
+  it('OBSERVABILITY: an ACCEPTED webhook does NOT bump the signature-failure counter', () => {
+    const { guard, metrics } = guardWithMetrics(SECRET);
+    const body = 'InvoiceId=inv-ok';
+    const ctx = contextWith(Buffer.from(body), { 'content-hmac': sign(body, SECRET) });
+    expect(guard.canActivate(ctx)).toBe(true);
+    expect(metrics.webhookSignatureFailed).not.toHaveBeenCalled();
+  });
 });
 
 describe('PaymentsService — Pay idempotency (double webhook → single credit)', () => {
@@ -132,6 +164,12 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     isConfigured: jest.Mock;
     cancelSubscription: jest.Mock;
     refundPayment: jest.Mock;
+  };
+  let metrics: {
+    paymentCompleted: jest.Mock;
+    paymentFailed: jest.Mock;
+    fulfilmentRolledBack: jest.Mock;
+    refundRecorded: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -169,6 +207,12 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
       cancelSubscription: jest.fn().mockResolvedValue(undefined),
       refundPayment: jest.fn().mockResolvedValue(undefined),
     };
+    metrics = {
+      paymentCompleted: jest.fn(),
+      paymentFailed: jest.fn(),
+      fulfilmentRolledBack: jest.fn(),
+      refundRecorded: jest.fn(),
+    };
 
     paymentModel = {
       findOne: jest.fn(),
@@ -193,6 +237,7 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
         { provide: PREMIUM_SERVICE, useValue: premium },
         { provide: COIN_PACKAGES_SERVICE, useValue: coinPackages },
         { provide: CloudPaymentsClient, useValue: cloudPayments },
+        { provide: MetricsService, useValue: metrics },
       ],
     }).compile();
 
@@ -265,6 +310,12 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     expect(paymentModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
     const [claimFilter] = paymentModel.findOneAndUpdate.mock.calls[0] as [Record<string, unknown>];
     expect(claimFilter).toMatchObject({ status: 'pending' });
+
+    // OBSERVABILITY: the completed-payment counter is bumped exactly once (only
+    // the winning delivery fulfils), labelled by purpose.
+    expect(metrics.paymentCompleted).toHaveBeenCalledTimes(1);
+    expect(metrics.paymentCompleted).toHaveBeenCalledWith('coins');
+    expect(metrics.fulfilmentRolledBack).not.toHaveBeenCalled();
   });
 
   it('does not credit when the Pay amount differs from the stored price', async () => {
@@ -336,6 +387,69 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     expect(actUser).toBe(userId);
     expect(actPlan).toBe('monthly');
     expect(actToken).toBe('tok_recurring');
+
+    // OBSERVABILITY: premium fulfilment bumps the completed counter (purpose=premium).
+    expect(metrics.paymentCompleted).toHaveBeenCalledTimes(1);
+    expect(metrics.paymentCompleted).toHaveBeenCalledWith('premium');
+  });
+
+  it('OBSERVABILITY: a fulfilment that throws bumps the rollback counter (paid-but-not-entitled) and NOT completed', async () => {
+    paymentModel.findOne.mockReturnValueOnce(
+      queryReturning({
+        _id: 'pay-rb',
+        invoiceId: 'inv-rb-1',
+        status: 'pending',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+    paymentModel.findOneAndUpdate.mockReturnValueOnce(
+      queryReturning({
+        _id: 'pay-rb',
+        invoiceId: 'inv-rb-1',
+        status: 'completed',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+    // The credit (fulfilment) throws → the service rolls the claim back to
+    // pending for retry and rethrows so CloudPayments redelivers.
+    wallet.credit.mockRejectedValueOnce(new Error('wallet unavailable'));
+
+    await expect(
+      service.handlePay({ InvoiceId: 'inv-rb-1', TransactionId: 11, Amount: 449, AccountId: userId }),
+    ).rejects.toThrow('wallet unavailable');
+
+    // The PAGE signal fired (labelled by purpose); the success counter did NOT.
+    expect(metrics.fulfilmentRolledBack).toHaveBeenCalledTimes(1);
+    expect(metrics.fulfilmentRolledBack).toHaveBeenCalledWith('coins');
+    expect(metrics.paymentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('OBSERVABILITY: a Fail webhook on a pending payment bumps the failed counter', async () => {
+    paymentModel.findOne.mockReturnValueOnce(
+      queryReturning({
+        _id: 'pay-fail',
+        invoiceId: 'inv-fail-1',
+        status: 'pending',
+        purpose: 'coins',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    const ack = await service.handleFail({
+      InvoiceId: 'inv-fail-1',
+      TransactionId: 12,
+      AccountId: userId,
+    });
+
+    expect(ack).toEqual({ code: 0 });
+    expect(metrics.paymentFailed).toHaveBeenCalledTimes(1);
   });
 
   it('renews premium on a Recurrent "Active" notification', async () => {

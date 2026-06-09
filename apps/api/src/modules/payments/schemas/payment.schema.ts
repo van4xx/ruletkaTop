@@ -87,9 +87,17 @@ export const PaymentSchema = SchemaFactory.createForClass(Payment);
 // Idempotency: one row per invoice, and the primary webhook lookup key.
 PaymentSchema.index({ invoiceId: 1 }, { unique: true });
 // Provider transaction lookups (idempotency for Confirm/Refund by tx id).
-// UNIQUE + SPARSE: an invoice ↔ CloudPayments transaction is 1:1, DB-enforced.
-// Sparse so the many rows that never get a `transactionId` (still `pending`, or
-// `null`) are excluded from the index and don't collide on a shared null key.
-PaymentSchema.index({ transactionId: 1 }, { unique: true, sparse: true });
+// UNIQUE + PARTIAL: an invoice ↔ CloudPayments transaction is 1:1, DB-enforced.
+// `transactionId` DEFAULTS to explicit `null` (see @Prop above), so a `sparse`
+// index would NOT help — sparse only excludes ABSENT fields, not explicit-null
+// ones, so the many `pending`/unmatched rows would all carry `null` and COLLIDE
+// on the unique key (E11000 → syncIndexes aborts boot). A `partialFilterExpression`
+// matching the field's actual BSON type (`transactionId` is a Number) constrains
+// uniqueness to rows that actually carry a provider tx id and lets every
+// null/unmatched row sit outside the index entirely.
+PaymentSchema.index(
+  { transactionId: 1 },
+  { unique: true, partialFilterExpression: { transactionId: { $type: 'number' } } },
+);
 // A user's payment history, newest first.
 PaymentSchema.index({ userId: 1, createdAt: -1 });

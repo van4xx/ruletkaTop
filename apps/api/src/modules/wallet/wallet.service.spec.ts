@@ -351,39 +351,58 @@ describe('WalletService — economy hold (spend-then-refund debt + spend freeze)
     service = moduleRef.get(WalletService);
   });
 
+  /**
+   * The hold's debt `$inc` is now applied in TWO atomic steps by
+   * applyEconomyHold: (a) an upserting "ensure wallet exists" findOneAndUpdate
+   * carrying NO debt, then (b) a `heldRefIds: { $ne: refId }`-guarded
+   * findOneAndUpdate that `$inc`s `heldCoins` and `$addToSet`s the refId (so a
+   * redelivery is a no-op). This helper finds the GUARDED debt-inc call.
+   */
+  function findDebtIncCall(): [Record<string, unknown>, Record<string, Record<string, unknown>>] {
+    const call = walletModel.findOneAndUpdate.mock.calls.find(([, update]) => {
+      const u = update as { $inc?: { heldCoins?: number } };
+      return typeof u.$inc?.heldCoins === 'number';
+    });
+    return call as [Record<string, unknown>, Record<string, Record<string, unknown>>];
+  }
+
   it('reverseRefund on a SPENT balance: claws back nothing, records the full amount as debt + sets the hold', async () => {
     // The buyer already spent everything ⇒ balance 0. The whole 600 is owed.
     walletModel.findOne.mockReturnValue(findOneReturning({ balanceCoins: 0 }));
-    // applyEconomyHold's upserting hold update.
-    walletModel.findOneAndUpdate.mockReturnValue(
-      queryReturning({ balanceCoins: 0, economyHold: true, heldCoins: 600 }),
-    );
+    // applyEconomyHold: (a) ensure-wallet upsert, (b) guarded debt $inc.
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 0 })) // ensure-wallet upsert
+      .mockReturnValueOnce(queryReturning({ economyHold: true, heldCoins: 600 })); // guarded debt $inc
 
     const result = await service.reverseRefund(userId, 600, 'refund:inv-cb');
 
     expect(result).toEqual({ reversed: 0, owed: 600 });
     // No clawback debit was issued (nothing to reverse) — so no ledger row.
     expect(coinTxModel.create).not.toHaveBeenCalled();
-    // The debt+hold was applied: economyHold:true and heldCoins +600, upserting.
-    expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
-    const [filter, update, options] = walletModel.findOneAndUpdate.mock.calls[0] as [
-      Record<string, unknown>,
-      Record<string, Record<string, unknown>>,
-      Record<string, unknown>,
-    ];
-    expect(filter).toMatchObject({ userId: expect.anything() });
-    expect(update.$set).toEqual({ economyHold: true });
+    // The debt+hold was applied idempotently: economyHold:true, heldCoins +600,
+    // guarded on the refId not yet held, and the refId recorded so a redelivery
+    // can't double-count.
+    const [filter, update] = findDebtIncCall();
+    expect(filter).toMatchObject({ userId: expect.anything(), heldRefIds: { $ne: 'refund:inv-cb' } });
+    expect(update.$set).toEqual({ economyHold: true, holdRefId: 'refund:inv-cb' });
     expect(update.$inc).toEqual({ heldCoins: 600 });
-    expect(options).toMatchObject({ upsert: true });
+    expect(update.$addToSet).toEqual({ heldRefIds: 'refund:inv-cb' });
   });
 
   it('reverseRefund on a PARTIALLY-spent balance: claws back what remains and holds only the shortfall', async () => {
     // 250 coins left of the 600 credited ⇒ reverse 250, hold 350 as debt.
-    walletModel.findOne.mockReturnValue(findOneReturning({ balanceCoins: 250 }));
-    // The clawback debit (refund, exempt from the hold gate) succeeds: 250→0.
+    // getBalance reads 250 first; after the clawback debit the loop re-reads and
+    // finds 0, so it stops (no further clawback).
+    walletModel.findOne
+      .mockReturnValueOnce(findOneReturning({ balanceCoins: 250 })) // getBalance (loop pass 1)
+      // credit()/debit() internal hold reads default to non-held; loop pass 2 read:
+      .mockReturnValue(findOneReturning({ balanceCoins: 0, economyHold: false, heldCoins: 0 }));
+    // The clawback debit (refund, exempt from the hold gate) succeeds: 250→0,
+    // then applyEconomyHold's two steps for the 350 shortfall.
     walletModel.findOneAndUpdate
       .mockReturnValueOnce(queryReturning({ balanceCoins: 0 })) // clawback debit
-      .mockReturnValueOnce(queryReturning({ balanceCoins: 0, economyHold: true, heldCoins: 350 })); // hold
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 0 })) // ensure-wallet upsert
+      .mockReturnValueOnce(queryReturning({ economyHold: true, heldCoins: 350 })); // guarded debt $inc
 
     const result = await service.reverseRefund(userId, 600, 'refund:inv-part');
 
@@ -391,13 +410,10 @@ describe('WalletService — economy hold (spend-then-refund debt + spend freeze)
     // The clawback was a `refund` debit of exactly the reversible 250.
     const [[row]] = coinTxModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
     expect(row).toMatchObject({ delta: -250, type: 'refund', refId: 'refund:inv-part' });
-    // The debt for the unrecovered 350 was held.
-    const holdUpdate = walletModel.findOneAndUpdate.mock.calls[1] as [
-      unknown,
-      Record<string, Record<string, unknown>>,
-    ];
-    expect(holdUpdate[1].$set).toEqual({ economyHold: true });
-    expect(holdUpdate[1].$inc).toEqual({ heldCoins: 350 });
+    // The debt for the unrecovered 350 was held (idempotent, guarded $inc).
+    const [, debtUpdate] = findDebtIncCall();
+    expect(debtUpdate.$set).toEqual({ economyHold: true, holdRefId: 'refund:inv-part' });
+    expect(debtUpdate.$inc).toEqual({ heldCoins: 350 });
   });
 
   it('reverseRefund on a FULLY-covered balance: claws everything back, no debt and no hold', async () => {
@@ -454,44 +470,79 @@ describe('WalletService — economy hold (spend-then-refund debt + spend freeze)
     expect(walletModel.findOne).not.toHaveBeenCalled();
   });
 
-  it('credit RELEASES the hold once the recovered balance covers the debt', async () => {
-    // A credit of 600 brings the balance to 600; the outstanding debt is 600, so
-    // the debt is repaid and the hold lifts.
+  it('credit that fully covers the debt CONSUMES the recovered balance (debits it + writes a refund ledger row) and lifts the hold', async () => {
+    // A credit of 600 brings the balance to 600; the outstanding debt is 600. The
+    // debt is repaid by DEBITING the recovered 600 back out (not by silently
+    // wiping the flag — that would make the buyer whole twice) and writing a
+    // matching `refund` ledger row, so balanceCoins stays equal to Σ(ledger).
     walletModel.findOneAndUpdate
-      .mockReturnValueOnce(queryReturning({ balanceCoins: 600 })) // the credit $inc
-      .mockReturnValueOnce(queryReturning({ balanceCoins: 600, economyHold: false, heldCoins: 0 })); // release
-    // maybeReleaseHold reads the current hold state: held with a 600 debt.
-    walletModel.findOne.mockReturnValue(findOneReturning({ economyHold: true, heldCoins: 600 }));
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 600 })) // credit $inc → 600
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 0 })); // repayment debit → 0, hold clears
+    walletModel.findOne
+      // maybeReleaseHold reads the hold state: held, 600 debt, namespaced refId.
+      .mockReturnValueOnce(
+        findOneReturning({ economyHold: true, heldCoins: 600, holdRefId: 'refund:inv-cb', balanceCoins: 600 }),
+      )
+      // post-credit balance re-read (after the repayment debit drew it to 0).
+      .mockReturnValue(findOneReturning({ balanceCoins: 0 }));
 
-    await service.credit(userId, 600, 'purchase', 'inv-repay');
+    const newBalance = await service.credit(userId, 600, 'purchase', 'inv-repay');
 
-    // The hold was cleared: economyHold:false + heldCoins:0, guarded on still-held.
-    const releaseCall = walletModel.findOneAndUpdate.mock.calls.find(([, update]) => {
-      const u = update as { $set?: { economyHold?: boolean } };
-      return u.$set?.economyHold === false;
+    // The returned balance reflects the repayment debit — NOT the pre-repayment 600.
+    expect(newBalance).toBe(0);
+
+    // The repayment update DEBITED the balance AND drew the debt down, clearing
+    // the hold at zero — guarded on the still-held debt so a concurrent release
+    // can't double-spend the recovered balance.
+    const repayCall = walletModel.findOneAndUpdate.mock.calls.find(([, update]) => {
+      const u = update as { $inc?: { balanceCoins?: number } };
+      return (u.$inc?.balanceCoins ?? 0) < 0;
     });
-    expect(releaseCall).toBeDefined();
-    const [releaseFilter, releaseUpdate] = releaseCall as [
+    expect(repayCall).toBeDefined();
+    const [repayFilter, repayUpdate] = repayCall as [
       Record<string, unknown>,
       Record<string, Record<string, unknown>>,
     ];
-    expect(releaseFilter).toMatchObject({ economyHold: true });
-    expect(releaseUpdate.$set).toEqual({ economyHold: false, heldCoins: 0 });
+    expect(repayFilter).toMatchObject({ economyHold: true, heldCoins: 600, balanceCoins: { $gte: 600 } });
+    expect(repayUpdate.$inc).toEqual({ balanceCoins: -600, heldCoins: -600 });
+    expect(repayUpdate.$set).toEqual({ economyHold: false, holdRefId: null });
+
+    // A `refund` ledger row was written for the repayment so the invariant holds:
+    // the recovered balance was removed from spendable funds, not kept for free.
+    const repayRow = coinTxModel.create.mock.calls
+      .map((c) => (c[0] as Array<Record<string, unknown>>)[0])
+      .find((r) => r?.type === 'refund');
+    expect(repayRow).toMatchObject({ delta: -600, type: 'refund', refId: 'holdrepay:refund:inv-cb:600' });
   });
 
-  it('credit does NOT release the hold while the recovered balance is still below the debt', async () => {
-    // Balance only recovers to 100 but the debt is 600 — stay frozen.
-    walletModel.findOneAndUpdate.mockReturnValue(queryReturning({ balanceCoins: 100 }));
-    walletModel.findOne.mockReturnValue(findOneReturning({ economyHold: true, heldCoins: 600 }));
+  it('credit below the debt makes a PARTIAL repayment (debits what it can, keeps the hold)', async () => {
+    // Balance recovers by only 100 against a 600 debt: repay 100 (debit it out +
+    // refund ledger row), draw the debt to 500, and STAY frozen (hold not lifted).
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 100 })) // credit $inc → 100
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 0 })); // repayment debit → 0
+    walletModel.findOne
+      .mockReturnValueOnce(
+        findOneReturning({ economyHold: true, heldCoins: 600, holdRefId: 'refund:inv-cb', balanceCoins: 100 }),
+      )
+      .mockReturnValue(findOneReturning({ balanceCoins: 0 }));
 
     await service.credit(userId, 100, 'purchase', 'inv-partial-repay');
 
-    // Only the credit $inc ran — NO release update (no $set economyHold:false).
-    const releaseCall = walletModel.findOneAndUpdate.mock.calls.find(([, update]) => {
-      const u = update as { $set?: { economyHold?: boolean } };
-      return u.$set?.economyHold === false;
+    const repayCall = walletModel.findOneAndUpdate.mock.calls.find(([, update]) => {
+      const u = update as { $inc?: { balanceCoins?: number } };
+      return (u.$inc?.balanceCoins ?? 0) < 0;
     });
-    expect(releaseCall).toBeUndefined();
+    expect(repayCall).toBeDefined();
+    const [, repayUpdate] = repayCall as [Record<string, unknown>, Record<string, Record<string, unknown>>];
+    // Only 100 repaid; the hold is NOT cleared (no $set economyHold:false).
+    expect(repayUpdate.$inc).toEqual({ balanceCoins: -100, heldCoins: -100 });
+    expect(repayUpdate.$set).toBeUndefined();
+
+    const repayRow = coinTxModel.create.mock.calls
+      .map((c) => (c[0] as Array<Record<string, unknown>>)[0])
+      .find((r) => r?.type === 'refund');
+    expect(repayRow).toMatchObject({ delta: -100, type: 'refund' });
   });
 });
 
@@ -667,5 +718,323 @@ describe('CoinTransaction ledger — type enum is the zod single source of truth
     // An out-of-contract value still fails, proving the enum is enforced.
     const bad = new LedgerModel({ ...base, type: 'not_a_real_type' }).validateSync();
     expect(bad?.errors?.type).toBeDefined();
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// In-memory fake wallet + ledger that actually MODELS the atomic
+// single-document semantics the service depends on, so each scenario can assert
+// the ACCOUNTING INVARIANT end-to-end:  balanceCoins === Σ(ledger deltas).
+//
+// This is the real regression guard for the wave-4 chargeback bugs: call-
+// sequence mocks can't catch "balance != ledger", but a model that applies the
+// same `$inc`/`$set`/`$addToSet`/guards Mongo would — including the unique
+// `(type, refId)` ledger index that drives idempotency — does.
+// ───────────────────────────────────────────────────────────────────────────
+describe('WalletService — economy-hold accounting invariant (balance == Σ ledger)', () => {
+  const userId = '507f1f77bcf86cd799439011';
+
+  interface WalletDoc {
+    userId: string;
+    balanceCoins: number;
+    economyHold: boolean;
+    heldCoins: number;
+    heldRefIds: string[];
+    holdRefId: string | null;
+  }
+
+  interface LedgerRow {
+    delta: number;
+    type: string;
+    refId: string | null;
+    balanceAfter: number;
+  }
+
+  interface FindOneChain {
+    select: () => FindOneChain;
+    lean: () => FindOneChain;
+    exec: () => Promise<WalletDoc | null>;
+  }
+
+  /** Does `doc` satisfy a (subset of) Mongo query operators we use? */
+  function matches(doc: WalletDoc, filter: Record<string, unknown>): boolean {
+    for (const [key, cond] of Object.entries(filter)) {
+      if (key === 'userId') continue; // single-wallet fake
+      const val = (doc as unknown as Record<string, unknown>)[key];
+      if (cond !== null && typeof cond === 'object') {
+        const c = cond as Record<string, unknown>;
+        if ('$gte' in c && !((val as number) >= (c.$gte as number))) return false;
+        if ('$ne' in c) {
+          if (Array.isArray(val)) {
+            if (val.includes(c.$ne)) return false;
+          } else if (val === c.$ne) {
+            return false;
+          }
+        }
+      } else if (val !== cond) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Apply a (subset of) Mongo update operators in place. */
+  function applyUpdate(doc: WalletDoc, update: Record<string, Record<string, unknown>>): void {
+    const d = doc as unknown as Record<string, unknown>;
+    if (update.$inc) for (const [k, v] of Object.entries(update.$inc)) d[k] = ((d[k] as number) ?? 0) + (v as number);
+    if (update.$set) for (const [k, v] of Object.entries(update.$set)) d[k] = v;
+    if (update.$setOnInsert) {
+      /* only on insert — handled by caller */
+    }
+    if (update.$addToSet)
+      for (const [k, v] of Object.entries(update.$addToSet)) {
+        const arr = (d[k] as unknown[]) ?? [];
+        if (!arr.includes(v)) arr.push(v);
+        d[k] = arr;
+      }
+    if (update.$unset) for (const k of Object.keys(update.$unset)) d[k] = k === 'heldRefIds' ? [] : undefined;
+  }
+
+  /**
+   * A fake Mongoose-ish model over a SINGLE wallet doc, supporting the exact
+   * `findOneAndUpdate(filter, update, opts)` / `findOne(filter, proj, opts)`
+   * surface the service uses, with `{ new: true }` and `upsert` semantics.
+   */
+  function makeFakeModels() {
+    const wallet: WalletDoc = {
+      userId,
+      balanceCoins: 0,
+      economyHold: false,
+      heldCoins: 0,
+      heldRefIds: [],
+      holdRefId: null,
+    };
+    // Ledger with the unique (type, refId) index enforced for string refIds.
+    const ledger: LedgerRow[] = [];
+
+    const walletModel = {
+      findOneAndUpdate: (
+        filter: Record<string, unknown>,
+        update: Record<string, Record<string, unknown>>,
+        opts?: Record<string, unknown>,
+      ): { exec: () => Promise<WalletDoc | null> } => ({
+        exec: () => {
+          if (!matches(wallet, filter)) {
+            // The single wallet always exists (userId is the only insert key), so
+            // an upsert never inserts a second doc; a non-match means a guard
+            // (e.g. $ne / $gte) failed → return null like Mongo would.
+            return Promise.resolve(null);
+          }
+          applyUpdate(wallet, update);
+          return Promise.resolve({ ...wallet });
+        },
+      }),
+      findOne: (filter: Record<string, unknown>, _proj?: unknown, _opts?: unknown): FindOneChain => {
+        const chain: FindOneChain = {
+          select: () => chain,
+          lean: () => chain,
+          exec: () => Promise.resolve(matches(wallet, filter) ? { ...wallet } : null),
+        };
+        return chain;
+      },
+    };
+
+    const coinTxModel = {
+      create: (rows: LedgerRow[]): Promise<Array<{ _id: string }>> => {
+        const row = rows[0]!;
+        if (row.refId !== null && ledger.some((r) => r.type === row.type && r.refId === row.refId)) {
+          // Unique (type, refId) partial index violation → E11000, as Mongo does.
+          return Promise.reject(Object.assign(new Error('E11000 duplicate key error'), { code: 11000 }));
+        }
+        ledger.push({ ...row });
+        return Promise.resolve([{ _id: `tx${ledger.length}` }]);
+      },
+    };
+
+    return { wallet, ledger, walletModel, coinTxModel };
+  }
+
+  async function buildService(walletModel: unknown, coinTxModel: unknown): Promise<WalletService> {
+    const connection = {
+      // Standalone path (no transactions) — exercises the sequential atomic
+      // fallback, which is where balance/ledger drift is hardest to keep in sync.
+      startSession: jest.fn().mockRejectedValue(
+        Object.assign(new Error('Transaction numbers are only allowed on a replica set'), { code: 20 }),
+      ),
+    };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        WalletService,
+        { provide: getModelToken(Wallet.name), useValue: walletModel },
+        { provide: getModelToken(CoinTransaction.name), useValue: coinTxModel },
+        { provide: getConnectionToken(), useValue: connection },
+      ],
+    }).compile();
+    return moduleRef.get(WalletService);
+  }
+
+  const ledgerSum = (ledger: Array<{ delta: number }>): number => ledger.reduce((s, r) => s + r.delta, 0);
+
+  it('release CONSUMES the recovered balance and writes a refund ledger row (invariant holds, no double make-whole)', async () => {
+    const { wallet, ledger, walletModel, coinTxModel } = makeFakeModels();
+    const service = await buildService(walletModel, coinTxModel);
+
+    // Buyer bought 600, spent all 600, then charged back → full 600 is debt+hold.
+    await service.credit(userId, 600, 'purchase', 'inv-1'); // balance 600, ledger +600
+    await service.debit(userId, 600, 'gift_out', 'gift-1'); // balance 0,   ledger -600 (spent)
+    await service.reverseRefund(userId, 600, 'refund:inv-1'); // nothing to claw back → hold 600
+
+    expect(wallet.economyHold).toBe(true);
+    expect(wallet.heldCoins).toBe(600);
+    expect(wallet.balanceCoins).toBe(0);
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // invariant
+
+    // A fresh 600 credit (e.g. a new top-up) repays the debt. The OLD bug wiped
+    // the flag and left the 600 spendable (made whole twice). Now the recovered
+    // 600 is debited back out under a refund ledger row, so the buyer is NOT
+    // enriched and the invariant survives.
+    const balanceAfter = await service.credit(userId, 600, 'purchase', 'inv-2');
+
+    expect(balanceAfter).toBe(0); // recovered 600 consumed to repay the 600 debt
+    expect(wallet.balanceCoins).toBe(0);
+    expect(wallet.economyHold).toBe(false);
+    expect(wallet.heldCoins).toBe(0);
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // INVARIANT still holds
+
+    // A holdrepay refund row was appended for the repayment.
+    const repay = ledger.find((r) => r.type === 'refund' && (r as { refId?: string }).refId?.startsWith('holdrepay:'));
+    expect(repay).toMatchObject({ delta: -600, type: 'refund' });
+  });
+
+  it('PARTIAL repayment over MULTIPLE credits draws the debt down and lifts the hold only at zero (invariant holds throughout)', async () => {
+    const { wallet, ledger, walletModel, coinTxModel } = makeFakeModels();
+    const service = await buildService(walletModel, coinTxModel);
+
+    await service.credit(userId, 600, 'purchase', 'inv-1');
+    await service.debit(userId, 600, 'gift_out', 'gift-1');
+    await service.reverseRefund(userId, 600, 'refund:inv-1'); // debt 600, hold on
+
+    // Credit #1: 200 → repays 200, debt 400, STILL frozen.
+    await service.credit(userId, 200, 'purchase', 'inv-a');
+    expect(wallet.heldCoins).toBe(400);
+    expect(wallet.economyHold).toBe(true);
+    expect(wallet.balanceCoins).toBe(0);
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger));
+
+    // Credit #2: 400 → repays the remaining 400, debt 0, hold LIFTS.
+    const after = await service.credit(userId, 400, 'purchase', 'inv-b');
+    expect(after).toBe(0);
+    expect(wallet.heldCoins).toBe(0);
+    expect(wallet.economyHold).toBe(false);
+    expect(wallet.balanceCoins).toBe(0);
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // invariant
+
+    // Now the account can spend again, and a credit beyond the (cleared) debt
+    // simply lands as spendable balance.
+    const spendable = await service.credit(userId, 50, 'bonus', 'bonus-1');
+    expect(spendable).toBe(50);
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger));
+  });
+
+  it('a REDELIVERED refund webhook does NOT double the debt (hold $inc is idempotent per refId)', async () => {
+    const { wallet, ledger, walletModel, coinTxModel } = makeFakeModels();
+    const service = await buildService(walletModel, coinTxModel);
+
+    await service.credit(userId, 600, 'purchase', 'inv-1');
+    await service.debit(userId, 600, 'gift_out', 'gift-1'); // spent
+
+    // First refund delivery: full 600 becomes debt.
+    const first = await service.reverseRefund(userId, 600, 'refund:inv-1');
+    expect(first).toEqual({ reversed: 0, owed: 600 });
+    expect(wallet.heldCoins).toBe(600);
+
+    // REDELIVERY of the SAME refund webhook: must NOT add another 600 of debt.
+    const second = await service.reverseRefund(userId, 600, 'refund:inv-1');
+    expect(second).toEqual({ reversed: 0, owed: 600 }); // owed is recomputed, but…
+    expect(wallet.heldCoins).toBe(600); // …the debt is NOT doubled (still 600)
+    expect(wallet.heldRefIds).toEqual(['refund:inv-1']); // recorded once
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // invariant intact
+  });
+
+  it('reverseRefund under a CONCURRENT-SPEND race records the FULL unrecovered debt + freezes (InsufficientFunds never escapes)', async () => {
+    const { wallet, ledger, walletModel, coinTxModel } = makeFakeModels();
+    const service = await buildService(walletModel, coinTxModel);
+
+    // Buyer has 600 spendable from the purchase being reversed.
+    await service.credit(userId, 600, 'purchase', 'inv-1');
+    expect(wallet.balanceCoins).toBe(600);
+
+    // Inject the TOCTOU: the very first balance read inside reverseRefund sees
+    // 600, but BEFORE the clawback debit lands a concurrent spend drains the
+    // wallet to 0. A REAL concurrent spend writes its own ledger row, so the
+    // harness models the drain as a genuine -600 spend (balance AND ledger) to
+    // keep the invariant honest — the service must keep it true from there.
+    const realFindOne = walletModel.findOne.bind(walletModel);
+    let raced = false;
+    walletModel.findOne = ((filter: Record<string, unknown>, proj?: unknown, opts?: unknown) => {
+      const chain = realFindOne(filter, proj, opts);
+      const realExec = chain.exec.bind(chain);
+      chain.exec = () =>
+        realExec().then((res) => {
+          if (!raced && res && res.balanceCoins === 600) {
+            raced = true;
+            wallet.balanceCoins = 0; // concurrent spend lands here → debit will miss
+            ledger.push({ delta: -600, type: 'gift_out', refId: 'race-spend', balanceAfter: 0 });
+          }
+          return res;
+        });
+      return chain;
+    }) as typeof walletModel.findOne;
+
+    const result = await service.reverseRefund(userId, 600, 'refund:inv-1');
+
+    // The clawback debit raced and missed (balance already 0); reverseRefund
+    // caught the InsufficientFundsException, re-read (now 0), recovered nothing,
+    // and recorded the FULL 600 as debt + froze the account. The exception did
+    // NOT escape.
+    expect(result.reversed).toBe(0);
+    expect(result.owed).toBe(600);
+    expect(wallet.economyHold).toBe(true);
+    expect(wallet.heldCoins).toBe(600);
+    expect(wallet.balanceCoins).toBe(0);
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // invariant: no free value
+  });
+
+  it('reverseRefund with a PARTIAL concurrent spend claws back what remains and holds the rest', async () => {
+    const { wallet, ledger, walletModel, coinTxModel } = makeFakeModels();
+    const service = await buildService(walletModel, coinTxModel);
+
+    await service.credit(userId, 600, 'purchase', 'inv-1'); // balance 600
+
+    // Concurrent spend of 350 lands right after the first balance read of 600,
+    // leaving 250. The first clawback attempt (debit 600) misses; the retry
+    // re-reads 250 and claws that back; the remaining 350 becomes debt. The
+    // concurrent spend writes its own -350 ledger row (a real spend would), so
+    // the invariant is honest.
+    const realFindOne = walletModel.findOne.bind(walletModel);
+    let raced = false;
+    walletModel.findOne = ((filter: Record<string, unknown>, proj?: unknown, opts?: unknown) => {
+      const chain = realFindOne(filter, proj, opts);
+      const realExec = chain.exec.bind(chain);
+      chain.exec = () =>
+        realExec().then((res) => {
+          if (!raced && res && res.balanceCoins === 600) {
+            raced = true;
+            wallet.balanceCoins = 250; // 350 spent concurrently
+            ledger.push({ delta: -350, type: 'gift_out', refId: 'race-spend', balanceAfter: 250 });
+          }
+          return res;
+        });
+      return chain;
+    }) as typeof walletModel.findOne;
+
+    const result = await service.reverseRefund(userId, 600, 'refund:inv-1');
+
+    expect(result.reversed).toBe(250);
+    expect(result.owed).toBe(350);
+    expect(wallet.economyHold).toBe(true);
+    expect(wallet.heldCoins).toBe(350);
+    expect(wallet.balanceCoins).toBe(0); // 250 clawed back from the 250 left
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // invariant
   });
 });

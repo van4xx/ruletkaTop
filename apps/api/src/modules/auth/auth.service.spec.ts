@@ -150,6 +150,10 @@ interface Mocks {
   usersCollectionDeleteOne: jest.Mock;
   /** The `withTransaction` mock of the session returned by `startSession`. */
   withTransaction: jest.Mock;
+  /** Append-only audit trail (failed/locked-login rows). Best-effort. */
+  auditService: { log: jest.Mock };
+  /** Prometheus counters surface (failed/locked-login bumps). Best-effort. */
+  metrics: { loginFailed: jest.Mock; loginLocked: jest.Mock };
 }
 
 /**
@@ -319,6 +323,10 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
     isMaintenanceMode: jest.fn().mockResolvedValue(false),
   };
 
+  // Audit + metrics are best-effort observability sinks (failed/locked logins).
+  const auditService = { log: jest.fn().mockResolvedValue(undefined) };
+  const metrics = { loginFailed: jest.fn(), loginLocked: jest.fn() };
+
   return {
     usersService,
     jwtService,
@@ -334,6 +342,8 @@ function buildMocks(transactionMode: 'commit' | 'unsupported' = 'commit'): Mocks
     liveFlags,
     usersCollectionDeleteOne,
     withTransaction: session.withTransaction,
+    auditService,
+    metrics,
   };
 }
 
@@ -359,6 +369,10 @@ function makeService(m: Mocks): AuthService {
     m.redis as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     m.liveFlags as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    m.auditService as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    m.metrics as any,
   );
 }
 
@@ -805,6 +819,84 @@ describe('AuthService.login', () => {
     expect(err).toBeInstanceOf(UnauthorizedException);
     expect((err as UnauthorizedException).message).toMatch(/too many failed attempts/i);
     expect(m.usersService.findByEmailWithSecret).not.toHaveBeenCalled();
+  });
+
+  it('OBSERVABILITY: a failed attempt bumps the failed-login counter + writes an auth.login.failed audit row', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByEmailWithSecret.mockResolvedValue((await userWithRealHash()) as never);
+    const service = makeService(m);
+
+    await expect(
+      service.login(
+        { ...loginDto, password: 'incorrect-password' },
+        { ip: '9.9.9.9' },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    // Failed-login metric bumped once; below the threshold ⇒ no lockout bump.
+    expect(m.metrics.loginFailed).toHaveBeenCalledTimes(1);
+    expect(m.metrics.loginLocked).not.toHaveBeenCalled();
+
+    // A best-effort audit row carries the email + ip + post-INCR count (no userId).
+    expect(m.auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'auth.login.failed',
+        targetId: null,
+        meta: expect.objectContaining({ email: 'new.user@example.com', ip: '9.9.9.9', count: 1 }),
+      }),
+    );
+    // The lockout-specific row is NOT written below the threshold.
+    const lockedCalls = m.auditService.log.mock.calls.filter(
+      (c) => (c[0] as { action: string }).action === 'auth.login.locked',
+    );
+    expect(lockedCalls).toHaveLength(0);
+  });
+
+  it('OBSERVABILITY: crossing the lockout threshold bumps the lockout counter + writes an auth.login.locked audit row', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByEmailWithSecret.mockResolvedValue((await userWithRealHash()) as never);
+    const service = makeService(m);
+    const bad = { ...loginDto, password: 'incorrect-password' };
+
+    // 10 failures trip the lockout (the fake Redis returns the count, locking at 10).
+    for (let i = 0; i < 10; i += 1) {
+      await expect(service.login(bad, { ip: '7.7.7.7' })).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    }
+
+    // The failed-login counter is bumped on EVERY attempt…
+    expect(m.metrics.loginFailed).toHaveBeenCalledTimes(10);
+    // …and the lockout counter exactly once (on the threshold-crossing attempt).
+    expect(m.metrics.loginLocked).toHaveBeenCalledTimes(1);
+
+    // A distinct auth.login.locked audit row is written for the surfaced lockout.
+    const lockedCalls = m.auditService.log.mock.calls.filter(
+      (c) => (c[0] as { action: string }).action === 'auth.login.locked',
+    );
+    expect(lockedCalls).toHaveLength(1);
+    expect(lockedCalls[0][0]).toEqual(
+      expect.objectContaining({
+        action: 'auth.login.locked',
+        targetId: null,
+        meta: expect.objectContaining({ email: 'new.user@example.com', ip: '7.7.7.7', count: 10 }),
+      }),
+    );
+  });
+
+  it('OBSERVABILITY: an audit/metrics blip never breaks the login path (fail-open)', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByEmailWithSecret.mockResolvedValue((await userWithRealHash()) as never);
+    // Both observability sinks throw — login must still reject as normal.
+    m.auditService.log.mockRejectedValue(new Error('audit down'));
+    m.metrics.loginFailed.mockImplementation(() => {
+      throw new Error('metrics down');
+    });
+    const service = makeService(m);
+
+    await expect(
+      service.login({ ...loginDto, password: 'incorrect-password' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('clearing failed attempts on success: a good login between failures resets the counter', async () => {

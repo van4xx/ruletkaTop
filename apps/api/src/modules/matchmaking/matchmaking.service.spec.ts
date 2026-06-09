@@ -20,6 +20,7 @@ import {
 } from './matchmaking.constants';
 import {
   areMutuallyCompatible,
+  coerceToFreeFilters,
   MatchmakingService,
   sharedInterestCount,
 } from './matchmaking.service';
@@ -169,6 +170,33 @@ describe('sharedInterestCount — interest overlap', () => {
     const a = ['music', 'gaming'];
     const b = ['gaming', 'art', 'music'];
     expect(sharedInterestCount(a, b)).toBe(sharedInterestCount(b, a));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// coerceToFreeFilters — strips the PREMIUM-only dimensions (gender / country /
+// sharedInterestsOnly) to their open defaults while preserving the always-free
+// age window. Pure + exported, so tested directly.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('coerceToFreeFilters — premium-filter stripping', () => {
+  it('resets gender, countries and sharedInterestsOnly to open defaults', () => {
+    const coerced = coerceToFreeFilters(
+      filters({ gender: 'female', countries: ['RU'], sharedInterestsOnly: true }),
+    );
+    expect(coerced.gender).toBe('any');
+    expect(coerced.countries).toEqual([]);
+    expect(coerced.sharedInterestsOnly).toBe(false);
+  });
+
+  it('preserves the always-free age window', () => {
+    const coerced = coerceToFreeFilters(filters({ ageMin: 25, ageMax: 40 }));
+    expect(coerced.ageMin).toBe(25);
+    expect(coerced.ageMax).toBe(40);
+  });
+
+  it('is a no-op for filters that are already open', () => {
+    const open = filters();
+    expect(coerceToFreeFilters(open)).toEqual(open);
   });
 });
 
@@ -936,6 +964,64 @@ describe('MatchmakingService.enqueue — premium priority scoring', () => {
 
     expect(entry).toBeNull();
     expect(zaddCalls).toHaveLength(0);
+  });
+
+  // ── Premium entitlement on the matchmaking filters ─────────────────────────
+  // The gender / country / shared-interest filters are an ADVERTISED premium
+  // perk ("Gender & country filters"). A non-premium user's request for them is
+  // coerced to the open defaults at the enqueue choke point BEFORE entering the
+  // pool; a premium user's is honored verbatim. The always-free age window is
+  // preserved in both cases.
+
+  /** The premium-gated filters a non-premium user demands, plus a custom age. */
+  const PREMIUM_FILTERS = {
+    gender: 'female' as const,
+    ageMin: 21,
+    ageMax: 35,
+    countries: ['RU', 'BY'],
+    sharedInterestsOnly: true,
+  };
+
+  it('IGNORES a non-premium user\'s gender/country/shared-interest filters (coerced to open defaults)', async () => {
+    premium = { isPremium: jest.fn().mockResolvedValue(false) };
+    const svc = buildService();
+
+    const entry = await svc.enqueue('u-free', 'video' as MatchType, PREMIUM_FILTERS, 'sock');
+
+    // Premium-only dimensions reset to their open defaults…
+    expect(entry?.filters.gender).toBe('any');
+    expect(entry?.filters.countries).toEqual([]);
+    expect(entry?.filters.sharedInterestsOnly).toBe(false);
+    // …while the always-free age window is preserved untouched.
+    expect(entry?.filters.ageMin).toBe(21);
+    expect(entry?.filters.ageMax).toBe(35);
+  });
+
+  it("HONORS a premium user's gender/country/shared-interest filters verbatim", async () => {
+    premium = { isPremium: jest.fn().mockResolvedValue(true) };
+    const svc = buildService();
+
+    const entry = await svc.enqueue('u-prem', 'video' as MatchType, PREMIUM_FILTERS, 'sock');
+
+    // A premium user gets exactly what they asked for.
+    expect(entry?.filters.gender).toBe('female');
+    expect(entry?.filters.countries).toEqual(['RU', 'BY']);
+    expect(entry?.filters.sharedInterestsOnly).toBe(true);
+    expect(entry?.filters.ageMin).toBe(21);
+    expect(entry?.filters.ageMax).toBe(35);
+  });
+
+  it('coerces filters to open defaults when the premium check FAILS (fail-closed entitlement)', async () => {
+    // A premium-service blip resolves non-premium (safeIsPremium), so the perk
+    // is NOT granted — the filters are coerced. No free filtering on errors.
+    premium = { isPremium: jest.fn().mockRejectedValue(new Error('premium down')) };
+    const svc = buildService();
+
+    const entry = await svc.enqueue('u-err', 'video' as MatchType, PREMIUM_FILTERS, 'sock');
+
+    expect(entry?.filters.gender).toBe('any');
+    expect(entry?.filters.countries).toEqual([]);
+    expect(entry?.filters.sharedInterestsOnly).toBe(false);
   });
 });
 

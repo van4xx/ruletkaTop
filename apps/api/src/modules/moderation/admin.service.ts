@@ -15,6 +15,7 @@ import {
   PAYMENTS_CANCEL_PORT,
   type PaymentsCancelPort,
 } from '../../common/payments-cancel.port';
+import { MetricsService } from '../../observability/metrics.service';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { AuditService } from '../admin/audit.service';
 import { AuthService } from '../auth/auth.service';
@@ -101,6 +102,10 @@ export class AdminService {
     @Optional()
     @Inject(PAYMENTS_CANCEL_PORT)
     private readonly paymentsCancelPort?: PaymentsCancelPort,
+    // OBSERVABILITY (emit-only): durable ban/unban counters (abuse-enforcement
+    // volume). Optional so focused unit tests instantiate without wiring it; the
+    // emit is best-effort and NEVER affects the sanction.
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   /**
@@ -147,6 +152,9 @@ export class AdminService {
       targetId: userId,
       meta: { reason: reason ?? null },
     });
+    // Count the sanction (abuse-enforcement volume). Best-effort: a metrics blip
+    // must never affect the ban (already effective via the steps above).
+    this.emitMetric((m) => m.banApplied());
     return { userId: updated._id.toString(), isBanned: updated.isBanned };
   }
 
@@ -180,6 +188,8 @@ export class AdminService {
       targetType: 'user',
       targetId: userId,
     });
+    // Count the lift (best-effort; never affects the unban).
+    this.emitMetric((m) => m.banLifted());
     return { userId: updated._id.toString(), isBanned: updated.isBanned };
   }
 
@@ -376,6 +386,22 @@ export class AdminService {
       throw new NotFoundException('User not found');
     }
     return updated;
+  }
+
+  /**
+   * Best-effort metric emit. Wraps the (optional) MetricsService so a counter
+   * bump can NEVER throw into a sanction flow (the ban/unban is authoritative,
+   * the metric is a side-effect). No-op when MetricsService isn't wired.
+   */
+  private emitMetric(fn: (m: MetricsService) => void): void {
+    if (!this.metrics) {
+      return;
+    }
+    try {
+      fn(this.metrics);
+    } catch {
+      // a metrics blip must never affect the sanction
+    }
   }
 
   /**

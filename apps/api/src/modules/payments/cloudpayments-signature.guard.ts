@@ -6,10 +6,13 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
+
+import { MetricsService } from '../../observability/metrics.service';
 
 /**
  * Express request carrying the raw (unparsed) body buffer.
@@ -49,7 +52,15 @@ export class CloudPaymentsSignatureGuard implements CanActivate {
   /** Parsed `CLOUDPAYMENTS_WEBHOOK_IPS` allow-list; empty ⇒ check disabled. */
   private readonly allowedIps: ReadonlySet<string>;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    // OBSERVABILITY: bump `ruletka_webhook_signature_failures_total{provider}` on
+    // every rejection (forged-webhook / broken-secret alert signal). Optional so
+    // the guard still constructs in focused unit tests that wire only the config
+    // (and where `MetricsModule` isn't in the injector); when absent the emit is
+    // simply skipped — it must NEVER affect the verification verdict.
+    @Optional() private readonly metrics?: MetricsService,
+  ) {
     this.secret = this.config.get<string>('CLOUDPAYMENTS_API_SECRET', '');
     this.allowedIps = CloudPaymentsSignatureGuard.parseAllowedIps(
       this.config.get<string>('CLOUDPAYMENTS_WEBHOOK_IPS', ''),
@@ -57,6 +68,23 @@ export class CloudPaymentsSignatureGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
+    try {
+      return this.verify(context);
+    } catch (err) {
+      // Any rejection (bad IP / missing-or-invalid signature / unconfigured
+      // secret) is a webhook-authenticity failure — bump the counter once before
+      // re-throwing so the verdict is unchanged. The emit is best-effort.
+      try {
+        this.metrics?.webhookSignatureFailed('cloudpayments');
+      } catch {
+        // a metrics blip must never mask the original rejection
+      }
+      throw err;
+    }
+  }
+
+  /** The actual verification (throws on any failure); wrapped by canActivate. */
+  private verify(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<RawBodyRequest>();
 
     // Network-layer pre-filter (optional): reject sources outside the allow-list.

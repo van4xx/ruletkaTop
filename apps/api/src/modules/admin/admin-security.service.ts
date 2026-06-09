@@ -47,6 +47,14 @@ interface BannedFingerprintRow {
   createdAt?: Date;
 }
 
+/** An `auditlogs` row as read for the (login-lockout) events source. */
+interface AuditLogRow {
+  _id: Types.ObjectId;
+  action?: string | null;
+  meta?: { email?: string | null; ip?: string | null; count?: number | null } | null;
+  createdAt?: Date;
+}
+
 /** An internal, pre-serialisation event carrying its real sort timestamp. */
 interface InternalEvent {
   id: string;
@@ -64,12 +72,19 @@ interface InternalEvent {
  * sessions with their client context (ip/ua/device) and a live-session count
  * (neither expired nor revoked). The token hash itself is never read.
  *
- * Events — REAL (WAVE-2): a unified, time-sorted security feed aggregated from
- * existing collections WITHOUT touching any other module. Three real signals:
+ * Events — REAL (WAVE-2 + observability pass): a unified, time-sorted security
+ * feed aggregated from existing collections WITHOUT touching any other module.
+ * Four real signals:
  *  - `user.banned`        — `users` where `isBanned`, by `updatedAt` desc;
  *  - `fingerprint.banned` — `bannedfingerprints` (ban-evasion), by `createdAt`;
  *  - `session.revoked`    — `sessions` where `revokedAt != null` (logout / token
- *                           reuse-detection revocation), by `revokedAt` desc.
+ *                           reuse-detection revocation), by `revokedAt` desc;
+ *  - `auth.login.locked`  — `admin_audit_logs` rows the auth service writes when
+ *                           a failed-login identity crosses the lockout threshold
+ *                           (brute-force / credential-stuffing signal), by
+ *                           `createdAt` desc. The audit collection is read by
+ *                           name (no AuditService import), and the lockout `meta`
+ *                           carries email/ip but no userId, so `userId` is null.
  * Each source is bounded, then merged + sorted newest-first into the contract
  * shape (`{ id, type, userId, detail, createdAt }`).
  */
@@ -128,13 +143,14 @@ export class AdminSecurityService {
    * by name via the shared connection (no cross-module imports).
    */
   async listEvents(): Promise<AdminSecurityEventList> {
-    const [bannedUsers, bannedFps, revokedSessions] = await Promise.all([
+    const [bannedUsers, bannedFps, revokedSessions, loginLockouts] = await Promise.all([
       this.bannedUserEvents(),
       this.bannedFingerprintEvents(),
       this.revokedSessionEvents(),
+      this.loginLockoutEvents(),
     ]);
 
-    const merged = [...bannedUsers, ...bannedFps, ...revokedSessions]
+    const merged = [...bannedUsers, ...bannedFps, ...revokedSessions, ...loginLockouts]
       .sort((a, b) => b.at.getTime() - a.at.getTime())
       .slice(0, EVENT_FEED_LIMIT);
 
@@ -211,6 +227,40 @@ export class AdminSecurityService {
         userId: r.userId ? r.userId.toString() : null,
         detail: `Сессия отозвана${where ? ` — ${where}` : ''}`,
         at: r.revokedAt ?? new Date(0),
+      };
+    });
+  }
+
+  /**
+   * Failed-login LOCKOUTS, sourced from the append-only audit collection
+   * (`admin_audit_logs`) where the auth service stamped `auth.login.locked` after
+   * an identity crossed the brute-force threshold. Read by name via the shared
+   * connection (no AuditService dependency); the `{ action: 1, _id: -1 }` index
+   * on that collection keeps the filtered, time-ordered read cheap. The lockout
+   * `meta` carries email + ip but no userId, so `userId` is null. Newest first.
+   */
+  private async loginLockoutEvents(): Promise<InternalEvent[]> {
+    const rows = (await this.connection
+      .collection('admin_audit_logs')
+      .find(
+        { action: 'auth.login.locked' },
+        { projection: { meta: 1, createdAt: 1 } },
+      )
+      .sort({ _id: -1 })
+      .limit(EVENT_SOURCE_LIMIT)
+      .toArray()) as unknown as AuditLogRow[];
+
+    return rows.map((r) => {
+      const email = r.meta?.email ?? null;
+      const ip = r.meta?.ip ?? null;
+      const where = [email, ip].filter(Boolean).join(' / ');
+      return {
+        id: r._id.toString(),
+        type: 'auth.login.locked',
+        // The lockout is keyed by email+IP, not a user account — no userId.
+        userId: null,
+        detail: `Блокировка входа (брутфорс)${where ? ` — ${where}` : ''}`,
+        at: r.createdAt ?? new Date(0),
       };
     });
   }

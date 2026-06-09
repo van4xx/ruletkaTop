@@ -290,6 +290,16 @@ class PeerConnectionManager {
   bool _hasRemoteDescription = false;
   bool _closed = false;
 
+  /// Perfect-negotiation politeness for ICE-restart glare (mirrors the web
+  /// `apps/web/src/lib/webrtc.ts`). The ANSWERER is `polite`; the INITIATOR is
+  /// impolite. When BOTH peers emit an `iceRestart` offer at once (a two-sided
+  /// drop), the polite peer rolls back its own offer and answers the incoming
+  /// one, while the impolite peer ignores the colliding offer and keeps its own
+  /// — so the renegotiation deterministically converges instead of deadlocking
+  /// on two dangling local offers. With one-sided drops there is no collision
+  /// and this never triggers. Set in [init]; defaults to polite.
+  bool _polite = true;
+
   // Running totals from the previous stats sample, so packet loss can be
   // expressed as a per-interval rate rather than a since-forever cumulative.
   double? _prevPacketsLost;
@@ -298,6 +308,8 @@ class PeerConnectionManager {
   /// Build the underlying connection and (optionally) the chat data channel.
   /// Must be awaited before [createOffer] / [addLocalStream].
   Future<void> init({required bool isInitiator, bool withChat = true}) async {
+    // The answerer is the polite peer; the initiator is impolite (see [_polite]).
+    _polite = !isInitiator;
     final config = <String, dynamic>{
       'iceServers': _iceServers.map((s) => s.toMap()).toList(),
       'sdpSemantics': 'unified-plan',
@@ -525,14 +537,60 @@ class PeerConnectionManager {
     );
   }
 
-  /// Apply a remote SDP description (`offer` | `answer`). Once applied, any ICE
-  /// candidates that arrived early are flushed in order.
-  Future<void> setRemoteDescription(String type, String sdp) async {
+  /// Apply a remote SDP description (`offer` | `answer`). Returns `true` if the
+  /// description was applied, `false` if it was intentionally skipped (a stale
+  /// answer, or an offer the impolite peer ignored during glare). Once applied,
+  /// any ICE candidates that arrived early are flushed in order.
+  ///
+  /// Safe for renegotiation (ICE restart) via perfect negotiation — a faithful
+  /// port of the web `setRemoteDescription`:
+  ///  - A remote OFFER arriving in a clean state (`stable` / `have-remote-offer`)
+  ///    is applied directly.
+  ///  - A remote OFFER that COLLIDES with our own outstanding local offer
+  ///    (`have-local-offer`, i.e. both peers restarted ICE at once) is resolved
+  ///    by politeness: the IMPOLITE peer ignores it (returns `false`, keeping its
+  ///    own offer to be answered), while the POLITE peer rolls its own offer back
+  ///    and applies the incoming one — so the renegotiation converges instead of
+  ///    deadlocking on two dangling offers.
+  ///  - A remote ANSWER is only meaningful while we have a local offer
+  ///    outstanding (`have-local-offer`); an answer in any other state is
+  ///    stale/duplicate and is ignored so a late answer can't tear down an
+  ///    otherwise-healthy call.
+  Future<bool> setRemoteDescription(String type, String sdp) async {
     final pc = _pc;
-    if (pc == null || _closed) return;
+    if (pc == null || _closed) return false;
+
+    // Read the authoritative signaling state (the cached getter can lag during
+    // a glare burst; `getSignalingState()` round-trips to the native PC).
+    final signalingState =
+        (await pc.getSignalingState()) ?? pc.signalingState;
+
+    if (type == 'answer') {
+      // No pending local offer → this answer is stale (e.g. raced a restart).
+      if (signalingState != RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+        return false;
+      }
+    } else if (type == 'offer') {
+      final collision =
+          signalingState == RTCSignalingState.RTCSignalingStateHaveLocalOffer;
+      if (collision) {
+        if (!_polite) {
+          // Impolite peer: ignore the colliding offer; our own offer stands.
+          return false;
+        }
+        // Polite peer: roll our offer back so the remote offer can apply on top.
+        try {
+          await pc.setLocalDescription(RTCSessionDescription(null, 'rollback'));
+        } catch (_) {
+          // Some engines auto-rollback on the next setRemoteDescription(offer).
+        }
+      }
+    }
+
     await pc.setRemoteDescription(RTCSessionDescription(sdp, type));
     _hasRemoteDescription = true;
     await _flushPendingCandidates();
+    return true;
   }
 
   /// Add a remote ICE candidate. If the remote description isn't set yet, the

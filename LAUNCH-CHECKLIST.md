@@ -46,7 +46,7 @@
 2. Merge `polish/web-dark-default` → `main` (carries: dark theme + new logo/preloader + design-system unification + P0/P1 waves 1–2).
 3. Auto-deploy (server-side systemd pull-deploy) → smoke-test each subdomain (web / api / admin).
 4. **DB index migration (one-off, REQUIRED).** Production runs with `autoIndex` OFF, so indexes are reconciled explicitly. On a fresh DB just boot the API once with `RUN_INDEX_SYNC=true` (creates every schema index, then unset it). On an EXISTING DB two index changes are destructive and must be de-duped first or the loud `syncIndexes()` will (correctly) abort boot:
-   - **Payments** — `transactionId` is promoted to `{unique, sparse}`. Find collisions, resolve, then let `RUN_INDEX_SYNC=true` drop+recreate it:
+   - **Payments** — `transactionId` is promoted to a **partial-unique** index `{unique, partialFilterExpression:{transactionId:{$type:"number"}}}` (NOT sparse: `transactionId` defaults to explicit `null`, which sparse would NOT exclude → all null rows would collide on the unique key and abort boot; the partial filter constrains uniqueness to rows that actually carry a numeric provider tx id and leaves every null/unmatched row outside the index). `syncIndexes()` drops the old index and recreates it cleanly in one pass. Still find/resolve any genuine duplicate numeric tx ids first:
      `db.payments.aggregate([{$match:{transactionId:{$ne:null}}},{$group:{_id:"$transactionId",n:{$sum:1}}},{$match:{n:{$gt:1}}}])`
    - **Appeals** — new partial-unique `{userId}` over `status:"pending"`. Resolve any user with two open appeals first:
      `db.moderation_appeals.aggregate([{$match:{status:"pending"}},{$group:{_id:"$userId",n:{$sum:1}}},{$match:{n:{$gt:1}}}])`

@@ -138,10 +138,18 @@ export class MatchmakingService {
     }
 
     const isPremium = await this.safeIsPremium(userId);
+    // Entitlement gate: the gender / country / shared-interest filters are an
+    // ADVERTISED premium perk ("Gender & country filters" in the plan copy). A
+    // non-premium user's request for them is silently coerced to the open
+    // defaults HERE — the single enqueue choke point — BEFORE the entry enters
+    // the pool. Because the stored `filters` are what the matcher tests both
+    // directions against, coercing on enqueue is symmetric (each side already
+    // open) and needs no change in the matcher. Age stays free (not a perk).
+    const effectiveFilters = isPremium ? filters : coerceToFreeFilters(filters);
     const entry: WaiterEntry = {
       userId,
       type,
-      filters,
+      filters: effectiveFilters,
       age: demographics.age,
       gender: demographics.gender,
       // Country comes from the SAME single profile read above — no second
@@ -738,6 +746,28 @@ export class MatchmakingService {
       return false;
     }
   }
+}
+
+/**
+ * Strip the PREMIUM-only matchmaking filters back to their open defaults,
+ * preserving the always-free dimensions (the age window). The advertised premium
+ * perk ("Gender & country filters") plus the premium-described
+ * `sharedInterestsOnly` are reset so a non-premium user's request for them is a
+ * no-op: gender → 'any' (match anyone), countries → [] (no geo restriction),
+ * sharedInterestsOnly → false (interests only prioritise, never gate).
+ *
+ * Applied at the {@link MatchmakingService.enqueue} choke point for non-premium
+ * users only. Symmetric by construction — both sides are coerced the same way
+ * before entering the pool — so the matcher's mutual compatibility check is
+ * unchanged.
+ */
+export function coerceToFreeFilters(filters: MatchFilters): MatchFilters {
+  return {
+    ...filters,
+    gender: 'any',
+    countries: [],
+    sharedInterestsOnly: false,
+  };
 }
 
 /**

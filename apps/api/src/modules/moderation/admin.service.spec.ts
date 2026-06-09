@@ -3,6 +3,7 @@ import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
 import { PAYMENTS_CANCEL_PORT } from '../../common/payments-cancel.port';
+import { MetricsService } from '../../observability/metrics.service';
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { AuditService } from '../admin/audit.service';
 import { AuthService } from '../auth/auth.service';
@@ -27,6 +28,7 @@ describe('AdminService — ban / unban', () => {
   let fingerprintService: { recordForUser: jest.Mock; clearForUser: jest.Mock };
   let redis: { publish: jest.Mock };
   let audit: { log: jest.Mock };
+  let metrics: { banApplied: jest.Mock; banLifted: jest.Mock };
 
   beforeEach(async () => {
     userModel = { findByIdAndUpdate: jest.fn() };
@@ -37,6 +39,7 @@ describe('AdminService — ban / unban', () => {
     };
     redis = { publish: jest.fn().mockResolvedValue(1) };
     audit = { log: jest.fn().mockResolvedValue(undefined) };
+    metrics = { banApplied: jest.fn(), banLifted: jest.fn() };
     // AdminService now also injects the Mongoose Connection (for the banned-users /
     // banned-fingerprints reads + the fingerprint lift). The ban/unban paths under
     // test here never touch it, so a minimal collection stub satisfies DI.
@@ -51,6 +54,7 @@ describe('AdminService — ban / unban', () => {
         { provide: REDIS_CLIENT, useValue: redis },
         { provide: getConnectionToken(), useValue: connection },
         { provide: AuditService, useValue: audit },
+        { provide: MetricsService, useValue: metrics },
       ],
     }).compile();
 
@@ -96,6 +100,17 @@ describe('AdminService — ban / unban', () => {
     const [channel, payload] = redis.publish.mock.calls[0] as [string, string];
     expect(channel).toBe(USER_DISCONNECT_CHANNEL);
     expect(payload).toBe(userId);
+
+    // OBSERVABILITY: the sanction bumps the ban counter exactly once (and never
+    // the unban counter).
+    expect(metrics.banApplied).toHaveBeenCalledTimes(1);
+    expect(metrics.banLifted).not.toHaveBeenCalled();
+  });
+
+  it('OBSERVABILITY: a 404 (unknown user) does NOT bump the ban counter', async () => {
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning(null));
+    await expect(service.banUser(userId)).rejects.toBeInstanceOf(NotFoundException);
+    expect(metrics.banApplied).not.toHaveBeenCalled();
   });
 
   it('ban: still succeeds when the disconnect publish fails (best-effort)', async () => {
@@ -159,6 +174,10 @@ describe('AdminService — ban / unban', () => {
       targetType: 'user',
       targetId: userId,
     });
+
+    // OBSERVABILITY: the lift bumps the unban counter exactly once (never the ban).
+    expect(metrics.banLifted).toHaveBeenCalledTimes(1);
+    expect(metrics.banApplied).not.toHaveBeenCalled();
   });
 
   it('unban: AI-path reversal logs a NULL actor (not an attributed moderator) for both rows', async () => {
