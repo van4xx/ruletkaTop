@@ -4,6 +4,7 @@ import type { Redis } from 'ioredis';
 import { Connection, Model, Types } from 'mongoose';
 
 import { REDIS_CLIENT } from '../../redis/redis.constants';
+import { AuditService } from '../admin/audit.service';
 import { AuthService } from '../auth/auth.service';
 import { FingerprintService } from '../auth/fingerprint.service';
 import { User, UserDocument } from '../users/schemas/user.schema';
@@ -81,6 +82,7 @@ export class AdminService {
     @Inject(forwardRef(() => FingerprintService))
     private readonly fingerprintService: FingerprintService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -99,17 +101,35 @@ export class AdminService {
    * run before any session teardown (the current `revokeAllSessions` only soft-
    * revokes rows, but recording first keeps us correct if that ever hard-deletes).
    */
-  async banUser(userId: string, reason?: string): Promise<BanResult> {
+  async banUser(userId: string, reason?: string, callerId?: string | null): Promise<BanResult> {
     const updated = await this.setBanned(userId, true, reason);
     await this.fingerprintService.recordForUser(userId);
     await this.authService.revokeAllSessions(userId);
     await this.forceDisconnect(userId);
+    // Append the privileged sanction to the audit trail (best-effort; never fails
+    // the ban). `callerId` is the acting moderator for a manual/report/review ban,
+    // or `null` for the AI-escalation path (no human actor).
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'user.ban',
+      targetType: 'user',
+      targetId: userId,
+      meta: { reason: reason ?? null },
+    });
     return { userId: updated._id.toString(), isBanned: updated.isBanned };
   }
 
   /** Unban a user: clear `isBanned`. Sessions are NOT restored (login afresh). */
-  async unbanUser(userId: string): Promise<BanResult> {
+  async unbanUser(userId: string, callerId?: string | null): Promise<BanResult> {
     const updated = await this.setBanned(userId, false);
+    // Best-effort audit row (never fails the unban). `callerId` is the acting
+    // moderator, or `null` for the AI false-positive reversal path (no human actor).
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'user.unban',
+      targetType: 'user',
+      targetId: userId,
+    });
     return { userId: updated._id.toString(), isBanned: updated.isBanned };
   }
 
@@ -231,7 +251,10 @@ export class AdminService {
    * (gated in the controller). 404s an unknown/invalid id so the console can show
    * a precise error rather than silently succeeding on a stale row.
    */
-  async liftFingerprint(id: string): Promise<{ id: string; deleted: true }> {
+  async liftFingerprint(
+    id: string,
+    callerId?: string | null,
+  ): Promise<{ id: string; deleted: true }> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Fingerprint not found');
     }
@@ -241,6 +264,14 @@ export class AdminService {
     if (result.deletedCount === 0) {
       throw new NotFoundException('Fingerprint not found');
     }
+    // Best-effort audit row (never fails the lift). Records which moderator
+    // cleared which ban-evasion fingerprint.
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'fingerprint.lift',
+      targetType: 'fingerprint',
+      targetId: id,
+    });
     return { id, deleted: true };
   }
 

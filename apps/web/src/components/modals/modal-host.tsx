@@ -16,10 +16,43 @@
  * `providers.tsx`).
  */
 import { Suspense, lazy, useCallback, type ComponentType } from 'react';
-import { Dialog, DialogContent, Spinner } from '@ruletka/ui';
+import { useTranslations } from 'next-intl';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  Spinner,
+} from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 import { useModalStore, type ModalType } from '@/lib/stores/modal-store';
 import { useSocketEvent } from '@/features/chat/lib/use-socket';
+
+/**
+ * Suspense fallback for a lazily-loaded modal body.
+ *
+ * `DialogContent` mounts EAGERLY (the moment `open` flips true), but each modal
+ * body is `React.lazy`, so there is a brief window where the dialog is open with
+ * no body yet. Radix Dialog requires a `DialogTitle` inside every `DialogContent`
+ * for screen-reader users and logs a console warning when one is missing — that
+ * window is exactly when the live-QA "DialogContent requires a DialogTitle"
+ * warning fired (most visibly on the larger buy-coins chunk). Rendering a
+ * visually-hidden title + description here satisfies the accessibility contract
+ * for the whole load window; once the body mounts it provides its own visible
+ * title, which Radix happily accepts as a replacement.
+ */
+function ModalLoadingFallback() {
+  const t = useTranslations('chrome');
+  return (
+    <div className="grid place-items-center py-12">
+      <DialogTitle className="sr-only">{t('modals.shared.loadingTitle')}</DialogTitle>
+      <DialogDescription className="sr-only">
+        {t('modals.shared.loadingDescription')}
+      </DialogDescription>
+      <Spinner />
+    </div>
+  );
+}
 
 // ── Code-split modal bodies ──
 const FiltersModal = lazy(() =>
@@ -139,13 +172,7 @@ export function ModalHost() {
           onPointerDownOutside={locked ? (e) => e.preventDefault() : undefined}
           onInteractOutside={locked ? (e) => e.preventDefault() : undefined}
         >
-          <Suspense
-            fallback={
-              <div className="grid place-items-center py-12">
-                <Spinner />
-              </div>
-            }
-          >
+          <Suspense fallback={<ModalLoadingFallback />}>
             <ActiveModal />
           </Suspense>
         </DialogContent>

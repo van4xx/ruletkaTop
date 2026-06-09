@@ -178,17 +178,24 @@ describe('ReviewService — admin review queue', () => {
       expect(adminService.banUser).not.toHaveBeenCalled();
     });
 
-    it('bans the flagged user (with a reason) THEN resolves the item', async () => {
+    it('bans the flagged user (with a reason + moderator id) THEN resolves the item', async () => {
+      const MODERATOR = '507f1f77bcf86cd7994390c0';
       const doc = eventDoc('507f1f77bcf86cd799439012');
       eventModel.findById.mockReturnValue(queryReturning(doc));
       adminService.banUser.mockResolvedValue({ userId: USER, isBanned: true });
 
-      const result = await service.resolveWithBan('507f1f77bcf86cd799439012');
+      const result = await service.resolveWithBan('507f1f77bcf86cd799439012', MODERATOR);
 
       expect(adminService.banUser).toHaveBeenCalledTimes(1);
-      const [bannedId, reason] = adminService.banUser.mock.calls[0] as [string, string];
+      const [bannedId, reason, callerId] = adminService.banUser.mock.calls[0] as [
+        string,
+        string,
+        string,
+      ];
       expect(bannedId).toBe(USER);
       expect(reason).toContain('nudity');
+      // The confirming moderator id is threaded through for the audit trail.
+      expect(callerId).toBe(MODERATOR);
       expect(doc.status).toBe('resolved');
       expect(doc.save).toHaveBeenCalledTimes(1);
       expect(result.item.status).toBe('resolved');

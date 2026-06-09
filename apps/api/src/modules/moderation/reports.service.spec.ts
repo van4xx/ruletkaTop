@@ -223,18 +223,25 @@ describe('ReportsService', () => {
       expect(adminService.banUser).not.toHaveBeenCalled();
     });
 
-    it('bans the reported user (with a reason) THEN resolves the report', async () => {
+    it('bans the reported user (with a reason + moderator id) THEN resolves the report', async () => {
+      const MODERATOR = '507f1f77bcf86cd7994390c0';
       const doc = reportDoc();
       reportModel.findById.mockReturnValue(queryReturning(doc));
       adminService.banUser.mockResolvedValue({ userId: AGAINST, isBanned: true });
 
-      const result = await service.resolveReportWithBan('507f1f77bcf86cd799439013');
+      const result = await service.resolveReportWithBan('507f1f77bcf86cd799439013', MODERATOR);
 
-      // Ban applied to the REPORTED user, with a reason embedding the report id.
+      // Ban applied to the REPORTED user, with a reason embedding the report id,
+      // and the acting moderator id threaded through for the audit trail.
       expect(adminService.banUser).toHaveBeenCalledTimes(1);
-      const [bannedId, reason] = adminService.banUser.mock.calls[0] as [string, string];
+      const [bannedId, reason, callerId] = adminService.banUser.mock.calls[0] as [
+        string,
+        string,
+        string,
+      ];
       expect(bannedId).toBe(AGAINST);
       expect(reason).toContain('report-1');
+      expect(callerId).toBe(MODERATOR);
       // Report flipped to resolved + persisted.
       expect(doc.status).toBe('resolved');
       expect(doc.save).toHaveBeenCalledTimes(1);

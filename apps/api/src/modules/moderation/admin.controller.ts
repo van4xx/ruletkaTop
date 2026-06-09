@@ -20,6 +20,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import type { JwtPayload } from '@ruletka/shared-types';
+
+import { CurrentUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
@@ -62,8 +65,8 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'User id (Mongo ObjectId)' })
   @ApiOkResponse({ description: 'The user ban state after the operation' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
-  async ban(@Param('id') id: string): Promise<BanResult> {
-    return this.adminService.banUser(id);
+  async ban(@Param('id') id: string, @CurrentUser() caller: JwtPayload): Promise<BanResult> {
+    return this.adminService.banUser(id, undefined, caller.sub);
   }
 
   @Post('users/:id/unban')
@@ -72,8 +75,8 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'User id (Mongo ObjectId)' })
   @ApiOkResponse({ description: 'The user ban state after the operation' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
-  async unban(@Param('id') id: string): Promise<BanResult> {
-    return this.adminService.unbanUser(id);
+  async unban(@Param('id') id: string, @CurrentUser() caller: JwtPayload): Promise<BanResult> {
+    return this.adminService.unbanUser(id, caller.sub);
   }
 
   // ── Ban-list reads (moderation console) ──────────────────────────────────────
@@ -122,7 +125,10 @@ export class AdminController {
   @ApiOkResponse({ description: 'The lifted fingerprint id' })
   @ApiNotFoundResponse({ description: 'No such fingerprint row' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async liftFingerprint(@Param('id') id: string): Promise<{ id: string; deleted: true }> {
-    return this.adminService.liftFingerprint(id);
+  async liftFingerprint(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<{ id: string; deleted: true }> {
+    return this.adminService.liftFingerprint(id, caller.sub);
   }
 }

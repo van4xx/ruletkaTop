@@ -127,7 +127,10 @@ export class ReviewService {
    * retry after a transient failure is safe. Reversal stays explicit via
    * `POST /admin/users/:id/unban` so the two actions remain auditable.
    */
-  async resolveWithBan(eventId: string): Promise<ReviewResolvedWithBan> {
+  async resolveWithBan(
+    eventId: string,
+    callerId?: string | null,
+  ): Promise<ReviewResolvedWithBan> {
     if (!Types.ObjectId.isValid(eventId)) {
       throw new NotFoundException('Review item not found');
     }
@@ -136,9 +139,12 @@ export class ReviewService {
       throw new NotFoundException('Review item not found');
     }
 
+    // `callerId` is threaded through to {@link AdminService.banUser} so the audit
+    // trail records the moderator who confirmed the AI flag.
     const ban = await this.adminService.banUser(
       event.userId.toString(),
       `Confirmed AI-flagged violation (${event.label}) #${event._id.toString()}`,
+      callerId,
     );
 
     event.status = 'resolved';

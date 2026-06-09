@@ -216,7 +216,10 @@ export class ReportsService {
    * reason embeds the report id) so the action stays auditable and is reversible
    * via the existing explicit `POST /admin/users/:id/unban`.
    */
-  async resolveReportWithBan(reportId: string): Promise<ResolvedWithBan> {
+  async resolveReportWithBan(
+    reportId: string,
+    callerId?: string | null,
+  ): Promise<ResolvedWithBan> {
     if (!Types.ObjectId.isValid(reportId)) {
       throw new NotFoundException('Report not found');
     }
@@ -227,9 +230,12 @@ export class ReportsService {
 
     const targetUserId = report.againstUserId.toString();
     // Apply the sanction first so a resolved report always implies a real ban.
+    // `callerId` is threaded through to {@link AdminService.banUser} so the audit
+    // trail records the moderator who upheld the report.
     const ban = await this.adminService.banUser(
       targetUserId,
       `Upheld abuse report (${report.reason}) #${report._id.toString()}`,
+      callerId,
     );
 
     report.status = 'resolved';

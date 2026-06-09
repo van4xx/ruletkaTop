@@ -20,5 +20,17 @@ export default getRequestConfig(async () => {
   return {
     locale,
     messages: await loadMessages(locale),
+    // Pin a single timestamp + an explicit time zone PER REQUEST so date
+    // formatting (notably `useFormatter().relativeTime` / `format.relativeTime`
+    // in the settings → devices "active sessions" list) resolves from this
+    // shared config instead of next-intl's per-render ENVIRONMENT_FALLBACK
+    // (which logs a dev warning and risks server/client hydration drift).
+    //
+    // `now` is captured once here so every formatter in the request shares the
+    // same reference point — this is exactly next-intl's "global now" contract,
+    // now made explicit rather than implicit. `timeZone` is fixed to Moscow,
+    // matching the Russian-first product (no per-user TZ preference is stored).
+    now: new Date(),
+    timeZone: 'Europe/Moscow',
   };
 });

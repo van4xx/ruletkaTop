@@ -9,6 +9,8 @@ import { Connection, Types } from 'mongoose';
 
 import type { AdminTransaction, EconomyOverview, Rarity } from '@ruletka/shared-types';
 
+import { AuditService } from '../admin/audit.service';
+
 /**
  * A raw aggregation pipeline as the NATIVE MongoDB driver consumes it (plain
  * stage objects via `connection.collection(name).aggregate`), mirroring
@@ -193,7 +195,10 @@ export interface AdminTopPlacementRow {
  */
 @Injectable()
 export class AdminEconomyService {
-  constructor(@InjectConnection() private readonly connection: Connection) {}
+  constructor(
+    @InjectConnection() private readonly connection: Connection,
+    private readonly auditService: AuditService,
+  ) {}
 
   /** Build the full {@link EconomyOverview}. */
   async getOverview(): Promise<EconomyOverview> {
@@ -295,7 +300,10 @@ export class AdminEconomyService {
   }
 
   /** Create a coin package. 409 on duplicate `code`. */
-  async createCoinPackage(dto: CreateCoinPackageDto): Promise<AdminCoinPackageRow> {
+  async createCoinPackage(
+    dto: CreateCoinPackageDto,
+    callerId?: string | null,
+  ): Promise<AdminCoinPackageRow> {
     const code = this.requireCode(dto.code);
     const coins = this.requireInt(dto.coins, 'coins', 1);
     const priceRub = this.requireInt(dto.priceRub, 'priceRub', 1);
@@ -309,11 +317,23 @@ export class AdminEconomyService {
     const now = new Date();
     const doc = { code, coins, priceRub, bonusCoins, createdAt: now, updatedAt: now };
     const { insertedId } = await coll.insertOne(doc);
-    return this.toCoinPackageRow({ _id: insertedId, ...doc });
+    const row = this.toCoinPackageRow({ _id: insertedId, ...doc });
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.coin_package.create',
+      targetType: 'coin_package',
+      targetId: row.id,
+      meta: { code, coins, priceRub, bonusCoins },
+    });
+    return row;
   }
 
   /** Patch a coin package (price/coins/bonus). `code` is immutable. 404 if absent. */
-  async updateCoinPackage(id: string, dto: UpdateCoinPackageDto): Promise<AdminCoinPackageRow> {
+  async updateCoinPackage(
+    id: string,
+    dto: UpdateCoinPackageDto,
+    callerId?: string | null,
+  ): Promise<AdminCoinPackageRow> {
     const _id = this.requireObjectId(id, 'Coin package not found');
     const set: Record<string, number | Date> = {};
     if (dto.coins !== undefined) set.coins = this.requireInt(dto.coins, 'coins', 1);
@@ -333,14 +353,28 @@ export class AdminEconomyService {
     );
     const doc = this.unwrapFindAndModify(updated);
     if (!doc) throw new NotFoundException('Coin package not found');
-    return this.toCoinPackageRow(doc);
+    const row = this.toCoinPackageRow(doc);
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.coin_package.update',
+      targetType: 'coin_package',
+      targetId: row.id,
+      meta: { code: row.code, coins: row.coins, priceRub: row.priceRub, bonusCoins: row.bonusCoins },
+    });
+    return row;
   }
 
   /** Delete a coin package by id. 404 if absent. */
-  async deleteCoinPackage(id: string): Promise<{ id: string }> {
+  async deleteCoinPackage(id: string, callerId?: string | null): Promise<{ id: string }> {
     const _id = this.requireObjectId(id, 'Coin package not found');
     const { deletedCount } = await this.connection.collection('coinpackages').deleteOne({ _id });
     if (!deletedCount) throw new NotFoundException('Coin package not found');
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.coin_package.delete',
+      targetType: 'coin_package',
+      targetId: id,
+    });
     return { id };
   }
 
@@ -359,7 +393,7 @@ export class AdminEconomyService {
   }
 
   /** Create a gift. 409 on duplicate `code`. */
-  async createGift(dto: CreateGiftDto): Promise<AdminGiftRow> {
+  async createGift(dto: CreateGiftDto, callerId?: string | null): Promise<AdminGiftRow> {
     const code = this.requireCode(dto.code);
     const title = this.requireString(dto.title, 'title', 64);
     const animationUrl = this.requireString(dto.animationUrl, 'animationUrl', 512);
@@ -383,11 +417,23 @@ export class AdminEconomyService {
       updatedAt: now,
     };
     const { insertedId } = await coll.insertOne(doc);
-    return this.toGiftRow({ _id: insertedId, ...doc });
+    const row = this.toGiftRow({ _id: insertedId, ...doc });
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.gift.create',
+      targetType: 'gift',
+      targetId: row.id,
+      meta: { code, title, priceCoins, rarity, isPremiumOnly },
+    });
+    return row;
   }
 
   /** Patch a gift. `code` is immutable. 404 if absent. */
-  async updateGift(id: string, dto: UpdateGiftDto): Promise<AdminGiftRow> {
+  async updateGift(
+    id: string,
+    dto: UpdateGiftDto,
+    callerId?: string | null,
+  ): Promise<AdminGiftRow> {
     const _id = this.requireObjectId(id, 'Gift not found');
     const set: Record<string, string | number | boolean | Date> = {};
     if (dto.title !== undefined) set.title = this.requireString(dto.title, 'title', 64);
@@ -408,7 +454,21 @@ export class AdminEconomyService {
       .findOneAndUpdate({ _id }, { $set: set }, { returnDocument: 'after' });
     const doc = this.unwrapFindAndModify(updated);
     if (!doc) throw new NotFoundException('Gift not found');
-    return this.toGiftRow(doc);
+    const row = this.toGiftRow(doc);
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.gift.update',
+      targetType: 'gift',
+      targetId: row.id,
+      meta: {
+        code: row.code,
+        title: row.title,
+        priceCoins: row.priceCoins,
+        rarity: row.rarity,
+        isPremiumOnly: row.isPremiumOnly,
+      },
+    });
+    return row;
   }
 
   /**
@@ -416,10 +476,16 @@ export class AdminEconomyService {
    * `priceCoins` and references `giftId` only for the received-gifts history, so
    * removing a catalogue row never breaks a past send.
    */
-  async deleteGift(id: string): Promise<{ id: string }> {
+  async deleteGift(id: string, callerId?: string | null): Promise<{ id: string }> {
     const _id = this.requireObjectId(id, 'Gift not found');
     const { deletedCount } = await this.connection.collection('gifts').deleteOne({ _id });
     if (!deletedCount) throw new NotFoundException('Gift not found');
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.gift.delete',
+      targetType: 'gift',
+      targetId: id,
+    });
     return { id };
   }
 
@@ -444,7 +510,10 @@ export class AdminEconomyService {
   }
 
   /** Create a premium plan. 409 on duplicate `code`. */
-  async createPremiumPlan(dto: CreatePremiumPlanDto): Promise<AdminPremiumPlanRow> {
+  async createPremiumPlan(
+    dto: CreatePremiumPlanDto,
+    callerId?: string | null,
+  ): Promise<AdminPremiumPlanRow> {
     const code = this.requireCode(dto.code);
     const title = this.requireString(dto.title, 'title', 64);
     const priceRub = this.requireInt(dto.priceRub, 'priceRub', 1);
@@ -458,14 +527,26 @@ export class AdminEconomyService {
     const now = new Date();
     const doc = { code, title, priceRub, intervalDays, perks, createdAt: now, updatedAt: now };
     const { insertedId } = await coll.insertOne(doc);
-    return this.toPremiumPlanRow({ _id: insertedId, ...doc });
+    const row = this.toPremiumPlanRow({ _id: insertedId, ...doc });
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.premium_plan.create',
+      targetType: 'premium_plan',
+      targetId: row.id,
+      meta: { code, title, priceRub, intervalDays },
+    });
+    return row;
   }
 
   /**
    * Patch a premium plan (title/price/interval/perks). `code` is immutable (the
    * stable public id the subscribe flow resolves a plan by). 404 if absent.
    */
-  async updatePremiumPlan(id: string, dto: UpdatePremiumPlanDto): Promise<AdminPremiumPlanRow> {
+  async updatePremiumPlan(
+    id: string,
+    dto: UpdatePremiumPlanDto,
+    callerId?: string | null,
+  ): Promise<AdminPremiumPlanRow> {
     const _id = this.requireObjectId(id, 'Premium plan not found');
     const set: Record<string, string | number | string[] | Date> = {};
     if (dto.title !== undefined) set.title = this.requireString(dto.title, 'title', 64);
@@ -483,7 +564,20 @@ export class AdminEconomyService {
       .findOneAndUpdate({ _id }, { $set: set }, { returnDocument: 'after' });
     const doc = this.unwrapFindAndModify(updated);
     if (!doc) throw new NotFoundException('Premium plan not found');
-    return this.toPremiumPlanRow(doc);
+    const row = this.toPremiumPlanRow(doc);
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.premium_plan.update',
+      targetType: 'premium_plan',
+      targetId: row.id,
+      meta: {
+        code: row.code,
+        title: row.title,
+        priceRub: row.priceRub,
+        intervalDays: row.intervalDays,
+      },
+    });
+    return row;
   }
 
   /**
@@ -491,10 +585,16 @@ export class AdminEconomyService {
    * their denormalised `plan` code and entitlement window, so removing a
    * catalogue row only pulls the tier from the pricing page going forward.
    */
-  async deletePremiumPlan(id: string): Promise<{ id: string }> {
+  async deletePremiumPlan(id: string, callerId?: string | null): Promise<{ id: string }> {
     const _id = this.requireObjectId(id, 'Premium plan not found');
     const { deletedCount } = await this.connection.collection('premiumplans').deleteOne({ _id });
     if (!deletedCount) throw new NotFoundException('Premium plan not found');
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.premium_plan.delete',
+      targetType: 'premium_plan',
+      targetId: id,
+    });
     return { id };
   }
 
@@ -549,10 +649,27 @@ export class AdminEconomyService {
   }
 
   /** Remove (take down) one top placement by id. 404 if absent. */
-  async removeTopPlacement(id: string): Promise<{ id: string }> {
+  async removeTopPlacement(id: string, callerId?: string | null): Promise<{ id: string }> {
     const _id = this.requireObjectId(id, 'Placement not found');
-    const { deletedCount } = await this.connection.collection('topplacements').deleteOne({ _id });
+    const coll = this.connection.collection('topplacements');
+    // Read the placement BEFORE the delete so the audit trail records WHOSE paid
+    // placement was taken down (the row's userId + coinsSpent are gone afterward).
+    const placement = (await coll.findOne(
+      { _id },
+      { projection: { userId: 1, coinsSpent: 1 } },
+    )) as { userId?: Types.ObjectId; coinsSpent?: number } | null;
+    const { deletedCount } = await coll.deleteOne({ _id });
     if (!deletedCount) throw new NotFoundException('Placement not found');
+    await this.auditService.log({
+      actorId: callerId ?? null,
+      action: 'economy.top.remove',
+      targetType: 'top_placement',
+      targetId: id,
+      meta: {
+        userId: placement?.userId ? placement.userId.toString() : null,
+        coinsSpent: typeof placement?.coinsSpent === 'number' ? placement.coinsSpent : null,
+      },
+    });
     return { id };
   }
 

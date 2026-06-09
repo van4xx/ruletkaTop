@@ -22,8 +22,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import type { EconomyOverview } from '@ruletka/shared-types';
+import type { EconomyOverview, JwtPayload } from '@ruletka/shared-types';
 
+import { CurrentUser } from '../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { Roles } from '../../common/roles.decorator';
 import { RolesGuard } from '../../common/roles.guard';
@@ -90,8 +91,11 @@ export class AdminEconomyController {
   @ApiBadRequestResponse({ description: 'Invalid body' })
   @ApiConflictResponse({ description: 'A package with that code already exists' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async createCoinPackage(@Body() body: CreateCoinPackageDto): Promise<AdminCoinPackageRow> {
-    return this.adminEconomyService.createCoinPackage(body);
+  async createCoinPackage(
+    @Body() body: CreateCoinPackageDto,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<AdminCoinPackageRow> {
+    return this.adminEconomyService.createCoinPackage(body, caller.sub);
   }
 
   @Patch('coin-packages/:id')
@@ -105,8 +109,9 @@ export class AdminEconomyController {
   async updateCoinPackage(
     @Param('id') id: string,
     @Body() body: UpdateCoinPackageDto,
+    @CurrentUser() caller: JwtPayload,
   ): Promise<AdminCoinPackageRow> {
-    return this.adminEconomyService.updateCoinPackage(id, body);
+    return this.adminEconomyService.updateCoinPackage(id, body, caller.sub);
   }
 
   @Delete('coin-packages/:id')
@@ -116,8 +121,11 @@ export class AdminEconomyController {
   @ApiOkResponse({ description: 'The deleted package id' })
   @ApiNotFoundResponse({ description: 'No such package' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async deleteCoinPackage(@Param('id') id: string): Promise<{ id: string }> {
-    return this.adminEconomyService.deleteCoinPackage(id);
+  async deleteCoinPackage(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<{ id: string }> {
+    return this.adminEconomyService.deleteCoinPackage(id, caller.sub);
   }
 
   // ── Gifts (`gifts`) ───────────────────────────────────────────────────────
@@ -137,8 +145,11 @@ export class AdminEconomyController {
   @ApiBadRequestResponse({ description: 'Invalid body' })
   @ApiConflictResponse({ description: 'A gift with that code already exists' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async createGift(@Body() body: CreateGiftDto): Promise<AdminGiftRow> {
-    return this.adminEconomyService.createGift(body);
+  async createGift(
+    @Body() body: CreateGiftDto,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<AdminGiftRow> {
+    return this.adminEconomyService.createGift(body, caller.sub);
   }
 
   @Patch('gifts/:id')
@@ -149,8 +160,12 @@ export class AdminEconomyController {
   @ApiBadRequestResponse({ description: 'Invalid body' })
   @ApiNotFoundResponse({ description: 'No such gift' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async updateGift(@Param('id') id: string, @Body() body: UpdateGiftDto): Promise<AdminGiftRow> {
-    return this.adminEconomyService.updateGift(id, body);
+  async updateGift(
+    @Param('id') id: string,
+    @Body() body: UpdateGiftDto,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<AdminGiftRow> {
+    return this.adminEconomyService.updateGift(id, body, caller.sub);
   }
 
   @Delete('gifts/:id')
@@ -162,8 +177,11 @@ export class AdminEconomyController {
   @ApiOkResponse({ description: 'The deleted gift id' })
   @ApiNotFoundResponse({ description: 'No such gift' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async deleteGift(@Param('id') id: string): Promise<{ id: string }> {
-    return this.adminEconomyService.deleteGift(id);
+  async deleteGift(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<{ id: string }> {
+    return this.adminEconomyService.deleteGift(id, caller.sub);
   }
 
   // ── Premium plans (`premiumplans`) ────────────────────────────────────────
@@ -183,8 +201,11 @@ export class AdminEconomyController {
   @ApiBadRequestResponse({ description: 'Invalid body' })
   @ApiConflictResponse({ description: 'A plan with that code already exists' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async createPremiumPlan(@Body() body: CreatePremiumPlanDto): Promise<AdminPremiumPlanRow> {
-    return this.adminEconomyService.createPremiumPlan(body);
+  async createPremiumPlan(
+    @Body() body: CreatePremiumPlanDto,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<AdminPremiumPlanRow> {
+    return this.adminEconomyService.createPremiumPlan(body, caller.sub);
   }
 
   @Patch('premium-plans/:id')
@@ -198,8 +219,9 @@ export class AdminEconomyController {
   async updatePremiumPlan(
     @Param('id') id: string,
     @Body() body: UpdatePremiumPlanDto,
+    @CurrentUser() caller: JwtPayload,
   ): Promise<AdminPremiumPlanRow> {
-    return this.adminEconomyService.updatePremiumPlan(id, body);
+    return this.adminEconomyService.updatePremiumPlan(id, body, caller.sub);
   }
 
   @Delete('premium-plans/:id')
@@ -211,8 +233,11 @@ export class AdminEconomyController {
   @ApiOkResponse({ description: 'The deleted plan id' })
   @ApiNotFoundResponse({ description: 'No such plan' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async deletePremiumPlan(@Param('id') id: string): Promise<{ id: string }> {
-    return this.adminEconomyService.deletePremiumPlan(id);
+  async deletePremiumPlan(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<{ id: string }> {
+    return this.adminEconomyService.deletePremiumPlan(id, caller.sub);
   }
 
   // ── Top placements (`topplacements`) ──────────────────────────────────────
@@ -235,7 +260,10 @@ export class AdminEconomyController {
   @ApiOkResponse({ description: 'The removed placement id' })
   @ApiNotFoundResponse({ description: 'No such placement' })
   @ApiForbiddenResponse({ description: 'Caller is not an admin' })
-  async removeTopPlacement(@Param('id') id: string): Promise<{ id: string }> {
-    return this.adminEconomyService.removeTopPlacement(id);
+  async removeTopPlacement(
+    @Param('id') id: string,
+    @CurrentUser() caller: JwtPayload,
+  ): Promise<{ id: string }> {
+    return this.adminEconomyService.removeTopPlacement(id, caller.sub);
   }
 }

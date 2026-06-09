@@ -1,4 +1,5 @@
 import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -53,6 +54,7 @@ export class HealthController {
   constructor(
     @InjectConnection() private readonly mongoConnection: Connection,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly config: ConfigService,
   ) {}
 
   @Get()
@@ -115,8 +117,22 @@ export class HealthController {
     }) as Promise<T>;
   }
 
-  /** Normalise a check failure into a short, safe `detail` string. */
+  /**
+   * Normalise a check failure into a short, safe `detail` string.
+   *
+   * `/health` is reachable UNAUTHENTICATED (external uptime monitors probe it),
+   * so the verbatim driver error — which can carry Mongo/Redis topology,
+   * hostnames, and IPs — must NOT leak to the public in production. We keep the
+   * `timeout` sentinel (raised by {@link withTimeout}, not infra-revealing) and
+   * the full message in non-prod for local debugging, but collapse any other
+   * failure to a generic `unreachable` once `NODE_ENV=production`.
+   */
   private failureDetail(err: unknown): string {
-    return err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === TIMEOUT_REASON) {
+      return message;
+    }
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    return isProd ? 'unreachable' : message;
   }
 }

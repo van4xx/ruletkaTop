@@ -1,4 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
 import type { Connection } from 'mongoose';
 import type { Redis } from 'ioredis';
 import type { Response } from 'express';
@@ -40,6 +41,15 @@ function makeRedis(pingImpl: () => Promise<string>): Redis {
   return { ping: pingImpl } as unknown as Redis;
 }
 
+/**
+ * A ConfigService double whose `get('NODE_ENV')` returns the supplied env.
+ * Defaults to a non-production env so the existing checks keep seeing the full
+ * (debuggable) failure detail; the redaction test flips it to `production`.
+ */
+function makeConfig(nodeEnv = 'test'): ConfigService {
+  return { get: (key: string) => (key === 'NODE_ENV' ? nodeEnv : undefined) } as unknown as ConfigService;
+}
+
 describe('HealthController', () => {
   afterEach(() => {
     jest.useRealTimers();
@@ -49,6 +59,7 @@ describe('HealthController', () => {
     const controller = new HealthController(
       makeMongo(async () => ({ ok: 1 })),
       makeRedis(async () => 'PONG'),
+      makeConfig(),
     );
     const res = makeRes();
 
@@ -66,6 +77,7 @@ describe('HealthController', () => {
     const controller = new HealthController(
       makeMongo(() => new Promise(() => undefined)),
       makeRedis(async () => 'PONG'),
+      makeConfig(),
     );
     const res = makeRes();
 
@@ -86,6 +98,7 @@ describe('HealthController', () => {
     const controller = new HealthController(
       makeMongo(async () => ({ ok: 1 })),
       makeRedis(() => new Promise<string>(() => undefined)),
+      makeConfig(),
     );
     const res = makeRes();
 
@@ -103,6 +116,7 @@ describe('HealthController', () => {
         throw new Error('not primary');
       }),
       makeRedis(async () => 'PONG'),
+      makeConfig(),
     );
     const res = makeRes();
 
@@ -112,9 +126,49 @@ describe('HealthController', () => {
     expect(body.dependencies.mongo).toEqual({ status: 'down', detail: 'not primary' });
   });
 
+  it('REDACTS the raw driver error to a generic "unreachable" in production (no infra leak)', async () => {
+    // `/health` is unauthenticated; a verbatim driver message could leak Mongo/
+    // Redis topology, hostnames, and IPs. In production every non-timeout
+    // failure must collapse to a generic string.
+    const controller = new HealthController(
+      makeMongo(async () => {
+        throw new Error('failed to connect to server [mongo-primary.internal:27017]');
+      }),
+      makeRedis(async () => {
+        throw new Error('Redis connection to 10.0.3.7:6379 failed - ECONNREFUSED');
+      }),
+      makeConfig('production'),
+    );
+    const res = makeRes();
+
+    const body = await controller.check(res);
+
+    expect(res.statusCode).toBe(HttpStatus.SERVICE_UNAVAILABLE);
+    // Neither the verbatim message, host, nor IP must appear — only 'unreachable'.
+    expect(body.dependencies.mongo).toEqual({ status: 'down', detail: 'unreachable' });
+    expect(body.dependencies.redis).toEqual({ status: 'down', detail: 'unreachable' });
+  });
+
+  it('still surfaces the "timeout" sentinel (not infra-revealing) even in production', async () => {
+    jest.useFakeTimers();
+    const controller = new HealthController(
+      makeMongo(() => new Promise(() => undefined)),
+      makeRedis(async () => 'PONG'),
+      makeConfig('production'),
+    );
+    const res = makeRes();
+
+    const pending = controller.check(res);
+    await jest.advanceTimersByTimeAsync(2_000);
+    const body = await pending;
+
+    // The redaction keeps the timeout branch intact (it carries no host/IP).
+    expect(body.dependencies.mongo).toEqual({ status: 'down', detail: 'timeout' });
+  });
+
   it('reports Mongo down when the connection is not in the connected state', async () => {
     const mongo = { readyState: 0, db: undefined } as unknown as Connection;
-    const controller = new HealthController(mongo, makeRedis(async () => 'PONG'));
+    const controller = new HealthController(mongo, makeRedis(async () => 'PONG'), makeConfig());
     const res = makeRes();
 
     const body = await controller.check(res);

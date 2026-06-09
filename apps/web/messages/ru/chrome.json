@@ -77,7 +77,9 @@
       "balance": "Баланс",
       "premiumGateTitle": "Только для премиум",
       "premiumGateDescription": "Эта возможность доступна премиум-участникам.",
-      "premiumGateCta": "Подключить премиум"
+      "premiumGateCta": "Подключить премиум",
+      "loadingTitle": "Загрузка диалога",
+      "loadingDescription": "Подождите, идёт загрузка содержимого."
     },
     "giftPicker": {
       "titleConfirm": "Подтвердите подарок",

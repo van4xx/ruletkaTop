@@ -136,8 +136,11 @@ export class ModerationController {
   @ApiParam({ name: 'id', description: 'Moderation event id (Mongo ObjectId)' })
   @ApiOkResponse({ description: 'The resolved review item + the applied ban' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
-  async resolveReviewWithBan(@Param('id') id: string): Promise<ResolvedReviewWithBan> {
-    return this.reviewService.resolveWithBan(id);
+  async resolveReviewWithBan(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResolvedReviewWithBan> {
+    return this.reviewService.resolveWithBan(id, user.sub);
   }
 
   // ── Moderator triage (role-guarded) ─────────────────────────────────────────
@@ -199,8 +202,11 @@ export class ModerationController {
   @ApiParam({ name: 'id', description: 'Report id (Mongo ObjectId)' })
   @ApiOkResponse({ description: 'The resolved report + the applied ban' })
   @ApiForbiddenResponse({ description: 'Caller is not a moderator/admin' })
-  async resolveReportWithBan(@Param('id') id: string): Promise<ResolvedWithBan> {
-    return this.reportsService.resolveReportWithBan(id);
+  async resolveReportWithBan(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<ResolvedWithBan> {
+    return this.reportsService.resolveReportWithBan(id, user.sub);
   }
 
   // ── User surface ─────────────────────────────────────────────────────────────

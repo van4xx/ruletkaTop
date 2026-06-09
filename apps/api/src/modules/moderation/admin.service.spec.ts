@@ -3,6 +3,7 @@ import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 
 import { REDIS_CLIENT } from '../../redis/redis.constants';
+import { AuditService } from '../admin/audit.service';
 import { AuthService } from '../auth/auth.service';
 import { FingerprintService } from '../auth/fingerprint.service';
 import { User } from '../users/schemas/user.schema';
@@ -17,17 +18,21 @@ function queryReturning(result: unknown): { exec: jest.Mock } {
 describe('AdminService — ban / unban', () => {
   const userId = '507f1f77bcf86cd799439011';
 
+  const ADMIN = '507f1f77bcf86cd7994390c0';
+
   let service: AdminService;
   let userModel: { findByIdAndUpdate: jest.Mock };
   let authService: { revokeAllSessions: jest.Mock };
   let fingerprintService: { recordForUser: jest.Mock };
   let redis: { publish: jest.Mock };
+  let audit: { log: jest.Mock };
 
   beforeEach(async () => {
     userModel = { findByIdAndUpdate: jest.fn() };
     authService = { revokeAllSessions: jest.fn().mockResolvedValue(undefined) };
     fingerprintService = { recordForUser: jest.fn().mockResolvedValue(undefined) };
     redis = { publish: jest.fn().mockResolvedValue(1) };
+    audit = { log: jest.fn().mockResolvedValue(undefined) };
     // AdminService now also injects the Mongoose Connection (for the banned-users /
     // banned-fingerprints reads + the fingerprint lift). The ban/unban paths under
     // test here never touch it, so a minimal collection stub satisfies DI.
@@ -41,6 +46,7 @@ describe('AdminService — ban / unban', () => {
         { provide: FingerprintService, useValue: fingerprintService },
         { provide: REDIS_CLIENT, useValue: redis },
         { provide: getConnectionToken(), useValue: connection },
+        { provide: AuditService, useValue: audit },
       ],
     }).compile();
 
@@ -50,9 +56,19 @@ describe('AdminService — ban / unban', () => {
   it('ban: sets isBanned=true, revokes ALL sessions, and publishes a socket disconnect', async () => {
     userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: true }));
 
-    const result = await service.banUser(userId);
+    const result = await service.banUser(userId, undefined, ADMIN);
 
     expect(result).toEqual({ userId, isBanned: true });
+
+    // The privileged ban is recorded with the acting moderator + the reason.
+    expect(audit.log).toHaveBeenCalledTimes(1);
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'user.ban',
+      targetType: 'user',
+      targetId: userId,
+      meta: { reason: null },
+    });
 
     // The update flips isBanned to true.
     const [, update] = userModel.findByIdAndUpdate.mock.calls[0] as [
@@ -108,7 +124,7 @@ describe('AdminService — ban / unban', () => {
   it('unban: clears isBanned + banReason and does NOT revoke sessions or publish', async () => {
     userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: false }));
 
-    const result = await service.unbanUser(userId);
+    const result = await service.unbanUser(userId, ADMIN);
 
     expect(result).toEqual({ userId, isBanned: false });
     const [, update] = userModel.findByIdAndUpdate.mock.calls[0] as [
@@ -119,6 +135,45 @@ describe('AdminService — ban / unban', () => {
     expect(update).toEqual({ $set: { isBanned: false, banReason: null } });
     expect(authService.revokeAllSessions).not.toHaveBeenCalled();
     expect(redis.publish).not.toHaveBeenCalled();
+
+    // The unban is recorded against the acting moderator.
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'user.unban',
+      targetType: 'user',
+      targetId: userId,
+    });
+  });
+
+  it('ban: records the supplied reason + a null actor on the AI-escalation path', async () => {
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: true }));
+
+    // No callerId → the AI-escalation (no human) path. `meta.reason` reflects the
+    // supplied reason; `actorId` is null (AuditService tolerates a null actor).
+    await service.banUser(userId, 'Confirmed AI-flagged violation (nudity)');
+
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: null,
+      action: 'user.ban',
+      targetType: 'user',
+      targetId: userId,
+      meta: { reason: 'Confirmed AI-flagged violation (nudity)' },
+    });
+  });
+
+  it('ban: the audit row is best-effort — a storage failure inside AuditService never fails the ban', async () => {
+    userModel.findByIdAndUpdate.mockReturnValue(queryReturning({ _id: userId, isBanned: true }));
+    // The real {@link AuditService.log} wraps its write in a try/catch and ALWAYS
+    // resolves (swallowing storage errors), so the privileged action it records
+    // can never be broken by a logging failure. Mirror that contract here: the
+    // ban completes and the row is attempted, exactly like admin-users.service's
+    // privileged-action logging.
+    await expect(service.banUser(userId, undefined, ADMIN)).resolves.toEqual({
+      userId,
+      isBanned: true,
+    });
+    expect(authService.revokeAllSessions).toHaveBeenCalledWith(userId);
+    expect(audit.log).toHaveBeenCalledTimes(1);
   });
 
   it('ban: persists a banReason when one is supplied', async () => {
@@ -144,5 +199,57 @@ describe('AdminService — ban / unban', () => {
       Record<string, unknown>,
     ];
     expect(update).toEqual({ $set: { isBanned: true } });
+  });
+});
+
+describe('AdminService — liftFingerprint audit trail', () => {
+  const FP_ID = '507f1f77bcf86cd799439021';
+  const ADMIN = '507f1f77bcf86cd7994390c0';
+
+  /** Build the service with a `bannedfingerprints` collection that deletes `n` rows. */
+  async function buildService(deletedCount: number): Promise<{
+    service: AdminService;
+    audit: { log: jest.Mock };
+    deleteOne: jest.Mock;
+  }> {
+    const audit = { log: jest.fn().mockResolvedValue(undefined) };
+    const deleteOne = jest.fn().mockResolvedValue({ deletedCount });
+    const connection = { collection: jest.fn(() => ({ deleteOne })) };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AdminService,
+        { provide: getModelToken(User.name), useValue: { findByIdAndUpdate: jest.fn() } },
+        { provide: AuthService, useValue: { revokeAllSessions: jest.fn() } },
+        { provide: FingerprintService, useValue: { recordForUser: jest.fn() } },
+        { provide: REDIS_CLIENT, useValue: { publish: jest.fn() } },
+        { provide: getConnectionToken(), useValue: connection },
+        { provide: AuditService, useValue: audit },
+      ],
+    }).compile();
+
+    return { service: moduleRef.get(AdminService), audit, deleteOne };
+  }
+
+  it('lifts a fingerprint then records `fingerprint.lift` with the acting moderator', async () => {
+    const { service, audit, deleteOne } = await buildService(1);
+
+    const result = await service.liftFingerprint(FP_ID, ADMIN);
+
+    expect(result).toEqual({ id: FP_ID, deleted: true });
+    expect(deleteOne).toHaveBeenCalledTimes(1);
+    expect(audit.log).toHaveBeenCalledWith({
+      actorId: ADMIN,
+      action: 'fingerprint.lift',
+      targetType: 'fingerprint',
+      targetId: FP_ID,
+    });
+  });
+
+  it('404s an unknown fingerprint WITHOUT writing an audit row', async () => {
+    const { service, audit } = await buildService(0);
+
+    await expect(service.liftFingerprint(FP_ID, ADMIN)).rejects.toBeInstanceOf(NotFoundException);
+    expect(audit.log).not.toHaveBeenCalled();
   });
 });

@@ -115,10 +115,30 @@ export class RedisIoAdapter extends IoAdapter {
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0);
 
+    // Mirror the HTTP CORS policy (see main.ts): `credentials: true` must NEVER
+    // pair with a reflect-any-origin policy. With an explicit allow-list we use
+    // it; with an EMPTY list we fail CLOSED in production (origin:false — no
+    // cross-origin socket handshake) rather than reflecting any origin with
+    // credentials, and only reflect (origin:true) outside production for local
+    // dev convenience.
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    let origin: string[] | boolean;
+    if (corsOrigins.length > 0) {
+      origin = corsOrigins;
+    } else if (isProd) {
+      this.logger.warn(
+        'CORS_ORIGINS is empty in production; cross-origin socket access is disabled. ' +
+          'Set CORS_ORIGINS to the web app origin(s) to enable the browser client.',
+      );
+      origin = false;
+    } else {
+      origin = true;
+    }
+
     const server: AppIoServer = super.createIOServer(port, {
       ...options,
       cors: {
-        origin: corsOrigins.length > 0 ? corsOrigins : true,
+        origin,
         credentials: true,
       },
     });

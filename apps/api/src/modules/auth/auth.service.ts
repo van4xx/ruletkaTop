@@ -1037,8 +1037,15 @@ export class AuthService {
   /**
    * Begin a password reset. ALWAYS resolves without revealing whether the email
    * exists (anti-enumeration): if an active account is found we mint a 1h
-   * single-use reset token and send the email (best-effort); otherwise we do
-   * nothing. The controller returns 204 regardless.
+   * single-use reset token and send the email; otherwise we do nothing. The
+   * controller returns 204 regardless.
+   *
+   * The mint + SMTP send for a KNOWN account are dispatched FIRE-AND-FORGET (not
+   * awaited) so the method resolves on the SAME code path for both branches —
+   * otherwise the extra two Mongo writes + SMTP round-trip would make the
+   * known-email response measurably slower, turning latency into an account-
+   * existence oracle (timing side-channel). The legitimate reset email is still
+   * sent in the background; failures are logged best-effort and never surface.
    */
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email.toLowerCase());
@@ -1046,13 +1053,21 @@ export class AuthService {
     if (!user || user.deletedAt) {
       return;
     }
+    // Fire-and-forget: kick off the mint+send WITHOUT awaiting it so the
+    // response timing is independent of account existence. Best-effort `.catch`.
+    void this.dispatchPasswordResetEmail(user._id.toString(), user.email);
+  }
+
+  /**
+   * Mint a single-use reset token and send the password-reset email. Invoked
+   * fire-and-forget from {@link requestPasswordReset}; it OWNS its own error
+   * handling (never rejects) because no caller awaits it. Extracted so the
+   * timing-independent dispatch is explicit and testable.
+   */
+  private async dispatchPasswordResetEmail(userId: string, email: string): Promise<void> {
     try {
-      const token = await this.mintToken(
-        user._id.toString(),
-        'password_reset',
-        PASSWORD_RESET_TTL_MS,
-      );
-      await this.mailerService.sendPasswordResetEmail(user.email, token);
+      const token = await this.mintToken(userId, 'password_reset', PASSWORD_RESET_TTL_MS);
+      await this.mailerService.sendPasswordResetEmail(email, token);
     } catch (err) {
       this.logger.warn(
         `Failed to issue password-reset email: ${err instanceof Error ? err.message : String(err)}`,

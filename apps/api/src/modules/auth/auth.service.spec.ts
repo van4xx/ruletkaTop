@@ -1322,7 +1322,15 @@ describe('AuthService.resendVerification', () => {
 // ── requestPasswordReset (anti-enumeration) ───────────────────────────────────
 
 describe('AuthService.requestPasswordReset', () => {
-  it('mints a 1h reset token and emails it when the account exists', async () => {
+  /**
+   * The mint + SMTP send are dispatched FIRE-AND-FORGET so the response timing
+   * is independent of account existence (no enumeration via latency). Flushing
+   * the microtask queue lets that background work settle so we can assert it
+   * eventually ran without the caller having awaited it.
+   */
+  const flushMicrotasks = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+  it('mints a 1h reset token and emails it when the account exists (in the background)', async () => {
     const m = buildMocks('commit');
     m.usersService.findByEmail.mockResolvedValue(fakeUser() as never);
     const service = makeService(m);
@@ -1332,9 +1340,30 @@ describe('AuthService.requestPasswordReset', () => {
     // Lookup uses the normalised (lower-cased) email.
     expect(m.usersService.findByEmail).toHaveBeenCalledWith('new.user@example.com');
 
+    // The legitimate reset email is still sent — just not on the awaited path.
+    await flushMicrotasks();
     const [tokenRow] = m.verificationTokenModel.create.mock.calls[0] as [{ purpose: string }];
     expect(tokenRow.purpose).toBe('password_reset');
     expect(m.mailerService.sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT await the SMTP send: resolves BEFORE the email dispatch completes (no timing oracle)', async () => {
+    const m = buildMocks('commit');
+    m.usersService.findByEmail.mockResolvedValue(fakeUser() as never);
+    // A send that never settles would block the response IF it were awaited.
+    let resolveSend!: () => void;
+    m.mailerService.sendPasswordResetEmail.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveSend = resolve;
+      }) as never,
+    );
+    const service = makeService(m);
+
+    // Must resolve even though the SMTP send is still pending → not awaited.
+    await expect(service.requestPasswordReset('new.user@example.com')).resolves.toBeUndefined();
+
+    resolveSend(); // let the background dispatch finish (no dangling promise).
+    await flushMicrotasks();
   });
 
   it('does NOT reveal a missing account: resolves silently with no token + no email (no enumeration)', async () => {
@@ -1365,6 +1394,9 @@ describe('AuthService.requestPasswordReset', () => {
     const service = makeService(m);
 
     await expect(service.requestPasswordReset('new.user@example.com')).resolves.toBeUndefined();
+    // The background dispatch swallows the SMTP failure (best-effort .catch);
+    // flush so the internal catch runs and no unhandled rejection escapes.
+    await flushMicrotasks();
   });
 });
 
