@@ -10,6 +10,11 @@ import { Model, type QueryFilter, Types } from 'mongoose';
 import type { PaginationQuery, ReportStatus, ReviewItem } from '@ruletka/shared-types';
 
 import { AdminService } from './admin.service';
+import {
+  EVIDENCE_RETENTION_CEILING_MS,
+  EVIDENCE_RETENTION_FLOOR_MS,
+  EVIDENCE_TERMINAL_STATUSES,
+} from './moderation.constants';
 import { ModerationEvent, ModerationEventDocument } from './schemas/moderation-event.schema';
 
 /** A page of review items (newest-first) with an opaque cursor for the next page. */
@@ -185,6 +190,48 @@ export class ReviewService {
     await event.save();
 
     return { item: this.toContract(event), ban };
+  }
+
+  /**
+   * Retention sweep for captured moderation EVIDENCE (152-ФЗ / GDPR
+   * data-minimisation): null the `evidenceUrl` blob on `moderation_events`
+   * whose evidence has aged past the retention bound, RETAINING the row
+   * (label/score/action/status) for the abuse audit trail.
+   *
+   * An event's frame is purged when EITHER:
+   *  - the case is TERMINAL (`resolved`/`dismissed`) and at least
+   *    {@link EVIDENCE_RETENTION_FLOOR_MS} has elapsed since the decision
+   *    (`updatedAt`) — the statutory-minimum floor giving appeals/disputes a
+   *    window; OR
+   *  - {@link EVIDENCE_RETENTION_CEILING_MS} has elapsed since capture
+   *    (`createdAt`) regardless of status — the backstop so an event that is
+   *    never triaged does not retain its frame indefinitely.
+   *
+   * Idempotent (only matches rows that still HAVE an `evidenceUrl`) and safe to
+   * re-run. Returns the number of frames purged.
+   *
+   * TODO(CSAM): before this purges a `minor`-label (CSAM-risk) frame, a real
+   * deployment MUST escalate the evidence to law enforcement / a hotline and
+   * record the referral — see the note on {@link EVIDENCE_RETENTION_CEILING_MS}.
+   * That report-to-authority workflow is a separate product task; this sweep
+   * only bounds retention.
+   */
+  async sweepExpiredEvidence(now: Date = new Date()): Promise<number> {
+    const floorCutoff = new Date(now.getTime() - EVIDENCE_RETENTION_FLOOR_MS);
+    const ceilingCutoff = new Date(now.getTime() - EVIDENCE_RETENTION_CEILING_MS);
+    const res = await this.eventModel
+      .updateMany(
+        {
+          evidenceUrl: { $ne: null },
+          $or: [
+            { status: { $in: EVIDENCE_TERMINAL_STATUSES }, updatedAt: { $lte: floorCutoff } },
+            { createdAt: { $lte: ceilingCutoff } },
+          ],
+        },
+        { $set: { evidenceUrl: null } },
+      )
+      .exec();
+    return res.modifiedCount ?? 0;
   }
 
   /** Map a hydrated moderation-event document to the shared `ReviewItem` shape. */

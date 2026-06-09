@@ -7,7 +7,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Redis } from 'ioredis';
-import type { Socket } from 'socket.io';
+import type { Namespace, Socket } from 'socket.io';
 
 import {
   type AppNotification,
@@ -17,6 +17,7 @@ import {
   type CallResponsePayload,
   callResponsePayloadSchema,
   type ClientToServerEvents,
+  type InterServerEvents,
   type MatchEndReason,
   type MmJoinPayload,
   mmJoinPayloadSchema,
@@ -1339,12 +1340,26 @@ export class MatchmakingGateway
    * Re-arm the presence connection-counter + status TTL for every user with a
    * live socket on THIS node (the per-node heartbeat). De-duplicated across a
    * user's devices so we touch each user once. Best-effort.
+   *
+   * Enumerates only THIS process's namespace socket map (`server.sockets`) — a
+   * LOCAL, in-memory iteration with no Redis round-trip — rather than the
+   * adapter's cluster-wide `fetchSockets()` (which fans an O(nodes × sockets)
+   * request out over Redis every heartbeat). Each node refreshes exactly the
+   * users it holds, which is precisely the per-node heartbeat's intent.
    */
   private async beatPresence(): Promise<void> {
     try {
-      const sockets = await this.server.fetchSockets();
       const userIds = new Set<string>();
-      for (const s of sockets) {
+      // This gateway runs under the `/mm` namespace, so the injected server is a
+      // Namespace at runtime; its `.sockets` is the LOCAL `id → Socket` map for
+      // this node (declared `AppIoServer`/Server here, narrowed to Namespace).
+      const local = this.server as unknown as Namespace<
+        ClientToServerEvents,
+        ServerToClientEvents,
+        InterServerEvents,
+        SocketData
+      >;
+      for (const [, s] of local.sockets) {
         const uid = s.data.userId;
         if (uid) {
           userIds.add(uid);

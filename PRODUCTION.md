@@ -34,8 +34,14 @@ transactional path always runs, so there is no atomicity gap in production.
   single mongod.
 - Use a `MONGODB_URI` **without** `directConnection`, with
   `retryWrites=true&w=majority`.
-- Enable auth (`--auth` + keyFile/x509) and TLS between app ↔ db.
-- A reference 3-node compose (keyFile + RS init) belongs in
+- Enable auth (`--auth` + keyFile/x509) and TLS between app ↔ db. **DONE for
+  self-hosted:** `infra/docker/docker-compose.prod.yml` now runs the RS with
+  `--auth --keyFile`, and `infra/deploy/bootstrap.sh` generates the keyFile
+  (`infra/secrets/mongo-keyfile`) + a root password + a least-privilege `app`
+  user and a credentialed `MONGODB_URI` (see ENV_CHECKLIST.md → "MongoDB
+  authentication"). TLS between app↔db is still TODO (the RS is on the isolated
+  Docker network); add it for multi-host.
+- The reference 3-node compose (keyFile + RS init) lives in
   `infra/docker/docker-compose.prod.yml` — validate it in staging before relying
   on it; managed Atlas is the lower-risk default.
 

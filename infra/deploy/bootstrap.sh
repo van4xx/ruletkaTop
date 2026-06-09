@@ -10,22 +10,41 @@
 # DNS for ruletka.top / www / api / admin / turn must already point at this host,
 # and :80/:443 must be free (mail is external Timeweb MX — nothing mail here).
 #
-# ── Run it (as root on the server). Fill in SMTP_PASS; everything else is auto:
+# ── Run it (as root on the server). Provide SMTP_PASS + TURNSTILE_SECRET +
+#    TURNSTILE_SITE_KEY (the two anti-bot keys); everything else is auto:
 #
 #   # If the repo is PUBLIC:
-#   SMTP_PASS='your-smtp-pass' bash -c \
+#   SMTP_PASS='your-smtp-pass' \
+#   TURNSTILE_SECRET='your-turnstile-secret' TURNSTILE_SITE_KEY='your-site-key' \
+#   bash -c \
 #     'git clone https://github.com/van4xx/ruletkaTop.git /opt/ruletka \
 #      && cd /opt/ruletka && bash infra/deploy/bootstrap.sh'
 #
 #   # If the repo is PRIVATE (use a read-only GitHub token):
 #   SMTP_PASS='your-smtp-pass' \
+#   TURNSTILE_SECRET='your-turnstile-secret' TURNSTILE_SITE_KEY='your-site-key' \
 #   RULETKA_REPO='https://x-access-token:GH_TOKEN@github.com/van4xx/ruletkaTop.git' \
 #   bash -c 'git clone "$RULETKA_REPO" /opt/ruletka && cd /opt/ruletka \
 #            && bash infra/deploy/bootstrap.sh'
 #
-# Optional env (all default to a clean no-op): TURNSTILE_SITE_KEY,
-# TURNSTILE_SECRET, SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN, ANALYTICS_DOMAIN,
-# ANALYTICS_HOST, ADMIN_EMAIL (promote to admin), ACME_EMAIL, RULETKA_REPO.
+# REQUIRED secrets the operator MUST supply (the script prompts if a TTY,
+# otherwise it aborts — both are auth/anti-bot gates the API fails-fast on):
+#   • SMTP_PASS        — Timeweb SMTP password for no-reply@ruletka.top.
+#   • TURNSTILE_SECRET — Cloudflare Turnstile server secret. It is the anti-bot
+#                        gate on /auth/register and the API REFUSES TO BOOT in
+#                        production without it (config-validation CRITICAL_SECRETS
+#                        + LAUNCH-CHECKLIST). Pair it with TURNSTILE_SITE_KEY (the
+#                        public widget key, baked into the web build).
+#
+# AUTO-GENERATED secrets (you never see/handle these — written into .env once):
+#   JWT_ACCESS/REFRESH_SECRET, REDIS_PASSWORD, TURN_STATIC_AUTH_SECRET, the VAPID
+#   keypair, METRICS_TOKEN (bearer for /api/metrics — the API fails-fast on a
+#   blank one in prod), and the Mongo root + least-privilege app passwords + the
+#   replica-set keyFile (infra/secrets/mongo-keyfile).
+#
+# Optional env (default to a clean no-op): SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN,
+# ANALYTICS_DOMAIN, ANALYTICS_HOST, ADMIN_EMAIL (promote to admin), ACME_EMAIL,
+# RULETKA_REPO.
 # =============================================================================
 set -euo pipefail
 
@@ -77,9 +96,50 @@ if [ ! -f .env ]; then
   fi
   [ -n "$SMTP_PASS" ] || die "SMTP_PASS not provided. Re-run with: SMTP_PASS='…' bash …/bootstrap.sh"
 
+  # TURNSTILE_SECRET is the anti-bot gate on /auth/register and the API
+  # FAILS-FAST in production without it (config-validation CRITICAL_SECRETS;
+  # LAUNCH-CHECKLIST marks it REQUIRED). It is a Cloudflare account secret — it
+  # cannot be auto-generated — so it is REQUIRED here, exactly like SMTP_PASS:
+  # prompt on a TTY, otherwise abort with a clear message rather than letting the
+  # API crash-loop at boot. Get it from: Cloudflare dashboard → Turnstile → your
+  # widget → Secret key (pair it with TURNSTILE_SITE_KEY, the public widget key).
+  TURNSTILE_SECRET="${TURNSTILE_SECRET:-}"
+  if [ -z "$TURNSTILE_SECRET" ] && [ -t 0 ]; then
+    read -rsp "Cloudflare Turnstile SECRET key (anti-bot gate — required in prod): " TURNSTILE_SECRET; echo
+  fi
+  [ -n "$TURNSTILE_SECRET" ] || die "TURNSTILE_SECRET not provided. It is REQUIRED in production (the API refuses to boot without it). Get it from Cloudflare → Turnstile → Secret key, then re-run with: TURNSTILE_SECRET='…' TURNSTILE_SITE_KEY='…' bash …/bootstrap.sh"
+
   PUBLIC_IP="$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null \
             || curl -fsS --max-time 8 https://ifconfig.me 2>/dev/null \
             || hostname -I 2>/dev/null | awk '{print $1}' || true)"
+
+  # ── Mongo auth secrets (prod RS runs with --auth --keyFile) ────────────────
+  # A shared keyFile gives the three RS members INTERNAL auth (members trust each
+  # other); a root user + a least-privilege `app` user gate CLIENT access. The
+  # keyFile must be `openssl rand -base64 756` (MongoDB requires 6–1024 base64
+  # chars) and chmod 400, owned by the mongod uid (the official image's entrypoint
+  # chowns the bind-mounted keyFile to its `mongodb` user on start).
+  say "Generating the Mongo replica-set keyFile + auth passwords…"
+  MONGO_ROOT_USERNAME="root"
+  MONGO_ROOT_PASSWORD="$(openssl rand -hex 24)"
+  MONGO_APP_USERNAME="app"
+  MONGO_APP_PASSWORD="$(openssl rand -hex 24)"
+  KEYFILE_PATH="$ROOT_DIR/infra/secrets/mongo-keyfile"
+  if [ ! -f "$KEYFILE_PATH" ]; then
+    mkdir -p "$(dirname "$KEYFILE_PATH")"
+    openssl rand -base64 756 > "$KEYFILE_PATH"
+    chmod 400 "$KEYFILE_PATH"
+    # The official mongo image runs as uid 999 (`mongodb`) and chowns a
+    # bind-mounted keyFile to itself; chowning here too keeps it tidy if uid 999
+    # exists on the host. Failure is non-fatal — the entrypoint handles it.
+    chown 999:999 "$KEYFILE_PATH" 2>/dev/null || true
+    echo "keyFile written to infra/secrets/mongo-keyfile (chmod 400)."
+  else
+    echo "Mongo keyFile already present — reusing it."
+  fi
+  # URL-encode the app password for the connection string. openssl hex output is
+  # [0-9a-f] only (no reserved chars), so it is already URI-safe — used verbatim.
+  MONGODB_URI_PROD="mongodb://${MONGO_APP_USERNAME}:${MONGO_APP_PASSWORD}@mongo1:27017,mongo2:27017,mongo3:27017/ruletka?replicaSet=rs0&authSource=ruletka&retryWrites=true&w=majority"
 
   # VAPID keypair for Web Push (generated in a throwaway node container — no host node needed).
   say "Generating VAPID keys…"
@@ -96,7 +156,18 @@ CORS_ORIGINS=https://ruletka.top,https://www.ruletka.top,https://admin.ruletka.t
 # Parent domain so the refresh + presence cookies are shared across the apex and
 # the api subdomain (fixes cross-subdomain presence-marker desync → spurious logouts).
 COOKIE_DOMAIN=.ruletka.top
-MONGODB_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/ruletka?replicaSet=rs0&retryWrites=true&w=majority
+# Mongo runs as an AUTHENTICATED replica set (--auth --keyFile). The API connects
+# as the least-privilege `app` user (scoped to the `ruletka` db only); authSource
+# is `ruletka` (where that user lives). The root user + the keyFile are infra-only
+# and never appear in the URI. Compose reads this exact value for the api service.
+MONGODB_URI=${MONGODB_URI_PROD}
+# Mongo auth secrets — consumed by docker-compose.prod.yml (mongo nodes create the
+# root user from MONGO_ROOT_*; mongo-init creates the app user from MONGO_APP_*).
+# The matching replica-set keyFile lives at infra/secrets/mongo-keyfile (chmod 400).
+MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+MONGO_APP_USERNAME=${MONGO_APP_USERNAME}
+MONGO_APP_PASSWORD=${MONGO_APP_PASSWORD}
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=$(openssl rand -hex 24)
@@ -124,8 +195,15 @@ WEB_BASE_URL=https://ruletka.top
 VAPID_PUBLIC_KEY=${VAPID_PUB}
 VAPID_PRIVATE_KEY=${VAPID_PRIV}
 VAPID_SUBJECT=mailto:admin@ruletka.top
+# Anti-bot — Cloudflare Turnstile server secret. REQUIRED in prod: the API
+# fails-fast at boot without it (it's a CRITICAL_SECRET in config-validation and
+# REQUIRED in LAUNCH-CHECKLIST). bootstrap REQUIRES it above, so it is never blank.
+TURNSTILE_SECRET=${TURNSTILE_SECRET}
+# Bearer token guarding GET /api/metrics. REQUIRED in prod: the MetricsTokenGuard
+# fails-fast at boot on a blank token (the metrics route is reachable through the
+# public nginx edge). Auto-generated here so /metrics is never exposed unauthenticated.
+METRICS_TOKEN=$(openssl rand -hex 32)
 # Optional integrations (blank = clean no-op)
-TURNSTILE_SECRET=${TURNSTILE_SECRET:-}
 SENTRY_DSN=${SENTRY_DSN:-}
 # Web public envs (baked into the web + admin builds at build time)
 NEXT_PUBLIC_API_URL=https://api.ruletka.top/api
@@ -147,6 +225,20 @@ EOF
   echo ".env written (chmod 600)."
 else
   say ".env already present — reusing it."
+fi
+
+# ── 3b. Safety net: the prod Mongo nodes mount infra/secrets/mongo-keyfile and
+#       will NOT start without it. On the happy path it was generated alongside
+#       .env above; guard the edge case where .env exists but the keyFile is
+#       missing (e.g. infra/secrets was wiped) so we fail with a clear message
+#       instead of an opaque mongod boot error. ────────────────────────────────
+KEYFILE_PATH="$ROOT_DIR/infra/secrets/mongo-keyfile"
+if [ ! -f "$KEYFILE_PATH" ]; then
+  warn "Mongo keyFile missing at infra/secrets/mongo-keyfile — regenerating it."
+  mkdir -p "$(dirname "$KEYFILE_PATH")"
+  openssl rand -base64 756 > "$KEYFILE_PATH"
+  chmod 400 "$KEYFILE_PATH"
+  chown 999:999 "$KEYFILE_PATH" 2>/dev/null || true
 fi
 
 # ── 4. Build shared-types + the admin SPA (in a container; nginx serves dist) ─
@@ -216,9 +308,15 @@ if [ -z "$ADMIN_EMAIL" ] && [ -t 0 ]; then
   read -rp "Admin email to promote (must be registered first; blank to skip): " ADMIN_EMAIL || true
 fi
 if [ -n "$ADMIN_EMAIL" ]; then
-  $COMPOSE exec -T mongo1 mongosh ruletka --quiet --eval \
+  # Mongo now runs with --auth, so mongosh must authenticate. Use the
+  # least-privilege app user (readWrite on `ruletka` covers the users update);
+  # creds come from the generated .env.
+  MONGO_APP_USER="$(getenv MONGO_APP_USERNAME)"; MONGO_APP_USER="${MONGO_APP_USER:-app}"
+  MONGO_APP_PW="$(getenv MONGO_APP_PASSWORD)"
+  $COMPOSE exec -T mongo1 mongosh ruletka --quiet \
+    -u "$MONGO_APP_USER" -p "$MONGO_APP_PW" --authenticationDatabase ruletka --eval \
     "print(db.users.updateOne({email:'${ADMIN_EMAIL}'},{\$set:{role:'admin'}}).matchedCount ? 'role=admin set for ${ADMIN_EMAIL}' : 'no user ${ADMIN_EMAIL} (register first, then re-run)');" \
-    || warn "Could not set admin role (is the user registered?)."
+    || warn "Could not set admin role (is the user registered? are MONGO_APP_* in .env?)."
 fi
 
 # ── 8. Verify ────────────────────────────────────────────────────────────────
@@ -230,3 +328,7 @@ say "Done. ruletka.top is live."
 echo "  • Logs:    $COMPOSE logs -f"
 echo "  • Update:  cd $ROOT_DIR && git pull && bash infra/deploy/bootstrap.sh"
 echo "  • Admin panel: https://admin.ruletka.top  (promote a user via ADMIN_EMAIL=… re-run)"
+echo "  • Secrets:  .env (chmod 600) holds the auto-generated JWT/Redis/TURN/VAPID"
+echo "              secrets + METRICS_TOKEN + the Mongo root/app passwords; the"
+echo "              Mongo replica-set keyFile is at infra/secrets/mongo-keyfile."
+echo "              Both are git-ignored — back them up; do NOT commit them."

@@ -24,7 +24,29 @@ extension ApiEndpoints on ApiClient {
       );
 
   // ───────────────────────────────── Auth ─────────────────────────────────
+  /// Header declaring the cookie-less (body) refresh-token transport for the
+  /// native client on the credential-minting routes (`login` / `register`).
+  /// Mirrors the server constants `REFRESH_TRANSPORT_HEADER` /
+  /// `REFRESH_TRANSPORT_BODY` in `auth.controller.ts`: the server returns
+  /// `tokens.refreshToken` in the JSON body for any client that sends it, and
+  /// keeps the body blanked for browsers (which omit it and instead re-read the
+  /// token from the httpOnly cookie). It is attached to login/register via the
+  /// shared Dio default headers (see `ApiClient`), since this app has no cookie
+  /// jar and must receive the minted refresh token in the body.
+  static const Map<String, String> kRefreshTransportHeader = {
+    'x-refresh-transport': 'body',
+  };
+
   /// `POST /auth/register` — create an account (18+) and start a session.
+  ///
+  /// Cookie-less transport: this app has NO cookie jar, so the server must echo
+  /// the minted refresh token in the JSON body (a browser instead re-reads it
+  /// from the httpOnly cookie). The server recognises this native client and
+  /// exposes the body token — see [kRefreshTransportHeader]. Without that the
+  /// body's `refreshToken` is `''`, the app would never have a token to present
+  /// to `/auth/refresh`, and the session would die when the ~15min access token
+  /// expires. (The downstream `_doRefresh` persists a non-empty body
+  /// `refreshToken`, completing the rotation loop.)
   Future<AuthResponse> register(RegisterDto dto) => sendJson(
         'POST',
         '/auth/register',
@@ -33,7 +55,8 @@ extension ApiEndpoints on ApiClient {
         skipAuth: true,
       );
 
-  /// `POST /auth/login`.
+  /// `POST /auth/login`. The server returns the refresh token in the body for
+  /// this cookie-less native client (see [register] / [kRefreshTransportHeader]).
   Future<AuthResponse> login(LoginDto dto) => sendJson(
         'POST',
         '/auth/login',

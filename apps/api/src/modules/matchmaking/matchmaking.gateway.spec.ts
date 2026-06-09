@@ -27,10 +27,14 @@ function makeServer(): {
   emits: EmitRecord[];
   joins: JoinLeaveRecord[];
   leaves: JoinLeaveRecord[];
+  /** The local namespace socket map `beatPresence` enumerates (`id → socket`). */
+  sockets: Map<string, { id: string; data: { userId?: string } }>;
 } {
   const emits: EmitRecord[] = [];
   const joins: JoinLeaveRecord[] = [];
   const leaves: JoinLeaveRecord[] = [];
+  // The in-process namespace socket map the presence heartbeat iterates over.
+  const sockets = new Map<string, { id: string; data: { userId?: string } }>();
   const server = {
     to: (target: string) => ({
       emit: (event: string, payload: unknown) => {
@@ -48,8 +52,10 @@ function makeServer(): {
         return Promise.resolve();
       },
     }),
+    // `for (const [, s] of this.server.sockets)` in beatPresence — local only.
+    sockets,
   } as unknown as AppIoServer;
-  return { server, emits, joins, leaves };
+  return { server, emits, joins, leaves, sockets };
 }
 
 /**
@@ -139,8 +145,9 @@ function makeGateway(opts: {
   matchmaking?: Partial<Record<string, jest.Mock>>;
   rateLimiter?: Partial<Record<string, jest.Mock>>;
   liveFlags?: Partial<Record<string, jest.Mock>>;
+  presence?: Partial<Record<string, jest.Mock>>;
 }) {
-  const { server, emits, joins, leaves } = makeServer();
+  const { server, emits, joins, leaves, sockets } = makeServer();
   const { redis, store } = makeRedis(opts.redisSeed);
 
   const calls = {
@@ -173,10 +180,17 @@ function makeGateway(opts: {
     ...opts.liveFlags,
   };
 
+  // Presence collaborator — `refreshConnection` is what the per-node heartbeat
+  // (`beatPresence`) re-arms; resolves by default.
+  const presence = {
+    refreshConnection: jest.fn().mockResolvedValue(undefined),
+    ...opts.presence,
+  };
+
   const gateway = new MatchmakingGateway(
     matchmaking as never,
     calls as never,
-    {} as never, // presence
+    presence as never, // presence
     {} as never, // settings
     liveFlags as never, // liveFlags
     {} as never, // wsAuth
@@ -195,6 +209,7 @@ function makeGateway(opts: {
   return {
     gateway,
     server,
+    sockets,
     emits,
     joins,
     leaves,
@@ -204,6 +219,7 @@ function makeGateway(opts: {
     matchmaking,
     rateLimiter,
     liveFlags,
+    presence,
   };
 }
 
@@ -559,5 +575,62 @@ describe('handleJoin — in-room re-roll is charged to the mm:next skip throttle
     // The stricter skip throttle is NOT charged on a genuine first join.
     expect(consumeNextToken).not.toHaveBeenCalled();
     expect(matchmaking.enqueue).toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// presence heartbeat (beatPresence): re-arm presence TTLs from the LOCAL
+// in-process namespace socket map ONLY — no cluster-wide `fetchSockets()` Redis
+// fan-out — touching each held user exactly once.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('beatPresence — local-only per-node heartbeat', () => {
+  /** Invoke the private heartbeat. */
+  function beat(gateway: MatchmakingGateway): Promise<void> {
+    return (gateway as unknown as { beatPresence(): Promise<void> }).beatPresence();
+  }
+
+  it('refreshes each held user once (de-duped across devices) from the local socket map', async () => {
+    const { gateway, sockets, presence } = makeGateway({});
+    // u1 has two devices on this node (must be touched once), u2 one, and a
+    // socket with no userId (pre-auth) must be ignored.
+    sockets.set('s1', { id: 's1', data: { userId: 'u1' } });
+    sockets.set('s2', { id: 's2', data: { userId: 'u1' } });
+    sockets.set('s3', { id: 's3', data: { userId: 'u2' } });
+    sockets.set('s4', { id: 's4', data: {} });
+
+    await beat(gateway);
+
+    expect(presence.refreshConnection).toHaveBeenCalledTimes(2);
+    expect(presence.refreshConnection).toHaveBeenCalledWith('u1');
+    expect(presence.refreshConnection).toHaveBeenCalledWith('u2');
+  });
+
+  it('never calls the cluster-wide fetchSockets() adapter fan-out', async () => {
+    const { gateway, server, sockets, presence } = makeGateway({});
+    sockets.set('s1', { id: 's1', data: { userId: 'u1' } });
+    // Spy a fetchSockets that would fail the test if the heartbeat used it.
+    const fetchSockets = jest.fn().mockResolvedValue([]);
+    (server as unknown as { fetchSockets: jest.Mock }).fetchSockets = fetchSockets;
+
+    await beat(gateway);
+
+    expect(fetchSockets).not.toHaveBeenCalled();
+    expect(presence.refreshConnection).toHaveBeenCalledWith('u1');
+  });
+
+  it('swallows a per-user refresh failure and still refreshes the rest', async () => {
+    const refreshConnection = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('redis blip'))
+      .mockResolvedValue(undefined);
+    const { gateway, sockets, presence } = makeGateway({
+      presence: { refreshConnection },
+    });
+    sockets.set('s1', { id: 's1', data: { userId: 'u1' } });
+    sockets.set('s2', { id: 's2', data: { userId: 'u2' } });
+
+    // Best-effort: a single rejection must not throw out of the heartbeat.
+    await expect(beat(gateway)).resolves.toBeUndefined();
+    expect(presence.refreshConnection).toHaveBeenCalledTimes(2);
   });
 });

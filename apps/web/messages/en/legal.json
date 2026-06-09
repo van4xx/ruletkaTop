@@ -209,12 +209,12 @@
     "security": {
       "title": "Storage & protection",
       "p1": "Data is stored on servers with restricted access. Passwords are stored only as irreversible hashes, and data in transit is protected by encryption (TLS).",
-      "p2": "We keep personal data no longer than necessary for the purposes of processing or than the law requires. After an account is deleted, the data is erased or anonymized."
+      "p2": "We keep personal data no longer than necessary for the purposes of processing or than the law requires. After an account is deleted, the data is erased or anonymized. Moderation materials (for example, still frames attached to reports) are kept for a limited period and are automatically removed after the case is resolved."
     },
     "rights": {
       "title": "Your rights",
       "intro": "With respect to your personal data, you have the right to:",
-      "item1": "Obtain information about the processing and request a copy of your data.",
+      "item1": "Obtain information about the processing and request a copy of your data in a machine-readable form (account data export).",
       "item2": "Request the clarification or correction of inaccurate or incomplete data.",
       "item3": "Request the deletion of your data and withdraw your consent to processing.",
       "item4": "Restrict processing and object to it in the cases provided for by law.",

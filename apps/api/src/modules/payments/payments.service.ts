@@ -44,6 +44,28 @@ interface CheckoutData extends Record<string, unknown> {
   plan?: string;
 }
 
+/**
+ * The wallet the payments service actually talks to. Structurally it is the
+ * cross-module {@link WalletServiceContract} (getBalance/credit/debit), but the
+ * concrete economy `WalletService` bound to {@link WALLET_SERVICE} also exposes
+ * a refund-with-debt reversal. We widen the injected type LOCALLY (rather than
+ * editing the shared contract) so a refund/chargeback that can't be fully clawed
+ * back records the unrecovered value as account debt + an economy hold instead
+ * of silently keeping the spent value free.
+ */
+interface RefundCapableWallet extends WalletServiceContract {
+  /**
+   * Reverse a previously-credited payment, clawing back what the balance still
+   * holds and recording any shortfall (already-spent value) as debt under an
+   * economy hold. Returns the coins reversed and the debt held.
+   */
+  reverseRefund(
+    userId: string,
+    coins: number,
+    refId: string,
+  ): Promise<{ reversed: number; owed: number }>;
+}
+
 /** CloudPayments ack signalling "processed successfully, do not retry". */
 const ACK_OK: CloudPaymentsAck = { code: 0 } as const;
 
@@ -89,7 +111,7 @@ export class PaymentsService {
     @InjectModel(Payment.name)
     private readonly paymentModel: Model<PaymentDocument>,
     private readonly config: ConfigService,
-    @Inject(WALLET_SERVICE) private readonly wallet: WalletServiceContract,
+    @Inject(WALLET_SERVICE) private readonly wallet: RefundCapableWallet,
     @Inject(PREMIUM_SERVICE) private readonly premium: PremiumServiceContract,
     @Inject(COIN_PACKAGES_SERVICE)
     private readonly coinPackages: CoinPackagesServiceContract,
@@ -638,7 +660,18 @@ export class PaymentsService {
     );
   }
 
-  /** Debit previously-credited coins back out on a refund (best-effort). */
+  /**
+   * Reverse previously-credited coins on a refund/chargeback.
+   *
+   * Uses {@link RefundCapableWallet.reverseRefund} rather than a bare `debit`:
+   * the old debit threw `InsufficientFundsException` whenever the buyer had
+   * already SPENT the credited coins, and the caller silently swallowed it — so
+   * the spent value stayed FREE after a chargeback. `reverseRefund` instead
+   * claws back whatever the balance still holds AND records the unrecovered
+   * remainder as account debt under an economy hold, which freezes all further
+   * spending until the debt is repaid. The hold is the real enforcement; this
+   * method just drives it.
+   */
   private async reverseCoins(payment: PaymentDocument): Promise<void> {
     const code = payment.packageCode;
     if (!code) {
@@ -649,16 +682,23 @@ export class PaymentsService {
       return;
     }
     const total = pkg.coins + pkg.bonusCoins;
+    const userId = payment.userId.toString();
     // refId namespaced so the refund ledger row is distinct from the purchase.
-    await this.wallet.debit(
-      payment.userId.toString(),
+    const { reversed, owed } = await this.wallet.reverseRefund(
+      userId,
       total,
-      'refund',
       `refund:${payment.invoiceId}`,
     );
-    this.logger.log(
-      `Reversed ${total} coins from user ${payment.userId.toString()} for refunded invoice ${payment.invoiceId}`,
-    );
+    if (owed > 0) {
+      this.logger.warn(
+        `Refund of ${total} coins for user ${userId} (invoice ${payment.invoiceId}) only ` +
+          `reversed ${reversed}; held ${owed} as debt + froze spending (already-spent value).`,
+      );
+    } else {
+      this.logger.log(
+        `Reversed ${total} coins from user ${userId} for refunded invoice ${payment.invoiceId}`,
+      );
+    }
   }
 
   /**

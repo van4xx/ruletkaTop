@@ -6,6 +6,7 @@ import type { CoinTransaction as CoinTransactionContract, CoinTxType } from '@ru
 
 import { CoinTransaction, CoinTransactionDocument } from './schemas/coin-transaction.schema';
 import { Wallet, WalletDocument } from './schemas/wallet.schema';
+import { EconomyHoldException } from './economy-hold.exception';
 import { InsufficientFundsException } from './insufficient-funds.exception';
 
 /**
@@ -108,8 +109,11 @@ export class WalletService {
       // Append the ledger row guarded by the unique `(type, refId)` index. If a
       // row already exists for this refId, this credit was already applied (a
       // redelivered webhook / retried fulfilment): undo the `$inc` we just did
-      // and return the balance WITHOUT the duplicate credit. AT-MOST-ONCE.
-      const applied = await this.appendLedger(
+      // and return the balance WITHOUT the duplicate credit. AT-MOST-ONCE. If the
+      // append THROWS a non-duplicate error on the standalone (no-session) path,
+      // {@link appendLedgerOrCompensate} also undoes the `$inc` before rethrowing
+      // so the balance is never mutated without a matching ledger row.
+      const applied = await this.appendLedgerOrCompensate(
         _id,
         coins,
         type,
@@ -121,14 +125,87 @@ export class WalletService {
         const reverted = await this.compensateBalance(_id, -coins, session);
         return reverted;
       }
+
+      // HOLD RELEASE: if the wallet is on an economy hold (an unpaid refund debt)
+      // and this credit has brought the balance back up to cover the outstanding
+      // `heldCoins`, the debt is repaid — lift the hold and clear the debt so the
+      // account can spend again. Done atomically and only when the recovered
+      // balance actually covers the debt, so the freeze stays until the buyer is
+      // solvent for what they owe.
+      await this.maybeReleaseHold(_id, updated.balanceCoins, session);
+
       return updated.balanceCoins;
     });
+  }
+
+  /**
+   * Reverse a previously-credited payment (refund / chargeback), recovering as
+   * many coins as the balance still holds and recording any UNRECOVERED value as
+   * an account DEBT under an economy hold.
+   *
+   * The naive "just debit the credited total back" reversal silently fails when
+   * the buyer has already SPENT the coins: the guarded debit can't go negative,
+   * throws insufficient-funds, and the caller swallows it — so the spent value
+   * is kept for free. Instead we:
+   *  1. claw back what's left: debit `min(balance, coins)` under a `refund`
+   *     ledger row (idempotent on `refId`); and
+   *  2. for the shortfall (`coins − reversed`) — the spent-and-now-owed value —
+   *     set `economyHold: true` and add the shortfall to `heldCoins`, freezing
+   *     the account from spending until the debt is repaid.
+   *
+   * `refId` is the namespaced refund key (e.g. `refund:<invoiceId>`) so the
+   * clawback debit is idempotent against a redelivered refund webhook; the debt
+   * mutation is keyed off the SAME refId so a redelivery does not double the debt.
+   *
+   * @returns `{ reversed, owed }` — coins actually clawed back, and the debt held.
+   */
+  async reverseRefund(
+    userId: string,
+    coins: number,
+    refId: string,
+  ): Promise<{ reversed: number; owed: number }> {
+    this.assertPositiveInt(coins);
+    const _id = new Types.ObjectId(userId);
+    const balance = await this.getBalance(userId);
+    const reversible = Math.min(balance, coins);
+
+    let reversed = 0;
+    if (reversible > 0) {
+      // `refund` debits are exempt from the hold gate, so this claws back even
+      // when the account is already on hold from an earlier short reversal.
+      await this.debit(userId, reversible, 'refund', refId);
+      reversed = reversible;
+    }
+
+    const owed = coins - reversed;
+    if (owed > 0) {
+      // The buyer spent value they no longer have to give back: record the debt
+      // and freeze spending. Keyed off the refund refId so a redelivered refund
+      // webhook does not re-apply the debt.
+      await this.applyEconomyHold(_id, owed, refId);
+      this.logger.warn(
+        `Refund of ${coins} coins for ${userId} (ref ${refId}) could only reverse ` +
+          `${reversed}; held ${owed} as debt and froze spending (economyHold).`,
+      );
+    }
+
+    return { reversed, owed };
   }
 
   /**
    * Atomically debit `coins` from a user's wallet (guarded by
    * `balanceCoins >= coins`) and append a ledger row. Returns the new balance.
    *
+   * ECONOMY HOLD CHOKEPOINT: every user-initiated SPEND (gifts/top/covers) is
+   * funnelled through here, so this is the single place to enforce the account
+   * hold. When the wallet is on hold (`economyHold: true` — a refund/chargeback
+   * left an unpaid debt), a spend debit is REFUSED with {@link EconomyHoldException}.
+   * System REVERSALS (`type === 'refund'`, e.g. a refund clawing back coins) are
+   * NOT gated, so the account can still be debited to recover a reversed payment
+   * and ultimately clear its own hold.
+   *
+   * @throws EconomyHoldException (403) when the wallet is on hold and this is a
+   *         user spend (any non-`refund` type).
    * @throws InsufficientFundsException (422) when the balance is too low (or no
    *         wallet exists).
    * @param coins positive integer amount of coins to remove.
@@ -141,28 +218,44 @@ export class WalletService {
   ): Promise<number> {
     this.assertPositiveInt(coins);
     const _id = new Types.ObjectId(userId);
+    // A `refund` debit is a SYSTEM reversal/clawback (never a user spend), so it
+    // is exempt from the hold gate — only user spends are frozen.
+    const gatedByHold = type !== 'refund';
 
     return this.runWalletWrite(async (session) => {
-      // Guarded single-document update: only matches when funds suffice, so an
-      // overdraft is impossible even under concurrent debits.
+      // Guarded single-document update: only matches when funds suffice AND (for a
+      // user spend) the wallet is not on hold — so an overdraft is impossible and
+      // a held account cannot spend, both atomically under concurrency.
       const updated = await this.walletModel
         .findOneAndUpdate(
-          { userId: _id, balanceCoins: { $gte: coins } },
+          {
+            userId: _id,
+            balanceCoins: { $gte: coins },
+            ...(gatedByHold ? { economyHold: { $ne: true } } : {}),
+          },
           { $inc: { balanceCoins: -coins } },
           { new: true, ...(session ? { session } : {}) },
         )
         .exec();
 
       if (!updated) {
-        // No document matched ⇒ either no wallet or balance < coins.
+        // No document matched ⇒ no wallet, balance < coins, OR (for a spend) the
+        // wallet is on hold. Distinguish the hold so the caller gets a 403 (not a
+        // misleading 422) — re-read the wallet's hold flag for the spend case.
+        if (gatedByHold && (await this.isOnHold(_id, session))) {
+          throw new EconomyHoldException();
+        }
         throw new InsufficientFundsException();
       }
 
       // Append the ledger row guarded by the unique `(type, refId)` index. A
       // duplicate means this debit was already applied (e.g. a redelivered
       // `Refund` webhook reversing the same invoice): undo the `$inc` and return
-      // the unchanged balance so the debit happens AT MOST ONCE per refId.
-      const applied = await this.appendLedger(
+      // the unchanged balance so the debit happens AT MOST ONCE per refId. If the
+      // append THROWS a non-duplicate error on the standalone (no-session) path,
+      // {@link appendLedgerOrCompensate} also undoes the `$inc` before rethrowing
+      // so the balance is never mutated without a matching ledger row.
+      const applied = await this.appendLedgerOrCompensate(
         _id,
         -coins,
         type,
@@ -221,6 +314,61 @@ export class WalletService {
   }
 
   /**
+   * {@link appendLedger}, but additionally guaranteeing that a THROWN
+   * (non-duplicate) ledger-insert error never leaves a mutated balance with no
+   * matching audit row on the standalone (no-session) fallback path.
+   *
+   * On a replica set the work runs inside a transaction, so a thrown append
+   * error aborts `withTransaction` and the speculative balance `$inc` rolls back
+   * automatically — we MUST NOT compensate manually there (the rollback already
+   * undoes it, and the session is aborting). We detect that path by the presence
+   * of a `session` and simply rethrow.
+   *
+   * On a standalone Mongo there is no session: the balance `$inc` already
+   * committed independently, so a thrown append would otherwise leave the
+   * balance changed with no ledger row (the duplicate case is already handled by
+   * {@link appendLedger} returning `false`). Here we compensate the just-applied
+   * `$inc` (by `-delta`) and then rethrow the original error, keeping the net
+   * balance effect zero and the wallet fully reconstructible from its ledger.
+   *
+   * @param delta the SIGNED balance change that was speculatively applied
+   *        (positive for a credit, negative for a debit) — compensation reverses it.
+   */
+  private async appendLedgerOrCompensate(
+    userId: Types.ObjectId,
+    delta: number,
+    type: CoinTxType,
+    refId: string | null,
+    balanceAfter: number,
+    session?: ClientSession,
+  ): Promise<boolean> {
+    try {
+      return await this.appendLedger(userId, delta, type, refId, balanceAfter, session);
+    } catch (err) {
+      // Transactional path: let the error abort the transaction (the $inc rolls
+      // back with it). Compensating here would double-undo against an aborting
+      // session.
+      if (session) {
+        throw err;
+      }
+      // Standalone path: the $inc already committed on its own. Undo it so the
+      // balance is never left mutated without a matching ledger row.
+      this.logger.error(
+        `Ledger append failed for (type=${type}, refId=${String(refId)}) on the ` +
+          'standalone path; compensating the balance to keep it in sync with the ledger: ' +
+          `${(err as Error).message}`,
+      );
+      await this.compensateBalance(userId, -delta).catch((compErr: unknown) =>
+        this.logger.error(
+          `Failed to compensate balance after a ledger-append error for ` +
+            `(type=${type}, refId=${String(refId)}): ${(compErr as Error).message}`,
+        ),
+      );
+      throw err;
+    }
+  }
+
+  /**
    * Reverse a speculative balance `$inc` when the ledger insert turned out to be
    * a duplicate (the mutation was already applied for this refId). Returns the
    * post-compensation balance (i.e. the balance WITHOUT this duplicate's effect).
@@ -238,6 +386,82 @@ export class WalletService {
       )
       .exec();
     return reverted?.balanceCoins ?? 0;
+  }
+
+  /**
+   * Whether the wallet is currently under an economy hold (an unpaid refund
+   * debt). Used by {@link debit} to distinguish a hold-block (403) from a plain
+   * insufficient-funds non-match (422) when the guarded spend update finds no row.
+   */
+  private async isOnHold(userId: Types.ObjectId, session?: ClientSession): Promise<boolean> {
+    const doc = await this.walletModel
+      .findOne({ userId }, { economyHold: 1 }, session ? { session } : {})
+      .lean()
+      .exec();
+    return doc?.economyHold === true;
+  }
+
+  /**
+   * Record an unrecovered refund as DEBT and FREEZE the account: set
+   * `economyHold: true` and add `owed` to the outstanding `heldCoins`. Upserts so
+   * a wallet always exists. Atomic single-document update — the debt accumulates
+   * if multiple refunds go partly unrecovered.
+   */
+  private async applyEconomyHold(
+    userId: Types.ObjectId,
+    owed: number,
+    refId: string,
+  ): Promise<void> {
+    await this.walletModel
+      .findOneAndUpdate(
+        { userId },
+        {
+          $set: { economyHold: true },
+          $inc: { heldCoins: owed },
+          $setOnInsert: { userId },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true },
+      )
+      .exec();
+    this.logger.warn(
+      `Economy hold applied to wallet ${userId.toString()}: +${owed} debt (ref ${refId}).`,
+    );
+  }
+
+  /**
+   * Lift the economy hold once the (recovered) balance covers the outstanding
+   * debt. Called after a successful credit: if the wallet is held and its
+   * post-credit `balanceCoins` is at least its `heldCoins` debt, the debt is
+   * considered repaid — clear the hold and zero the debt atomically (guarded on
+   * the still-held condition so a concurrent release doesn't double-run). A
+   * no-op when the wallet isn't held or the balance still falls short.
+   */
+  private async maybeReleaseHold(
+    userId: Types.ObjectId,
+    balanceAfter: number,
+    session?: ClientSession,
+  ): Promise<void> {
+    const held = await this.walletModel
+      .findOne({ userId }, { economyHold: 1, heldCoins: 1 }, session ? { session } : {})
+      .lean()
+      .exec();
+    if (!held || held.economyHold !== true) {
+      return;
+    }
+    if (balanceAfter < (held.heldCoins ?? 0)) {
+      return; // debt not yet covered by the recovered balance — stay frozen.
+    }
+    await this.walletModel
+      .findOneAndUpdate(
+        { userId, economyHold: true },
+        { $set: { economyHold: false, heldCoins: 0 } },
+        { new: true, ...(session ? { session } : {}) },
+      )
+      .exec();
+    this.logger.log(
+      `Economy hold released for wallet ${userId.toString()}: balance ${balanceAfter} ` +
+        `covered the ${held.heldCoins ?? 0} debt.`,
+    );
   }
 
   /** True for a MongoDB duplicate-key error (code 11000 / E11000). */

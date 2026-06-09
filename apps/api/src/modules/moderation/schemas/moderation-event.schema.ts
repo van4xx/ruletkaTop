@@ -55,6 +55,14 @@ export class ModerationEvent {
    * `null` once purged / never supplied. Stored verbatim; a real deployment
    * would offload this to object storage and keep only a URL here — the
    * contract field is named `evidenceUrl` to allow that without a migration.
+   *
+   * RETENTION IS BOUNDED (152-ФЗ / GDPR data-minimisation): this blob is nulled
+   * by the daily `ModerationEvidenceSweepProcessor` once the case is terminal +
+   * a statutory floor has elapsed, or a hard ceiling is reached — see
+   * `ReviewService.sweepExpiredEvidence` and the retention constants in
+   * `moderation.constants.ts` (incl. the CSAM-escalation TODO for `minor`). The
+   * flagged user's own evidence is ALSO nulled on account erasure
+   * (`runErasurePiiScrub`). The row itself (label/score/action) is retained.
    */
   @Prop({ required: false, default: null, type: String })
   evidenceUrl!: string | null;

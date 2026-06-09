@@ -75,6 +75,17 @@ const PRESENCE_COOKIE = 'ruletka_auth';
 const DEFAULT_REFRESH_MAX_AGE_S = 30 * 24 * 60 * 60; // 30 days
 
 /**
+ * Explicit opt-in header a COOKIE-LESS client sends on `login`/`register` to ask
+ * for the rotated refresh token in the JSON body (it has no cookie jar to read
+ * the httpOnly cookie). On `refresh` the source of the presented token already
+ * reveals the transport, but `login`/`register` mint a brand-new token from no
+ * prior credential, so the client must declare its transport up front. The
+ * Flutter app sets `x-refresh-transport: body` (see the mobile `endpoints.dart`).
+ */
+const REFRESH_TRANSPORT_HEADER = 'x-refresh-transport';
+const REFRESH_TRANSPORT_BODY = 'body';
+
+/**
  * Authentication REST surface under `/auth`.
  *
  * ───────────────────────────── Token transport ─────────────────────────────
@@ -119,7 +130,15 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponse> {
     const result = await this.authService.register(dto, this.contextFrom(req));
-    return this.withRefreshCookie(res, result);
+    // Transport-aware, exactly like `refresh`: a BROWSER re-reads the refresh
+    // token from the httpOnly cookie, so the body copy stays blanked (XSS can't
+    // read it). A COOKIE-LESS native client (the Flutter app has no cookie jar)
+    // can ONLY see the body — without this it gets `refreshToken:''` and never
+    // has a token to present to `/auth/refresh`, so the session dies when the
+    // ~15min access token expires. See {@link isCookieLessClient}.
+    return this.withRefreshCookie(res, result, {
+      exposeRefreshInBody: this.isCookieLessClient(req),
+    });
   }
 
   @Post('login')
@@ -133,7 +152,12 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponse> {
     const result = await this.authService.login(dto, this.contextFrom(req));
-    return this.withRefreshCookie(res, result);
+    // Transport-aware (see `register` / `refresh`): expose the refresh token in
+    // the body ONLY for cookie-less native clients; keep it blanked for browsers
+    // (which re-read it from the httpOnly cookie). See {@link isCookieLessClient}.
+    return this.withRefreshCookie(res, result, {
+      exposeRefreshInBody: this.isCookieLessClient(req),
+    });
   }
 
   @Post('refresh')
@@ -413,6 +437,35 @@ export class AuthController {
       return { token: dto.refreshToken, fromCookie: false };
     }
     return null;
+  }
+
+  /**
+   * Decide whether the `login`/`register` caller is a COOKIE-LESS native client
+   * (the Flutter app uses Dio with NO cookie jar) and therefore needs the rotated
+   * refresh token echoed in the JSON body. `refresh` infers this from the SOURCE
+   * of the presented token (`resolveRefreshToken().fromCookie`), but a brand-new
+   * login/register has no prior token to inspect, so the transport is detected
+   * two ways:
+   *
+   *  1. Explicit opt-in: the client sends `x-refresh-transport: body` (the mobile
+   *     app does — see its `endpoints.dart`). This is the authoritative signal.
+   *  2. Fallback heuristic: a browser issues these credential POSTs cross-origin
+   *     (the web app lives on another origin behind CORS) and therefore ALWAYS
+   *     attaches an `Origin` header; Dio sends none. So a request with NO `Origin`
+   *     is treated as a non-browser (cookie-less) client.
+   *
+   * A browser is the safe default: if neither signal fires we keep the body
+   * blanked (cookie-only), so an XSS payload can never read the refresh token.
+   */
+  private isCookieLessClient(req: Request): boolean {
+    const transport = req.headers[REFRESH_TRANSPORT_HEADER];
+    if (typeof transport === 'string' && transport.toLowerCase() === REFRESH_TRANSPORT_BODY) {
+      return true;
+    }
+    // No browser `Origin` ⇒ not a browser ⇒ cookie-less. Browsers always send
+    // `Origin` on cross-origin credentialed POSTs (and on any same-site POST too).
+    const origin = req.headers.origin;
+    return !(typeof origin === 'string' && origin.length > 0);
   }
 
   /**

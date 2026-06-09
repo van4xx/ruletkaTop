@@ -18,10 +18,13 @@
 #   docker compose -f infra/docker/docker-compose.prod.yml up -d --build
 #
 # ⚠️ HARDENING (do BEFORE exposing to the internet — see PRODUCTION.md):
-#   • Mongo here runs on the ISOLATED `ruletka-net` with NO published ports, so
-#     it is reachable only by the app containers. For internet-facing or
-#     multi-host deploys you MUST enable auth (keyFile/x509) + TLS, or use a
-#     managed RS (MongoDB Atlas) — then set MONGODB_URI accordingly.
+#   • Mongo here runs on the ISOLATED `ruletka-net` with NO published ports AND
+#     with AUTHENTICATION ENABLED (`--auth --keyFile`): every client must present
+#     credentials and the three RS members authenticate to each other with a
+#     shared keyFile. `bootstrap.sh` generates the keyFile + a root password + a
+#     least-privilege `app` password and wires them into `MONGODB_URI`. For
+#     multi-host deploys add TLS on top (or use a managed RS — MongoDB Atlas) and
+#     set MONGODB_URI accordingly.
 #   • Terminate TLS at nginx (mount real certs); set strong secrets in .env.
 #   • Consider running Mongo nodes on separate hosts/volumes for true HA.
 # =============================================================================
@@ -32,9 +35,37 @@ x-mongo-common: &mongo-common
   image: mongo:7
   restart: unless-stopped
   networks: [ruletka-net]
-  # Replica set, bound to the internal network only (no published ports).
-  command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
+  # Replica set with AUTH ENABLED:
+  #   --auth     → require client authentication (closes the unauthenticated
+  #                replica set; only credentialed clients can read/write).
+  #   --keyFile  → shared-secret INTERNAL auth so the three members trust each
+  #                other (a keyFile also implies --auth). The keyfile is
+  #                bind-mounted read-only; bootstrap.sh generates it
+  #                (`openssl rand -base64 756`, chmod 400) and the root/app users.
+  # The image entrypoint creates the root user (over loopback, via the localhost
+  # exception) from MONGO_INITDB_ROOT_* on first init; mongo-init then authenticates
+  # as root to rs.initiate() and create the least-privilege `app` user.
+  command:
+    [
+      'mongod',
+      '--replSet',
+      'rs0',
+      '--bind_ip_all',
+      '--auth',
+      '--keyFile',
+      '/etc/mongo-keyfile',
+    ]
+  environment:
+    MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?set MONGO_ROOT_USERNAME in .env for prod}
+    MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env for prod}
+  # NOTE: each node sets its OWN `volumes:` below (data volume + the shared
+  # keyFile) — a per-service `volumes:` REPLACES (does not merge with) an
+  # anchored one, so the keyFile mount must be repeated per node, not put here.
   healthcheck:
+    # Auth is on, so an UNauthenticated ping is rejected — but `connectionStatus`
+    # (and a plain serverStatus ping) is allowed pre-auth and still proves the
+    # mongod is up + answering, which is all the healthcheck needs to gate
+    # mongo-init / the API. (mongo-init handles the credentialed RS init.)
     test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
     interval: 10s
     timeout: 5s
@@ -46,18 +77,34 @@ services:
   mongo1:
     <<: *mongo-common
     container_name: ruletka-mongo1
-    volumes: [mongo1-data:/data/db]
+    volumes:
+      - mongo1-data:/data/db
+      - ../secrets/mongo-keyfile:/etc/mongo-keyfile:ro
   mongo2:
     <<: *mongo-common
     container_name: ruletka-mongo2
-    volumes: [mongo2-data:/data/db]
+    volumes:
+      - mongo2-data:/data/db
+      - ../secrets/mongo-keyfile:/etc/mongo-keyfile:ro
   mongo3:
     <<: *mongo-common
     container_name: ruletka-mongo3
-    volumes: [mongo3-data:/data/db]
+    volumes:
+      - mongo3-data:/data/db
+      - ../secrets/mongo-keyfile:/etc/mongo-keyfile:ro
 
-  # One-shot: initialise rs0 with all three members, then exit. Idempotent —
-  # re-running is a no-op once the set is already initialised.
+  # One-shot: initialise rs0 with all three members, then ensure the
+  # least-privilege `app` user exists, then exit. Idempotent — re-running is a
+  # no-op once the set is initialised and the user exists.
+  #
+  # AUTH FLOW (with --auth --keyFile on the nodes):
+  #   1. The image entrypoint already created the ROOT user on each node from
+  #      MONGO_INITDB_ROOT_* (over the loopback localhost-exception) on first init.
+  #   2. We authenticate to mongo1 AS ROOT and `rs.initiate()` (root has the
+  #      cluster privileges the RS init needs once a user exists).
+  #   3. After the primary is elected we create the `app` user, scoped to ONLY
+  #      the `ruletka` db (readWrite + dbAdmin for index management) — the API
+  #      connects as this least-privilege user, never as root.
   mongo-init:
     image: mongo:7
     container_name: ruletka-mongo-init
@@ -67,25 +114,67 @@ services:
       mongo2: { condition: service_healthy }
       mongo3: { condition: service_healthy }
     restart: 'no'
+    environment:
+      MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?set MONGO_ROOT_USERNAME in .env for prod}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env for prod}
+      MONGO_APP_USERNAME: ${MONGO_APP_USERNAME:-app}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env for prod}
     entrypoint:
       - bash
       - -c
       - |
+        set -euo pipefail
+        ADMIN_AUTH=(--host mongo1:27017 --quiet -u "$$MONGO_ROOT_USERNAME" -p "$$MONGO_ROOT_PASSWORD" --authenticationDatabase admin)
+
         echo "Initialising replica set rs0…"
-        mongosh --host mongo1:27017 --quiet --eval '
-          try {
-            rs.status();
-            print("rs0 already initialised");
-          } catch (e) {
-            rs.initiate({
-              _id: "rs0",
-              members: [
-                { _id: 0, host: "mongo1:27017", priority: 2 },
-                { _id: 1, host: "mongo2:27017" },
-                { _id: 2, host: "mongo3:27017" }
-              ]
+        # rs.initiate needs auth now that the root user exists. Retry briefly in
+        # case the root user creation on mongo1 is still settling at first boot.
+        for i in $$(seq 1 20); do
+          if mongosh "$${ADMIN_AUTH[@]}" --eval '
+            try {
+              rs.status();
+              print("rs0 already initialised");
+            } catch (e) {
+              rs.initiate({
+                _id: "rs0",
+                members: [
+                  { _id: 0, host: "mongo1:27017", priority: 2 },
+                  { _id: 1, host: "mongo2:27017" },
+                  { _id: 2, host: "mongo3:27017" }
+                ]
+              });
+              print("rs0 initiated");
+            }
+          '; then break; fi
+          echo "  …mongo1 not ready for authenticated init yet (attempt $$i) — retrying"; sleep 3
+        done
+
+        echo "Waiting for a PRIMARY before creating the app user…"
+        mongosh "$${ADMIN_AUTH[@]}" --eval '
+          let ok = false;
+          for (let i = 0; i < 60; i++) {
+            try { if (db.hello().isWritablePrimary) { ok = true; break; } } catch (e) {}
+            sleep(1000);
+          }
+          if (!ok) { throw new Error("no PRIMARY elected in time"); }
+        '
+
+        echo "Ensuring least-privilege app user on the ruletka db…"
+        mongosh "$${ADMIN_AUTH[@]}" --eval '
+          const u = process.env.MONGO_APP_USERNAME;
+          const p = process.env.MONGO_APP_PASSWORD;
+          const adb = db.getSiblingDB("ruletka");
+          if (adb.getUser(u)) {
+            print("app user already exists — leaving as-is");
+          } else {
+            adb.createUser({
+              user: u,
+              pwd: p,
+              // Scoped to ONLY the ruletka db. dbAdmin is needed so the API can
+              // build/sync its indexes (RUN_INDEX_SYNC); no cluster/admin rights.
+              roles: [ { role: "readWrite", db: "ruletka" }, { role: "dbAdmin", db: "ruletka" } ]
             });
-            print("rs0 initiated");
+            print("app user created");
           }
         '
 
@@ -160,16 +249,25 @@ services:
     environment:
       NODE_ENV: production
       API_HOST: 0.0.0.0
-      # All three RS members; driver discovers the primary. Real transactions.
-      MONGODB_URI: mongodb://mongo1:27017,mongo2:27017,mongo3:27017/ruletka?replicaSet=rs0&retryWrites=true&w=majority
+      # All three RS members; the driver discovers the primary. Real transactions.
+      # Carries the least-privilege `app` credentials + `authSource=ruletka` (the
+      # db the app user lives on). Sourced from .env (bootstrap.sh builds it with
+      # the generated app password) so the secret lives in exactly one place.
+      # `:?` fails the deploy loudly if .env is missing it rather than silently
+      # falling back to an unauthenticated string.
+      MONGODB_URI: ${MONGODB_URI:?set MONGODB_URI (with app credentials) in .env for prod}
       REDIS_HOST: redis
       REDIS_PORT: '6379'
       TURN_HOST: coturn
-      # Cloudflare Turnstile server secret. Passed through from .env so the
-      # prod CAPTCHA gate is satisfiable; `:-` keeps compose parseable when the
-      # var is supplied via env_file rather than exported in the shell. Leave
-      # blank in .env to keep CAPTCHA a no-op (dev); set it to enforce the gate.
-      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      # Cloudflare Turnstile server secret — the anti-bot gate on /auth/register.
+      # REQUIRED in production: it's a CRITICAL_SECRET in
+      # apps/api/src/common/config-validation.ts (the API FAILS-FAST at boot
+      # without it) and is marked REQUIRED in LAUNCH-CHECKLIST. bootstrap.sh
+      # REQUIRES the operator to supply it, so .env always carries a real value.
+      # `:?` fails the deploy loudly if it's somehow missing rather than silently
+      # shipping with the bot gate disabled. (Pair it with the public site key
+      # NEXT_PUBLIC_TURNSTILE_SITE_KEY, baked into the web build.)
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:?set TURNSTILE_SECRET in .env for prod (anti-bot gate; the API refuses to boot without it)}
     depends_on:
       mongo-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }

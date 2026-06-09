@@ -96,3 +96,43 @@ export const BAN_AT_VIOLATION = 3;
 export const ZERO_TOLERANCE_LABELS: readonly import('@ruletka/shared-types').ModerationLabel[] = [
   'minor',
 ];
+
+// ── Abuse-evidence retention (152-ФЗ / GDPR data-minimisation) ───────────────
+
+/**
+ * Statutory-minimum retention floor (ms) for captured abuse evidence
+ * (`reports.evidenceUrl` / `moderation_events.evidenceUrl`). Evidence is purged
+ * only once a case is TERMINAL (`resolved`/`dismissed`) AND at least this long
+ * has elapsed since the decision — so a closed case's frame survives a minimum
+ * window for appeal review / dispute, then is dropped to honour
+ * data-minimisation (we must not hold a person's captured image forever).
+ *
+ * 90 days balances the appeals window (see `appeals.service`) and a conservative
+ * complaint/dispute floor. Tune per legal counsel.
+ */
+export const EVIDENCE_RETENTION_FLOOR_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Hard ceiling (ms) after which evidence is purged regardless of case status —
+ * a backstop so an event/report that is never triaged to a terminal state does
+ * NOT retain its captured frame indefinitely (unbounded retention is the exact
+ * finding this bound closes). Set comfortably above the appeals/dispute window;
+ * 1 year. The purge only nulls the `evidenceUrl` blob — the row (label/score/
+ * action/status) is RETAINED for the audit trail.
+ *
+ * NOTE — CSAM ESCALATION HOOK (TODO): for `minor` (CSAM-risk) events the
+ * captured frame must NOT simply be silently deleted on expiry. The legally
+ * required workflow is to hand the evidence to law enforcement / a hotline
+ * (e.g. NCMEC) BEFORE purge and record the referral. That full
+ * report-to-authority workflow is a separate product task; this retention sweep
+ * intentionally still purges the blob on the ceiling to avoid unbounded
+ * retention, but a real deployment MUST wire a pre-purge CSAM escalation hook
+ * here (preserve + refer `minor`-label evidence) before this runs in production.
+ */
+export const EVIDENCE_RETENTION_CEILING_MS = 365 * 24 * 60 * 60 * 1000;
+
+/** Terminal case statuses after which the retention FLOOR starts counting. */
+export const EVIDENCE_TERMINAL_STATUSES: readonly import('@ruletka/shared-types').ReportStatus[] = [
+  'resolved',
+  'dismissed',
+];

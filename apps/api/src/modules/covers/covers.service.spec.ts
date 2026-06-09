@@ -1,6 +1,17 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { Model } from 'mongoose';
 
+/**
+ * A per-attempt cover ledger ref is `${userId}:${coverId}:${objectId}`: the
+ * (user, cover) prefix scopes it per buyer, and the trailing 24-hex ObjectId is
+ * minted fresh on every purchase attempt so a retry re-charges (a fixed ref
+ * would idempotently self-cancel with its own compensating refund and grant the
+ * cover for free). This matcher asserts the prefix while allowing any ObjectId.
+ */
+function coverRefFor(userId: string, coverId: string): RegExp {
+  return new RegExp(`^${userId}:${coverId}:[0-9a-f]{24}$`);
+}
+
 import type { PublicProfile } from '@ruletka/shared-types';
 
 import type { ProfilesService } from '../profiles/profiles.service';
@@ -104,11 +115,17 @@ describe('CoversService', () => {
 
       const inv = await service.purchase(userId, 'sunset');
 
-      // Charged the catalogue price as a `cover` debit keyed by the (user, cover)
-      // pair — NOT the bare catalogue id, which is a global constant that would
-      // collide across buyers on the global (type, refId) ledger index.
+      // Charged the catalogue price as a `cover` debit keyed by a PER-ATTEMPT ref
+      // (the (user, cover) prefix + a fresh ObjectId) — NOT the bare catalogue
+      // id (which is a global constant that would collide across buyers) and NOT
+      // a fixed (user, cover) key (which would self-cancel on a retry).
       expect(wallet.debit).toHaveBeenCalledTimes(1);
-      expect(wallet.debit).toHaveBeenCalledWith(userId, 120, 'cover', `${userId}:sunset`);
+      expect(wallet.debit).toHaveBeenCalledWith(
+        userId,
+        120,
+        'cover',
+        expect.stringMatching(coverRefFor(userId, 'sunset')),
+      );
 
       // Granted via $addToSet AND set active in a single update.
       expect(profileModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
@@ -177,10 +194,19 @@ describe('CoversService', () => {
       await expect(service.purchase(userId, 'mint')).rejects.toBe(writeErr);
 
       // The earlier debit is reversed with a `refund` credit for the same amount,
-      // keyed by the SAME (user, cover) ref as the debit — so the compensation
-      // pairs up and we never charge without recording ownership.
+      // keyed by the EXACT SAME per-attempt ref as the debit — so the
+      // compensation pairs up to a net zero and we never charge without recording
+      // ownership.
       expect(wallet.credit).toHaveBeenCalledTimes(1);
-      expect(wallet.credit).toHaveBeenCalledWith(userId, 200, 'refund', `${userId}:mint`);
+      expect(wallet.credit).toHaveBeenCalledWith(
+        userId,
+        200,
+        'refund',
+        expect.stringMatching(coverRefFor(userId, 'mint')),
+      );
+      const debitRef = (wallet.debit.mock.calls[0] as unknown[])[3];
+      const refundRef = (wallet.credit.mock.calls[0] as unknown[])[3];
+      expect(refundRef).toBe(debitRef);
     });
 
     it('still surfaces the original write error even if the compensating refund also fails', async () => {
@@ -200,11 +226,20 @@ describe('CoversService', () => {
 
       await expect(service.purchase(userId, 'mint')).rejects.toBeInstanceOf(NotFoundException);
 
-      // The debit is compensated so we don't charge for a cover we couldn't grant.
-      expect(wallet.credit).toHaveBeenCalledWith(userId, 200, 'refund', `${userId}:mint`);
+      // The debit is compensated so we don't charge for a cover we couldn't grant,
+      // reusing the same per-attempt ref so the pair nets to zero.
+      expect(wallet.credit).toHaveBeenCalledWith(
+        userId,
+        200,
+        'refund',
+        expect.stringMatching(coverRefFor(userId, 'mint')),
+      );
+      const debitRef = (wallet.debit.mock.calls[0] as unknown[])[3];
+      const refundRef = (wallet.credit.mock.calls[0] as unknown[])[3];
+      expect(refundRef).toBe(debitRef);
     });
 
-    it('keys the ledger by (user, cover) so two DIFFERENT buyers of the same cover are BOTH charged with distinct refIds (regression: paid covers were free after the first buyer)', async () => {
+    it('keys the ledger per buyer so two DIFFERENT buyers of the same cover are BOTH charged with distinct refIds (regression: paid covers were free after the first buyer)', async () => {
       const userA = '507f1f77bcf86cd799439011';
       const userB = '507f1f77bcf86cd799439abc';
       profileModel.findOneAndUpdate.mockReturnValue(
@@ -217,9 +252,56 @@ describe('CoversService', () => {
       // Each buyer is debited under a refId scoped to THEIR userId, so neither
       // collides with the other on the global (type, refId) ledger index — the
       // second buyer is charged for real instead of silently self-refunded.
-      expect(wallet.debit).toHaveBeenNthCalledWith(1, userA, 500, 'cover', `${userA}:noir`);
-      expect(wallet.debit).toHaveBeenNthCalledWith(2, userB, 500, 'cover', `${userB}:noir`);
-      expect(`${userA}:noir`).not.toBe(`${userB}:noir`);
+      expect(wallet.debit).toHaveBeenNthCalledWith(
+        1,
+        userA,
+        500,
+        'cover',
+        expect.stringMatching(coverRefFor(userA, 'noir')),
+      );
+      expect(wallet.debit).toHaveBeenNthCalledWith(
+        2,
+        userB,
+        500,
+        'cover',
+        expect.stringMatching(coverRefFor(userB, 'noir')),
+      );
+      const refA = (wallet.debit.mock.calls[0] as unknown[])[3];
+      const refB = (wallet.debit.mock.calls[1] as unknown[])[3];
+      expect(refA).not.toBe(refB);
+    });
+
+    it('RE-CHARGES on a retry after a compensated-refund failure (regression: a fixed ref self-cancelled and granted the cover for free)', async () => {
+      // Attempt 1: the grant write fails after the debit, so the debit is
+      // compensated with a matching refund (net zero) and the call throws.
+      const writeErr = new Error('mongo write failed');
+      profileModel.findOneAndUpdate.mockReturnValueOnce({
+        exec: jest.fn().mockRejectedValue(writeErr),
+      });
+      // Attempt 2 (the RETRY): the grant write succeeds.
+      profileModel.findOneAndUpdate.mockReturnValueOnce(
+        queryReturning(profileDoc({ activeCover: 'noir', ownedCovers: ['noir'] })),
+      );
+      // The retry's profile is still un-owned (the failed attempt granted nothing).
+      profiles.findByUserId.mockResolvedValue(profileDoc({ ownedCovers: [] }));
+
+      await expect(service.purchase(userId, 'noir')).rejects.toBe(writeErr);
+      await service.purchase(userId, 'noir');
+
+      // Two real debits — one per attempt — under DISTINCT per-attempt refs, so
+      // the retry actually re-charges instead of colliding with the first
+      // attempt's ledger row and self-refunding to a free cover.
+      expect(wallet.debit).toHaveBeenCalledTimes(2);
+      const firstDebitRef = (wallet.debit.mock.calls[0] as unknown[])[3];
+      const retryDebitRef = (wallet.debit.mock.calls[1] as unknown[])[3];
+      expect(firstDebitRef).toEqual(expect.stringMatching(coverRefFor(userId, 'noir')));
+      expect(retryDebitRef).toEqual(expect.stringMatching(coverRefFor(userId, 'noir')));
+      expect(retryDebitRef).not.toBe(firstDebitRef);
+
+      // Attempt 1 was compensated (its debit refunded under the same ref); the
+      // successful retry issues no refund.
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+      expect((wallet.credit.mock.calls[0] as unknown[])[3]).toBe(firstDebitRef);
     });
   });
 

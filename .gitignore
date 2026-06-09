@@ -22,6 +22,9 @@ uploads/
 .env
 .env.local
 .env.*.local
+# Generated Mongo replica-set keyFile + any other on-host deploy secrets
+# (bootstrap.sh writes infra/secrets/mongo-keyfile — NEVER commit it).
+infra/secrets/
 
 # Logs
 *.log

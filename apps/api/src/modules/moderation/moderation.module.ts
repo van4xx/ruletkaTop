@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -20,6 +21,10 @@ import { AppealsController } from './appeals.controller';
 import { AppealsService } from './appeals.service';
 import { BlocksService } from './blocks.service';
 import { FRAME_SCORER, resolveFrameScorer } from './frame-scorer';
+import {
+  MODERATION_EVIDENCE_SWEEP_QUEUE,
+  ModerationEvidenceSweepProcessor,
+} from './moderation-evidence-sweep.processor';
 import { ModerationController } from './moderation.controller';
 import { ModerationService } from './moderation.service';
 import { ReportsService } from './reports.service';
@@ -72,6 +77,10 @@ import { Report, ReportSchema } from './schemas/report.schema';
       { name: Appeal.name, schema: AppealSchema },
     ]),
     UsersModule,
+    // Background abuse-evidence retention sweep (BullMQ). The root connection
+    // lives in AppModule; here we register the named queue this module's
+    // processor drains. Bounds the previously-unbounded `evidenceUrl` storage.
+    BullModule.registerQueue({ name: MODERATION_EVIDENCE_SWEEP_QUEUE }),
     // Breaks the AuthModule → ProfilesModule → ModerationModule → AuthModule cycle.
     forwardRef(() => AuthModule),
     // {@link AdminModule} exports {@link AuditService} so the privileged admin
@@ -96,6 +105,8 @@ import { Report, ReportSchema } from './schemas/report.schema';
     AdminEconomyService,
     ModerationService,
     ReviewService,
+    // Drains the abuse-evidence retention queue registered above.
+    ModerationEvidenceSweepProcessor,
     // Account-teardown's best-effort upstream billing cancel for ban / admin
     // delete. The port + its CloudPayments client depend only on the global
     // ConfigService, so they are provided LOCALLY (no extra DI cycle); when

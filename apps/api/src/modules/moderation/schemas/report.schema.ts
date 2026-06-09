@@ -47,6 +47,13 @@ export class Report {
    * (reports filed outside a call). Stored verbatim; named `evidenceUrl` so a
    * real deployment can offload the blob to object storage and keep only a URL
    * here without a contract/migration change — mirrors {@link ModerationEvent}.
+   *
+   * RETENTION IS BOUNDED (152-ФЗ / GDPR data-minimisation): this blob is nulled
+   * by the daily `ModerationEvidenceSweepProcessor` once the case is terminal +
+   * a statutory floor has elapsed, or a hard ceiling is reached — see
+   * `ReportsService.sweepExpiredEvidence` and the retention constants in
+   * `moderation.constants.ts`. The user's OWN authored evidence is ALSO nulled
+   * on account erasure (`runErasurePiiScrub`). The row itself is retained.
    */
   @Prop({ required: false, default: null, type: String })
   evidenceUrl!: string | null;

@@ -6,6 +6,7 @@ import {
   PAYMENTS_CANCEL_PORT,
 } from '../../common/payments-cancel.port';
 import { CloudPaymentsClient } from '../payments/cloudpayments.client';
+import { AvatarStorageService } from '../profiles/avatar-storage.service';
 import { User, UserSchema } from './schemas/user.schema';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -30,6 +31,12 @@ import { UsersService } from './users.service';
     // is unconfigured the port no-ops and only the LOCAL terminal-state drive runs.
     CloudPaymentsClient,
     { provide: PAYMENTS_CANCEL_PORT, useClass: CloudPaymentsCancelPort },
+    // Used by {@link UsersService.eraseAccount} to fs.unlink the user's avatar
+    // FILE on disk during right-to-be-forgotten. The service depends ONLY on the
+    // global ConfigService (no DB/state), so it is provided LOCALLY here rather
+    // than importing ProfilesModule (which imports back into this graph — would
+    // risk a DI cycle), mirroring the local CloudPaymentsClient provision above.
+    AvatarStorageService,
   ],
   exports: [UsersService, MongooseModule],
 })

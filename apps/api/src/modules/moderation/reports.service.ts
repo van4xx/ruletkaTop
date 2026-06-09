@@ -17,6 +17,11 @@ import type {
 
 import { UsersService } from '../users/users.service';
 import { AdminService } from './admin.service';
+import {
+  EVIDENCE_RETENTION_CEILING_MS,
+  EVIDENCE_RETENTION_FLOOR_MS,
+  EVIDENCE_TERMINAL_STATUSES,
+} from './moderation.constants';
 import { Report, ReportDocument } from './schemas/report.schema';
 
 /** A page of reports (newest-first) with an opaque cursor for the next page. */
@@ -306,6 +311,39 @@ export class ReportsService {
       againstUserId: row._id.toString(),
       openReports: row.count,
     }));
+  }
+
+  /**
+   * Retention sweep for captured abuse-report EVIDENCE (152-ФЗ / GDPR
+   * data-minimisation): null the `evidenceUrl` blob on `reports` whose evidence
+   * has aged past the retention bound, RETAINING the row (reason/status/target)
+   * so the moderation record survives.
+   *
+   * A report's frame is purged when EITHER the case is TERMINAL
+   * (`resolved`/`dismissed`) and at least {@link EVIDENCE_RETENTION_FLOOR_MS}
+   * has elapsed since the decision (`updatedAt`), OR
+   * {@link EVIDENCE_RETENTION_CEILING_MS} has elapsed since filing (`createdAt`)
+   * regardless of status. Mirrors {@link ReviewService.sweepExpiredEvidence}.
+   *
+   * Idempotent (only matches rows that still HAVE an `evidenceUrl`). Returns the
+   * number of frames purged.
+   */
+  async sweepExpiredEvidence(now: Date = new Date()): Promise<number> {
+    const floorCutoff = new Date(now.getTime() - EVIDENCE_RETENTION_FLOOR_MS);
+    const ceilingCutoff = new Date(now.getTime() - EVIDENCE_RETENTION_CEILING_MS);
+    const res = await this.reportModel
+      .updateMany(
+        {
+          evidenceUrl: { $ne: null },
+          $or: [
+            { status: { $in: EVIDENCE_TERMINAL_STATUSES }, updatedAt: { $lte: floorCutoff } },
+            { createdAt: { $lte: ceilingCutoff } },
+          ],
+        },
+        { $set: { evidenceUrl: null } },
+      )
+      .exec();
+    return res.modifiedCount ?? 0;
   }
 
   /** Map a hydrated report document to the shared `Report` contract shape. */

@@ -48,11 +48,21 @@ function eventDoc(
 
 describe('ReviewService — admin review queue', () => {
   let service: ReviewService;
-  let eventModel: { find: jest.Mock; findById: jest.Mock; findByIdAndUpdate: jest.Mock };
+  let eventModel: {
+    find: jest.Mock;
+    findById: jest.Mock;
+    findByIdAndUpdate: jest.Mock;
+    updateMany: jest.Mock;
+  };
   let adminService: { banUser: jest.Mock; unbanUser: jest.Mock };
 
   beforeEach(async () => {
-    eventModel = { find: jest.fn(), findById: jest.fn(), findByIdAndUpdate: jest.fn() };
+    eventModel = {
+      find: jest.fn(),
+      findById: jest.fn(),
+      findByIdAndUpdate: jest.fn(),
+      updateMany: jest.fn(),
+    };
     adminService = {
       banUser: jest.fn(),
       unbanUser: jest.fn().mockResolvedValue({ userId: USER, isBanned: false }),
@@ -251,6 +261,34 @@ describe('ReviewService — admin review queue', () => {
       // A closed item must never resurrect a ban.
       expect(adminService.banUser).not.toHaveBeenCalled();
       expect(doc.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sweepExpiredEvidence (bounded retention)', () => {
+    it('nulls evidenceUrl for aged-out terminal OR ceiling-exceeded events that still HAVE evidence, retaining the row', async () => {
+      eventModel.updateMany.mockReturnValue(queryReturning({ modifiedCount: 3 }));
+
+      const purged = await service.sweepExpiredEvidence(new Date('2026-06-10T00:00:00.000Z'));
+
+      expect(purged).toBe(3);
+      const [filter, update] = eventModel.updateMany.mock.calls[0] as [
+        Record<string, unknown>,
+        Record<string, unknown>,
+      ];
+      // Idempotent: only events that still carry an evidence blob are touched.
+      expect(filter.evidenceUrl).toEqual({ $ne: null });
+      const or = filter.$or as Array<Record<string, unknown>>;
+      expect(or).toHaveLength(2);
+      expect(or[0]).toMatchObject({ status: { $in: ['resolved', 'dismissed'] } });
+      expect(or[0]?.updatedAt).toHaveProperty('$lte');
+      expect(or[1]?.createdAt).toHaveProperty('$lte');
+      // Only the blob is nulled — label/score/action/status are retained for audit.
+      expect(update).toEqual({ $set: { evidenceUrl: null } });
+    });
+
+    it('returns 0 when nothing was due for purge', async () => {
+      eventModel.updateMany.mockReturnValue(queryReturning({ modifiedCount: 0 }));
+      await expect(service.sweepExpiredEvidence()).resolves.toBe(0);
     });
   });
 });

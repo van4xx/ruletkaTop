@@ -93,11 +93,18 @@ export class CoversService {
     // is a code-defined constant shared by every buyer — using it as the refId
     // collided across users: the second buyer's debit hit the first buyer's
     // ledger row, self-refunded, and the cover was still granted (a paid cover
-    // for free). Key the ledger by the (user, cover) pair instead: globally
-    // unique per buyer, while still idempotent for THIS user+cover (so a
-    // concurrent double-buy that slips past the ownsCover check above charges at
-    // most once). The compensating refund reuses the SAME ref so it pairs up.
-    const ledgerRef = `${userId}:${coverId}`;
+    // for free).
+    //
+    // A `${userId}:${coverId}` pair fixes the cross-USER collision, but is still
+    // a FIXED key for a given (user, cover): if the grant write fails, the
+    // compensating refund fires, and the user RETRIES, the re-debit collides on
+    // that same fixed refId → idempotent self-cancelling no-op → the cover is
+    // granted at ZERO net cost. Mint a PER-ATTEMPT ref instead (a fresh ObjectId
+    // every call) so each retry re-charges for real. The compensating refund
+    // below reuses THIS attempt's ref so the debit/refund pair still nets to
+    // zero, and a concurrent double-buy is caught upstream by the ownsCover
+    // check (the per-attempt ref no longer dedupes that, but ownership does).
+    const ledgerRef = `${userId}:${coverId}:${new Types.ObjectId().toString()}`;
 
     // Step 4: charge first. Throws InsufficientFundsException (422) on shortfall.
     await this.walletService.debit(userId, cover.priceCoins, 'cover', ledgerRef);

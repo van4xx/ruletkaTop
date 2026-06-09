@@ -44,6 +44,7 @@ describe('ReportsService', () => {
     findById: jest.Mock;
     findOneAndUpdate: jest.Mock;
     aggregate: jest.Mock;
+    updateMany: jest.Mock;
   };
   let usersService: { findById: jest.Mock };
   let adminService: { banUser: jest.Mock };
@@ -56,6 +57,7 @@ describe('ReportsService', () => {
       findById: jest.fn(),
       findOneAndUpdate: jest.fn(),
       aggregate: jest.fn(),
+      updateMany: jest.fn(),
     };
     usersService = { findById: jest.fn() };
     adminService = { banUser: jest.fn() };
@@ -388,6 +390,35 @@ describe('ReportsService', () => {
       const [filter] = reportModel.find.mock.calls[0] as [Record<string, unknown>];
       expect(filter.status).toBe('open');
       expect(String(filter.againstUserId)).toBe(AGAINST);
+    });
+  });
+
+  describe('sweepExpiredEvidence (bounded retention)', () => {
+    it('nulls evidenceUrl for aged-out terminal OR ceiling-exceeded rows that still HAVE evidence', async () => {
+      reportModel.updateMany.mockReturnValue(queryReturning({ modifiedCount: 4 }));
+
+      const purged = await service.sweepExpiredEvidence(new Date('2026-06-10T00:00:00.000Z'));
+
+      expect(purged).toBe(4);
+      const [filter, update] = reportModel.updateMany.mock.calls[0] as [
+        Record<string, unknown>,
+        Record<string, unknown>,
+      ];
+      // Only rows that STILL carry an evidence blob are touched (idempotent).
+      expect(filter.evidenceUrl).toEqual({ $ne: null });
+      // Either a terminal-and-aged case OR a ceiling-exceeded case.
+      const or = filter.$or as Array<Record<string, unknown>>;
+      expect(or).toHaveLength(2);
+      expect(or[0]).toMatchObject({ status: { $in: ['resolved', 'dismissed'] } });
+      expect(or[0]?.updatedAt).toHaveProperty('$lte');
+      expect(or[1]?.createdAt).toHaveProperty('$lte');
+      // The blob is nulled; the row (reason/status/target) is retained.
+      expect(update).toEqual({ $set: { evidenceUrl: null } });
+    });
+
+    it('returns 0 when nothing was due for purge', async () => {
+      reportModel.updateMany.mockReturnValue(queryReturning({ modifiedCount: 0 }));
+      await expect(service.sweepExpiredEvidence()).resolves.toBe(0);
     });
   });
 });

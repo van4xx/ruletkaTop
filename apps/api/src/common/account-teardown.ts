@@ -183,9 +183,92 @@ export async function runLeaderboardTopTeardown(
 }
 
 /**
+ * PERMANENT-ERASURE PII scrub across the remaining collections that still carry
+ * personal data the user authored — the long-tail right-to-be-forgotten cleanup
+ * that complements the credential/profile/settings/session/message scrub in
+ * `UsersService.eraseAccount`. Permanent teardown ONLY (`erase`/`delete`); a
+ * reversible `ban` must NOT destroy this data.
+ *
+ * Scrubbed here (each independent + best-effort, mirroring the warn pattern):
+ *  - `device_tokens` / `push_subscriptions` — the user's push endpoints are
+ *    DELETED (a device/browser routing identifier is PII and serves no post-
+ *    erasure purpose; we must also stop pushing to a forgotten account);
+ *  - `gifttransactions.message` — the free-text note the user AUTHORED (as
+ *    sender) is redacted to `null` (the financial row itself is retained for
+ *    accounting, like the coin ledger, but the personal note is stripped);
+ *  - `reports.details` / `reports.evidenceUrl` — the free-text and captured
+ *    frame the user AUTHORED (as reporter, `fromUserId`) are redacted; the row
+ *    is kept so the moderation record against the target survives;
+ *  - `moderation_events.evidenceUrl` — the captured JPEG frame of the user's own
+ *    flagged frames (`userId`) is NULLED, but the row is RETAINED (label/score/
+ *    action) for the abuse audit trail.
+ *
+ * NOT touched here (lawful retention, handled elsewhere / intentionally kept):
+ *  - `payments` — financial records are retained under accounting/tax law; the
+ *    `userId` link is left intact but the person is de-identified via the User
+ *    tombstone (no direct PII lives on a payment row — card data never touches
+ *    our DB);
+ *  - `cointransactions` / `gifttransactions` ROWS — the append-only ledgers are
+ *    retained (de-identified via the User tombstone), as documented on
+ *    `eraseAccount`.
+ *
+ * The avatar FILE on disk is removed by the caller (it holds the
+ * `AvatarStorageService` + the pre-scrub `avatarUrl`); this helper covers the DB.
+ */
+export async function runErasurePiiScrub(
+  connection: Connection,
+  objectId: Types.ObjectId,
+  deps: TeardownDeps = {},
+): Promise<void> {
+  const warn = deps.onWarn ?? (() => undefined);
+
+  // Push routing identifiers (PII) — delete; also stops post-erasure delivery.
+  try {
+    await connection.collection('device_tokens').deleteMany({ userId: objectId });
+  } catch (err) {
+    warn(`teardown: failed to delete device tokens: ${(err as Error).message}`);
+  }
+  try {
+    await connection.collection('push_subscriptions').deleteMany({ userId: objectId });
+  } catch (err) {
+    warn(`teardown: failed to delete push subscriptions: ${(err as Error).message}`);
+  }
+
+  // Authored gift notes (sender free-text) — redact, keep the financial row.
+  try {
+    await connection
+      .collection('gifttransactions')
+      .updateMany({ fromUserId: objectId }, { $set: { message: null } });
+  } catch (err) {
+    warn(`teardown: failed to redact gift messages: ${(err as Error).message}`);
+  }
+
+  // Authored abuse reports (reporter free-text + captured frame) — redact, keep
+  // the row so the record against the reported user survives.
+  try {
+    await connection
+      .collection('reports')
+      .updateMany({ fromUserId: objectId }, { $set: { details: null, evidenceUrl: null } });
+  } catch (err) {
+    warn(`teardown: failed to redact authored reports: ${(err as Error).message}`);
+  }
+
+  // The user's own moderation evidence frames — null the captured JPEG but RETAIN
+  // the event row (label/score/action) for the abuse audit trail.
+  try {
+    await connection
+      .collection('moderation_events')
+      .updateMany({ userId: objectId }, { $set: { evidenceUrl: null } });
+  } catch (err) {
+    warn(`teardown: failed to null moderation evidence: ${(err as Error).message}`);
+  }
+}
+
+/**
  * The full teardown side-effects for one account, in one call: billing cancel +
- * leaderboard/Top tombstoning. Convenience wrapper invoked by
- * `eraseAccount` / `deleteUser` / `banUser`. Best-effort throughout.
+ * leaderboard/Top tombstoning, plus (for PERMANENT modes) the long-tail PII
+ * scrub. Convenience wrapper invoked by `eraseAccount` / `deleteUser` /
+ * `banUser`. Best-effort throughout.
  */
 export async function runAccountTeardown(
   connection: Connection,
@@ -195,6 +278,11 @@ export async function runAccountTeardown(
 ): Promise<void> {
   await cancelSubscriptionForTeardown(connection, objectId, deps);
   await runLeaderboardTopTeardown(connection, objectId, mode, deps);
+  // Permanent erasure also scrubs the long-tail PII collections; a reversible
+  // ban leaves them intact (an unban restores the account).
+  if (mode !== 'ban') {
+    await runErasurePiiScrub(connection, objectId, deps);
+  }
 }
 
 /**

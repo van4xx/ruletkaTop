@@ -114,7 +114,12 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     updateOne: jest.Mock;
     create: jest.Mock;
   };
-  let wallet: { credit: jest.Mock; debit: jest.Mock; getBalance: jest.Mock };
+  let wallet: {
+    credit: jest.Mock;
+    debit: jest.Mock;
+    getBalance: jest.Mock;
+    reverseRefund: jest.Mock;
+  };
   let premium: {
     activate: jest.Mock;
     cancel: jest.Mock;
@@ -123,13 +128,19 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     findPlanByCode: jest.Mock;
   };
   let coinPackages: { findByCode: jest.Mock };
-  let cloudPayments: { isConfigured: jest.Mock; cancelSubscription: jest.Mock; refundPayment: jest.Mock };
+  let cloudPayments: {
+    isConfigured: jest.Mock;
+    cancelSubscription: jest.Mock;
+    refundPayment: jest.Mock;
+  };
 
   beforeEach(async () => {
     wallet = {
       credit: jest.fn().mockResolvedValue(600),
       debit: jest.fn().mockResolvedValue(0),
       getBalance: jest.fn().mockResolvedValue(0),
+      // By default a reversal fully claws back (no debt held).
+      reverseRefund: jest.fn().mockResolvedValue({ reversed: 600, owed: 0 }),
     };
     premium = {
       activate: jest.fn().mockResolvedValue(undefined),
@@ -509,8 +520,9 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
 
     expect(cloudPayments.refundPayment).toHaveBeenCalledWith(9001, 449);
     expect(result).toEqual({ amount: 449, transactionId: 9001 });
-    // Coins reversal debits the credited total back out.
-    expect(wallet.debit).toHaveBeenCalledWith(userId, 600, 'refund', 'refund:inv-r');
+    // Coins reversal claws the credited total back out (with debt+hold fallback
+    // when the buyer already spent it), keyed by the namespaced refund refId.
+    expect(wallet.reverseRefund).toHaveBeenCalledWith(userId, 600, 'refund:inv-r');
   });
 
   it('admin refund: rejects a non-completed payment and never calls the provider', async () => {
@@ -528,6 +540,80 @@ describe('PaymentsService — Pay idempotency (double webhook → single credit)
     await expect(service.refundByAdmin('507f1f77bcf86cd799439011')).rejects.toThrow();
     expect(cloudPayments.refundPayment).not.toHaveBeenCalled();
   });
+
+  it('Refund webhook: reverses coins via reverseRefund so a SPENT-then-refunded balance becomes debt + hold (not free)', async () => {
+    // Regression: a buyer who BOUGHT coins, SPENT them, then refunded/charged
+    // back used to keep the spent value free — the old reverseCoins debit threw
+    // insufficient-funds and the catch swallowed it. Now reverseCoins delegates
+    // to wallet.reverseRefund, which claws back what's left and records the
+    // unrecovered remainder as debt under an economy hold.
+    wallet.reverseRefund.mockResolvedValue({ reversed: 0, owed: 600 });
+
+    // A completed coins payment is being refunded.
+    paymentModel.findOne.mockReturnValue(
+      queryReturning({
+        _id: 'pay-cb',
+        invoiceId: 'inv-cb',
+        status: 'completed',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+    // The atomic refund claim wins.
+    paymentModel.findOneAndUpdate.mockReturnValue(
+      queryReturning({
+        _id: 'pay-cb',
+        invoiceId: 'inv-cb',
+        status: 'refunded',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    const ack = await service.handleRefund({ InvoiceId: 'inv-cb', TransactionId: 77 });
+
+    expect(ack).toEqual({ code: 0 });
+    // The reversal is routed through reverseRefund (debt+hold aware), NOT a bare
+    // debit that would throw + be swallowed, keyed by the namespaced refund ref.
+    expect(wallet.reverseRefund).toHaveBeenCalledWith(userId, 600, 'refund:inv-cb');
+    expect(wallet.debit).not.toHaveBeenCalled();
+  });
+
+  it('admin refund: also reverses via reverseRefund (debt+hold) for a spent-then-refunded balance', async () => {
+    wallet.reverseRefund.mockResolvedValue({ reversed: 100, owed: 500 });
+    paymentModel.findById.mockReturnValue(
+      queryReturning({
+        _id: 'pay-cb2',
+        invoiceId: 'inv-cb2',
+        status: 'completed',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        transactionId: 9009,
+        userId: { toString: () => userId },
+      }),
+    );
+    paymentModel.findOneAndUpdate.mockReturnValue(
+      queryReturning({
+        _id: 'pay-cb2',
+        invoiceId: 'inv-cb2',
+        status: 'refunded',
+        purpose: 'coins',
+        packageCode: 'coins_550',
+        amount: 449,
+        userId: { toString: () => userId },
+      }),
+    );
+
+    await service.refundByAdmin('507f1f77bcf86cd799439011');
+
+    expect(wallet.reverseRefund).toHaveBeenCalledWith(userId, 600, 'refund:inv-cb2');
+    expect(wallet.debit).not.toHaveBeenCalled();
+  });
 });
 
 describe('PaymentsService — tombstone/ban guard (a dead account is never re-entitled)', () => {
@@ -542,7 +628,12 @@ describe('PaymentsService — tombstone/ban guard (a dead account is never re-en
     updateOne: jest.Mock;
     create: jest.Mock;
   };
-  let wallet: { credit: jest.Mock; debit: jest.Mock; getBalance: jest.Mock };
+  let wallet: {
+    credit: jest.Mock;
+    debit: jest.Mock;
+    getBalance: jest.Mock;
+    reverseRefund: jest.Mock;
+  };
   let premium: {
     activate: jest.Mock;
     cancel: jest.Mock;
@@ -592,6 +683,8 @@ describe('PaymentsService — tombstone/ban guard (a dead account is never re-en
       credit: jest.fn().mockResolvedValue(600),
       debit: jest.fn().mockResolvedValue(0),
       getBalance: jest.fn().mockResolvedValue(0),
+      // By default a reversal fully claws back (no debt held).
+      reverseRefund: jest.fn().mockResolvedValue({ reversed: 600, owed: 0 }),
     };
     premium = {
       activate: jest.fn().mockResolvedValue(undefined),
@@ -735,7 +828,12 @@ describe('PaymentsService — post-claim teardown re-check (renewal races accoun
     updateOne: jest.Mock;
     create: jest.Mock;
   };
-  let wallet: { credit: jest.Mock; debit: jest.Mock; getBalance: jest.Mock };
+  let wallet: {
+    credit: jest.Mock;
+    debit: jest.Mock;
+    getBalance: jest.Mock;
+    reverseRefund: jest.Mock;
+  };
   let premium: {
     activate: jest.Mock;
     cancel: jest.Mock;
@@ -758,9 +856,13 @@ describe('PaymentsService — post-claim teardown re-check (renewal races accoun
    * exact race the re-check defends: teardown commits the tombstone in the window
    * between the first gate passing and fulfilment.
    */
-  async function build(rows: Array<{ deletedAt?: Date | null; isBanned?: boolean } | null>): Promise<void> {
+  async function build(
+    rows: Array<{ deletedAt?: Date | null; isBanned?: boolean } | null>,
+  ): Promise<void> {
     let i = 0;
-    usersFindOne = jest.fn().mockImplementation(() => Promise.resolve(rows[i++] ?? rows[rows.length - 1]));
+    usersFindOne = jest
+      .fn()
+      .mockImplementation(() => Promise.resolve(rows[i++] ?? rows[rows.length - 1]));
     const connection = { collection: jest.fn(() => ({ findOne: usersFindOne })) };
     const config = {
       get: jest.fn((key: string, def?: unknown) =>
@@ -788,6 +890,8 @@ describe('PaymentsService — post-claim teardown re-check (renewal races accoun
       credit: jest.fn().mockResolvedValue(600),
       debit: jest.fn().mockResolvedValue(0),
       getBalance: jest.fn().mockResolvedValue(0),
+      // By default a reversal fully claws back (no debt held).
+      reverseRefund: jest.fn().mockResolvedValue({ reversed: 600, owed: 0 }),
     };
     premium = {
       activate: jest.fn().mockResolvedValue(undefined),
@@ -826,7 +930,10 @@ describe('PaymentsService — post-claim teardown re-check (renewal races accoun
 
   it('Pay: account torn down AFTER the claim → rolls the claim back to pending, never fulfils', async () => {
     // Gate 1 (pre-claim): live. Gate 2 (post-claim): torn down — the race.
-    await build([{ deletedAt: null, isBanned: false }, { deletedAt: new Date(), isBanned: false }]);
+    await build([
+      { deletedAt: null, isBanned: false },
+      { deletedAt: new Date(), isBanned: false },
+    ]);
 
     paymentModel.findOne.mockReturnValue(
       queryReturning({
@@ -876,7 +983,10 @@ describe('PaymentsService — post-claim teardown re-check (renewal races accoun
 
   it('Recurrent "Active": account torn down AFTER the renewal claim → never re-activates', async () => {
     // Gate 1 (pre-claim): live. Gate 2 (post-claim): torn down — the race.
-    await build([{ deletedAt: null, isBanned: false }, { deletedAt: null, isBanned: true }]);
+    await build([
+      { deletedAt: null, isBanned: false },
+      { deletedAt: null, isBanned: true },
+    ]);
     // planFromRecurrent lookup returns null (plan via Data); the renewal claim wins.
     paymentModel.findOne.mockReturnValue(sortableQueryReturning(null));
 

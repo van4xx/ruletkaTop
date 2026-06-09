@@ -5,6 +5,7 @@ import { model, Types } from 'mongoose';
 
 import { CoinTransaction, CoinTransactionSchema } from './schemas/coin-transaction.schema';
 import { Wallet } from './schemas/wallet.schema';
+import { EconomyHoldException } from './economy-hold.exception';
 import { InsufficientFundsException } from './insufficient-funds.exception';
 import { WalletService } from './wallet.service';
 
@@ -27,7 +28,14 @@ describe('WalletService — debit atomicity & insufficient funds', () => {
   beforeEach(async () => {
     walletModel = {
       findOneAndUpdate: jest.fn(),
-      findOne: jest.fn(),
+      // Default: a NON-held wallet, so the economy-hold read-helpers (isOnHold on
+      // a debit non-match, maybeReleaseHold after a credit) are safe no-ops here.
+      // Tests that exercise getBalance override this with their own chain stub.
+      findOne: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue({ economyHold: false, heldCoins: 0 }),
+      }),
     };
     coinTxModel = {
       create: jest.fn().mockResolvedValue([{ _id: 'tx1' }]),
@@ -209,6 +217,58 @@ describe('WalletService — debit atomicity & insufficient funds', () => {
     expect(compensation[1]).toEqual({ $inc: { balanceCoins: 600 } });
   });
 
+  it('compensates the $inc and rethrows when a NON-duplicate ledger error is thrown on credit (no orphan balance)', async () => {
+    // Standalone fallback: the credit $inc commits independently of the ledger
+    // append. A non-duplicate ledger error (e.g. enum validation / transient
+    // write error) would otherwise leave the balance bumped with NO audit row.
+    // We must undo the $inc before rethrowing so balance and ledger stay in sync.
+    //
+    // Call sequence:
+    //   findOneAndUpdate #1 → speculative credit $inc → balance 130
+    //   coinTxModel.create → throws a NON-duplicate error
+    //   findOneAndUpdate #2 → compensating $inc(-30) → balance 100
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 130 })) // speculative credit
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 100 })); // compensation
+
+    const ledgerErr = Object.assign(new Error('ledger write blew up'), { code: 121 });
+    coinTxModel.create.mockRejectedValueOnce(ledgerErr);
+
+    // The original (non-duplicate) error is surfaced — the credit did NOT succeed.
+    await expect(service.credit(userId, 30, 'purchase', 'inv-boom')).rejects.toBe(ledgerErr);
+
+    // The speculative $inc was reversed: a second findOneAndUpdate compensates by
+    // exactly -30, so the balance is left untouched (no orphaned credit).
+    expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(2);
+    const compensation = walletModel.findOneAndUpdate.mock.calls[1] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(compensation[1]).toEqual({ $inc: { balanceCoins: -30 } });
+  });
+
+  it('compensates the $inc and rethrows when a NON-duplicate ledger error is thrown on debit (no orphan balance)', async () => {
+    // Mirror of the credit case for the debit path: the guarded debit $inc
+    // committed, the ledger append throws a non-duplicate error, and we must add
+    // the coins back so the debit is not silently applied without a ledger row.
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 70 })) // guarded debit (100-30)
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 100 })); // compensation
+
+    const ledgerErr = Object.assign(new Error('ledger write blew up'), { code: 121 });
+    coinTxModel.create.mockRejectedValueOnce(ledgerErr);
+
+    await expect(service.debit(userId, 30, 'gift_out', 'gift-boom')).rejects.toBe(ledgerErr);
+
+    // Compensation re-adds the debited coins (+30) so the balance is restored.
+    expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(2);
+    const compensation = walletModel.findOneAndUpdate.mock.calls[1] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    expect(compensation[1]).toEqual({ $inc: { balanceCoins: 30 } });
+  });
+
   it('does NOT oversell under concurrency: of two debits, only the guarded match succeeds', async () => {
     // Wallet has 80 coins; two debits of 50 race. The balance-guarded
     // findOneAndUpdate is itself atomic, so exactly ONE can match a balance
@@ -241,11 +301,205 @@ describe('WalletService — debit atomicity & insufficient funds', () => {
   });
 });
 
+describe('WalletService — economy hold (spend-then-refund debt + spend freeze)', () => {
+  const userId = '507f1f77bcf86cd799439011';
+
+  let service: WalletService;
+  let walletModel: { findOneAndUpdate: jest.Mock; findOne: jest.Mock };
+  let coinTxModel: { create: jest.Mock };
+
+  /**
+   * A `findOne(...)` stub that supports BOTH chain shapes the service uses:
+   *  - `getBalance`:        `.findOne(filter).select(...).lean().exec()`
+   *  - hold read helpers:   `.findOne(filter, projection, opts).lean().exec()`
+   * Both terminate in `.exec()` resolving to `result`.
+   */
+  function findOneReturning(result: unknown): {
+    select: jest.Mock;
+    lean: jest.Mock;
+    exec: jest.Mock;
+  } {
+    const stub = {
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(result),
+    };
+    return stub;
+  }
+
+  beforeEach(async () => {
+    walletModel = { findOneAndUpdate: jest.fn(), findOne: jest.fn() };
+    coinTxModel = { create: jest.fn().mockResolvedValue([{ _id: 'tx1' }]) };
+
+    // Standalone-Mongo path (no transactions) — the realistic dev scenario.
+    const connection = {
+      startSession: jest.fn().mockRejectedValue(
+        Object.assign(new Error('Transaction numbers are only allowed on a replica set'), {
+          code: 20,
+        }),
+      ),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        WalletService,
+        { provide: getModelToken(Wallet.name), useValue: walletModel },
+        { provide: getModelToken(CoinTransaction.name), useValue: coinTxModel },
+        { provide: getConnectionToken(), useValue: connection },
+      ],
+    }).compile();
+    service = moduleRef.get(WalletService);
+  });
+
+  it('reverseRefund on a SPENT balance: claws back nothing, records the full amount as debt + sets the hold', async () => {
+    // The buyer already spent everything ⇒ balance 0. The whole 600 is owed.
+    walletModel.findOne.mockReturnValue(findOneReturning({ balanceCoins: 0 }));
+    // applyEconomyHold's upserting hold update.
+    walletModel.findOneAndUpdate.mockReturnValue(
+      queryReturning({ balanceCoins: 0, economyHold: true, heldCoins: 600 }),
+    );
+
+    const result = await service.reverseRefund(userId, 600, 'refund:inv-cb');
+
+    expect(result).toEqual({ reversed: 0, owed: 600 });
+    // No clawback debit was issued (nothing to reverse) — so no ledger row.
+    expect(coinTxModel.create).not.toHaveBeenCalled();
+    // The debt+hold was applied: economyHold:true and heldCoins +600, upserting.
+    expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    const [filter, update, options] = walletModel.findOneAndUpdate.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, Record<string, unknown>>,
+      Record<string, unknown>,
+    ];
+    expect(filter).toMatchObject({ userId: expect.anything() });
+    expect(update.$set).toEqual({ economyHold: true });
+    expect(update.$inc).toEqual({ heldCoins: 600 });
+    expect(options).toMatchObject({ upsert: true });
+  });
+
+  it('reverseRefund on a PARTIALLY-spent balance: claws back what remains and holds only the shortfall', async () => {
+    // 250 coins left of the 600 credited ⇒ reverse 250, hold 350 as debt.
+    walletModel.findOne.mockReturnValue(findOneReturning({ balanceCoins: 250 }));
+    // The clawback debit (refund, exempt from the hold gate) succeeds: 250→0.
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 0 })) // clawback debit
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 0, economyHold: true, heldCoins: 350 })); // hold
+
+    const result = await service.reverseRefund(userId, 600, 'refund:inv-part');
+
+    expect(result).toEqual({ reversed: 250, owed: 350 });
+    // The clawback was a `refund` debit of exactly the reversible 250.
+    const [[row]] = coinTxModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
+    expect(row).toMatchObject({ delta: -250, type: 'refund', refId: 'refund:inv-part' });
+    // The debt for the unrecovered 350 was held.
+    const holdUpdate = walletModel.findOneAndUpdate.mock.calls[1] as [
+      unknown,
+      Record<string, Record<string, unknown>>,
+    ];
+    expect(holdUpdate[1].$set).toEqual({ economyHold: true });
+    expect(holdUpdate[1].$inc).toEqual({ heldCoins: 350 });
+  });
+
+  it('reverseRefund on a FULLY-covered balance: claws everything back, no debt and no hold', async () => {
+    // Balance still holds the full 600 (buyer never spent it) ⇒ reverse all, owe 0.
+    walletModel.findOne.mockReturnValue(findOneReturning({ balanceCoins: 600 }));
+    walletModel.findOneAndUpdate.mockReturnValue(queryReturning({ balanceCoins: 0 }));
+
+    const result = await service.reverseRefund(userId, 600, 'refund:inv-ok');
+
+    expect(result).toEqual({ reversed: 600, owed: 0 });
+    // Exactly the clawback debit ran — NO hold update (owed is 0).
+    expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    const [[row]] = coinTxModel.create.mock.calls[0] as [Array<Record<string, unknown>>];
+    expect(row).toMatchObject({ delta: -600, type: 'refund' });
+  });
+
+  it('a HELD wallet cannot SPEND: a gift_out debit is refused with EconomyHoldException (403)', async () => {
+    // The guarded spend update adds `economyHold: { $ne: true }`, so a held wallet
+    // matches nothing; we then re-read the hold flag and throw a 403 (not a 422).
+    walletModel.findOneAndUpdate.mockReturnValue(queryReturning(null)); // no match (held)
+    walletModel.findOne.mockReturnValue(findOneReturning({ economyHold: true })); // hold re-read
+
+    const err = await service.debit(userId, 50, 'gift_out', 'gift-held').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(EconomyHoldException);
+    expect((err as EconomyHoldException).getStatus()).toBe(403);
+
+    // The spend guard included the hold condition, and NO ledger row was written.
+    const [filter] = walletModel.findOneAndUpdate.mock.calls[0] as [Record<string, unknown>];
+    expect(filter).toMatchObject({ economyHold: { $ne: true } });
+    expect(coinTxModel.create).not.toHaveBeenCalled();
+  });
+
+  it('a non-held wallet with insufficient funds still gets InsufficientFundsException (422), not a hold error', async () => {
+    walletModel.findOneAndUpdate.mockReturnValue(queryReturning(null)); // no match
+    walletModel.findOne.mockReturnValue(findOneReturning({ economyHold: false })); // not held
+
+    const err = await service.debit(userId, 50, 'top', 'top-broke').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(InsufficientFundsException);
+    expect((err as InsufficientFundsException).getStatus()).toBe(422);
+  });
+
+  it('a `refund` debit is EXEMPT from the hold gate (clawbacks proceed on a held wallet)', async () => {
+    // A refund debit must NOT carry the economyHold condition, so a held account
+    // can still be clawed back. The guarded update succeeds (balance suffices).
+    walletModel.findOneAndUpdate.mockReturnValue(queryReturning({ balanceCoins: 0 }));
+
+    await service.debit(userId, 100, 'refund', 'refund:clawback');
+
+    const [filter] = walletModel.findOneAndUpdate.mock.calls[0] as [Record<string, unknown>];
+    expect(filter).not.toHaveProperty('economyHold');
+    // The hold flag is NOT re-read for a refund debit (it is never gated).
+    expect(walletModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('credit RELEASES the hold once the recovered balance covers the debt', async () => {
+    // A credit of 600 brings the balance to 600; the outstanding debt is 600, so
+    // the debt is repaid and the hold lifts.
+    walletModel.findOneAndUpdate
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 600 })) // the credit $inc
+      .mockReturnValueOnce(queryReturning({ balanceCoins: 600, economyHold: false, heldCoins: 0 })); // release
+    // maybeReleaseHold reads the current hold state: held with a 600 debt.
+    walletModel.findOne.mockReturnValue(findOneReturning({ economyHold: true, heldCoins: 600 }));
+
+    await service.credit(userId, 600, 'purchase', 'inv-repay');
+
+    // The hold was cleared: economyHold:false + heldCoins:0, guarded on still-held.
+    const releaseCall = walletModel.findOneAndUpdate.mock.calls.find(([, update]) => {
+      const u = update as { $set?: { economyHold?: boolean } };
+      return u.$set?.economyHold === false;
+    });
+    expect(releaseCall).toBeDefined();
+    const [releaseFilter, releaseUpdate] = releaseCall as [
+      Record<string, unknown>,
+      Record<string, Record<string, unknown>>,
+    ];
+    expect(releaseFilter).toMatchObject({ economyHold: true });
+    expect(releaseUpdate.$set).toEqual({ economyHold: false, heldCoins: 0 });
+  });
+
+  it('credit does NOT release the hold while the recovered balance is still below the debt', async () => {
+    // Balance only recovers to 100 but the debt is 600 — stay frozen.
+    walletModel.findOneAndUpdate.mockReturnValue(queryReturning({ balanceCoins: 100 }));
+    walletModel.findOne.mockReturnValue(findOneReturning({ economyHold: true, heldCoins: 600 }));
+
+    await service.credit(userId, 100, 'purchase', 'inv-partial-repay');
+
+    // Only the credit $inc ran — NO release update (no $set economyHold:false).
+    const releaseCall = walletModel.findOneAndUpdate.mock.calls.find(([, update]) => {
+      const u = update as { $set?: { economyHold?: boolean } };
+      return u.$set?.economyHold === false;
+    });
+    expect(releaseCall).toBeUndefined();
+  });
+});
+
 describe('WalletService — transactional (replica-set) write path', () => {
   const userId = '507f1f77bcf86cd799439011';
 
   let service: WalletService;
-  let walletModel: { findOneAndUpdate: jest.Mock };
+  let walletModel: { findOneAndUpdate: jest.Mock; findOne: jest.Mock };
   let coinTxModel: { create: jest.Mock };
   let session: {
     withTransaction: jest.Mock;
@@ -254,7 +508,17 @@ describe('WalletService — transactional (replica-set) write path', () => {
   let connection: { startSession: jest.Mock };
 
   beforeEach(async () => {
-    walletModel = { findOneAndUpdate: jest.fn() };
+    walletModel = {
+      findOneAndUpdate: jest.fn(),
+      // Default: a non-held wallet, so the hold read-helpers (isOnHold /
+      // maybeReleaseHold) added for the economy-hold feature are safe no-ops in
+      // these transaction-path tests, which assert the session threading only.
+      findOne: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue({ economyHold: false, heldCoins: 0 }),
+      }),
+    };
     coinTxModel = { create: jest.fn().mockResolvedValue([{ _id: 'tx1' }]) };
 
     // A working replica-set session: withTransaction runs the unit of work and
@@ -312,6 +576,23 @@ describe('WalletService — transactional (replica-set) write path', () => {
     // Both writes used a session; no fallback ever ran.
     expect(connection.startSession).toHaveBeenCalledTimes(2);
     expect(session.withTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT manually compensate on a thrown ledger error inside a transaction (the abort rolls the $inc back)', async () => {
+    // On the replica-set path a thrown ledger append must bubble out of the
+    // unit of work so `withTransaction` ABORTS — the speculative $inc rolls back
+    // with the transaction. We must NOT issue a manual compensating $inc here
+    // (that would double-undo against an aborting session).
+    walletModel.findOneAndUpdate.mockReturnValue(queryReturning({ balanceCoins: 130 }));
+    const ledgerErr = Object.assign(new Error('ledger write blew up'), { code: 121 });
+    coinTxModel.create.mockRejectedValueOnce(ledgerErr);
+
+    await expect(service.credit(userId, 30, 'purchase', 'inv-tx-boom')).rejects.toBe(ledgerErr);
+
+    // Exactly ONE findOneAndUpdate (the speculative credit) — no manual
+    // compensation; the transaction abort is responsible for the rollback.
+    expect(walletModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    expect(session.endSession).toHaveBeenCalledTimes(1);
   });
 
   it('propagates InsufficientFundsException from inside the transaction without falling back', async () => {
