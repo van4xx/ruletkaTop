@@ -15,6 +15,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { CoversModule } from './modules/covers/covers.module';
+import { DailyBonusModule } from './modules/daily-bonus/daily-bonus.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { GiftsModule } from './modules/gifts/gifts.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
@@ -211,6 +212,7 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
     PremiumModule,
     PaymentsModule,
     LeaderboardModule,
+    DailyBonusModule,
 
     // Matchmaking + WebRTC
     MatchmakingModule,

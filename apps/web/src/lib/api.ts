@@ -17,6 +17,8 @@ import type {
   CoinPackage,
   CoinTransaction,
   CountryCode,
+  DailyBonusClaimResponse,
+  DailyBonusState,
   FriendRequestsResponse,
   Gender,
   Gift,
@@ -855,6 +857,26 @@ export const api = {
     gifts: () => request<Gift[]>('/economy/gifts'),
     premiumPlans: () => request<PremiumPlan[]>('/economy/premium-plans'),
     topFeed: () => request<TopPlacement[]>('/economy/top'),
+  },
+
+  /**
+   * Daily-bonus surface. State is a cheap read; claim is the money-moving call.
+   *
+   * The wire shape is owned by `DailyBonusState` / `DailyBonusClaimResponse` in
+   * `@ruletka/shared-types`, so the FE and the NestJS controller share one
+   * contract. The claim is non-idempotent FROM THE CLIENT'S POINT OF VIEW
+   * (you only get one credit per UTC day) — but it IS idempotent SERVER-SIDE
+   * via the namespaced ledger refId (`daily-bonus:<userId>:<UTC-day>`), so a
+   * network retry will quietly land on a 409 from the row's day check instead
+   * of double-crediting.
+   */
+  dailyBonus: {
+    state: () => request<DailyBonusState>('/economy/daily-bonus'),
+    claim: () =>
+      request<DailyBonusClaimResponse>('/economy/daily-bonus/claim', {
+        method: 'POST',
+        noRetry: true,
+      }),
   },
 
   /**

@@ -4,6 +4,7 @@ export * from './profile';
 export * from './cosmetics';
 export * from './social';
 export * from './economy';
+export * from './daily-bonus';
 export * from './admin';
 export * from './admin-panel';
 export * from './moderation';
