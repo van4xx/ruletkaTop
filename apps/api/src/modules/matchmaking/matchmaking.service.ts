@@ -569,6 +569,26 @@ export class MatchmakingService {
   // ── Privacy (whoCanCall) gating ──────────────────────────────────────────────
 
   /**
+   * Whether a DIRECT (friend) call from `fromUserId` to `toUserId` is permitted
+   * by both parties' `whoCanCall` privacy — the public gate the gateway's
+   * `call:invite` path consults, giving the direct path the SAME privacy
+   * enforcement the roulette gets via {@link mutualCanCall}. Without it a user who
+   * set `whoCanCall` to 'nobody' / 'friends' could still be rung directly by
+   * anyone holding their userId (the wave-5 privacy bypass).
+   *
+   * Symmetric for parity with roulette: each side must independently permit the
+   * other (so a caller who blocked all incoming calls can't ring out either, and
+   * a 'friends'-only party is only reachable by / can only reach friends). Reads
+   * `whoCanCall` directly (a single call, no per-pass memo cache) since this is a
+   * one-shot check, not a pool scan. The CALLEE's setting is always honoured.
+   */
+  async canCallDirect(fromUserId: string, toUserId: string): Promise<boolean> {
+    return (
+      (await this.canCall(fromUserId, toUserId)) && (await this.canCall(toUserId, fromUserId))
+    );
+  }
+
+  /**
    * Whether `a` and `b` may be matched given BOTH parties' `whoCanCall`
    * privacy. Symmetric: each must independently permit the other to call them.
    * The `cache` memoises each user's `whoCanCall` for the duration of one match
@@ -585,14 +605,18 @@ export class MatchmakingService {
   /**
    * Whether `target` permits `caller` to be matched into a call with them, per
    * `target`'s `whoCanCall`: 'nobody' → never, 'friends' → only accepted
-   * friends, 'everyone' → always.
+   * friends, 'everyone' → always. When a per-pass `cache` is supplied (the
+   * roulette pool scan) the `whoCanCall` read is memoised through it; the direct
+   * `call:invite` path passes none and reads the setting directly (one-shot).
    */
   private async canCall(
     caller: string,
     target: string,
-    cache: Map<string, Promise<Visibility>>,
+    cache?: Map<string, Promise<Visibility>>,
   ): Promise<boolean> {
-    const visibility = await this.cachedWhoCanCall(target, cache);
+    const visibility = cache
+      ? await this.cachedWhoCanCall(target, cache)
+      : await this.getWhoCanCall(target);
     if (visibility === 'nobody') {
       return false;
     }

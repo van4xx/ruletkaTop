@@ -526,6 +526,14 @@ export class WalletService {
    *
    * All writes run inside the surrounding {@link runWalletWrite} envelope (the
    * `session`, when present). A no-op when the wallet isn't held.
+   *
+   * On the STANDALONE (no-session) path the repayment update commits on its own,
+   * so if the ledger append then THROWS (a non-duplicate error) we restore the
+   * full repayment — the `heldCoins` drawdown and the lifted-hold flags as well
+   * as the balance debit — before rethrowing, so a failed append can never
+   * silently understate the debt or un-freeze a debtor. On a replica set the
+   * whole unit runs in a transaction, so a thrown append aborts and rolls
+   * everything back atomically; we never restore manually there.
    */
   private async maybeReleaseHold(
     userId: Types.ObjectId,
@@ -585,21 +593,11 @@ export class WalletService {
       return;
     }
 
-    // Append the matching ledger row so balanceCoins == Σ(ledger deltas). A
-    // duplicate (idempotent redelivery hitting the same repayRefId) is undone by
-    // compensating the debit we just made, keeping the net effect zero.
-    const applied = await this.appendLedgerOrCompensate(
-      userId,
-      -repaid,
-      'refund',
-      repayRefId,
-      updated.balanceCoins,
-      session,
-    );
-    if (!applied) {
-      // The repayment ledger row already exists — undo the debit+debt-drawdown
-      // we speculatively applied so we don't repay the same debt twice.
-      await this.walletModel
+    // Reverse the speculative repayment update (the balance debit + debt
+    // drawdown, and the lifted-hold flags when it cleared) so we don't repay the
+    // same debt twice / leave a debtor un-frozen with no matching ledger row.
+    const restoreRepayment = (): Promise<unknown> =>
+      this.walletModel
         .findOneAndUpdate(
           { userId },
           {
@@ -609,6 +607,59 @@ export class WalletService {
           { new: true, ...(session ? { session } : {}) },
         )
         .exec();
+
+    // Append the matching ledger row so balanceCoins == Σ(ledger deltas). A
+    // duplicate (idempotent redelivery hitting the same repayRefId) is undone by
+    // compensating the debit we just made, keeping the net effect zero.
+    //
+    // STANDALONE PATH: the repayment findOneAndUpdate above committed
+    // independently, so on a THROWN (non-duplicate) error appendLedgerOrCompensate
+    // ALREADY restores the balance $inc (+repaid) for us — but it does NOT know
+    // about the heldCoins drawdown or the lifted-hold flags this method applied
+    // alongside. Restore ONLY those remaining pieces here (NOT the balance again —
+    // that would double-restore) before letting the error propagate, so a thrown
+    // append can't silently shrink the debt or un-freeze a debtor. On a replica
+    // set the work runs in withTransaction, so a thrown append aborts and rolls
+    // EVERYTHING back atomically — never restore manually there (it would
+    // double-undo against an aborting session).
+    let applied: boolean;
+    try {
+      applied = await this.appendLedgerOrCompensate(
+        userId,
+        -repaid,
+        'refund',
+        repayRefId,
+        updated.balanceCoins,
+        session,
+      );
+    } catch (err) {
+      if (!session) {
+        await this.walletModel
+          .findOneAndUpdate(
+            { userId },
+            {
+              // Balance was already restored by appendLedgerOrCompensate; restore
+              // only the held-debt drawdown and the lifted-hold flags.
+              $inc: { heldCoins: repaid },
+              ...(clears ? { $set: { economyHold: true } } : {}),
+            },
+            { new: true },
+          )
+          .exec()
+          .catch((restoreErr: unknown) =>
+            this.logger.error(
+              `Failed to restore the held-debt drawdown after a repayment ledger-append ` +
+                `error for wallet ${userId.toString()} (ref ${repayRefId}): ` +
+                `${(restoreErr as Error).message}`,
+            ),
+          );
+      }
+      throw err;
+    }
+    if (!applied) {
+      // The repayment ledger row already exists — undo the debit+debt-drawdown
+      // we speculatively applied so we don't repay the same debt twice.
+      await restoreRepayment();
       return;
     }
 

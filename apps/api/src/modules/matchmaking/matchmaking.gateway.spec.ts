@@ -154,10 +154,15 @@ function makeGateway(opts: {
     consumePendingForCallee: jest.fn(),
     clearPending: jest.fn().mockResolvedValue(null),
     getPending: jest.fn(),
+    // `call:invite` mints a pending call once every gate passes.
+    createPending: jest.fn().mockResolvedValue({ callId: 'call-new' }),
     ...opts.calls,
   };
   const matchmaking = {
     isBlockedEitherWay: jest.fn().mockResolvedValue(false),
+    // Direct-call privacy gate (whoCanCall). Permits by default so the invite
+    // happy path is reached unless a test overrides it.
+    canCallDirect: jest.fn().mockResolvedValue(true),
     getRelayTarget: jest.fn().mockResolvedValue(null),
     getUserRoom: jest.fn().mockResolvedValue(null),
     getPeerOf: jest.fn().mockResolvedValue(null),
@@ -184,6 +189,9 @@ function makeGateway(opts: {
   // (`beatPresence`) re-arms; resolves by default.
   const presence = {
     refreshConnection: jest.fn().mockResolvedValue(undefined),
+    // `call:invite` short-circuits an offline callee; online by default so the
+    // privacy gate under test is reached.
+    isOnline: jest.fn().mockResolvedValue(true),
     ...opts.presence,
   };
 
@@ -222,6 +230,101 @@ function makeGateway(opts: {
     presence,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 0) DIRECT-CALL PRIVACY: call:invite must honour the callee's whoCanCall
+//    (canCallDirect) — a denied invite never mints a pending call nor reaches the
+//    callee's room. Mirrors the roulette path's mutualCanCall gate (the wave-5
+//    privacy-bypass fix). Block + offline gates already covered upstream; here we
+//    isolate the privacy gate (block=false, online=true by default).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('handleCallInvite — honours the callee whoCanCall privacy gate', () => {
+  // `callInvitePayloadSchema` requires `toUserId` to be a 24-hex ObjectId, so use
+  // real OIDs (a bare 'callee' string would be rejected by the payload parse
+  // BEFORE the privacy gate ever runs).
+  const CALLER = '507f1f77bcf86cd799439101';
+  const CALLEE = '507f1f77bcf86cd799439102';
+  const invite = { toUserId: CALLEE, type: 'video' as const };
+
+  /** Caller socket capturing the `ws:error` emits the handler sends to it. */
+  function callerSocket(): { socket: any; errors: EmitRecord[] } {
+    const errors: EmitRecord[] = [];
+    const socket: any = {
+      id: 's-caller',
+      data: { userId: CALLER },
+      rooms: new Set<string>(),
+      emit: (event: string, payload: unknown) => {
+        errors.push({ target: 's-caller', event, payload });
+        return true;
+      },
+    };
+    return { socket, errors };
+  }
+
+  it("refuses the invite (forbidden, no pending call) when canCallDirect denies — callee 'nobody'", async () => {
+    const { gateway, emits, calls, matchmaking } = makeGateway({
+      // whoCanCall:'nobody' on the callee → the direct gate denies.
+      matchmaking: { canCallDirect: jest.fn().mockResolvedValue(false) },
+    });
+    const { socket, errors } = callerSocket();
+
+    await gateway.handleCallInvite(socket as never, invite);
+
+    // The privacy gate was consulted in the (caller, callee) direction.
+    expect(matchmaking.canCallDirect).toHaveBeenCalledWith(CALLER, CALLEE);
+    // Caller told it was forbidden…
+    expect(errors).toContainEqual({
+      target: 's-caller',
+      event: 'ws:error',
+      payload: { code: 'forbidden', event: 'call:invite' },
+    });
+    // …and NO pending call was minted, so the callee is never rung.
+    expect(calls.createPending).not.toHaveBeenCalled();
+    // Nothing was relayed to the callee's room.
+    expect(emits.some((e) => e.event === 'call:invite')).toBe(false);
+  });
+
+  it("refuses a 'friends'-only callee invited by a NON-friend (canCallDirect denies)", async () => {
+    // The gate collapses the whoCanCall:'friends' + non-friend case to a deny,
+    // so from the gateway's view this is the same forbidden outcome.
+    const { gateway, emits, calls, matchmaking } = makeGateway({
+      matchmaking: { canCallDirect: jest.fn().mockResolvedValue(false) },
+    });
+    const { socket, errors } = callerSocket();
+
+    await gateway.handleCallInvite(socket as never, invite);
+
+    expect(matchmaking.canCallDirect).toHaveBeenCalledWith(CALLER, CALLEE);
+    expect(errors).toContainEqual({
+      target: 's-caller',
+      event: 'ws:error',
+      payload: { code: 'forbidden', event: 'call:invite' },
+    });
+    expect(calls.createPending).not.toHaveBeenCalled();
+    expect(emits.some((e) => e.event === 'call:invite')).toBe(false);
+  });
+
+  it('mints the pending call and rings the callee when canCallDirect permits (friend / everyone)', async () => {
+    const { gateway, emits, calls, matchmaking } = makeGateway({
+      // whoCanCall permits (a friend of a 'friends' callee, or an 'everyone' callee).
+      matchmaking: { canCallDirect: jest.fn().mockResolvedValue(true) },
+      calls: { createPending: jest.fn().mockResolvedValue({ callId: 'call-1' }) },
+    });
+    const { socket } = makeSocket('s-caller', CALLER);
+
+    await gateway.handleCallInvite(socket as never, invite);
+
+    expect(matchmaking.canCallDirect).toHaveBeenCalledWith(CALLER, CALLEE);
+    // Pending call minted…
+    expect(calls.createPending).toHaveBeenCalledWith(CALLER, CALLEE, 'video');
+    // …and the invite relayed to the callee's per-user room.
+    expect(emits).toContainEqual({
+      target: `mm:user:${CALLEE}`,
+      event: 'call:invite',
+      payload: { toUserId: CALLEE, type: 'video', callId: 'call-1', fromUserId: CALLER },
+    });
+  });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1) BLOCK during a friend-call ring: call:accept must ABORT when a block was

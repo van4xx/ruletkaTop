@@ -533,6 +533,63 @@ describe('MatchmakingService.tryMatch — pairing, blocks, self, premium priorit
     expect(joinerReads).toBeLessThanOrEqual(1);
   });
 
+  // ── canCallDirect — the PUBLIC whoCanCall gate for the direct call:invite ──
+  // path. Same getWhoCanCall + areFriends logic the roulette uses, but a one-shot
+  // (caller, callee) check the gateway consults before minting a pending call.
+  // Closes the wave-5 privacy bypass where a 'nobody'/'friends' callee could be
+  // rung directly by anyone who knew their userId. Reuses the OID ids so the real
+  // settings-read path runs (invalid ids short-circuit to the 'friends' default).
+
+  it("canCallDirect denies when the CALLEE's whoCanCall is 'nobody'", async () => {
+    // Callee accepts calls from nobody; caller is open. Must deny.
+    whoCanCallBy({ [JOINER_OID]: 'everyone', [PEER_OID]: 'nobody' });
+
+    const allowed = await service.canCallDirect(JOINER_OID, PEER_OID);
+
+    expect(allowed).toBe(false);
+  });
+
+  it("canCallDirect denies a 'friends'-only callee when the caller is NOT a friend", async () => {
+    whoCanCallBy({ [JOINER_OID]: 'everyone', [PEER_OID]: 'friends' });
+    friends.areFriends.mockResolvedValue(false);
+
+    const allowed = await service.canCallDirect(JOINER_OID, PEER_OID);
+
+    expect(allowed).toBe(false);
+    // The 'friends' gate is consulted in the (caller, callee) order.
+    expect(friends.areFriends).toHaveBeenCalledWith(JOINER_OID, PEER_OID);
+  });
+
+  it("canCallDirect ALLOWS a 'friends'-only callee when the caller IS a friend", async () => {
+    // Caller is open ('everyone'); callee is friends-only and they ARE friends.
+    whoCanCallBy({ [JOINER_OID]: 'everyone', [PEER_OID]: 'friends' });
+    friends.areFriends.mockResolvedValue(true);
+
+    const allowed = await service.canCallDirect(JOINER_OID, PEER_OID);
+
+    expect(allowed).toBe(true);
+    expect(friends.areFriends).toHaveBeenCalledWith(JOINER_OID, PEER_OID);
+  });
+
+  it("canCallDirect ALLOWS when both parties' whoCanCall is 'everyone' (no friendship lookup)", async () => {
+    whoCanCallBy({ [JOINER_OID]: 'everyone', [PEER_OID]: 'everyone' });
+
+    const allowed = await service.canCallDirect(JOINER_OID, PEER_OID);
+
+    expect(allowed).toBe(true);
+    // 'everyone' both ways never needs a friendship lookup.
+    expect(friends.areFriends).not.toHaveBeenCalled();
+  });
+
+  it("canCallDirect is SYMMETRIC — a 'nobody' CALLER cannot ring an 'everyone' callee", async () => {
+    // Mirrors the roulette's mutual gate: a caller who hid all calls can't dial.
+    whoCanCallBy({ [JOINER_OID]: 'nobody', [PEER_OID]: 'everyone' });
+
+    const allowed = await service.canCallDirect(JOINER_OID, PEER_OID);
+
+    expect(allowed).toBe(false);
+  });
+
   it('prefers a premium candidate when several are compatible (priority order)', async () => {
     // The pool is returned by zrange in PRIORITY order (premium sorts first via
     // its lower score). We model that ordering: premium peer is index 0.

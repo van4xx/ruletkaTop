@@ -578,6 +578,15 @@ export class MatchmakingGateway
       emitWsError(client, { code: 'forbidden', event: 'call:invite', message: 'User is offline' });
       return;
     }
+    // Honour the callee's `whoCanCall` privacy — the SAME gate the roulette path
+    // applies to every pairing (`mutualCanCall`). Without it a user who set
+    // `whoCanCall` to 'nobody' / 'friends' could still be rung directly by anyone
+    // who knows their userId (the wave-5 privacy bypass). Refuse before minting a
+    // pending call or reaching the callee's room, exactly like the block gate.
+    if (!(await this.matchmaking.canCallDirect(fromUserId, toUserId))) {
+      emitWsError(client, { code: 'forbidden', event: 'call:invite' });
+      return;
+    }
 
     const call = await this.calls.createPending(fromUserId, toUserId, type);
     // Relay the invite to all of the callee's devices on any replica. This is

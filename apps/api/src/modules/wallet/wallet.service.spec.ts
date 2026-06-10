@@ -1037,4 +1037,52 @@ describe('WalletService — economy-hold accounting invariant (balance == Σ led
     expect(wallet.balanceCoins).toBe(0); // 250 clawed back from the 250 left
     expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // invariant
   });
+
+  it('standalone path: a NON-duplicate throw on the repayment ledger row restores heldCoins + the lifted-hold flags (invariant + hold state preserved)', async () => {
+    const { wallet, ledger, walletModel, coinTxModel } = makeFakeModels();
+    const service = await buildService(walletModel, coinTxModel);
+
+    // Set up a 600 debt + hold (bought, spent, charged back — nothing to claw).
+    await service.credit(userId, 600, 'purchase', 'inv-1');
+    await service.debit(userId, 600, 'gift_out', 'gift-1');
+    await service.reverseRefund(userId, 600, 'refund:inv-1');
+    expect(wallet.economyHold).toBe(true);
+    expect(wallet.heldCoins).toBe(600);
+    expect(wallet.holdRefId).toBe('refund:inv-1');
+    expect(wallet.heldRefIds).toEqual(['refund:inv-1']);
+
+    // A fresh 600 credit would fully repay the debt and LIFT the hold — but the
+    // matching holdrepay refund ledger row insert blows up with a NON-duplicate
+    // error (e.g. a transient write error). On the standalone path the repayment
+    // findOneAndUpdate (balance -600, heldCoins -600, hold lifted) already
+    // committed; appendLedgerOrCompensate restores only the balance $inc, so
+    // maybeReleaseHold MUST additionally restore the heldCoins drawdown and the
+    // lifted-hold flags before the error propagates — otherwise the debt is
+    // silently understated and the debtor is un-frozen with no ledger row.
+    const ledgerErr = Object.assign(new Error('ledger write blew up'), { code: 121 });
+    const realCreate = coinTxModel.create.bind(coinTxModel);
+    coinTxModel.create = ((rows: LedgerRow[]) => {
+      const row = rows[0]!;
+      if (row.type === 'refund' && typeof row.refId === 'string' && row.refId.startsWith('holdrepay:')) {
+        return Promise.reject(ledgerErr);
+      }
+      return realCreate(rows);
+    }) as typeof coinTxModel.create;
+
+    // The credit's own ledger row was written, then the holdrepay append throws —
+    // the original (non-duplicate) error surfaces out of credit().
+    await expect(service.credit(userId, 600, 'purchase', 'inv-2')).rejects.toBe(ledgerErr);
+
+    // The repayment was fully UNWOUND: heldCoins is back to 600, the hold flags
+    // are restored, and the balance still equals Σ(ledger) — the failed
+    // holdrepay row left no orphan effect, and no debtor was silently freed.
+    expect(wallet.heldCoins).toBe(600);
+    expect(wallet.economyHold).toBe(true);
+    // The credit's +600 landed as spendable balance (its ledger row succeeded);
+    // the repayment that would have consumed it was rolled back in full.
+    expect(wallet.balanceCoins).toBe(600);
+    expect(wallet.balanceCoins).toBe(ledgerSum(ledger)); // INVARIANT holds
+    // No holdrepay row was persisted (the only attempt threw).
+    expect(ledger.some((r) => (r as { refId?: string }).refId?.startsWith('holdrepay:'))).toBe(false);
+  });
 });
