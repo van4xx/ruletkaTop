@@ -339,3 +339,83 @@
     transform: rotate(360deg);
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * AuthShell — "live grid" brand panel.
+ * 16 portrait tiles that breathe + a subset glow as "LIVE", staggered via
+ * per-tile inline --i delay. All animations are pure CSS so no JS runs after
+ * mount; the global prefers-reduced-motion rule collapses them to 0.001ms.
+ * ------------------------------------------------------------------------- */
+@keyframes auth-tile-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes auth-tile-live {
+  0%,
+  18%,
+  100% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  4%,
+  14% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes auth-tile-live-ring {
+  0%,
+  18%,
+  100% {
+    opacity: 0;
+  }
+  4%,
+  14% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes auth-scanline {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@layer components {
+  .auth-tile {
+    animation: auth-tile-breathe 6s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * 220ms);
+  }
+  .auth-tile-live-dot {
+    animation: auth-tile-live 7s ease-in-out infinite;
+    animation-delay: calc(var(--live-delay, 0ms));
+  }
+  .auth-tile-live-ring {
+    animation: auth-tile-live-ring 7s ease-in-out infinite;
+    animation-delay: calc(var(--live-delay, 0ms));
+  }
+  .auth-scanline {
+    animation: auth-scanline 9s linear infinite;
+    animation-delay: calc(var(--i, 0) * 1.4s);
+  }
+}

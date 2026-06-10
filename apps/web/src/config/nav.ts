@@ -103,20 +103,20 @@ export const PRIMARY_NAV: readonly NavItem[] = [
     keywords: ['видео', 'звонок', 'roulette', 'chat'],
   },
   {
-    key: 'friends',
-    label: 'Друзья',
-    href: ROUTES.friends,
-    icon: Users,
-    description: 'Список друзей и заявки',
-    keywords: ['friends', 'контакты'],
-  },
-  {
     key: 'top',
     label: 'Топ',
     href: ROUTES.top,
     icon: Trophy,
     description: 'Топ профилей — попади в ленту',
     keywords: ['рейтинг', 'лидеры', 'top'],
+  },
+  {
+    key: 'friends',
+    label: 'Друзья',
+    href: ROUTES.friends,
+    icon: Users,
+    description: 'Список друзей и заявки',
+    keywords: ['friends', 'контакты'],
   },
 ] as const;
 
