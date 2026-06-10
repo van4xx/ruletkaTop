@@ -30,6 +30,10 @@ import { useMe, meKey } from '@/features/economy/use-me';
 /** Public id for the CloudPayments widget (premium recurrent charge). */
 const CP_PUBLIC_ID = process.env.NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID ?? '';
 
+/** Active payment provider (`tbank` default). */
+const PROVIDER: 'tbank' | 'cloudpayments' =
+  (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER as 'tbank' | 'cloudpayments' | undefined) ?? 'tbank';
+
 /** Premium plan catalogue (public; cheapest first). */
 export function usePremiumPlans() {
   return useQuery({
@@ -92,6 +96,7 @@ export function useSubscribe() {
   // params (price, accountId, recurrent descriptor) so the browser never fakes
   // the invoice or the amount. Entitlement is still granted only by the webhook.
   const checkout = useMutation({ mutationFn: economyApi.premiumCheckout });
+  const tbankCheckout = useMutation({ mutationFn: economyApi.tbankPremiumCheckout });
 
   const reset = () => {
     setPhase('idle');
@@ -99,7 +104,35 @@ export function useSubscribe() {
     setError(null);
   };
 
+  /** T-Bank hosted-redirect path: ask the API for a PaymentURL, then redirect. */
+  const subscribeViaTbank = (plan: PremiumPlan) => {
+    tbankCheckout.mutate(
+      { plan: plan.code },
+      {
+        onSuccess: (res) => {
+          if (typeof window !== 'undefined' && res?.paymentUrl) {
+            window.location.href = res.paymentUrl;
+            return;
+          }
+          setError(t('premiumHook.openFailed'));
+          setPhase('error');
+        },
+        onError: (e) => {
+          setError(e instanceof Error ? e.message : t('premiumHook.subscribeFailed'));
+          setPhase('error');
+        },
+      },
+    );
+  };
+
   const subscribe = (plan: PremiumPlan) => {
+    if (PROVIDER === 'tbank') {
+      setActivePlan(plan);
+      setError(null);
+      setPhase('starting');
+      subscribeViaTbank(plan);
+      return;
+    }
     // The widget bundle still needs a public id to load; the server also returns
     // one in the checkout params (preferred), but if neither is present we can't
     // open the widget at all, so fail fast with a clear message.

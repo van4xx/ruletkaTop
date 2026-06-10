@@ -66,6 +66,16 @@ export const registerSchema = z.object({
    */
   acceptedTerms: z.boolean().optional(),
   /**
+   * EXPLICIT 18+ self-attestation (age-gate level 1, additive on top of the
+   * derived-from-birthDate server check). Naming mirrors the `acceptedTerms`
+   * consent field: the SAME boolean shape, treated as a SECOND distinct consent
+   * record. ADDITIVE + optional in the contract so existing callers still
+   * type-check; the API rejects a registration unless this is `true` EVEN IF
+   * `birthDate` resolves to >= 18 years old (the explicit attestation is a
+   * separate legal artifact, audited as `user.consent.adult`).
+   */
+  acceptedAdult: z.boolean().optional(),
+  /**
    * Anti-bot CAPTCHA token (Cloudflare Turnstile / hCaptcha). ADDITIVE +
    * optional in the contract so existing callers type-check; the API verifies
    * it server-side when a CAPTCHA secret is configured (no-op in dev).

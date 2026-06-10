@@ -83,12 +83,14 @@ export function RegisterForm() {
       birthDate: '',
       locale: 'ru',
       acceptedTerms: false,
+      acceptedAdult: false,
     },
     mode: 'onTouched',
   });
 
   const passwordValue = watch('password');
   const termsAccepted = watch('acceptedTerms');
+  const adultAccepted = watch('acceptedAdult');
 
   const onSubmit = handleSubmit((values) => {
     // Attach the Turnstile token when present; omit the key entirely otherwise
@@ -120,7 +122,11 @@ export function RegisterForm() {
   // API rejects a registration without `acceptedTerms: true`). Also hard-block
   // while registration is closed (the API 403s anyway — this fails fast).
   const submitDisabled =
-    busy || registrationClosed || (captchaRequired && !captchaToken) || !termsAccepted;
+    busy ||
+    registrationClosed ||
+    (captchaRequired && !captchaToken) ||
+    !termsAccepted ||
+    !adultAccepted;
 
   return (
     <div>
@@ -313,6 +319,34 @@ export function RegisterForm() {
               {errors.acceptedTerms && (
                 <p className="mt-1.5 text-xs text-destructive">
                   {fieldError(errors.acceptedTerms.message)}
+                </p>
+              )}
+            </div>
+          )}
+        />
+
+        {/* AGE-GATE LEVEL 1 — explicit 18+ self-attestation, captured as a
+            SEPARATE consent record (audited as `user.consent.adult` server-side).
+            The API rejects a registration unless `acceptedAdult === true`, EVEN
+            IF the self-attested birthDate is already >= 18. */}
+        <Controller
+          control={control}
+          name="acceptedAdult"
+          render={({ field: { value, onChange } }) => (
+            <div>
+              <label className="flex cursor-pointer select-none items-start gap-2.5 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={value ?? false}
+                  onChange={(e) => onChange(e.target.checked)}
+                  aria-required="true"
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border accent-[var(--color-neon-cyan)]"
+                />
+                <span>{t('register.adult.label')}</span>
+              </label>
+              {errors.acceptedAdult && (
+                <p className="mt-1.5 text-xs text-destructive">
+                  {fieldError(errors.acceptedAdult.message)}
                 </p>
               )}
             </div>

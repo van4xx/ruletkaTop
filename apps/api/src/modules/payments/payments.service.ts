@@ -19,8 +19,15 @@ import type {
   CoinsCheckoutDto,
 } from '@ruletka/shared-types';
 
+import type { TbankNotification } from '@ruletka/shared-types';
+
 import { MetricsService } from '../../observability/metrics.service';
 import { CloudPaymentsClient } from './cloudpayments.client';
+import {
+  PAYMENT_PROVIDER,
+  type PaymentProvider,
+  type PaymentProviderName,
+} from './payment-provider';
 import {
   COIN_PACKAGES_SERVICE,
   type CoinPackagesServiceContract,
@@ -108,6 +115,9 @@ export class PaymentsService {
   private readonly publicId: string;
   private readonly currency = 'RUB';
 
+  /** Active payment provider (`tbank` default, `cloudpayments` fallback). */
+  private readonly providerName: PaymentProviderName;
+
   constructor(
     @InjectModel(Payment.name)
     private readonly paymentModel: Model<PaymentDocument>,
@@ -117,6 +127,13 @@ export class PaymentsService {
     @Inject(COIN_PACKAGES_SERVICE)
     private readonly coinPackages: CoinPackagesServiceContract,
     private readonly cloudPayments: CloudPaymentsClient,
+    /**
+     * Provider-agnostic outbound port. Bound to {@link TbankProvider} when
+     * `PAYMENT_PROVIDER=tbank` (default) and {@link CloudPaymentsProvider} when
+     * `PAYMENT_PROVIDER=cloudpayments`. Optional so the original CloudPayments-
+     * focused unit tests still wire (they exercise `cloudPayments` directly).
+     */
+    @Optional() @Inject(PAYMENT_PROVIDER) private readonly provider?: PaymentProvider,
     // Shared connection, used ONLY to read the `users` source-of-truth so a
     // tombstoned (`deletedAt`) / banned account can never be (re-)entitled by a
     // webhook. Optional so the service still instantiates where no connection is
@@ -129,6 +146,13 @@ export class PaymentsService {
     @Optional() private readonly metrics?: MetricsService,
   ) {
     this.publicId = this.config.get<string>('CLOUDPAYMENTS_PUBLIC_ID', '');
+    const raw = this.config.get<string>('PAYMENT_PROVIDER', 'tbank').trim().toLowerCase();
+    this.providerName = raw === 'cloudpayments' ? 'cloudpayments' : 'tbank';
+  }
+
+  /** Active provider name (`tbank` | `cloudpayments`). */
+  getProviderName(): PaymentProviderName {
+    return this.providerName;
   }
 
   // ── Checkout (authenticated) ───────────────────────────────────────────────
@@ -648,6 +672,302 @@ export class PaymentsService {
       `Admin refunded payment ${paymentId} (tx ${payment.transactionId}, amount ${payment.amount})`,
     );
     return { amount: payment.amount, transactionId: payment.transactionId };
+  }
+
+  // ── T-Bank (Tinkoff) hosted-redirect flow ───────────────────────────────────
+
+  /**
+   * Begin a coins purchase via T-Bank. Resolves the package server-side, mints
+   * a PENDING {@link Payment} keyed by a fresh `invoiceId` (= the T-Bank
+   * `OrderId`), and asks the provider to {@link PaymentProvider.createCheckout}
+   * which returns a hosted PaymentURL. The client redirects there; entitlement
+   * is granted by the webhook handler ({@link handleTbankWebhook}).
+   *
+   * The price is FIXED server-side from the catalogue — the request body only
+   * names the package code, never the amount. Amount on the wire is kopecks
+   * (T-Bank's unit); we store roubles in `Payment.amount` for parity with the
+   * legacy CloudPayments rows.
+   *
+   * @throws NotFoundException unknown packageCode.
+   */
+  async createTbankCoinsCheckout(
+    userId: string,
+    packageCode: string,
+  ): Promise<{ provider: PaymentProviderName; paymentUrl: string; orderId: string }> {
+    if (!this.provider) {
+      throw new BadRequestException('Payment provider not configured');
+    }
+    const pkg = await this.coinPackages.findByCode(packageCode);
+    if (!pkg) {
+      throw new NotFoundException('Coin package not found');
+    }
+
+    const invoiceId = randomUUID();
+    const amount = pkg.priceRub;
+
+    await this.paymentModel.create({
+      userId: new Types.ObjectId(userId),
+      provider: this.providerName,
+      invoiceId,
+      amount,
+      currency: this.currency,
+      status: 'pending',
+      purpose: 'coins',
+      packageCode: pkg.code,
+    });
+
+    const result = await this.provider.createCheckout({
+      purpose: 'coins',
+      userId,
+      amountKopecks: Math.round(amount * 100),
+      currency: this.currency,
+      orderId: invoiceId,
+      description: `${pkg.coins + pkg.bonusCoins} coins (${pkg.code})`,
+      data: { purpose: 'coins', userId, packageCode: pkg.code },
+    });
+
+    // Persist the provider-issued PaymentId so refunds/cancellations can target it.
+    if (result.providerPaymentId) {
+      await this.paymentModel
+        .updateOne(
+          { invoiceId },
+          { $set: { providerPaymentId: result.providerPaymentId } },
+        )
+        .exec();
+    }
+
+    return { provider: this.providerName, paymentUrl: result.paymentUrl, orderId: invoiceId };
+  }
+
+  /**
+   * Begin a premium subscription purchase via T-Bank. Mints a PENDING Payment,
+   * tells the provider to enable Recurrent on the Init so a RebillId is issued
+   * on the first successful charge (returned in the webhook), and surfaces the
+   * hosted PaymentURL. Subsequent renewals are driver-side via
+   * {@link PaymentProvider.chargeRecurring} (out of scope for this method).
+   *
+   * @throws NotFoundException unknown plan code.
+   */
+  async createTbankPremiumCheckout(
+    userId: string,
+    plan: string,
+  ): Promise<{ provider: PaymentProviderName; paymentUrl: string; orderId: string }> {
+    if (!this.provider) {
+      throw new BadRequestException('Payment provider not configured');
+    }
+    const found = await this.premium.findPlanByCode(plan);
+    if (!found) {
+      throw new NotFoundException('Premium plan not found');
+    }
+
+    const invoiceId = randomUUID();
+    const amount = found.priceRub;
+
+    await this.paymentModel.create({
+      userId: new Types.ObjectId(userId),
+      provider: this.providerName,
+      invoiceId,
+      amount,
+      currency: this.currency,
+      status: 'pending',
+      purpose: 'premium',
+      plan: found.code,
+    });
+
+    const result = await this.provider.createCheckout({
+      purpose: 'premium',
+      userId,
+      amountKopecks: Math.round(amount * 100),
+      currency: this.currency,
+      orderId: invoiceId,
+      description: `${found.title} (${found.code})`,
+      recurrent: { enabled: true, intervalDays: found.intervalDays },
+      data: { purpose: 'premium', userId, plan: found.code },
+    });
+
+    if (result.providerPaymentId) {
+      await this.paymentModel
+        .updateOne(
+          { invoiceId },
+          { $set: { providerPaymentId: result.providerPaymentId } },
+        )
+        .exec();
+    }
+
+    return { provider: this.providerName, paymentUrl: result.paymentUrl, orderId: invoiceId };
+  }
+
+  /**
+   * Handle a verified T-Bank webhook (Token already validated by the guard).
+   *
+   * Idempotency: keyed on the local `invoiceId` (= T-Bank `OrderId`). Replays
+   * see a non-pending Payment and short-circuit returning the platform's plain
+   * text `OK` (controller responsibility).
+   *
+   * State transitions:
+   *   - CONFIRMED / AUTHORIZED with `Success:true` → fulfil + mark `completed`.
+   *   - REJECTED                                   → mark `failed`.
+   *   - REVERSED / REFUNDED / PARTIAL_REFUNDED      → mark `refunded` + reverse fulfilment.
+   *   - NEW                                         → audit-only update.
+   */
+  async handleTbankWebhook(n: TbankNotification): Promise<void> {
+    const payment = await this.paymentModel.findOne({ invoiceId: n.OrderId }).exec();
+    if (!payment) {
+      this.logger.warn(`T-Bank webhook for unknown OrderId ${n.OrderId} — ignoring (ack)`);
+      return;
+    }
+
+    // Persist the provider PaymentId + RebillId on first sight (audit).
+    const auditPatch: Record<string, unknown> = { rawPayload: { ...n } };
+    if (typeof n.PaymentId === 'string' && payment.providerPaymentId !== n.PaymentId) {
+      auditPatch.providerPaymentId = n.PaymentId;
+    }
+    if (typeof n.RebillId === 'string') {
+      auditPatch.subscriptionToken = n.RebillId;
+      auditPatch.subscriptionId = n.RebillId;
+    }
+
+    // Terminal-status idempotency: a redelivered confirm/refund/fail must NOT
+    // run fulfilment / reversal a second time. We only act on transitions FROM
+    // pending or completed → next state.
+    if (n.Status === 'CONFIRMED' || (n.Status === 'AUTHORIZED' && n.Success)) {
+      await this.fulfilTbankSuccess(payment, n, auditPatch);
+      return;
+    }
+    if (n.Status === 'REJECTED') {
+      if (payment.status === 'pending') {
+        await this.paymentModel
+          .updateOne({ _id: payment._id, status: 'pending' }, { $set: { status: 'failed', ...auditPatch } })
+          .exec();
+        this.emit((m) => m.paymentFailed());
+      } else {
+        await this.paymentModel.updateOne({ _id: payment._id }, { $set: auditPatch }).exec();
+      }
+      return;
+    }
+    if (n.Status === 'REVERSED' || n.Status === 'REFUNDED' || n.Status === 'PARTIAL_REFUNDED') {
+      await this.reverseTbank(payment, auditPatch);
+      return;
+    }
+    // NEW / anything else: audit-only.
+    await this.paymentModel.updateOne({ _id: payment._id }, { $set: auditPatch }).exec();
+  }
+
+  /**
+   * Fulfilment path for a T-Bank success notification. Mirrors the
+   * CloudPayments `handlePay` semantics: atomic pending→completed claim, then
+   * coins credit OR premium activation. Guarded by the same teardown re-check
+   * so a dead account can never be entitled.
+   */
+  private async fulfilTbankSuccess(
+    payment: PaymentDocument,
+    n: TbankNotification,
+    auditPatch: Record<string, unknown>,
+  ): Promise<void> {
+    if (payment.status !== 'pending') {
+      // Audit-only update for redeliveries.
+      await this.paymentModel.updateOne({ _id: payment._id }, { $set: auditPatch }).exec();
+      return;
+    }
+
+    // Defence-in-depth: never fulfil if the paid amount differs from our price.
+    const paidRub = typeof n.Amount === 'number' ? n.Amount / 100 : undefined;
+    if (paidRub !== undefined && !this.amountMatches(payment.amount, paidRub)) {
+      this.logger.error(
+        `T-Bank webhook amount mismatch for invoice ${payment.invoiceId}: expected ${payment.amount}, got ${paidRub} — not fulfilling`,
+      );
+      return;
+    }
+
+    if (await this.isAccountTorndown(payment.userId.toString())) {
+      this.logger.warn(
+        `T-Bank webhook for invoice ${payment.invoiceId} refused: account is deleted/banned`,
+      );
+      return;
+    }
+
+    const claimed = await this.paymentModel
+      .findOneAndUpdate(
+        { _id: payment._id, status: 'pending' },
+        {
+          $set: {
+            status: 'completed',
+            ...auditPatch,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!claimed) {
+      return;
+    }
+
+    if (await this.isAccountTorndown(claimed.userId.toString())) {
+      this.logger.warn(
+        `T-Bank webhook refused post-claim for invoice ${claimed.invoiceId}: account torn down`,
+      );
+      await this.paymentModel
+        .updateOne({ _id: claimed._id }, { $set: { status: 'pending' } })
+        .exec();
+      await this.premium.cancel(claimed.userId.toString()).catch(() => undefined);
+      return;
+    }
+
+    try {
+      if (claimed.purpose === 'coins') {
+        await this.fulfilCoins(claimed);
+      } else {
+        const rebill = typeof n.RebillId === 'string' ? n.RebillId : undefined;
+        await this.fulfilPremium(claimed, rebill, rebill);
+      }
+    } catch (err) {
+      await this.paymentModel
+        .updateOne({ _id: claimed._id }, { $set: { status: 'pending' } })
+        .exec();
+      this.emit((m) => m.fulfilmentRolledBack(claimed.purpose));
+      this.logger.error(
+        `T-Bank fulfilment failed for invoice ${claimed.invoiceId}; rolled back: ${(err as Error).message}`,
+      );
+      throw err;
+    }
+    this.emit((m) => m.paymentCompleted(claimed.purpose));
+  }
+
+  /** Reverse a fulfilled T-Bank payment on a refund/reverse webhook. */
+  private async reverseTbank(
+    payment: PaymentDocument,
+    auditPatch: Record<string, unknown>,
+  ): Promise<void> {
+    if (payment.status === 'refunded') {
+      // Idempotent: redelivered refund is a no-op (only audit fields).
+      await this.paymentModel.updateOne({ _id: payment._id }, { $set: auditPatch }).exec();
+      return;
+    }
+    const claimed = await this.paymentModel
+      .findOneAndUpdate(
+        { _id: payment._id, status: { $ne: 'refunded' } },
+        { $set: { status: 'refunded', ...auditPatch } },
+        { new: true },
+      )
+      .exec();
+    if (!claimed) {
+      return;
+    }
+    this.emit((m) => m.refundRecorded());
+
+    if (payment.status === 'completed') {
+      try {
+        if (claimed.purpose === 'coins') {
+          await this.reverseCoins(claimed);
+        } else {
+          await this.premium.cancel(claimed.userId.toString());
+        }
+      } catch (err) {
+        this.logger.error(
+          `T-Bank refund reversal issue for invoice ${claimed.invoiceId}: ${(err as Error).message}`,
+        );
+      }
+    }
   }
 
   // ── internals ───────────────────────────────────────────────────────────────

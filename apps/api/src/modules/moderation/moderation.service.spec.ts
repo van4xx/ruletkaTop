@@ -141,6 +141,30 @@ describe('ModerationService — escalation policy', () => {
     expect(eventModel.countDocuments).not.toHaveBeenCalled();
   });
 
+  it("label 'minor' (CSAM) → forces force-logout/disconnect via adminService.banUser (kills all active sessions NOW)", async () => {
+    // The minor-label path MUST drive an immediate session teardown of the
+    // offender (not merely flip `isBanned` so they're blocked on NEXT login).
+    // The full chain — revokeAllSessions + cluster-wide socket disconnect —
+    // lives inside AdminService.banUser; here we assert the moderation engine
+    // INVOKES that hook on the minor path so the chain is wired through.
+    withPriorViolations(0);
+
+    await service.handleViolation(USER, violation({ label: 'minor', score: 0.1 }));
+
+    // banUser is the single force-logout entry point: it revokes every refresh
+    // session AND publishes to USER_DISCONNECT_CHANNEL so live sockets drop
+    // cluster-wide. The minor path must call it exactly once with the offender id.
+    expect(adminService.banUser).toHaveBeenCalledTimes(1);
+    expect(adminService.banUser).toHaveBeenCalledWith(USER);
+
+    // And the published `mod:action` for the ban must be the LAST step (after
+    // banUser has resolved), so the client/sockets only observe the announce
+    // AFTER the account is un-authable. Order: banUser → publish.
+    const banOrder = adminService.banUser.mock.invocationCallOrder[0]!;
+    const publishOrder = redis.publish.mock.invocationCallOrder[0]!;
+    expect(banOrder).toBeLessThan(publishOrder);
+  });
+
   it('high score (≥ threshold) on the FIRST strike → immediate ban (bypasses warn/kick)', async () => {
     withPriorViolations(0);
 

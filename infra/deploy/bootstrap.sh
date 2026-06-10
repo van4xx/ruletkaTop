@@ -10,8 +10,9 @@
 # DNS for ruletka.top / www / api / admin / turn must already point at this host,
 # and :80/:443 must be free (mail is external Timeweb MX — nothing mail here).
 #
-# ── Run it (as root on the server). Provide SMTP_PASS + TURNSTILE_SECRET +
-#    TURNSTILE_SITE_KEY (the two anti-bot keys); everything else is auto:
+# ── Run it (as root on the server). Provide SMTP_PASS + the TWO Turnstile keys
+#    (TURNSTILE_SECRET + TURNSTILE_SITE_KEY — both prod-required); everything
+#    else is auto-generated:
 #
 #   # If the repo is PUBLIC:
 #   SMTP_PASS='your-smtp-pass' \
@@ -28,13 +29,18 @@
 #            && bash infra/deploy/bootstrap.sh'
 #
 # REQUIRED secrets the operator MUST supply (the script prompts if a TTY,
-# otherwise it aborts — both are auth/anti-bot gates the API fails-fast on):
-#   • SMTP_PASS        — Timeweb SMTP password for no-reply@ruletka.top.
-#   • TURNSTILE_SECRET — Cloudflare Turnstile server secret. It is the anti-bot
-#                        gate on /auth/register and the API REFUSES TO BOOT in
-#                        production without it (config-validation CRITICAL_SECRETS
-#                        + LAUNCH-CHECKLIST). Pair it with TURNSTILE_SITE_KEY (the
-#                        public widget key, baked into the web build).
+# otherwise it aborts — all three gate user-facing flows the prod app cannot
+# meaningfully open without):
+#   • SMTP_PASS          — Timeweb SMTP password for no-reply@ruletka.top.
+#   • TURNSTILE_SECRET   — Cloudflare Turnstile SERVER secret. The anti-bot gate
+#                          on /auth/register; the API REFUSES TO BOOT in prod
+#                          without it (config-validation CRITICAL_SECRETS +
+#                          LAUNCH-CHECKLIST). Cloudflare dash → Turnstile → Secret.
+#   • TURNSTILE_SITE_KEY — Cloudflare Turnstile PUBLIC site key. Baked into the
+#                          web build as NEXT_PUBLIC_TURNSTILE_SITE_KEY (compose
+#                          build-arg). Without it the widget renders NOTHING and
+#                          every signup is 400-rejected by the API (paired-secret
+#                          mismatch). Same Cloudflare widget → Site key.
 #
 # AUTO-GENERATED secrets (you never see/handle these — written into .env once):
 #   JWT_ACCESS/REFRESH_SECRET, REDIS_PASSWORD, TURN_STATIC_AUTH_SECRET, the VAPID
@@ -108,6 +114,19 @@ if [ ! -f .env ]; then
     read -rsp "Cloudflare Turnstile SECRET key (anti-bot gate — required in prod): " TURNSTILE_SECRET; echo
   fi
   [ -n "$TURNSTILE_SECRET" ] || die "TURNSTILE_SECRET not provided. It is REQUIRED in production (the API refuses to boot without it). Get it from Cloudflare → Turnstile → Secret key, then re-run with: TURNSTILE_SECRET='…' TURNSTILE_SITE_KEY='…' bash …/bootstrap.sh"
+
+  # TURNSTILE_SITE_KEY is the public widget half. It is BAKED INTO THE WEB BUILD
+  # via NEXT_PUBLIC_TURNSTILE_SITE_KEY (compose build-arg). If it is blank, the
+  # widget renders nothing (turnstile-widget.tsx:181) → the register form posts
+  # no captcha token → the API (TURNSTILE_SECRET set) 400s every submit with
+  # "CAPTCHA verification failed". Net effect: registration is silently closed.
+  # So enforce it here in lockstep with the secret rather than letting a fresh
+  # deploy ship with a broken signup flow. Get it from the same Cloudflare widget.
+  TURNSTILE_SITE_KEY="${TURNSTILE_SITE_KEY:-}"
+  if [ -z "$TURNSTILE_SITE_KEY" ] && [ -t 0 ]; then
+    read -rp "Cloudflare Turnstile SITE key (public widget key — required in prod): " TURNSTILE_SITE_KEY
+  fi
+  [ -n "$TURNSTILE_SITE_KEY" ] || die "TURNSTILE_SITE_KEY not provided. It is REQUIRED in production (without it the register-form widget hides and every signup is 400-rejected by the API). Get it from Cloudflare → Turnstile → Site key (same widget as the secret), then re-run with: TURNSTILE_SECRET='…' TURNSTILE_SITE_KEY='…' bash …/bootstrap.sh"
 
   PUBLIC_IP="$(curl -fsS --max-time 8 https://api.ipify.org 2>/dev/null \
             || curl -fsS --max-time 8 https://ifconfig.me 2>/dev/null \

@@ -14,7 +14,8 @@
 | 🔑 `CLOUDPAYMENTS_PUBLIC_ID` + `CLOUDPAYMENTS_API_SECRET` | **Premium + coin revenue** (wave 2 builds the server checkout/cancel/refund; it needs these to actually charge) | **MISSING** → premium is uncollectable until set | CloudPayments dashboard → Site settings → API |
 | 🔑 `NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID` | web payment widget | **MISSING** | same Public ID (safe to expose) |
 | 🔑 `SIGHTENGINE_API_USER` + `MODERATION_PROVIDER_API_KEY` | **server-side NSFW screening** of call frames (today it fails-open → trusts the client) | **MISSING** → no real AI moderation | sightengine.com (or chosen provider) |
-| 🔑 `TURNSTILE_SECRET` (+ public site key) | anti-bot on signup/login | **MISSING → now REQUIRED in prod** (the API boot now fails-fast without it — security hardening) | Cloudflare Turnstile (free) |
+| 🔑 `TURNSTILE_SECRET` (API server `.env`) | anti-bot on `/auth/register` (server siteverify). **PROD-REQUIRED — boot fails-fast** without it (`CRITICAL_SECRETS` in `apps/api/src/common/config-validation.ts`). `bootstrap.sh` PROMPTS / REQUIRES it; on a running server install via `SECRETS-INSTALL.md`. | **MISSING** → must be set before launch | Cloudflare dash → **Turnstile** → Add widget → **Secret key** (server-only) |
+| 🔑 `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (web build env) | renders the Turnstile widget on `/register`. **PROD-REQUIRED**: without it the widget hides → users submit with no token → API 400s (`CAPTCHA verification failed`), so registration is effectively closed. **Build-time bake** — changing it requires rebuilding the web image (`bootstrap.sh` forwards it as a Docker build-arg to the web service). | **MISSING** → set alongside `TURNSTILE_SECRET` | Same Cloudflare widget → **Site key** (safe to expose; the public half of the pair) |
 | `SMTP_*` (host/user/pass) | email verify / password reset | **SET** (server `.env`) | — verify deliverability |
 | `TURN_STATIC_AUTH_SECRET` + `TURN_REALM` | WebRTC relay (calls behind NAT) | **SET** (coturn) | — |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | auth | **SET** (generated) | — |
@@ -42,7 +43,7 @@
 
 ## 3. Launch sequence
 
-1. Provision the 🔑 keys above on the server `.env`.
+1. Provision the 🔑 keys above on the server `.env` — the exact shell snippets per secret group live in **`infra/deploy/SECRETS-INSTALL.md`** (Turnstile / T-Bank / Sightengine / first-deploy index sync), including the post-launch rotation steps for the keys that transited untrusted channels.
 2. Merge `polish/web-dark-default` → `main` (carries: dark theme + new logo/preloader + design-system unification + P0/P1 waves 1–2).
 3. Auto-deploy (server-side systemd pull-deploy) → smoke-test each subdomain (web / api / admin).
 4. **DB index migration (one-off, REQUIRED).** Production runs with `autoIndex` OFF, so indexes are reconciled explicitly. On a fresh DB just boot the API once with `RUN_INDEX_SYNC=true` (creates every schema index, then unset it). On an EXISTING DB two index changes are destructive and must be de-duped first or the loud `syncIndexes()` will (correctly) abort boot:

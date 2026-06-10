@@ -1,9 +1,16 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Header,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiExcludeEndpoint,
-  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
@@ -15,9 +22,12 @@ import {
   cloudPaymentsNotificationSchema,
   type CoinsCheckoutDto,
   coinsCheckoutSchema,
+  type HostedCheckoutResult,
   type JwtPayload,
   type SubscribeDto,
   subscribeSchema,
+  type TbankNotification,
+  tbankNotificationSchema,
 } from '@ruletka/shared-types';
 
 import { CurrentUser } from '../../common/current-user.decorator';
@@ -25,6 +35,7 @@ import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 import { createZodValidationPipe } from '../../common/zod-validation.pipe';
 import { CloudPaymentsSignatureGuard } from './cloudpayments-signature.guard';
 import { PaymentsService } from './payments.service';
+import { TbankSignatureGuard } from './tbank/tbank-signature.guard';
 
 /**
  * Validates CloudPayments webhook bodies. CloudPayments POSTs
@@ -34,6 +45,9 @@ import { PaymentsService } from './payments.service';
  * separately by {@link CloudPaymentsSignatureGuard} (reads `req.rawBody`).
  */
 const notificationPipe = createZodValidationPipe(cloudPaymentsNotificationSchema);
+
+/** Validates T-Bank webhook bodies (PascalCase JSON, includes Token). */
+const tbankNotificationPipe = createZodValidationPipe(tbankNotificationSchema);
 
 /**
  * Payments surface for CloudPayments.
@@ -144,5 +158,61 @@ export class PaymentsController {
   @ApiExcludeEndpoint()
   async refund(@Body(notificationPipe) body: CloudPaymentsNotification): Promise<CloudPaymentsAck> {
     return this.paymentsService.handleRefund(body);
+  }
+
+  // ── T-Bank (Tinkoff) hosted-redirect flow ──────────────────────────────────
+
+  @Post('tbank/coins/checkout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Start a coins purchase via T-Bank and get a hosted PaymentURL',
+    description:
+      'Resolves the coin package server-side, creates a PENDING payment keyed by ' +
+      'a unique OrderId, and returns the T-Bank PaymentURL. The browser redirects ' +
+      'to it; entitlement is granted by the webhook after capture.',
+  })
+  @ApiCreatedResponse({ description: 'Hosted PaymentURL the browser should redirect to' })
+  async tbankCoinsCheckout(
+    @CurrentUser() user: JwtPayload,
+    @Body(createZodValidationPipe(coinsCheckoutSchema)) dto: CoinsCheckoutDto,
+  ): Promise<HostedCheckoutResult> {
+    const r = await this.paymentsService.createTbankCoinsCheckout(user.sub, dto.packageCode);
+    return { provider: r.provider, paymentUrl: r.paymentUrl, orderId: r.orderId };
+  }
+
+  @Post('tbank/premium/checkout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Start a premium subscription purchase via T-Bank and get a hosted PaymentURL',
+    description:
+      'Resolves the premium plan server-side, creates a PENDING payment keyed by ' +
+      'a unique OrderId, asks T-Bank to enable Recurrent so a RebillId is issued, ' +
+      'and returns the hosted PaymentURL. Entitlement is granted by the webhook.',
+  })
+  @ApiCreatedResponse({ description: 'Hosted PaymentURL the browser should redirect to' })
+  async tbankPremiumCheckout(
+    @CurrentUser() user: JwtPayload,
+    @Body(createZodValidationPipe(subscribeSchema)) dto: SubscribeDto,
+  ): Promise<HostedCheckoutResult> {
+    const r = await this.paymentsService.createTbankPremiumCheckout(user.sub, dto.plan);
+    return { provider: r.provider, paymentUrl: r.paymentUrl, orderId: r.orderId };
+  }
+
+  /**
+   * T-Bank webhook (PUBLIC, Token-verified by TbankSignatureGuard). Returns a
+   * plain text `OK` body — that is the literal ack string the T-Bank docs
+   * require. Retries are hourly for 24h then daily for 30d so the handler MUST
+   * be idempotent (keyed on OrderId).
+   */
+  @Post('tbank/webhook')
+  @UseGuards(TbankSignatureGuard)
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  @ApiExcludeEndpoint()
+  async tbankWebhook(@Body(tbankNotificationPipe) body: TbankNotification): Promise<string> {
+    await this.paymentsService.handleTbankWebhook(body);
+    return 'OK';
   }
 }

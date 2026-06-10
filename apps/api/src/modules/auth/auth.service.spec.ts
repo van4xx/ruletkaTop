@@ -57,6 +57,9 @@ function makeRegisterDto(overrides: Partial<RegisterDto> = {}): RegisterDto {
     locale: 'en',
     // Consent is required by the service; the happy path accepts the terms.
     acceptedTerms: true,
+    // AGE-GATE LEVEL 1: the service requires an EXPLICIT 18+ self-attestation
+    // (distinct from the derived `birthDate` check). The happy path attests it.
+    acceptedAdult: true,
     ...overrides,
   };
 }
@@ -509,6 +512,46 @@ describe('AuthService.register', () => {
 
     // No account is created when consent is absent.
     expect(m.usersService.createUser).not.toHaveBeenCalled();
+  });
+
+  it('REJECTS registration when the explicit 18+ self-attestation is missing or declined (age-gate level 1)', async () => {
+    const m = buildMocks('commit');
+    const service = makeService(m);
+
+    // Missing the explicit attestation (even with a 25-year-old birthDate and
+    // terms accepted) — the attestation is a SEPARATE consent record.
+    await expect(
+      service.register(makeRegisterDto({ acceptedAdult: undefined })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    // Explicitly declined.
+    await expect(
+      service.register(makeRegisterDto({ acceptedAdult: false })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    // No account is created when the attestation is absent.
+    expect(m.usersService.createUser).not.toHaveBeenCalled();
+  });
+
+  it("AUDITS the 18+ self-attestation as `user.consent.adult` when the user attests", async () => {
+    const m = buildMocks('commit');
+    const service = makeService(m);
+
+    await service.register(makeRegisterDto(), { ip: '9.9.9.9' });
+
+    // Among the audit rows written, exactly one is the adult-consent record,
+    // carrying the user id as both actor + target and the captured IP in `meta`.
+    const adultLogs = m.auditService.log.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .filter((c) => c.action === 'user.consent.adult');
+    expect(adultLogs).toHaveLength(1);
+    const log = adultLogs[0]!;
+    expect(log).toMatchObject({
+      actorId: USER_ID,
+      targetType: 'user',
+      targetId: USER_ID,
+    });
+    expect((log.meta as { ip?: string }).ip).toBe('9.9.9.9');
+    expect((log.meta as { acceptedAt?: string }).acceptedAt).toEqual(expect.any(String));
   });
 
   it('records the consent timestamps on the created user when terms are accepted', async () => {

@@ -78,6 +78,12 @@ export const registerFormSchema = baseRegisterSchema.extend({
   // must collect it and we enforce it client-side (a ticked box) to mirror the
   // server rule and avoid a confusing 400 on submit.
   acceptedTerms: z.boolean().refine((v) => v === true, 'validation.acceptTerms'),
+  // AGE-GATE LEVEL 1: explicit 18+ self-attestation, captured as a SEPARATE
+  // checkbox under the Terms/Privacy consent. The contract leaves
+  // `acceptedAdult` optional for additivity, but the API REQUIRES it to be
+  // `true` (audited as `user.consent.adult` server-side). Enforced client-side
+  // to mirror the server rule and avoid a confusing 400 on submit.
+  acceptedAdult: z.boolean().refine((v) => v === true, 'validation.acceptAdult'),
 });
 export type RegisterFormValues = z.infer<typeof registerFormSchema>;
 

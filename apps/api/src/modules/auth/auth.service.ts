@@ -272,6 +272,18 @@ export class AuthService {
       throw new BadRequestException('You must accept the Terms of Service and Privacy Policy');
     }
 
+    // AGE-GATE LEVEL 1 (explicit 18+ self-attestation). This is a SEPARATE
+    // consent record from the Terms/Privacy acceptance above — a user must
+    // EXPLICITLY confirm they are at least 18, distinct from the server-side
+    // derivation from `birthDate` below. The explicit attestation is required
+    // EVEN IF the self-reported birthDate would already pass the 18+ check, so
+    // an under-age user cannot bypass the attestation by lying about their DoB.
+    // The contract field is optional+additive; we enforce it server-side and
+    // audit it as `user.consent.adult` (see auditService.log call after creation).
+    if (dto.acceptedAdult !== true) {
+      throw new BadRequestException('You must confirm you are at least 18 years old');
+    }
+
     const birthDate = this.parseBirthDate(dto.birthDate);
     if (this.computeAge(birthDate) < MIN_AGE_YEARS) {
       throw new BadRequestException('Must be at least 18 years old');
@@ -293,6 +305,23 @@ export class AuthService {
       birthDate,
       acceptedAt,
     );
+
+    // Append a durable audit row for the explicit 18+ self-attestation
+    // (`user.consent.adult`) — a separate legal artifact from the Terms/Privacy
+    // acceptance timestamps stored on the User row. Captures the acceptance
+    // instant + the client IP for later compliance review. Best-effort: the
+    // `auditService.log` swallows storage errors, and the trailing `.catch`
+    // belt-and-braces against an unexpected synchronous throw so a logging
+    // hiccup cannot fail registration after the account already exists.
+    await this.auditService
+      .log({
+        actorId: userId,
+        action: 'user.consent.adult',
+        targetType: 'user',
+        targetId: userId,
+        meta: { acceptedAt: acceptedAt.toISOString(), ip: ctx.ip ?? null },
+      })
+      .catch(() => undefined);
 
     const authUser: AuthUser = {
       id: userId,

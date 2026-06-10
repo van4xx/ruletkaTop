@@ -14,6 +14,13 @@ declare global {
       readonly NEXT_PUBLIC_WS_URL?: string;
       /** CloudPayments public id for the payment widget (optional). */
       readonly NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID?: string;
+      /**
+       * Active payment provider on the frontend (`tbank` | `cloudpayments`).
+       * Default `tbank`. When set to `cloudpayments` the legacy widget path is
+       * used; otherwise the T-Bank hosted-redirect path is taken and the
+       * CloudPayments widget bundle is not loaded.
+       */
+      readonly NEXT_PUBLIC_PAYMENT_PROVIDER?: 'tbank' | 'cloudpayments';
       /** Comma-separated STUN URLs for WebRTC. */
       readonly NEXT_PUBLIC_STUN_URLS?: string;
       /** Comma-separated TURN URLs for WebRTC. */

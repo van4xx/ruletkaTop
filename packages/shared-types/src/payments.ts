@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { isoDateSchema, objectIdSchema } from './common';
 
-export const paymentProviderSchema = z.enum(['cloudpayments']);
+/**
+ * Active payment providers. T-Bank (Tinkoff) e-acquiring is the default; the
+ * legacy CloudPayments adapter is kept so we can fall back via the
+ * `PAYMENT_PROVIDER` env without a code change.
+ */
+export const paymentProviderSchema = z.enum(['cloudpayments', 'tbank']);
 export type PaymentProvider = z.infer<typeof paymentProviderSchema>;
 
 export const paymentStatusSchema = z.enum(['pending', 'completed', 'failed', 'refunded']);
@@ -68,3 +73,55 @@ export const cloudPaymentsAckSchema = z.object({
   code: z.union([z.literal(0), z.literal(11), z.literal(12), z.literal(13), z.literal(20)]),
 });
 export type CloudPaymentsAck = z.infer<typeof cloudPaymentsAckSchema>;
+
+/**
+ * Hosted-redirect checkout result returned by the API to the web client for
+ * T-Bank flows. The client `window.location.href = paymentUrl` and the user
+ * lands back on success/fail URL afterwards; entitlement is granted by the
+ * webhook. `orderId` lets the client recognise its own checkout if needed.
+ *
+ * Additive: CloudPayments flows still use {@link checkoutWidgetParamsSchema}.
+ */
+export const hostedCheckoutResultSchema = z.object({
+  provider: paymentProviderSchema,
+  paymentUrl: z.string().url(),
+  orderId: z.string(),
+});
+export type HostedCheckoutResult = z.infer<typeof hostedCheckoutResultSchema>;
+
+/**
+ * T-Bank (Tinkoff) e-acquiring webhook envelope.
+ *
+ * Authoritative status enum: NEW | AUTHORIZED | CONFIRMED | REVERSED |
+ * REFUNDED | PARTIAL_REFUNDED | REJECTED. Authenticity is verified via the
+ * `Token` field (SHA-256 of the sorted-by-key value concatenation including
+ * the merchant Password) — see `signTbankToken`.
+ */
+export const tbankStatusSchema = z.enum([
+  'NEW',
+  'AUTHORIZED',
+  'CONFIRMED',
+  'REVERSED',
+  'REFUNDED',
+  'PARTIAL_REFUNDED',
+  'REJECTED',
+]);
+export type TbankStatus = z.infer<typeof tbankStatusSchema>;
+
+export const tbankNotificationSchema = z.object({
+  TerminalKey: z.string(),
+  OrderId: z.string(),
+  Success: z.coerce.boolean(),
+  Status: tbankStatusSchema,
+  PaymentId: z.union([z.string(), z.number()]).transform((v) => String(v)),
+  ErrorCode: z.string().optional(),
+  Amount: z.coerce.number().optional(),
+  CardId: z.union([z.string(), z.number()]).optional(),
+  Pan: z.string().optional(),
+  ExpDate: z.string().optional(),
+  RebillId: z.union([z.string(), z.number()]).optional().transform((v) => (v === undefined ? undefined : String(v))),
+  Token: z.string(),
+  Data: z.record(z.string(), z.string()).optional(),
+  Receipt: z.unknown().optional(),
+});
+export type TbankNotification = z.infer<typeof tbankNotificationSchema>;

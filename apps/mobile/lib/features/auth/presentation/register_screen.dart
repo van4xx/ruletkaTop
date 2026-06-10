@@ -41,6 +41,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String? _country;
   DateTime? _birthDate;
   bool _acceptedTerms = false;
+  // AGE-GATE LEVEL 1: explicit 18+ self-attestation, captured as a SEPARATE
+  // checkbox under the Terms/Privacy consent. The API rejects a registration
+  // unless `acceptedAdult === true` (audited as `user.consent.adult` server-side).
+  bool _acceptedAdult = false;
 
   // Validation for the non-TextFormField pickers is surfaced manually (they
   // aren't part of the Form's auto-validation), gated on a submit attempt.
@@ -72,6 +76,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final pickersOk = _countryError == null && _birthDateError == null;
     if (!formOk || !pickersOk) return;
     if (!_acceptedTerms) return; // button is disabled, but guard anyway.
+    if (!_acceptedAdult) return; // age-gate L1: button is disabled, but guard anyway.
 
     FocusScope.of(context).unfocus();
 
@@ -84,6 +89,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       country: _country!,
       locale: _locale,
       acceptedTerms: true,
+      acceptedAdult: true,
     );
 
     await ref.read(authControllerProvider.notifier).register(dto);
@@ -235,6 +241,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     value: _acceptedTerms,
                     onChanged: (v) => setState(() => _acceptedTerms = v),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  // AGE-GATE LEVEL 1 — explicit 18+ self-attestation, a SEPARATE
+                  // consent record (audited as `user.consent.adult` server-side).
+                  // The API rejects a registration unless this is `true`, EVEN IF
+                  // the self-attested birthDate already passes the 18+ check.
+                  _AdultConfirmTile(
+                    value: _acceptedAdult,
+                    onChanged: (v) => setState(() => _acceptedAdult = v),
+                  ),
 
                   if (auth.errorMessage != null) ...[
                     const SizedBox(height: AppSpacing.md),
@@ -248,7 +263,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     gradientColors: [colors.neonViolet, colors.neonMagenta],
                     loading: auth.isBusy,
                     onPressed:
-                        (_acceptedTerms && registrationOpen) ? _submit : null,
+                        (_acceptedTerms && _acceptedAdult && registrationOpen)
+                            ? _submit
+                            : null,
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
@@ -485,6 +502,73 @@ class _ConsentTileState extends State<_ConsentTile> {
                         ),
                         const TextSpan(text: '.'),
                       ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The explicit 18+ self-attestation row (AGE-GATE LEVEL 1). Maps to
+/// `acceptedAdult` — registration is blocked until it's checked (the API rejects
+/// otherwise, audited as `user.consent.adult` server-side). A SEPARATE consent
+/// record from `_ConsentTile`'s Terms/Privacy acceptance. Mirrors the consent
+/// tile's frosted-glass styling — border lights up when accepted; the row's tap
+/// toggles the checkbox.
+class _AdultConfirmTile extends StatelessWidget {
+  const _AdultConfirmTile({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.scheme;
+    final colors = context.colors;
+
+    return AnimatedContainer(
+      duration: AppDurations.normal,
+      curve: AppCurves.glass,
+      decoration: BoxDecoration(
+        color: colors.glassFill.withValues(alpha: value ? 0.6 : 0.35),
+        borderRadius: AppRadii.brMd,
+        border: Border.all(
+          color: value
+              ? colors.neonCyan.withValues(alpha: 0.5)
+              : colors.glassBorder,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: AppRadii.brMd,
+          onTap: () => onChanged(!value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Checkbox(
+                  value: value,
+                  onChanged: (v) => onChanged(v ?? false),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Мне исполнилось 18 лет',
+                    style: context.texts.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      height: 1.4,
                     ),
                   ),
                 ),

@@ -101,6 +101,7 @@ class RegisterDto {
     required this.country,
     this.locale,
     this.acceptedTerms = true,
+    this.acceptedAdult = true,
   });
 
   final String email;
@@ -111,6 +112,12 @@ class RegisterDto {
   final String country;
   final Locale? locale;
   final bool acceptedTerms;
+  // AGE-GATE LEVEL 1: explicit 18+ self-attestation. The API requires this to
+  // be `true` (audited as `user.consent.adult` server-side), as a SEPARATE
+  // consent record from `acceptedTerms` — even if the self-attested birthDate
+  // already passes the 18+ check. The register screen toggles it via its own
+  // checkbox; the controller sends it on the wire.
+  final bool acceptedAdult;
 
   Map<String, dynamic> toJson() => {
         'email': email,
@@ -121,6 +128,7 @@ class RegisterDto {
         'country': country,
         if (locale != null) 'locale': locale!.wire,
         'acceptedTerms': acceptedTerms,
+        'acceptedAdult': acceptedAdult,
       };
 }
 

@@ -20,6 +20,14 @@ import { economyApi, economyKeys } from '@/features/economy/api';
 import { openCloudPaymentsWidget } from '@/lib/cloudpayments';
 import { useEconomyInvalidation, useWallet } from '@/hooks/wallet/use-wallet';
 
+/**
+ * Active payment provider (`tbank` default). When set to `cloudpayments` the
+ * legacy widget bundle is loaded and the existing widget flow is used; the
+ * default takes the T-Bank hosted-redirect path (no client SDK).
+ */
+const PROVIDER: 'tbank' | 'cloudpayments' =
+  (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER as 'tbank' | 'cloudpayments' | undefined) ?? 'tbank';
+
 /** Package catalogue (public; cheapest first). */
 export function useCoinPackages() {
   return useQuery({
@@ -74,6 +82,9 @@ export function useBuyCoins(): UseBuyCoinsResult {
   const checkout = useMutation({
     mutationFn: economyApi.coinsCheckout,
   });
+  const tbankCheckout = useMutation({
+    mutationFn: economyApi.tbankCoinsCheckout,
+  });
 
   const reset = () => {
     setPhase('idle');
@@ -81,10 +92,41 @@ export function useBuyCoins(): UseBuyCoinsResult {
     setError(null);
   };
 
+  /**
+   * T-Bank hosted-redirect path: ask the API to mint the order, then
+   * `window.location.href = paymentUrl`. The browser does NOT come back here
+   * after the success — it lands on TBANK_SUCCESS_URL (`/wallet?payment=ok`),
+   * so we never observe the credit in this hook; the wallet page picks it up
+   * on its own load.
+   */
+  const buyViaTbank = (pkg: CoinPackage) => {
+    tbankCheckout.mutate(
+      { packageCode: pkg.code },
+      {
+        onSuccess: (res) => {
+          if (typeof window !== 'undefined' && res?.paymentUrl) {
+            window.location.href = res.paymentUrl;
+            return;
+          }
+          setError(t('coinsHook.openFailed'));
+          setPhase('error');
+        },
+        onError: (e) => {
+          setError(e instanceof Error ? e.message : t('coinsHook.startFailed'));
+          setPhase('error');
+        },
+      },
+    );
+  };
+
   const buy = (pkg: CoinPackage) => {
     setActivePackage(pkg);
     setError(null);
     setPhase('starting');
+    if (PROVIDER === 'tbank') {
+      buyViaTbank(pkg);
+      return;
+    }
     const balanceBefore = wallet?.balanceCoins ?? null;
 
     checkout.mutate(

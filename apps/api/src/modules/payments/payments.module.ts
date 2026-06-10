@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { CoinPackagesService } from '../wallet/coin-packages.service';
@@ -7,11 +8,16 @@ import { WalletService } from '../wallet/wallet.service';
 import { PremiumModule } from '../premium/premium.module';
 import { PremiumService } from '../premium/premium.service';
 import { CloudPaymentsClient } from './cloudpayments.client';
+import { CloudPaymentsProvider } from './cloudpayments.provider';
 import { CloudPaymentsSignatureGuard } from './cloudpayments-signature.guard';
+import { PAYMENT_PROVIDER, type PaymentProvider } from './payment-provider';
 import { COIN_PACKAGES_SERVICE, PREMIUM_SERVICE, WALLET_SERVICE } from './payments.contracts';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { Payment, PaymentSchema } from './schemas/payment.schema';
+import { TbankClient } from './tbank/tbank.client';
+import { TbankProvider } from './tbank/tbank.provider';
+import { TbankSignatureGuard } from './tbank/tbank-signature.guard';
 
 /**
  * CloudPayments integration: the authenticated coins checkout and the
@@ -42,15 +48,34 @@ import { Payment, PaymentSchema } from './schemas/payment.schema';
     PaymentsService,
     CloudPaymentsClient,
     CloudPaymentsSignatureGuard,
+    CloudPaymentsProvider,
+    TbankClient,
+    TbankProvider,
+    TbankSignatureGuard,
     // Bind the cross-module contract tokens to the real economy services.
     { provide: WALLET_SERVICE, useExisting: WalletService },
     { provide: PREMIUM_SERVICE, useExisting: PremiumService },
     { provide: COIN_PACKAGES_SERVICE, useExisting: CoinPackagesService },
+    // Pick the active PaymentProvider implementation from the env (default tbank).
+    {
+      provide: PAYMENT_PROVIDER,
+      useFactory: (
+        config: ConfigService,
+        tbank: TbankProvider,
+        cp: CloudPaymentsProvider,
+      ): PaymentProvider => {
+        const raw = (config.get<string>('PAYMENT_PROVIDER', 'tbank') ?? 'tbank')
+          .trim()
+          .toLowerCase();
+        return raw === 'cloudpayments' ? cp : tbank;
+      },
+      inject: [ConfigService, TbankProvider, CloudPaymentsProvider],
+    },
   ],
-  // Export the outbound REST client + PaymentsService so the admin refund
-  // surface can drive an authoritative refund (CloudPayments call + ledger
-  // reversal) through the same code path the webhook uses. AdminModule imports
-  // PaymentsModule for this; no cycle (payments never imports admin).
-  exports: [CloudPaymentsClient, PaymentsService],
+  // Export the outbound REST client + PaymentsService + provider port so the
+  // admin refund surface and the users/moderation teardown helpers can drive
+  // an authoritative refund / cancellation through the same code path the
+  // webhook uses. AdminModule imports PaymentsModule for this; no cycle.
+  exports: [CloudPaymentsClient, PaymentsService, PAYMENT_PROVIDER],
 })
 export class PaymentsModule {}

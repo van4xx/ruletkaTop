@@ -18,6 +18,7 @@ import type {
   CoinsCheckoutDto,
   Gift,
   GiftTransaction,
+  HostedCheckoutResult,
   PremiumPlan,
   SendGiftDto,
   SubscribeDto,
@@ -47,12 +48,26 @@ export const economyApi = {
     api.request<CoinTransactionPage>('/wallet/transactions', { query: { cursor, limit } }),
   coinPackages: () => api.request<CoinPackage[]>('/coin-packages'),
 
-  // ── Payments (CloudPayments) ──
+  // ── Payments (CloudPayments — legacy fallback path) ──
   coinsCheckout: (dto: CoinsCheckoutDto) =>
     api.request<CheckoutWidgetParams>('/payments/coins/checkout', { method: 'POST', json: dto }),
   /** Server-minted premium subscription checkout (PENDING payment + widget params). */
   premiumCheckout: (dto: SubscribeDto) =>
     api.request<CheckoutWidgetParams>('/payments/premium/checkout', { method: 'POST', json: dto }),
+
+  // ── Payments (T-Bank hosted redirect — default) ──
+  /** T-Bank coins checkout: returns the hosted PaymentURL the browser redirects to. */
+  tbankCoinsCheckout: (dto: CoinsCheckoutDto) =>
+    api.request<HostedCheckoutResult>('/payments/tbank/coins/checkout', {
+      method: 'POST',
+      json: dto,
+    }),
+  /** T-Bank premium checkout (Recurrent enabled): returns the hosted PaymentURL. */
+  tbankPremiumCheckout: (dto: SubscribeDto) =>
+    api.request<HostedCheckoutResult>('/payments/tbank/premium/checkout', {
+      method: 'POST',
+      json: dto,
+    }),
 
   // ── Gifts ──
   gifts: () => api.request<Gift[]>('/gifts'),

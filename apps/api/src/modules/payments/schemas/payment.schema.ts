@@ -3,8 +3,8 @@ import { HydratedDocument, Types } from 'mongoose';
 
 import type { PaymentPurpose, PaymentStatus } from '@ruletka/shared-types';
 
-/** Provider enum — only CloudPayments is supported (mirrors `paymentProviderSchema`). */
-const PROVIDERS = ['cloudpayments'] as const;
+/** Provider enum (mirrors `paymentProviderSchema`). T-Bank is the default; CloudPayments kept as fallback. */
+const PROVIDERS = ['cloudpayments', 'tbank'] as const;
 /** Payment lifecycle states (mirrors `paymentStatusSchema`). */
 const STATUSES: readonly PaymentStatus[] = ['pending', 'completed', 'failed', 'refunded'];
 /** What the payment buys (mirrors `paymentPurposeSchema`). */
@@ -36,11 +36,21 @@ export class Payment {
   @Prop({ required: true, type: String })
   invoiceId!: string;
 
-  /** CloudPayments transaction id, set once a notification references it. */
+  /** CloudPayments transaction id (numeric), set once a notification references it. */
   @Prop({ required: false, default: null, type: Number })
   transactionId!: number | null;
 
-  /** CloudPayments recurring-charge token (premium subscriptions), if any. */
+  /**
+   * Provider-side payment id as a STRING. T-Bank issues string PaymentIds; the
+   * webhook + GetState/Refund/Cancel calls all reference it. Distinct from the
+   * legacy numeric `transactionId` (CloudPayments) so a payment ledger row can
+   * carry both shapes without union pain in the schema. Persisted exactly as
+   * T-Bank sends it (do not coerce).
+   */
+  @Prop({ required: false, default: null, type: String })
+  providerPaymentId!: string | null;
+
+  /** CloudPayments recurring-charge token / T-Bank RebillId (premium subscriptions), if any. */
   @Prop({ required: false, default: null, type: String })
   subscriptionToken!: string | null;
 
