@@ -16,3 +16,4 @@ export * from './settings';
 export * from './socket';
 export * from './referrals';
 export * from './achievements';
+export * from './premium';

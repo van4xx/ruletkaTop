@@ -4,10 +4,14 @@ import { Model, Types } from 'mongoose';
 
 import {
   DAILY_BONUS_LADDER,
+  DAILY_BONUS_TIER_MULTIPLIER,
+  multipliedDailyBonus,
   type DailyBonusClaimResponse,
   type DailyBonusState,
+  type EffectiveTier,
 } from '@ruletka/shared-types';
 
+import { PremiumService } from '../premium/premium.service';
 import { WalletService } from '../wallet/wallet.service';
 import { DailyBonus, DailyBonusDocument } from './schemas/daily-bonus.schema';
 
@@ -73,6 +77,7 @@ export class DailyBonusService {
   constructor(
     @InjectModel(DailyBonus.name) private readonly dailyBonusModel: Model<DailyBonusDocument>,
     private readonly walletService: WalletService,
+    private readonly premiumService: PremiumService,
     @Optional() @Inject(DAILY_BONUS_CLOCK) clock?: DailyBonusClock,
   ) {
     this.clock = clock ?? (() => new Date());
@@ -103,7 +108,12 @@ export class DailyBonusService {
         { new: true, upsert: true, setDefaultsOnInsert: true },
       )
       .exec();
-    return this.toState(row);
+    // Read the caller's effective tier so the widget's `nextRewardCoins`
+    // already reflects the post-multiplier amount the next claim WILL credit
+    // (Lite=1.5x, Pro=2x). The web widget shows it verbatim — no client-side
+    // multiplier math needed.
+    const tier = await this.premiumService.getEffectiveTier(userId);
+    return this.toState(row, tier);
   }
 
   /**
@@ -149,13 +159,22 @@ export class DailyBonusService {
     // `(streak % 7) + 1` rolls 7 → 1 so the next claim after a completed week
     // starts a fresh cycle at the ladder's first rung (per the product spec).
     const newStreak = continuing ? (row.streak % 7) + 1 : 1;
-    const coinsToCredit = DAILY_BONUS_LADDER[newStreak - 1]!;
+    const baseCoins = DAILY_BONUS_LADDER[newStreak - 1]!;
+
+    // Read the caller's effective premium tier at credit time so a freshly
+    // bought (or just-expired) Pro subscription takes effect on the very next
+    // claim. {@link multipliedDailyBonus} integer-floors the result so the
+    // wallet's `assertPositiveInt` accepts it — Free 1x, Lite 1.5x, Pro 2x.
+    const tier = await this.premiumService.getEffectiveTier(userId);
+    const coinsToCredit = multipliedDailyBonus(baseCoins, tier);
 
     // Step 4: credit via WalletService. The refId is the IDEMPOTENCY KEY: a
     // duplicated claim (network retry, double-click) lands on the wallet's
     // partial-unique (type, refId) ledger index and is skipped cleanly. We
     // namespace by user AND UTC day so the next day's claim has a different
-    // refId and is not blocked by today's row.
+    // refId and is not blocked by today's row. The tier IS NOT in the refId
+    // so a same-day claim under a flipped tier still hits the same idempotency
+    // row (a user can't double-dip by upgrading mid-day).
     const refId = `daily-bonus:${userId}:${today}`;
     await this.walletService.credit(userId, coinsToCredit, 'bonus', refId);
 
@@ -168,7 +187,7 @@ export class DailyBonusService {
     await row.save();
 
     // Step 6: return the fresh state + the just-credited amount.
-    const state = this.toState(row);
+    const state = this.toState(row, tier);
     return { ...state, justCredited: coinsToCredit };
   }
 
@@ -181,7 +200,7 @@ export class DailyBonusService {
    * arithmetic the claim flow uses, so the button shows the actual amount the
    * next claim will credit.
    */
-  private toState(row: DailyBonusDocument): DailyBonusState {
+  private toState(row: DailyBonusDocument, tier: EffectiveTier = 'none'): DailyBonusState {
     const now = this.clock();
     const today = formatUtcDay(now);
     const yesterday = previousUtcDay(now);
@@ -197,7 +216,12 @@ export class DailyBonusService {
       : row.lastClaimDay === yesterday && row.streak > 0;
     const baseStreak = claimedToday ? row.streak : row.streak;
     const nextStreak = continuingForNext ? (baseStreak % 7) + 1 : 1;
-    const nextRewardCoins = DAILY_BONUS_LADDER[nextStreak - 1]!;
+    const baseNextReward = DAILY_BONUS_LADDER[nextStreak - 1]!;
+    // Apply the same tier multiplier the next CLAIM will apply, so the widget
+    // shows the exact post-multiplier amount. Defaults to `'none'` (1x) when
+    // the caller didn't pass a tier — preserves the pre-split behaviour for
+    // any direct internal call site.
+    const nextRewardCoins = multipliedDailyBonus(baseNextReward, tier);
 
     return {
       streak: row.streak,
@@ -210,3 +234,6 @@ export class DailyBonusService {
     };
   }
 }
+
+/** Re-export for tests / call sites that want to label the multiplier in copy. */
+export { DAILY_BONUS_TIER_MULTIPLIER };

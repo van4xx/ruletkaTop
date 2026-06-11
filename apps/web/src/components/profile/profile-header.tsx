@@ -16,10 +16,17 @@ import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { CalendarDays } from 'lucide-react';
-import type { CoverId, OnlineStatus, PublicProfile } from '@ruletka/shared-types';
+import type {
+  CoverId,
+  EffectiveTier,
+  FrameId,
+  OnlineStatus,
+  PublicProfile,
+} from '@ruletka/shared-types';
 import { Avatar, codeToFlag, COUNTRY_BY_CODE } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 import { ProfileBadges } from '@/components/social/profile-badges';
+import { AvatarFrame } from './avatar-frame';
 import { ProfileCover } from './cover-presets';
 import { InterestChips } from './interest-chips';
 
@@ -60,11 +67,28 @@ export function ProfileHeader({
    * it before the server round-trip lands.
    */
   coverId,
+  /**
+   * The avatar-frame cosmetic to render around the avatar. Defaults to
+   * `null` (no frame) so existing profiles render bare. Passed explicitly by
+   * the owner page so the live picker preview can override before the server
+   * round-trip lands.
+   */
+  frameId,
+  /**
+   * The viewer's premium tier — drives the tier-aware glow (`silver` for Lite,
+   * animated `gold-shimmer` for Pro). Optional and only meaningful when
+   * `profile.isPremium` is true; falls back to a generic premium aurora ring
+   * when omitted (the historical look — no visual regression on public
+   * profiles where the server doesn't expose another user's tier).
+   */
+  premiumTier,
   actions,
 }: {
   profile: PublicProfile;
   status?: OnlineStatus;
   coverId?: CoverId;
+  frameId?: FrameId | null;
+  premiumTier?: EffectiveTier;
   actions?: ReactNode;
 }) {
   const t = useTranslations('profile');
@@ -97,31 +121,50 @@ export function ProfileHeader({
       <div className="px-5 pb-6 sm:px-8">
         <div className="-mt-14 flex flex-col gap-4 sm:-mt-16 sm:flex-row sm:items-end sm:justify-between">
           <motion.div variants={rise} className="flex items-end gap-4">
-            {/* Avatar with a soft glow + presence dot. */}
+            {/* Avatar with a soft glow + presence dot, optionally wrapped
+                in the equipped avatar-frame cosmetic (decorative ring). The
+                frame is invisible when `frameId` is null, so users with no
+                frame see zero visual delta. */}
             <div className="relative">
+              {/* Tier-aware glow:
+                  - Pro  → animated gold-shimmer halo + a stronger aurora ring;
+                  - Lite → subtle silver-ish halo (silvers the violet/cyan mix);
+                  - Free → the historical generic neon glow.
+                  Class names are intentionally derived (not raw `bg-[...]`) so
+                  the diff against the previous hero is a CSS-only change. */}
               <span
                 aria-hidden="true"
-                className="absolute -inset-2 -z-10 rounded-full bg-gradient-to-br from-[var(--color-neon-violet)]/50 to-[var(--color-neon-cyan)]/40 blur-xl"
+                className={cn(
+                  'profile-glow absolute -inset-2 -z-10 rounded-full blur-xl',
+                  profile.isPremium && premiumTier === 'pro'
+                    ? 'profile-glow--pro'
+                    : profile.isPremium && premiumTier === 'lite'
+                      ? 'profile-glow--lite'
+                      : 'profile-glow--free',
+                )}
               />
-              <div className="rounded-full ring-4 ring-background">
-                <Avatar
-                  src={profile.avatarUrl}
-                  alt={profile.nickname}
-                  size="xl"
-                  status={status}
-                  // Premium gets the animated aurora ring; everyone else still
-                  // gets a crisp accent ring so the avatar never reads as "naked".
-                  ring={profile.isPremium ? 'aurora' : 'accent'}
-                  // Vivid on-brand gradient disk behind the initial so an
-                  // image-less avatar still looks designed, not empty.
-                  fallback={
-                    <span className="font-display text-3xl font-extrabold text-white drop-shadow-sm sm:text-4xl">
-                      {profile.nickname.charAt(0).toUpperCase()}
-                    </span>
-                  }
-                  className="size-24 bg-[linear-gradient(135deg,var(--color-neon-violet),var(--color-neon-magenta)_55%,var(--color-neon-cyan))] sm:size-28"
-                />
-              </div>
+              <AvatarFrame frameId={frameId ?? null}>
+                <div className="rounded-full ring-4 ring-background">
+                  <Avatar
+                    src={profile.avatarUrl}
+                    alt={profile.nickname}
+                    size="xl"
+                    status={status}
+                    // Tier-aware ring: Pro keeps the animated aurora; Lite gets
+                    // a crisp accent ring (so the silver glow alone reads the
+                    // tier); everyone else stays accent.
+                    ring={profile.isPremium && premiumTier === 'pro' ? 'aurora' : 'accent'}
+                    // Vivid on-brand gradient disk behind the initial so an
+                    // image-less avatar still looks designed, not empty.
+                    fallback={
+                      <span className="font-display text-3xl font-extrabold text-white drop-shadow-sm sm:text-4xl">
+                        {profile.nickname.charAt(0).toUpperCase()}
+                      </span>
+                    }
+                    className="size-24 bg-[linear-gradient(135deg,var(--color-neon-violet),var(--color-neon-magenta)_55%,var(--color-neon-cyan))] sm:size-28"
+                  />
+                </div>
+              </AvatarFrame>
             </div>
 
             <div className="mb-1 min-w-0">

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isoDateSchema, objectIdSchema, raritySchema } from './common';
+import { premiumTierSchema } from './premium';
 
 // ─────────────────────────── Wallet & coins ───────────────────────────
 export const walletSchema = z.object({
@@ -14,6 +15,8 @@ export const coinTxTypeSchema = z.enum([
   'gift_in',
   'top',
   'cover',
+  /** Paid avatar-frame cosmetic purchase (mirrors `'cover'`). */
+  'frame',
   'bonus',
   'refund',
   /**
@@ -146,6 +149,13 @@ export const subscriptionSchema = z.object({
   startedAt: isoDateSchema.nullable(),
   currentPeriodEnd: isoDateSchema.nullable(),
   cancelAtPeriodEnd: z.boolean(),
+  /**
+   * Two-tier split. Defaults to `'lite'` so existing rows (and historical
+   * clients) read as Lite without a backfill. Only meaningful while
+   * `status === 'active'`; otherwise the user is Free and the tier is just
+   * the carry value. See `premium.ts` for the full ordering + helpers.
+   */
+  tier: premiumTierSchema.default('lite'),
 });
 export type Subscription = z.infer<typeof subscriptionSchema>;
 

@@ -31,6 +31,13 @@ export class PrivacySettingsEntity implements PrivacySettings {
 
   @Prop({ required: true, default: true })
   showOnlineStatus!: boolean;
+
+  /**
+   * Pro-only incognito mode. Defaults to `false`; toggling on without the Pro
+   * tier is rejected by {@link SettingsService.update} with a 402.
+   */
+  @Prop({ required: true, default: false })
+  incognito!: boolean;
 }
 
 /** Embedded notification preferences (defaults mirror shared-types). */

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PremiumModule } from '../premium/premium.module';
 import { PresenceModule } from '../presence/presence.module';
 import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
@@ -23,6 +24,9 @@ import { Friendship, FriendshipSchema } from './schemas/friendship.schema';
     MongooseModule.forFeature([{ name: Friendship.name, schema: FriendshipSchema }]),
     PresenceModule,
     NotificationsModule,
+    // Friends consults {@link PremiumService.getEffectiveTier} to enforce the
+    // tier-aware accept cap (Free=100, Lite=500, Pro=∞).
+    PremiumModule,
   ],
   controllers: [FriendsController],
   providers: [FriendsService],

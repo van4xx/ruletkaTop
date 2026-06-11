@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { PremiumModule } from '../premium/premium.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { DailyBonusController } from './daily-bonus.controller';
 import { DailyBonusService } from './daily-bonus.service';
@@ -22,6 +23,9 @@ import { DailyBonus, DailyBonusSchema } from './schemas/daily-bonus.schema';
   imports: [
     MongooseModule.forFeature([{ name: DailyBonus.name, schema: DailyBonusSchema }]),
     WalletModule,
+    // Daily-bonus reads the caller's tier at credit time so the multiplier
+    // (Lite 1.5x / Pro 2x) is applied authoritatively from a single source.
+    PremiumModule,
   ],
   controllers: [DailyBonusController],
   providers: [DailyBonusService],

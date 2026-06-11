@@ -19,55 +19,9 @@ import { BlocksService } from '../moderation/blocks.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PremiumService } from '../premium/premium.service';
 import { WalletService } from '../wallet/wallet.service';
+import { RETIRED_GIFT_CODES, SEED_GIFTS } from './data/gift-catalogue';
 import { Gift, GiftDocument } from './schemas/gift.schema';
 import { GiftTransaction, GiftTransactionDocument } from './schemas/gift-transaction.schema';
-
-/**
- * Default gift catalogue seeded on boot (idempotent upsert by `code`).
- * A spread of rarities, with the rarest gated to premium senders.
- */
-const SEED_GIFTS: readonly Omit<GiftContract, 'id'>[] = [
-  {
-    code: 'rose',
-    title: 'Rose',
-    animationUrl: '/gifts/rose.json',
-    priceCoins: 10,
-    rarity: 'common',
-    isPremiumOnly: false,
-  },
-  {
-    code: 'heart',
-    title: 'Heart',
-    animationUrl: '/gifts/heart.json',
-    priceCoins: 25,
-    rarity: 'common',
-    isPremiumOnly: false,
-  },
-  {
-    code: 'teddy',
-    title: 'Teddy Bear',
-    animationUrl: '/gifts/teddy.json',
-    priceCoins: 100,
-    rarity: 'rare',
-    isPremiumOnly: false,
-  },
-  {
-    code: 'diamond',
-    title: 'Diamond',
-    animationUrl: '/gifts/diamond.json',
-    priceCoins: 500,
-    rarity: 'epic',
-    isPremiumOnly: false,
-  },
-  {
-    code: 'crown',
-    title: 'Golden Crown',
-    animationUrl: '/gifts/crown.json',
-    priceCoins: 2000,
-    rarity: 'legendary',
-    isPremiumOnly: true,
-  },
-];
 
 /**
  * Catalogue read model + the gift-send transaction flow.
@@ -92,16 +46,44 @@ export class GiftsService implements OnModuleInit {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  /** Idempotently seed the default catalogue (upsert by unique `code`). */
+  /**
+   * Idempotently seed the default catalogue (upsert by unique `code`).
+   *
+   * The update uses `$set` so the seed doubles as a self-applying re-pricing
+   * migration: existing rows have `title / priceCoins / rarity / isPremiumOnly
+   * / animationUrl / artVariant` brought up to the latest ladder on every
+   * boot. `code` is the stable public identifier so we only pin it on insert.
+   * Retired codes (e.g. `diamond`) are deleted in the same pass so the picker
+   * never shows a stale entry after a redeploy.
+   */
   async onModuleInit(): Promise<void> {
     await Promise.all(
       SEED_GIFTS.map((gift) =>
         this.giftModel
-          .updateOne({ code: gift.code }, { $setOnInsert: gift }, { upsert: true })
+          .updateOne(
+            { code: gift.code },
+            {
+              $set: {
+                title: gift.title,
+                animationUrl: gift.animationUrl,
+                priceCoins: gift.priceCoins,
+                rarity: gift.rarity,
+                isPremiumOnly: gift.isPremiumOnly,
+                artVariant: gift.artVariant,
+              },
+              $setOnInsert: { code: gift.code },
+            },
+            { upsert: true },
+          )
           .exec(),
       ),
     );
-    this.logger.log(`Seeded ${SEED_GIFTS.length} gifts (idempotent)`);
+    if (RETIRED_GIFT_CODES.length > 0) {
+      await this.giftModel.deleteMany({ code: { $in: [...RETIRED_GIFT_CODES] } }).exec();
+    }
+    this.logger.log(
+      `Seeded ${SEED_GIFTS.length} gifts (idempotent; retired ${RETIRED_GIFT_CODES.length})`,
+    );
   }
 
   /** List the full gift catalogue (cheapest first). */

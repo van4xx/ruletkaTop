@@ -33,6 +33,9 @@ const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: 'in' | 'out' }> = {
   gift_out: { icon: Gift, tone: 'out' },
   top: { icon: Crown, tone: 'out' },
   cover: { icon: ImageIcon, tone: 'out' },
+  // Avatar-frame cosmetic purchase — outgoing like cover/top spends, but
+  // reuses the Sparkles glyph so the ledger row matches the picker's chrome.
+  frame: { icon: Sparkles, tone: 'out' },
 };
 
 function TxRow({ tx }: { tx: CoinTransaction }) {

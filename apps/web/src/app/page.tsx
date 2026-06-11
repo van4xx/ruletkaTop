@@ -10,7 +10,7 @@
  *   4. FeaturesGrid    — 6 feature cards (H3 each + 2-sentence real prose)
  *   5. SafetySection   — the trust-&-safety story (Turnstile, Sightengine, mods)
  *   6. TopSection      — semantic wrap around the existing TopMarquee client island
- *   7. PricingSection  — Free / Premium Monthly (399 ₽) / Premium Yearly (3499 ₽)
+ *   7. PricingSection  — Free / Premium Lite (299 ₽/mo) / Premium Pro — 3 mo (3 499 ₽)
  *   8. FaqSection      — 10 native `<details>` Q+A (drives FAQPage JSON-LD)
  *   9. FinalCta        — second-chance signup band at the page foot
  *

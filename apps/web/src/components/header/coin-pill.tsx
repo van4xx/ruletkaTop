@@ -1,23 +1,24 @@
 'use client';
 
 /**
- * Coin-balance pill (header) — live balance + a "+" to top up.
+ * Coin-balance pill (header) — live balance + click-to-buy.
  *
  * Wires to {@link useCoinBalance} (TanStack Query against `/wallet`, gated by
- * auth). The pill body links to the wallet; the trailing "+" opens the
- * «Купить монеты» modal (the coin storefront) so the two affordances are
- * distinct targets. A subtle key-bump animates the number whenever it changes
- * (a purchase landing).
+ * auth). The whole pill is one button that opens the «Купить монеты» modal
+ * (the coin storefront) — the trailing "+" stays as a visual affordance but
+ * the primary click target is the pill itself, in line with the broader
+ * "modal-first" entry-point switch. A subtle key-bump animates the number
+ * whenever it changes (a purchase landing). The legacy `/wallet` deep-link
+ * lives in the user-menu (and as a SEO fallback), so collapsing the link into
+ * a button trades one affordance for a far more discoverable purchase entry.
  *
  * States: skeleton shimmer while the balance is unknown; locale-formatted
  * number once loaded. Memoised on the numeric value.
  */
 import { memo } from 'react';
-import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Coins, Plus } from 'lucide-react';
-import { ROUTES } from '@/config/nav';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/features/economy/format';
 import { useModal } from '@/lib/stores/modal-store';
@@ -30,29 +31,32 @@ interface CoinPillProps {
 
 function CoinPillImpl({ balance, className }: CoinPillProps) {
   const t = useTranslations('chrome');
+  const tEcon = useTranslations('economy');
   const locale = useLocale();
   const { open } = useModal();
   const reduceMotion = useReducedMotion();
   const display = balance === null ? null : formatNumber(balance, locale);
 
+  const ariaLabel =
+    display === null
+      ? tEcon('modals.coins.triggerAria')
+      : t('coinPill.balanceValueAria', { amount: display });
+
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => open('coins')}
+      aria-label={ariaLabel}
+      title={tEcon('modals.coins.triggerHint')}
       className={cn(
-        'group inline-flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-1',
+        'group inline-flex items-center gap-1.5 rounded-full py-1 pl-2.5 pr-1 outline-none',
         'border border-border/70 bg-card/40 backdrop-blur transition-colors',
-        'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
+        'hover:border-border-strong hover:bg-card/70',
+        'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className,
       )}
     >
-      <Link
-        href={ROUTES.wallet}
-        aria-label={
-          display === null
-            ? t('coinPill.balanceAria')
-            : t('coinPill.balanceValueAria', { amount: display })
-        }
-        className="inline-flex items-center gap-1.5 rounded-full text-sm font-medium tabular-nums outline-none"
-      >
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
         <Coins className="h-4 w-4 text-warning" aria-hidden="true" />
         {display === null ? (
           <span
@@ -74,21 +78,18 @@ function CoinPillImpl({ balance, className }: CoinPillProps) {
             </AnimatePresence>
           </span>
         )}
-      </Link>
-      <button
-        type="button"
-        onClick={() => open('buy-coins')}
-        aria-label={t('coinPill.topUpAria')}
+      </span>
+      <span
+        aria-hidden="true"
         className={cn(
-          'inline-flex h-6 w-6 items-center justify-center rounded-full outline-none',
+          'inline-flex h-6 w-6 items-center justify-center rounded-full',
           'bg-primary/15 text-primary transition-colors',
-          'hover:bg-primary/25 group-hover:bg-primary/25',
-          'focus-visible:ring-2 focus-visible:ring-ring',
+          'group-hover:bg-primary/25',
         )}
       >
-        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
-    </div>
+        <Plus className="h-3.5 w-3.5" />
+      </span>
+    </button>
   );
 }
 

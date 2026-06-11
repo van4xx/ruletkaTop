@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 
+import { PremiumModule } from '../premium/premium.module';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { WalletModule } from '../wallet/wallet.module';
-import { CoversController } from './covers.controller';
+import { CoversController, FramesController } from './covers.controller';
 import { CoversService } from './covers.service';
 
 /**
@@ -20,8 +21,14 @@ import { CoversService } from './covers.service';
  * {@link WalletService} (ledger type `cover`), mirroring `gifts`/`top`.
  */
 @Module({
-  imports: [ProfilesModule, WalletModule],
-  controllers: [CoversController],
+  imports: [
+    ProfilesModule,
+    WalletModule,
+    // Covers consults {@link PremiumService.hasTierOrAbove} on the equip path
+    // to enforce the Pro-only cover gate (`PRO_ONLY_COVER_IDS`).
+    PremiumModule,
+  ],
+  controllers: [CoversController, FramesController],
   providers: [CoversService],
   exports: [CoversService],
 })

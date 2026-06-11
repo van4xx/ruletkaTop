@@ -90,11 +90,18 @@ describe('FriendsService.listFriends — pagination + batched profiles', () => {
     // listFriends never raises a notification, so a bare stub suffices.
     const notifications = { create: jest.fn().mockResolvedValue(null) };
 
+    // listFriends never gates on tier, so a stub returning `'none'` is fine.
+    const premium = {
+      getEffectiveTier: jest.fn().mockResolvedValue('none'),
+      hasTierOrAbove: jest.fn().mockResolvedValue(false),
+    };
+
     service = new FriendsService(
       friendshipModel as unknown as never,
       connection as unknown as never,
       presence as unknown as PresenceService,
       notifications as unknown as NotificationsService,
+      premium as unknown as never,
     );
   });
 

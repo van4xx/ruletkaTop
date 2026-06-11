@@ -12,8 +12,14 @@ function coverRefFor(userId: string, coverId: string): RegExp {
   return new RegExp(`^${userId}:${coverId}:[0-9a-f]{24}$`);
 }
 
+/** Same shape as {@link coverRefFor} but for frame purchases. */
+function frameRefFor(userId: string, frameId: string): RegExp {
+  return new RegExp(`^${userId}:${frameId}:[0-9a-f]{24}$`);
+}
+
 import type { PublicProfile } from '@ruletka/shared-types';
 
+import type { PremiumService } from '../premium/premium.service';
 import type { ProfilesService } from '../profiles/profiles.service';
 import type { ProfileDocument } from '../profiles/schemas/profile.schema';
 import type { WalletService } from '../wallet/wallet.service';
@@ -27,11 +33,13 @@ function queryReturning(result: unknown): { exec: jest.Mock } {
   return { exec: jest.fn().mockResolvedValue(result) };
 }
 
-/** A stand-in profile document carrying the cover inventory fields. */
+/** A stand-in profile document carrying the cover + frame inventory fields. */
 function profileDoc(overrides: Partial<Record<string, unknown>> = {}): unknown {
   return {
     activeCover: 'aurora',
     ownedCovers: [] as string[],
+    equippedFrameId: null as string | null,
+    ownedFrames: [] as string[],
     ...overrides,
   };
 }
@@ -43,6 +51,10 @@ describe('CoversService', () => {
   let profileModel: { findOneAndUpdate: jest.Mock };
   let wallet: { debit: jest.Mock; credit: jest.Mock };
   let profiles: { findByUserId: jest.Mock; getPublicProfile: jest.Mock };
+  // PremiumService is consulted only on the Pro-only cover equip path. Default
+  // to "not Pro" so the legacy tests (which equip non-Pro-only covers) behave
+  // as before; Pro-gated specs can override via `hasTierOrAbove.mockResolvedValue`.
+  let premium: { hasTierOrAbove: jest.Mock; getEffectiveTier: jest.Mock };
 
   beforeEach(() => {
     profileModel = { findOneAndUpdate: jest.fn() };
@@ -56,11 +68,16 @@ describe('CoversService', () => {
         .fn()
         .mockResolvedValue({ id: userId, activeCover: 'sunset' } as PublicProfile),
     };
+    premium = {
+      hasTierOrAbove: jest.fn().mockResolvedValue(false),
+      getEffectiveTier: jest.fn().mockResolvedValue('none'),
+    };
 
     service = new CoversService(
       profileModel as unknown as Model<ProfileDocument>,
       wallet as unknown as WalletService,
       profiles as unknown as ProfilesService,
+      premium as unknown as PremiumService,
     );
   });
 
@@ -69,9 +86,9 @@ describe('CoversService', () => {
       const catalogue = service.findAll();
       expect(catalogue[0]).toMatchObject({ id: 'aurora', tier: 'free', priceCoins: 0 });
       expect(catalogue[1]).toMatchObject({ id: 'graphite', tier: 'free', priceCoins: 0 });
-      // 10 covers total; the last is the flagship.
+      // 10 covers total; the last is the flagship Pro-only Prismatic at 2500.
       expect(catalogue).toHaveLength(10);
-      expect(catalogue.at(-1)).toMatchObject({ id: 'prismatic', tier: 'paid', priceCoins: 1500 });
+      expect(catalogue.at(-1)).toMatchObject({ id: 'prismatic', tier: 'paid', priceCoins: 2500 });
       // Prices are non-decreasing across the catalogue.
       const prices = catalogue.map((c) => c.priceCoins);
       expect([...prices].sort((a, b) => a - b)).toEqual(prices);
@@ -122,7 +139,7 @@ describe('CoversService', () => {
       expect(wallet.debit).toHaveBeenCalledTimes(1);
       expect(wallet.debit).toHaveBeenCalledWith(
         userId,
-        120,
+        200,
         'cover',
         expect.stringMatching(coverRefFor(userId, 'sunset')),
       );
@@ -349,6 +366,248 @@ describe('CoversService', () => {
       profiles.findByUserId.mockResolvedValue(null);
 
       await expect(service.setActive(userId, 'aurora')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  // ── AVATAR FRAMES ────────────────────────────────────────────────────────
+  // The frame system mirrors covers end-to-end (atomic debit, per-attempt
+  // ledger ref, refund-on-write-failure), with one structural difference: the
+  // `equipped` state is nullable and unequipping is first-class.
+
+  describe('findAllFrames', () => {
+    it('returns the 10-frame catalogue free-first then by ascending price', () => {
+      const catalogue = service.findAllFrames();
+      expect(catalogue[0]).toMatchObject({ id: 'neon-ring', tier: 'free', priceCoins: 0 });
+      expect(catalogue[1]).toMatchObject({ id: 'magenta-pulse', tier: 'free', priceCoins: 0 });
+      expect(catalogue).toHaveLength(10);
+      // Prices are non-decreasing across the catalogue.
+      const prices = catalogue.map((f) => f.priceCoins);
+      expect([...prices].sort((a, b) => a - b)).toEqual(prices);
+      // Two free + eight paid.
+      expect(catalogue.filter((f) => f.tier === 'free')).toHaveLength(2);
+      expect(catalogue.filter((f) => f.tier === 'paid')).toHaveLength(8);
+    });
+  });
+
+  describe('getMyFrames', () => {
+    it('returns the equipped frame and free ids ∪ purchased ids (free first)', async () => {
+      profiles.findByUserId.mockResolvedValue(
+        profileDoc({ equippedFrameId: 'aurora-sweep', ownedFrames: ['aurora-sweep'] }),
+      );
+
+      const inv = await service.getMyFrames(userId);
+
+      expect(inv.equipped).toBe('aurora-sweep');
+      // Free ids are implicit and always present; the purchased paid id follows.
+      expect(inv.owned).toEqual(['neon-ring', 'magenta-pulse', 'aurora-sweep']);
+    });
+
+    it('returns equipped: null when the user has no frame on', async () => {
+      profiles.findByUserId.mockResolvedValue(profileDoc({ equippedFrameId: null }));
+
+      const inv = await service.getMyFrames(userId);
+
+      expect(inv.equipped).toBeNull();
+      expect(inv.owned).toEqual(['neon-ring', 'magenta-pulse']);
+    });
+
+    it('throws 404 when the profile does not exist', async () => {
+      profiles.findByUserId.mockResolvedValue(null);
+
+      await expect(service.getMyFrames(userId)).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('purchaseFrame', () => {
+    it('debits (frame, keyed by the user:frame pair) and grants + equips the frame', async () => {
+      profileModel.findOneAndUpdate.mockReturnValue(
+        queryReturning(
+          profileDoc({ equippedFrameId: 'constellation', ownedFrames: ['constellation'] }),
+        ),
+      );
+
+      const inv = await service.purchaseFrame(userId, 'constellation');
+
+      // Charged the catalogue price as a `frame` debit keyed by a per-attempt ref.
+      // Constellation is the cheapest paid frame at 200 coins.
+      expect(wallet.debit).toHaveBeenCalledTimes(1);
+      expect(wallet.debit).toHaveBeenCalledWith(
+        userId,
+        200,
+        'frame',
+        expect.stringMatching(frameRefFor(userId, 'constellation')),
+      );
+
+      // Granted via $addToSet AND equipped in a single update.
+      expect(profileModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+      const [, update] = profileModel.findOneAndUpdate.mock.calls[0] as [
+        unknown,
+        Record<string, Record<string, unknown>>,
+      ];
+      expect(update.$addToSet).toEqual({ ownedFrames: 'constellation' });
+      expect(update.$set).toEqual({ equippedFrameId: 'constellation' });
+
+      // No refund on the happy path.
+      expect(wallet.credit).not.toHaveBeenCalled();
+
+      expect(inv).toEqual({
+        equipped: 'constellation',
+        owned: ['neon-ring', 'magenta-pulse', 'constellation'],
+      });
+    });
+
+    it('charges BEFORE granting (debit precedes the profile write)', async () => {
+      const order: string[] = [];
+      wallet.debit.mockImplementation(async () => {
+        order.push('debit');
+        return 880;
+      });
+      profileModel.findOneAndUpdate.mockImplementation(() => {
+        order.push('grant');
+        return queryReturning(
+          profileDoc({ equippedFrameId: 'constellation', ownedFrames: ['constellation'] }),
+        );
+      });
+
+      await service.purchaseFrame(userId, 'constellation');
+
+      expect(order).toEqual(['debit', 'grant']);
+    });
+
+    it('rejects a FREE frame (409) without charging', async () => {
+      await expect(service.purchaseFrame(userId, 'neon-ring')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      expect(wallet.debit).not.toHaveBeenCalled();
+      expect(profileModel.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('rejects an ALREADY-OWNED frame (409) without charging', async () => {
+      profiles.findByUserId.mockResolvedValue(profileDoc({ ownedFrames: ['gold-filigree'] }));
+
+      await expect(service.purchaseFrame(userId, 'gold-filigree')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      expect(wallet.debit).not.toHaveBeenCalled();
+      expect(profileModel.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('does NOT swallow an insufficient-funds debit error (nothing granted)', async () => {
+      const debitErr = new Error('insufficient');
+      wallet.debit.mockRejectedValue(debitErr);
+
+      await expect(service.purchaseFrame(userId, 'flame')).rejects.toBe(debitErr);
+
+      expect(profileModel.findOneAndUpdate).not.toHaveBeenCalled();
+      expect(wallet.credit).not.toHaveBeenCalled();
+    });
+
+    it('compensates with a refund credit if the grant write fails after a successful debit', async () => {
+      const writeErr = new Error('mongo write failed');
+      profileModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(writeErr),
+      });
+
+      await expect(service.purchaseFrame(userId, 'gold-filigree')).rejects.toBe(writeErr);
+
+      // The earlier debit is reversed with a `refund` credit for the same amount,
+      // keyed by the EXACT SAME per-attempt ref as the debit.
+      expect(wallet.credit).toHaveBeenCalledTimes(1);
+      expect(wallet.credit).toHaveBeenCalledWith(
+        userId,
+        1000,
+        'refund',
+        expect.stringMatching(frameRefFor(userId, 'gold-filigree')),
+      );
+      const debitRef = (wallet.debit.mock.calls[0] as unknown[])[3];
+      const refundRef = (wallet.credit.mock.calls[0] as unknown[])[3];
+      expect(refundRef).toBe(debitRef);
+    });
+
+    it('throws 404 when the profile vanishes between the debit and the grant', async () => {
+      profileModel.findOneAndUpdate.mockReturnValue(queryReturning(null));
+
+      await expect(service.purchaseFrame(userId, 'flame')).rejects.toBeInstanceOf(NotFoundException);
+
+      // `flame` is the 2000-coin flagship rung of the re-tuned frame ladder.
+      expect(wallet.credit).toHaveBeenCalledWith(
+        userId,
+        2000,
+        'refund',
+        expect.stringMatching(frameRefFor(userId, 'flame')),
+      );
+    });
+  });
+
+  describe('equipFrame', () => {
+    it('switches to an OWNED paid frame and returns the updated public profile', async () => {
+      profiles.findByUserId.mockResolvedValue(
+        profileDoc({ equippedFrameId: null, ownedFrames: ['gold-filigree'] }),
+      );
+      profileModel.findOneAndUpdate.mockReturnValue(
+        queryReturning(
+          profileDoc({ equippedFrameId: 'gold-filigree', ownedFrames: ['gold-filigree'] }),
+        ),
+      );
+
+      const result = await service.equipFrame(userId, 'gold-filigree');
+
+      const [, update] = profileModel.findOneAndUpdate.mock.calls[0] as [
+        unknown,
+        Record<string, Record<string, unknown>>,
+      ];
+      expect(update.$set).toEqual({ equippedFrameId: 'gold-filigree' });
+      expect(profiles.getPublicProfile).toHaveBeenCalledWith(userId);
+      expect(result).toMatchObject({ id: userId });
+    });
+
+    it('allows switching to a FREE frame even when never purchased', async () => {
+      profiles.findByUserId.mockResolvedValue(profileDoc({ ownedFrames: [] }));
+      profileModel.findOneAndUpdate.mockReturnValue(
+        queryReturning(profileDoc({ equippedFrameId: 'neon-ring' })),
+      );
+
+      await expect(service.equipFrame(userId, 'neon-ring')).resolves.toBeDefined();
+      expect(profileModel.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('unequips with frameId: null (no ownership check, sets equippedFrameId: null)', async () => {
+      profileModel.findOneAndUpdate.mockReturnValue(
+        queryReturning(profileDoc({ equippedFrameId: null })),
+      );
+
+      await service.equipFrame(userId, null);
+
+      const [, update] = profileModel.findOneAndUpdate.mock.calls[0] as [
+        unknown,
+        Record<string, Record<string, unknown>>,
+      ];
+      expect(update.$set).toEqual({ equippedFrameId: null });
+    });
+
+    it('rejects equipping a frame the caller does NOT own (403)', async () => {
+      profiles.findByUserId.mockResolvedValue(profileDoc({ ownedFrames: ['constellation'] }));
+
+      await expect(service.equipFrame(userId, 'flame')).rejects.toBeInstanceOf(ForbiddenException);
+
+      // No write occurs when ownership is missing.
+      expect(profileModel.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 when the profile does not exist (equip path)', async () => {
+      profiles.findByUserId.mockResolvedValue(null);
+
+      await expect(service.equipFrame(userId, 'neon-ring')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('throws 404 when the profile does not exist (unequip path)', async () => {
+      profiles.findByUserId.mockResolvedValue(null);
+
+      await expect(service.equipFrame(userId, null)).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

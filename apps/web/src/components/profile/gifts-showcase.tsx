@@ -18,7 +18,7 @@ import { Badge, CoinIcon, Skeleton, Tooltip, TooltipContent, TooltipTrigger } fr
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/features/economy/format';
 import { RARITY_STYLES } from '@/features/gifts/rarity';
-import { GiftMedia } from '@/components/gifts/gift-media';
+import { Gift3DArt } from '@/components/gifts/gift-3d-art';
 import type { ReceivedGift } from '@/features/profile/use-profile';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -26,6 +26,8 @@ const RARITY_ORDER: Record<Rarity, number> = { legendary: 3, epic: 2, rare: 1, c
 
 interface Aggregated {
   key: string;
+  /** Catalogue code — drives the inline SVG-3D art via `<Gift3DArt />`. */
+  code?: string;
   title: string;
   animationUrl?: string;
   rarity: Rarity;
@@ -65,6 +67,7 @@ export function GiftsShowcase({
       } else {
         map.set(key, {
           key,
+          code: g.gift?.code,
           title: g.gift?.title ?? giftFallbackTitle,
           animationUrl: g.gift?.animationUrl,
           rarity: g.gift?.rarity ?? 'common',
@@ -168,7 +171,7 @@ export function GiftsShowcase({
                       className="pointer-events-none absolute -inset-x-2 -top-1/2 h-[200%] -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent opacity-0 transition-all duration-700 group-hover:translate-x-full group-hover:opacity-100 motion-reduce:hidden"
                     />
                     <div className="relative flex h-14 w-14 items-center justify-center">
-                      <GiftMedia url={g.animationUrl ?? ''} title={g.title} rarity={g.rarity} />
+                      <Gift3DArt code={g.code} label={g.title} />
                     </div>
                     {g.count > 1 && (
                       <Badge

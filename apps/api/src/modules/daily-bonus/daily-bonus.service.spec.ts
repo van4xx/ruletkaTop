@@ -1,8 +1,9 @@
 import { ConflictException } from '@nestjs/common';
 import type { Model } from 'mongoose';
 
-import { DAILY_BONUS_LADDER } from '@ruletka/shared-types';
+import { DAILY_BONUS_LADDER, type EffectiveTier } from '@ruletka/shared-types';
 
+import type { PremiumService } from '../premium/premium.service';
 import type { WalletService } from '../wallet/wallet.service';
 import {
   DailyBonusService,
@@ -12,6 +13,29 @@ import {
   type DailyBonusClock,
 } from './daily-bonus.service';
 import type { DailyBonusDocument } from './schemas/daily-bonus.schema';
+
+/**
+ * Lightweight stub of {@link PremiumService} that the spec can override per
+ * test to drive the multiplier (Free=1x, Lite=1.5x, Pro=2x) through the
+ * service's tier-aware credit path without spinning up a full Mongo stub.
+ */
+function makePremiumStub(tier: EffectiveTier = 'none'): {
+  premium: PremiumService;
+  setTier: (t: EffectiveTier) => void;
+} {
+  let current: EffectiveTier = tier;
+  const stub = {
+    getEffectiveTier: jest.fn(async () => current),
+    hasTier: jest.fn(async (_: string, t: EffectiveTier) => current === t),
+    hasTierOrAbove: jest.fn(),
+  };
+  return {
+    premium: stub as unknown as PremiumService,
+    setTier: (t) => {
+      current = t;
+    },
+  };
+}
 
 /**
  * Minimal in-memory state for ONE user's daily-bonus row, matching the schema
@@ -89,6 +113,7 @@ describe('DailyBonusService', () => {
   let now: Date;
   const clock: DailyBonusClock = () => now;
   let service: DailyBonusService;
+  let premiumStub: ReturnType<typeof makePremiumStub>;
 
   beforeEach(() => {
     state = {
@@ -123,9 +148,12 @@ describe('DailyBonusService', () => {
     // Fix the clock to a known UTC instant inside a normal day.
     now = new Date('2026-06-10T12:00:00.000Z');
 
+    premiumStub = makePremiumStub('none');
+
     service = new DailyBonusService(
       model as unknown as Model<DailyBonusDocument>,
       wallet as unknown as WalletService,
+      premiumStub.premium,
       clock,
     );
   });
@@ -279,6 +307,43 @@ describe('DailyBonusService', () => {
     expect(nextUtcMidnight(new Date('2026-06-10T00:00:00.000Z')).toISOString()).toBe(
       '2026-06-11T00:00:00.000Z',
     );
+  });
+
+  it('Premium LITE applies 1.5x multiplier — first claim credits 3 coins (base 2 × 1.5)', async () => {
+    // Lite holder claims on day 1 → ladder rung 1 is 2 coins; 2 * 1.5 = 3.
+    premiumStub.setTier('lite');
+
+    const res = await service.claim(userId);
+
+    expect(res.justCredited).toBe(3);
+    expect(res.streak).toBe(1);
+    expect(res.lifetimeCoins).toBe(3);
+    // Wallet was credited with the post-multiplier amount under the same
+    // ledger refId namespace — the tier is NOT in the refId, so an in-day
+    // upgrade can't double-credit.
+    const [, debitedCoins] = wallet.credit.mock.calls[0] as [string, number, string, string];
+    expect(debitedCoins).toBe(3);
+  });
+
+  it('Premium PRO applies 2x multiplier and getState surfaces the post-multiplier nextRewardCoins', async () => {
+    // Pro holder: day 1 → 4 coins (2*2); state.nextRewardCoins on day 1
+    // is the day-2 rung 3 * 2 = 6.
+    premiumStub.setTier('pro');
+
+    const res = await service.claim(userId);
+    expect(res.justCredited).toBe(4);
+    expect(res.streak).toBe(1);
+
+    // After today's claim, the widget peek is at day-2 rung (3) × 2 = 6.
+    const state = await service.getState(userId);
+    expect(state.claimedToday).toBe(true);
+    expect(state.nextRewardCoins).toBe(6);
+
+    // Day 2 actually credits 6 coins as previewed.
+    advanceDays(1);
+    const next = await service.claim(userId);
+    expect(next.justCredited).toBe(6);
+    expect(next.streak).toBe(2);
   });
 
   it('constructor refuses to boot if the ladder is tampered (defensive invariant)', () => {

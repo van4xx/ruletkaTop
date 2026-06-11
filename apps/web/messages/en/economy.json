@@ -92,7 +92,8 @@
     "refund": "Refund",
     "gift_out": "Gift sent",
     "top": "Spot in the Top",
-    "cover": "Profile cover"
+    "cover": "Profile cover",
+    "frame": "Avatar frame"
   },
   "gifts": {
     "eyebrow": "Gift store",
@@ -164,6 +165,26 @@
     "cadenceEveryDays": "for {count} d.",
     "current": "Current plan",
     "subscribe": "Subscribe"
+  },
+  "tier": {
+    "free": "Free",
+    "lite": "Premium Lite",
+    "pro": "Premium Pro",
+    "liteShort": "Lite",
+    "proShort": "Pro"
+  },
+  "planMatrix": {
+    "title": "Lite vs Pro",
+    "dailyBonusMultiplier": "Daily bonus",
+    "profileBadgeGlow": "Profile glow",
+    "friendLimit": "Friend limit",
+    "proOnlyCovers": "Pro-only covers",
+    "referralCap": "Referral cap",
+    "incognito": "Incognito mode"
+  },
+  "dailyBonusTier": {
+    "tooltipLite": "Premium Lite x1.5!",
+    "tooltipPro": "Premium Pro x2!"
   },
   "subscribeStatus": {
     "titleError": "Subscription not completed",
@@ -282,5 +303,23 @@
     "errorTitle": "Couldn't load the packs",
     "errorDescription": "The coin catalogue is temporarily unavailable.",
     "secure": "Secure payment by CloudPayments"
+  },
+  "modals": {
+    "premium": {
+      "trigger": "Premium",
+      "triggerAria": "Open the Premium subscription dialog",
+      "triggerHint": "Open the Premium subscription",
+      "menuItem": "Get Premium",
+      "menuItemDescription": "Filters, no ads, priority matching",
+      "ctaProfile": "Premium",
+      "ctaProfileAria": "Subscribe to Premium"
+    },
+    "coins": {
+      "trigger": "Buy coins",
+      "triggerAria": "Open the buy-coins dialog",
+      "triggerHint": "Top up your coin balance",
+      "ctaProfile": "Buy coins",
+      "ctaProfileAria": "Open the coin store"
+    }
   }
 }

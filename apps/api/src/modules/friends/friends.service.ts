@@ -16,9 +16,11 @@ import type {
   Friendship as FriendshipContract,
   PaginationQuery,
 } from '@ruletka/shared-types';
+import { maxFriendsFor } from '@ruletka/shared-types';
 
 import { NotificationsService } from '../notifications/notifications.service';
 import { PresenceService } from '../presence/presence.service';
+import { PremiumService } from '../premium/premium.service';
 import { buildPairKey, Friendship, FriendshipDocument } from './schemas/friendship.schema';
 
 /** A page of friend summaries (newest friendships first) plus an opaque cursor. */
@@ -74,7 +76,25 @@ export class FriendsService {
     @InjectConnection() private readonly connection: Connection,
     private readonly presenceService: PresenceService,
     private readonly notificationsService: NotificationsService,
+    private readonly premiumService: PremiumService,
   ) {}
+
+  /**
+   * Count the `accepted` friendships a user is part of — both directions.
+   * Used by the tier-aware cap on {@link acceptRequest}.
+   */
+  private async countAcceptedFriendships(userId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return 0;
+    }
+    const _id = new Types.ObjectId(userId);
+    return this.friendshipModel
+      .countDocuments({
+        status: 'accepted',
+        $or: [{ requesterId: _id }, { recipientId: _id }],
+      })
+      .exec();
+  }
 
   /**
    * Send a friend request from `requesterId` to `recipientId`.
@@ -121,6 +141,37 @@ export class FriendsService {
     }
     if (doc.status !== 'pending') {
       throw new ConflictException(`Cannot accept a ${doc.status} friendship`);
+    }
+
+    // Tier-aware friend cap: Free=100, Lite=500, Pro=∞. We check BOTH sides
+    // (the acceptor AND the original requester) so a friend pair never lands
+    // on a row that puts either party over their cap. Failing closed here is
+    // the right product call — refusing-to-accept is recoverable (the request
+    // stays pending), accepting-and-then-discovering would orphan a row.
+    const [acceptorCount, requesterCount, acceptorTier, requesterTier] = await Promise.all([
+      this.countAcceptedFriendships(userId),
+      this.countAcceptedFriendships(doc.requesterId.toString()),
+      this.premiumService.getEffectiveTier(userId),
+      this.premiumService.getEffectiveTier(doc.requesterId.toString()),
+    ]);
+    const acceptorCap = maxFriendsFor(acceptorTier);
+    const requesterCap = maxFriendsFor(requesterTier);
+    if (acceptorCount >= acceptorCap) {
+      throw new ConflictException({
+        message: `Friend limit reached (${acceptorCap}); upgrade to Pro for unlimited friends`,
+        code: 'FRIEND_LIMIT_REACHED',
+        side: 'self',
+        cap: acceptorCap,
+        currentTier: acceptorTier,
+      });
+    }
+    if (requesterCount >= requesterCap) {
+      throw new ConflictException({
+        message: 'The requester has reached their friend limit',
+        code: 'FRIEND_LIMIT_REACHED_OTHER',
+        side: 'other',
+        cap: requesterCap,
+      });
     }
 
     doc.status = 'accepted';

@@ -178,6 +178,7 @@
     "copyFailed": "Не удалось скопировать",
     "changeAvatarAria": "Сменить аватар",
     "changeCoverAria": "Сменить обложку",
+    "changeFrameAria": "Сменить рамку аватара",
     "copyIdAria": "Скопировать мой ID",
     "copyIdTooltip": "Скопировать ID профиля",
     "settingsAria": "Настройки",
@@ -189,6 +190,12 @@
     "signInRequired": "Войдите, чтобы редактировать профиль.",
     "back": "К профилю",
     "editTitle": "Редактирование профиля"
+  },
+  "editModal": {
+    "title": "Редактировать профиль",
+    "description": "Обновите никнейм, статус и интересы. Аватар и обложка меняются отдельно.",
+    "changeCover": "Сменить обложку",
+    "discardConfirm": "Изменения не сохранены. Закрыть и потерять их?"
   },
   "publicProfile": {
     "notFoundTitle": "Профиль не найден",
@@ -211,6 +218,45 @@
       "galaxy": "Галактика",
       "prismatic": "Призма"
     }
+  },
+  "frames": {
+    "names": {
+      "neon-ring": "Неоновое кольцо",
+      "magenta-pulse": "Маджента-пульс",
+      "gold-filigree": "Золотая филигрань",
+      "diamond-shards": "Алмазные осколки",
+      "constellation": "Созвездие",
+      "roulette-wheel": "Колесо рулетки",
+      "holographic": "Голограмма",
+      "aurora-sweep": "Аврора-свип",
+      "vinyl-record": "Виниловая пластинка",
+      "flame": "Пламя"
+    },
+    "titleSelect": "Рамка аватара",
+    "titleConfirm": "Подтвердите покупку",
+    "descSelect": "Украсьте аватар светящейся рамкой. Две — бесплатно, остальные за монеты, навсегда.",
+    "descConfirm": "Рамка спишется с баланса и сразу появится на аватаре.",
+    "loadError": "Не удалось загрузить рамки.",
+    "retry": "Повторить",
+    "equipped": "Активна",
+    "locked": "Заблокирована",
+    "free": "Бесплатно",
+    "owned": "Куплена",
+    "equipAria": "Надеть рамку «{name}»",
+    "buyAria": "Купить рамку «{name}» за {price} монет",
+    "flagshipHint": "Живая неоновая рамка вокруг вашего аватара.",
+    "permanentNote": "Покупка разовая — рамка останется у вас навсегда.",
+    "backToCatalog": "К рамкам",
+    "close": "Закрыть",
+    "removeFrame": "Снять рамку",
+    "buyFor": "Купить за {price}",
+    "equippedTitle": "Рамка обновлена",
+    "removedTitle": "Рамка снята",
+    "purchasedTitle": "Рамка куплена!",
+    "purchasedDescription": "«{name}» уже на вашем аватаре.",
+    "errInsufficientTitle": "Недостаточно монет",
+    "errInsufficientDescription": "Пополните баланс, чтобы купить рамку.",
+    "errGeneric": "Не удалось обновить рамку"
   },
   "achievements": {
     "meta": {

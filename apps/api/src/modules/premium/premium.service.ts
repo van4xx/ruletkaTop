@@ -3,9 +3,12 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 
 import type {
+  EffectiveTier,
   PremiumPlan as PremiumPlanContract,
+  PremiumTier,
   Subscription as SubscriptionContract,
 } from '@ruletka/shared-types';
+import { isTierAtOrAbove } from '@ruletka/shared-types';
 
 import { CloudPaymentsClient } from '../payments/cloudpayments.client';
 import { PremiumPlan, PremiumPlanDocument } from './schemas/premium-plan.schema';
@@ -13,29 +16,93 @@ import { Subscription, SubscriptionDocument } from './schemas/subscription.schem
 
 /**
  * Default premium plans seeded on boot (idempotent upsert by `code`).
+ *
+ * Two-tier RU-market lineup:
+ *   - `lite`           — 299 ₽/мес, 14-day trial, daily-bonus ×1.5, 500 friends,
+ *                        all basic covers.
+ *   - `pro_monthly`    — 799 ₽/мес, daily-bonus ×2.0, unlimited friends, every
+ *                        cover incl. Pro-only, incognito, higher referral cap.
+ *   - `pro_quarterly`  — 3 499 ₽ / 3 мес. (≈ 1 166 ₽/мес — ~27 % vs `pro_monthly`).
+ *
+ * `intervalDays` drives the billing period and the access window. The
+ * Lite-trial / daily-bonus multiplier / friends cap / cover access etc. are
+ * marketing fields surfaced as `perks` so the existing read-only contract
+ * (`PremiumPlan`) stays unchanged — entitlement-changing behaviour lives in
+ * matchmaking / friends / daily-bonus modules under separate plan-aware flags.
+ *
+ * Re-pricing migration: this seeder runs `$set` (not just `$setOnInsert`)
+ * on every boot, so deployments with the previous catalogue (`monthly` /
+ * `yearly` at 399 / 3499) automatically adopt the new ladder on restart.
+ * Retired codes are deleted in the same pass.
  */
 const SEED_PLANS: readonly PremiumPlanContract[] = [
   {
-    code: 'monthly',
-    title: 'Premium Monthly',
-    priceRub: 399,
+    code: 'lite',
+    title: 'Premium Lite',
+    priceRub: 299,
     intervalDays: 30,
     perks: [
-      'Unlimited matches',
-      'Gender & country filters',
-      'Premium-only gifts',
-      'Ad-free experience',
-      'Premium badge',
+      '14-дневный пробный период',
+      'Ежедневный бонус ×1.5',
+      'До 500 друзей',
+      'Все базовые обложки профиля',
+      'Без рекламы и Premium-значок',
+      'Фильтры по полу и стране',
     ],
   },
   {
-    code: 'yearly',
-    title: 'Premium Yearly',
+    code: 'pro_monthly',
+    title: 'Premium Pro',
+    priceRub: 799,
+    intervalDays: 30,
+    perks: [
+      'Всё из Lite',
+      'Ежедневный бонус ×2.0',
+      'Безлимит друзей',
+      'Все обложки + Pro-only',
+      'Режим инкогнито',
+      'Повышенный лимит рефералов',
+    ],
+  },
+  {
+    code: 'pro_quarterly',
+    title: 'Premium Pro — 3 месяца',
     priceRub: 3499,
-    intervalDays: 365,
-    perks: ['Everything in Monthly', '2 months free vs monthly', 'Priority matchmaking'],
+    intervalDays: 90,
+    perks: [
+      'Всё из Premium Pro',
+      'Выгоднее на 26 % vs помесячно',
+      'Экономия ~898 ₽ за период',
+      'Безлимит друзей',
+      'Режим инкогнито',
+    ],
   },
 ];
+
+/**
+ * Legacy plan codes superseded by the new lineup. The seeder removes these
+ * on boot so the plans grid never shows a stale tile after a redeploy.
+ * Existing subscribers on these plans keep their entitlement until their
+ * `currentPeriodEnd` (the catalogue row is metadata only — the authoritative
+ * record is on the `Subscription`).
+ */
+const RETIRED_PLAN_CODES: readonly string[] = ['monthly', 'yearly'];
+
+/**
+ * Plan-code → tier. Used by {@link PremiumService.activate} to paint the
+ * `tier` field on the subscription row from the freshly-paid plan code so
+ * webhooks / admin grants converge on a single source of truth without a
+ * separate write.
+ *
+ * Convention:
+ *  - `lite`                          → `lite`
+ *  - any code containing `pro`       → `pro`  (e.g. `pro_monthly`, `pro_quarterly`)
+ *  - anything else                   → `lite` (mirrors the schema default; safe
+ *    for retired codes and admin-added custom plans that follow naming)
+ */
+function tierForPlanCode(code: string): PremiumTier {
+  return /pro/i.test(code) ? 'pro' : 'lite';
+}
 
 /**
  * Owns subscription state and is the authority on premium entitlement.
@@ -68,16 +135,44 @@ export class PremiumService implements OnModuleInit {
     private readonly cloudPayments: CloudPaymentsClient,
   ) {}
 
-  /** Idempotently seed the default plans (upsert by unique `code`). */
+  /**
+   * Idempotently seed the default plans (upsert by unique `code`).
+   *
+   * The update uses `$set` so the seed doubles as a self-applying re-pricing
+   * migration: existing rows have `title / priceRub / intervalDays / perks`
+   * brought up to the latest catalogue on every boot. `code` is the stable
+   * public identifier so we only pin it on insert. Retired codes (`monthly`,
+   * `yearly`) are deleted in the same pass so the plans grid never shows a
+   * stale tile after a redeploy; existing subscribers on those plans keep
+   * their entitlement until their `currentPeriodEnd` (the catalogue row is
+   * marketing metadata only — the authoritative state lives on `Subscription`).
+   */
   async onModuleInit(): Promise<void> {
     await Promise.all(
       SEED_PLANS.map((plan) =>
         this.planModel
-          .updateOne({ code: plan.code }, { $setOnInsert: plan }, { upsert: true })
+          .updateOne(
+            { code: plan.code },
+            {
+              $set: {
+                title: plan.title,
+                priceRub: plan.priceRub,
+                intervalDays: plan.intervalDays,
+                perks: plan.perks,
+              },
+              $setOnInsert: { code: plan.code },
+            },
+            { upsert: true },
+          )
           .exec(),
       ),
     );
-    this.logger.log(`Seeded ${SEED_PLANS.length} premium plans (idempotent)`);
+    if (RETIRED_PLAN_CODES.length > 0) {
+      await this.planModel.deleteMany({ code: { $in: [...RETIRED_PLAN_CODES] } }).exec();
+    }
+    this.logger.log(
+      `Seeded ${SEED_PLANS.length} premium plans (idempotent; retired ${RETIRED_PLAN_CODES.length})`,
+    );
   }
 
   /** List all premium plans (cheapest first) as the shared contract shape. */
@@ -106,6 +201,49 @@ export class PremiumService implements OnModuleInit {
       .lean()
       .exec();
     return this.entitled(doc?.status, doc?.currentPeriodEnd ?? null);
+  }
+
+  /**
+   * Resolve a user's *effective* premium tier — `'none' | 'lite' | 'pro'`.
+   *
+   * Returns `'none'` for any user without an active, in-period subscription.
+   * Otherwise reads the persisted `tier` (defaulted to `'lite'` for
+   * pre-split rows, see schema). The single source of truth consulted by
+   * every cross-cutting tier check (daily-bonus multiplier, friends cap,
+   * referral cap, covers proOnly, settings incognito) — never read the
+   * `tier` field directly from another module.
+   */
+  async getEffectiveTier(userId: string): Promise<EffectiveTier> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return 'none';
+    }
+    const doc = await this.subscriptionModel
+      .findOne({ userId: new Types.ObjectId(userId) })
+      .select('status currentPeriodEnd tier')
+      .lean()
+      .exec();
+    if (!doc || !this.entitled(doc.status, doc.currentPeriodEnd ?? null)) {
+      return 'none';
+    }
+    return (doc.tier ?? 'lite') as EffectiveTier;
+  }
+
+  /**
+   * Predicate: the user holds `tier` *exactly*. Rarely the right gate — most
+   * call sites want {@link hasTierOrAbove}. Useful when the call site needs
+   * to distinguish "Lite" from "Pro" for analytics or copy.
+   */
+  async hasTier(userId: string, tier: PremiumTier): Promise<boolean> {
+    return (await this.getEffectiveTier(userId)) === tier;
+  }
+
+  /**
+   * Predicate: the user holds `tier` OR a higher tier. THE canonical
+   * entitlement check for the tier-gated features (`@RequiresPremiumTier`,
+   * daily-bonus multiplier picker, friends cap lookup, etc.).
+   */
+  async hasTierOrAbove(userId: string, tier: PremiumTier): Promise<boolean> {
+    return isTierAtOrAbove(await this.getEffectiveTier(userId), tier);
   }
 
   /**
@@ -175,6 +313,11 @@ export class PremiumService implements OnModuleInit {
     // could lose an interval to a lost update). `$max` ignores a null/absent
     // existing end, so a first activation yields `now + intervalMs`. `startedAt`
     // is stamped once via `$ifNull` (covers both insert and an old null record).
+    // Paint the tier from the plan code — single source of truth, no separate
+    // write needed by the webhook / admin grant. A renewal of a Pro plan stays
+    // Pro; an upgrade from Lite → Pro flips tier in the same atomic update.
+    const tier: PremiumTier = tierForPlanCode(plan);
+
     const set: Record<string, unknown> = {
       plan,
       status: 'active',
@@ -183,6 +326,7 @@ export class PremiumService implements OnModuleInit {
         $add: [{ $max: [{ $ifNull: ['$currentPeriodEnd', '$$NOW'] }, '$$NOW'] }, intervalMs],
       },
       startedAt: { $ifNull: ['$startedAt', '$$NOW'] },
+      tier,
     };
     if (token !== undefined) {
       set.token = token;
@@ -350,6 +494,9 @@ export class PremiumService implements OnModuleInit {
       return this.toSubscriptionContract(doc);
     }
     // No record yet — return a synthetic, un-persisted `none` subscription.
+    // `tier: 'lite'` is the schema default and only conveys "the tier the
+    // user WOULD hold if they subscribed"; entitlement still gates on
+    // `status`, so a Free user gates exactly like before this split.
     return {
       id: _id.toString(),
       userId: _id.toString(),
@@ -358,6 +505,7 @@ export class PremiumService implements OnModuleInit {
       startedAt: null,
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
+      tier: 'lite',
     };
   }
 
@@ -438,6 +586,10 @@ export class PremiumService implements OnModuleInit {
       startedAt: doc.startedAt ? doc.startedAt.toISOString() : null,
       currentPeriodEnd: doc.currentPeriodEnd ? doc.currentPeriodEnd.toISOString() : null,
       cancelAtPeriodEnd: doc.cancelAtPeriodEnd,
+      // Coalesce a missing tier on a legacy row to the schema default so the
+      // wire shape is always exhaustive (the field was added with a default,
+      // but pre-split documents may not have persisted it yet).
+      tier: (doc.tier ?? 'lite') as PremiumTier,
     };
   }
 }

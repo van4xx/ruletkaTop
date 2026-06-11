@@ -1,11 +1,13 @@
 /**
  * Landing — "Pricing / Premium" section.
  *
- * Server component. Three plain pricing cards (Free, Premium Monthly, Premium
- * Yearly) — the prices are real (399 ₽/mo and 3499 ₽/yr, mirroring the seed
- * plans in `apps/api/src/modules/premium/premium.service.ts`) so the
+ * Server component. Three plain pricing cards (Free, Premium Lite, Premium Pro
+ * — 3 months) — the prices are real (299 ₽/mo for Lite and 3 499 ₽ / 3 mo for
+ * the quarterly Pro tile, mirroring the seed plans in
+ * `apps/api/src/modules/premium/premium.service.ts`) so the
  * `SoftwareApplication` AggregateOffer in the structured data tracks what
- * users actually see.
+ * users actually see. Premium Pro (799 ₽/мес) is offered inside the app's
+ * /premium picker — the landing surfaces the headline quarterly tile.
  *
  * Each card's "perks" list is rendered from a real `<ul>` (not a div pretending
  * to be a list) so screen-readers + crawlers understand the structure.

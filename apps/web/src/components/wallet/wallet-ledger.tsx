@@ -41,6 +41,9 @@ const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: Tone; badge: BadgeP
     gift_out: { icon: Gift, tone: 'out', badge: 'neutral' },
     top: { icon: Crown, tone: 'out', badge: 'warning' },
     cover: { icon: ImageIcon, tone: 'out', badge: 'accent' },
+    // Avatar-frame cosmetic purchase — outgoing like cover, distinct icon
+    // (Sparkles) so frame buys are visually distinguishable in the ledger.
+    frame: { icon: Sparkles, tone: 'out', badge: 'accent' },
   };
 
 type DirectionFilter = 'all' | 'in' | 'out';

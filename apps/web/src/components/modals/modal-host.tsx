@@ -64,8 +64,20 @@ const GiftPickerModal = lazy(() =>
 const CoverPickerModal = lazy(() =>
   import('./cover-picker-modal').then((m) => ({ default: m.CoverPickerModal })),
 );
+const FramesPickerModal = lazy(() =>
+  import('@/features/profile/frames-picker-modal').then((m) => ({ default: m.FramesPickerModal })),
+);
+const ProfileEditModal = lazy(() =>
+  import('./profile-edit-modal').then((m) => ({ default: m.ProfileEditModal })),
+);
 const BuyCoinsModal = lazy(() =>
   import('./buy-coins-modal').then((m) => ({ default: m.BuyCoinsModal })),
+);
+// `coins-modal.tsx` is a thin re-export of `BuyCoinsModal`, mounted under the new
+// `'coins'` id used by the modal-first entry points (header user-menu / coin-pill,
+// dashboard profile-block). Same body, same props.
+const CoinsModal = lazy(() =>
+  import('./coins-modal').then((m) => ({ default: m.CoinsModal })),
 );
 const BuyTopModal = lazy(() => import('./buy-top-modal').then((m) => ({ default: m.BuyTopModal })));
 const PremiumModal = lazy(() =>
@@ -101,7 +113,10 @@ const REGISTRY: Record<ModalType, ComponentType> = {
   filters: FiltersModal,
   'gift-picker': GiftPickerModal,
   'cover-picker': CoverPickerModal,
+  'frames-picker': FramesPickerModal,
+  'profile-edit': ProfileEditModal,
   'buy-coins': BuyCoinsModal,
+  coins: CoinsModal,
   'buy-top': BuyTopModal,
   premium: PremiumModal,
   'report-user': ReportUserModal,
@@ -118,7 +133,10 @@ const REGISTRY: Record<ModalType, ComponentType> = {
 const SIZE: Partial<Record<ModalType, string>> = {
   'gift-picker': 'max-w-xl',
   'cover-picker': 'max-w-2xl',
+  'frames-picker': 'max-w-2xl',
+  'profile-edit': 'max-w-3xl',
   'buy-coins': 'max-w-xl',
+  coins: 'max-w-xl',
   'buy-top': 'max-w-xl',
   premium: 'max-w-xl',
   'search-users': 'max-w-xl',

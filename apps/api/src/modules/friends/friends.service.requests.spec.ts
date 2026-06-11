@@ -69,11 +69,18 @@ describe('FriendsService.listRequests — incoming vs outgoing split', () => {
 
     const notifications = { create: jest.fn().mockResolvedValue(null) };
 
+    // listRequests does not gate on tier; a `none` stub keeps things simple.
+    const premium = {
+      getEffectiveTier: jest.fn().mockResolvedValue('none'),
+      hasTierOrAbove: jest.fn().mockResolvedValue(false),
+    };
+
     service = new FriendsService(
       friendshipModel as unknown as never,
       connection as unknown as never,
       presence as unknown as PresenceService,
       notifications as unknown as NotificationsService,
+      premium as unknown as never,
     );
   });
 

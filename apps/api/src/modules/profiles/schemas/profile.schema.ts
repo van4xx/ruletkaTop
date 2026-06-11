@@ -98,6 +98,23 @@ export class Profile {
   @Prop({ required: true, default: [], type: [String] })
   ownedCovers!: string[];
 
+  /**
+   * Selected avatar-frame cosmetic id (a decorative ring drawn around the
+   * avatar). Defaults to `null` — i.e. no frame — because, unlike a cover,
+   * wearing a frame is optional and the avatar reads fine bare. The owner
+   * may equip a free/owned frame or unequip back to `null` at any time.
+   */
+  @Prop({ required: false, default: null, type: String })
+  equippedFrameId!: string | null;
+
+  /**
+   * Owned PAID frame ids (private inventory; never projected onto the public
+   * profile). The two FREE frames are implicitly owned and never stored here —
+   * ownership is `FREE_FRAME_IDS ∪ ownedFrames`. Appended to on purchase.
+   */
+  @Prop({ required: true, default: [], type: [String] })
+  ownedFrames!: string[];
+
   /** Lifetime non-owner profile views. */
   @Prop({ required: true, default: 0, min: 0 })
   profileViews!: number;

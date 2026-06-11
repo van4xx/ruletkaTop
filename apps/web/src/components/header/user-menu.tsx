@@ -28,6 +28,7 @@ import {
 } from '@ruletka/ui';
 import { USER_MENU } from '@/config/nav';
 import { cn } from '@/lib/cn';
+import { useModal } from '@/lib/stores/modal-store';
 
 interface UserMenuProps {
   user: AuthUser;
@@ -40,6 +41,8 @@ function UserMenuImpl({ user, onLogout }: UserMenuProps) {
   const t = useTranslations('chrome');
   const tc = useTranslations('common');
   const tn = useTranslations('nav');
+  const tEcon = useTranslations('economy');
+  const { open: openModal } = useModal();
   const [signingOut, setSigningOut] = useState(false);
 
   const handleLogout = useCallback(async () => {
@@ -97,6 +100,30 @@ function UserMenuImpl({ user, onLogout }: UserMenuProps) {
         </div>
 
         <DropdownMenuSeparator />
+
+        {/* Premium CTA — primary upsell entry point in the user menu. Opens the
+            premium modal directly. Hidden once the user already has Premium. */}
+        {!user.isPremium && (
+          <>
+            <DropdownMenuItem
+              aria-label={tEcon('modals.premium.triggerAria')}
+              onSelect={(e) => {
+                e.preventDefault();
+                openModal('premium');
+              }}
+              className="cursor-pointer"
+            >
+              <Crown aria-hidden="true" className="text-warning" />
+              <span className="flex flex-col">
+                <span className="font-semibold">{tEcon('modals.premium.menuItem')}</span>
+                <span className="text-[0.6875rem] text-muted-foreground">
+                  {tEcon('modals.premium.menuItemDescription')}
+                </span>
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
 
         <DropdownMenuLabel>{t('userMenu.sectionAccount')}</DropdownMenuLabel>
         {USER_MENU.map((item) => {

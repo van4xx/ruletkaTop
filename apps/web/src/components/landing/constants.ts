@@ -121,7 +121,7 @@ export const PRICING_TIERS: readonly PricingTier[] = [
     key: 'lite',
     icon: Crown,
     href: ROUTES.premium,
-    priceRub: 399,
+    priceRub: 299,
     accent: 'from-violet-500/30 to-fuchsia-500/10',
     highlighted: true,
   },

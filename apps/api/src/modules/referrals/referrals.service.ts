@@ -14,6 +14,7 @@ import {
   REFERRAL_CODE_LENGTH,
   REFERRAL_LIFETIME_CAP_COINS,
   REFERRAL_TIER_BPS,
+  lifetimeReferralCapFor,
   type PaginationMeta,
   type ReferralDownlineEntry,
   type ReferralLookupResponse,
@@ -22,6 +23,7 @@ import {
   type ReferralTier,
 } from '@ruletka/shared-types';
 
+import { PremiumService } from '../premium/premium.service';
 import { Profile, ProfileDocument } from '../profiles/schemas/profile.schema';
 import {
   CoinTransaction,
@@ -94,6 +96,7 @@ export class ReferralsService {
     @InjectModel(CoinTransaction.name)
     private readonly coinTxModel: Model<CoinTransactionDocument>,
     private readonly walletService: WalletService,
+    private readonly premiumService: PremiumService,
     @Optional() private readonly publicOriginOverride?: string,
   ) {}
 
@@ -331,19 +334,31 @@ export class ReferralsService {
       // Cap gate: STOP crediting once the inviter is at/above the lifetime
       // ceiling. We READ the latest counter just before each tier's credit
       // (cheap indexed read) so back-to-back sweeps can't blow past the cap.
-      const link = await this.linkModel
-        .findOne({ userId: edge.inviterId })
-        .select('totalEarnedCoins')
-        .lean()
-        .exec();
+      const [link, inviterTier] = await Promise.all([
+        this.linkModel
+          .findOne({ userId: edge.inviterId })
+          .select('totalEarnedCoins')
+          .lean()
+          .exec(),
+        // Per-tier cap — Pro raises the ceiling from 5000 → 20000 lifetime
+        // (see `lifetimeReferralCapFor`). Read AT CREDIT TIME so a tier change
+        // takes effect on the very next reward (a downgrade re-clamps).
+        this.premiumService.getEffectiveTier(inviterId),
+      ]);
       const earned = link?.totalEarnedCoins ?? 0;
-      if (earned >= REFERRAL_LIFETIME_CAP_COINS) {
+      const tierCap = lifetimeReferralCapFor(inviterTier);
+      if (earned >= tierCap) {
         this.logger.debug(
-          `Skipping T${tier} reward for inviter ${inviterId}: lifetime cap reached (${earned}/${REFERRAL_LIFETIME_CAP_COINS})`,
+          `Skipping T${tier} reward for inviter ${inviterId}: lifetime cap reached (${earned}/${tierCap}, tier=${inviterTier})`,
         );
         continue;
       }
-      const reservedReward = Math.min(reward, REFERRAL_LIFETIME_CAP_COINS - earned);
+      const reservedReward = Math.min(reward, tierCap - earned);
+      // Defensive: the legacy `REFERRAL_LIFETIME_CAP_COINS` constant remains
+      // in the shared contract for backward-compat with mobile/admin mirrors,
+      // but the AUTHORITATIVE cap on the API is `tierCap`. Reference the
+      // legacy constant in the log only when it would matter for diagnostics.
+      void REFERRAL_LIFETIME_CAP_COINS;
       const refId = tierRefId(tier, purchaserId, purchaseLedgerId);
 
       try {

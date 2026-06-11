@@ -92,7 +92,8 @@
     "refund": "Возврат",
     "gift_out": "Подарок отправлен",
     "top": "Место в Топе",
-    "cover": "Обложка профиля"
+    "cover": "Обложка профиля",
+    "frame": "Рамка аватара"
   },
   "gifts": {
     "eyebrow": "Магазин подарков",
@@ -164,6 +165,26 @@
     "cadenceEveryDays": "за {count} дн.",
     "current": "Текущий план",
     "subscribe": "Оформить"
+  },
+  "tier": {
+    "free": "Без подписки",
+    "lite": "Premium Lite",
+    "pro": "Premium Pro",
+    "liteShort": "Lite",
+    "proShort": "Pro"
+  },
+  "planMatrix": {
+    "title": "Сравнение Lite vs Pro",
+    "dailyBonusMultiplier": "Ежедневный бонус",
+    "profileBadgeGlow": "Свечение профиля",
+    "friendLimit": "Лимит друзей",
+    "proOnlyCovers": "Pro-обложки",
+    "referralCap": "Лимит рефералов",
+    "incognito": "Режим инкогнито"
+  },
+  "dailyBonusTier": {
+    "tooltipLite": "Premium Lite ×1.5!",
+    "tooltipPro": "Premium Pro ×2!"
   },
   "subscribeStatus": {
     "titleError": "Подписка не оформлена",
@@ -282,5 +303,23 @@
     "errorTitle": "Не удалось загрузить пакеты",
     "errorDescription": "Каталог монет временно недоступен.",
     "secure": "Безопасная оплата CloudPayments"
+  },
+  "modals": {
+    "premium": {
+      "trigger": "Премиум",
+      "triggerAria": "Открыть окно подписки Премиум",
+      "triggerHint": "Откройте подписку Премиум",
+      "menuItem": "Подключить Премиум",
+      "menuItemDescription": "Фильтры, без рекламы, приоритет в поиске",
+      "ctaProfile": "Премиум",
+      "ctaProfileAria": "Подключить премиум-подписку"
+    },
+    "coins": {
+      "trigger": "Купить монеты",
+      "triggerAria": "Открыть окно покупки монет",
+      "triggerHint": "Пополните баланс монет",
+      "ctaProfile": "Купить монеты",
+      "ctaProfileAria": "Открыть магазин монет"
+    }
   }
 }

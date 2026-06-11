@@ -23,6 +23,7 @@ import { useWallet } from '@/hooks/wallet/use-wallet';
 import { formatNumber } from '@/features/economy/format';
 import { cn } from '@/lib/cn';
 import { MODAL, useAppModals } from '@/hooks/dashboard/use-app-modals';
+import { useModal } from '@/lib/stores/modal-store';
 import { DashboardCard } from './dashboard-card';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -37,6 +38,8 @@ export function ProfileBlock() {
   const profileQuery = useProfile(user?.id);
   const walletQuery = useWallet();
   const modals = useAppModals();
+  const { open: openModal } = useModal();
+  const tEcon = useTranslations('economy');
 
   const profile = profileQuery.data;
   const isPremium = profile?.isPremium ?? user?.isPremium ?? false;
@@ -90,8 +93,9 @@ export function ProfileBlock() {
             )}
           </div>
 
-          <Link
-            href="/profile/me/edit"
+          <button
+            type="button"
+            onClick={() => openModal('profile-edit')}
             className={cn(
               'mb-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
               'border border-border/70 bg-card/50 text-muted-foreground backdrop-blur',
@@ -101,7 +105,7 @@ export function ProfileBlock() {
             aria-label={t('dashboard.profileEditAria')}
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-          </Link>
+          </button>
         </div>
 
         {/* Balance + top-up. */}
@@ -140,6 +144,62 @@ export function ProfileBlock() {
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t('dashboard.topUp')}
+          </button>
+        </div>
+
+        {/* Modal-first CTA pair — primary entry points for the Premium + Coins
+            modals from the profile block. The Premium tile is a gradient
+            primary action (and collapses into a small "active" badge for
+            premium users); the Coins tile is the outlined secondary. */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {!isPremium ? (
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  openModal('premium');
+                } catch {
+                  // Defensive: if the modal host isn't mounted, fall through to
+                  // the legacy /premium route so the affordance never dead-ends.
+                  if (typeof window !== 'undefined') {
+                    window.location.assign(PREMIUM_ROUTE);
+                  }
+                }
+              }}
+              aria-label={tEcon('modals.premium.ctaProfileAria')}
+              className={cn(
+                'group inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-primary-foreground',
+                'bg-gradient-to-r from-[var(--color-neon-violet)] via-[var(--color-neon-magenta)] to-[var(--color-neon-violet)] bg-[length:200%_100%] bg-left',
+                'shadow-[0_8px_24px_-10px_var(--color-neon-violet)] transition-[background-position,transform] duration-500',
+                'hover:bg-right active:scale-[0.97]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              )}
+            >
+              <Crown className="h-4 w-4" aria-hidden="true" />
+              {tEcon('modals.premium.ctaProfile')}
+            </button>
+          ) : (
+            <span
+              className={cn(
+                'inline-flex items-center justify-center gap-1.5 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm font-semibold text-warning',
+              )}
+            >
+              <Crown className="h-4 w-4" aria-hidden="true" />
+              {tEcon('modals.premium.ctaProfile')}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => modals.open(MODAL.buyCoins, { fallback: COINS_ROUTE })}
+            aria-label={tEcon('modals.coins.ctaProfileAria')}
+            className={cn(
+              'group inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card/40 px-3 py-2 text-sm font-semibold text-foreground',
+              'transition-colors hover:border-border-strong hover:bg-card/70',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+            )}
+          >
+            <Coins className="h-4 w-4 text-warning" aria-hidden="true" />
+            {tEcon('modals.coins.ctaProfile')}
           </button>
         </div>
 

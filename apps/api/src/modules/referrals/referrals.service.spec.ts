@@ -277,12 +277,21 @@ describe('ReferralsService', () => {
     wallet = {
       credit: jest.fn().mockResolvedValue(1),
     };
+    // Referrals consults PremiumService for the per-tier lifetime cap. The
+    // existing reward-cap spec doesn't differentiate by tier, so a `none` stub
+    // preserves the legacy 5000-coin cap. Tests that want to exercise the
+    // Pro-raised cap override this stub locally.
+    const premium = {
+      getEffectiveTier: jest.fn().mockResolvedValue('none'),
+      hasTierOrAbove: jest.fn().mockResolvedValue(false),
+    };
     service = new ReferralsService(
       makeLinkModel(linkRows) as unknown as Model<ReferralLinkDocument>,
       makeEdgeModel(edgeRows) as unknown as Model<ReferralEdgeDocument>,
       makeProfileModel(profileRows) as unknown as never,
       makeCoinTxModel(coinTxRows) as unknown as never,
       wallet as unknown as WalletService,
+      premium as unknown as never,
       'https://example.test',
     );
   });

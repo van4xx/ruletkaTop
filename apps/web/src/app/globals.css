@@ -489,3 +489,168 @@
     animation-delay: calc(var(--i, 0) * 340ms);
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Gift cards (SVG-3D illustrations)
+ *
+ * Each catalogue gift maps to one of 10 inline-SVG art variants drawn by
+ * <Gift3DArt /> (components/gifts/gift-3d-art.tsx). Every variant gets ONE
+ * subtle ambient micro-animation so a wall of cards feels alive without
+ * pulling focus. Names are deliberately namespaced `gift-3d-*` so they
+ * don't collide with `auth-tile-*` etc. The global `prefers-reduced-motion`
+ * rule above collapses all of these to a one-shot 0.001ms, landing each
+ * element on its visible end-state.
+ * ------------------------------------------------------------------------ */
+@keyframes gift-3d-sway {
+  /* Used by Rose, Castle banner, Cocktail liquid. Tiny side-to-side wobble. */
+  0%,
+  100% {
+    transform: rotate(-2.2deg);
+  }
+  50% {
+    transform: rotate(2.2deg);
+  }
+}
+
+@keyframes gift-3d-pulse {
+  /* Used by Heart. Slow, breathing scale. */
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+
+@keyframes gift-3d-twinkle {
+  /* Used by Ring sparkle, Star/Crown facets. Opacity-driven shimmer. */
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes gift-3d-flicker {
+  /* Used by Cake candle flame, Rocket exhaust. Quick non-linear flutter. */
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+    opacity: 1;
+  }
+  35% {
+    transform: scaleY(0.84) translateY(1px);
+    opacity: 0.85;
+  }
+  65% {
+    transform: scaleY(1.08) translateY(-1px);
+    opacity: 0.95;
+  }
+}
+
+@keyframes gift-3d-bob {
+  /* Used by Bear, Cocktail olive. Soft vertical bob. */
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.6px);
+  }
+}
+
+@layer components {
+  /* Apply transform-box on every animated <g> so transform-origin behaves
+     predictably inside the SVG coordinate space. */
+  .gift-3d-sway,
+  .gift-3d-pulse,
+  .gift-3d-twinkle,
+  .gift-3d-twinkle-2,
+  .gift-3d-flicker,
+  .gift-3d-bob {
+    transform-box: fill-box;
+  }
+  .gift-3d-sway {
+    animation: gift-3d-sway 6.5s ease-in-out infinite;
+  }
+  .gift-3d-pulse {
+    animation: gift-3d-pulse 3.4s ease-in-out infinite;
+  }
+  .gift-3d-twinkle {
+    animation: gift-3d-twinkle 2.6s ease-in-out infinite;
+  }
+  /* Offset version so paired sparkles don't blink in lockstep. */
+  .gift-3d-twinkle-2 {
+    animation: gift-3d-twinkle 2.6s ease-in-out infinite;
+    animation-delay: 1.1s;
+  }
+  .gift-3d-flicker {
+    animation: gift-3d-flicker 0.9s ease-in-out infinite;
+  }
+  .gift-3d-bob {
+    animation: gift-3d-bob 3.2s ease-in-out infinite;
+  }
+
+  /* ── Profile premium glow (tier-aware) ────────────────────────────────
+     Three variants applied to the avatar's `-z-10` halo div in
+     profile-header.tsx. Same target element (no layout change), only the
+     background gradient differs — so the diff is CSS-only.
+     - Free  → historical generic neon (matches the pre-split look).
+     - Lite  → desaturated silvery cool gradient (subtle but readable).
+     - Pro   → animated gold gradient with a moving shimmer band.
+     `prefers-reduced-motion` neutralises the shimmer keyframe — Pro still
+     reads as gold, just static. */
+  .profile-glow--free {
+    background-image: linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--color-neon-violet) 50%, transparent),
+      color-mix(in oklch, var(--color-neon-cyan) 40%, transparent)
+    );
+  }
+  .profile-glow--lite {
+    /* Cool silver: violet washed toward white + cyan washed toward white.
+       Slightly lower alpha than Pro so the tier hierarchy reads visually. */
+    background-image: linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--color-neon-violet) 25%, white 75%) 0%,
+      color-mix(in oklch, var(--color-neon-cyan) 25%, white 75%) 100%
+    );
+    opacity: 0.5;
+  }
+  .profile-glow--pro {
+    /* Warm gold gradient: amber → magenta → cyan-gold edge, then a moving
+       conic shimmer overlay. Background-blend handled inside the gradient
+       definition so the halo reads as one cohesive gold ring. */
+    background-image: conic-gradient(
+      from 0deg,
+      oklch(0.82 0.14 85),
+      oklch(0.86 0.18 60),
+      oklch(0.78 0.16 30),
+      oklch(0.86 0.18 60),
+      oklch(0.82 0.14 85)
+    );
+    animation: profile-glow-pro-shimmer 6s linear infinite;
+    opacity: 0.75;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .profile-glow--pro {
+      animation: none;
+    }
+  }
+}
+
+@keyframes profile-glow-pro-shimmer {
+  /* Rotate the conic-gradient so the gold band drifts. Pure background-
+     rotation — never moves layout, never affects the avatar inside. */
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

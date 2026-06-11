@@ -85,7 +85,7 @@
   },
   "pricing": {
     "title": "Pricing and Premium",
-    "lede": "Video chat and voice roulette are free. Premium unlocks filters, priority and exclusive gifts starting from 399 rubles per month.",
+    "lede": "Video chat and voice roulette are free. Premium unlocks filters, priority and exclusive gifts starting from 299 rubles per month.",
     "free": {
       "name": "Free",
       "price": "$0",
@@ -100,31 +100,34 @@
       "cta": "Start free"
     },
     "lite": {
-      "name": "Premium Monthly",
-      "price": "$4.99",
+      "name": "Premium Lite",
+      "price": "$3.49",
       "period": "per month",
-      "tagline": "Flexible subscription you can cancel any time",
+      "tagline": "14-day trial. Cancel any time in one click.",
       "popular": "Popular",
       "perks": [
-        "Gender and country filters",
+        "14-day trial period",
+        "Daily bonus ×1.5",
+        "Up to 500 friends",
+        "All basic profile covers",
         "No ads and Premium badge",
-        "Priority in matchmaking",
-        "Exclusive Premium gifts"
+        "Gender and country filters"
       ],
-      "cta": "Get for $4.99"
+      "cta": "Get for $3.49"
     },
     "pro": {
-      "name": "Premium Yearly",
-      "price": "$44.99",
-      "period": "per year",
-      "tagline": "Save 27% — 2 months free vs. monthly billing",
+      "name": "Premium Pro — 3 months",
+      "price": "$39.99",
+      "period": "per 3 months",
+      "tagline": "Best value — save 26% vs. monthly Pro billing.",
       "perks": [
-        "Everything in Premium Monthly",
-        "Extra matchmaking priority",
-        "Extended Premium gifts set",
-        "Save about $15 a year"
+        "Everything in Premium Pro ($8.99 / mo)",
+        "Daily bonus ×2.0",
+        "Unlimited friends and all covers + Pro-only",
+        "Incognito mode and a higher referral cap",
+        "Save about $10 per period"
       ],
-      "cta": "Get for $44.99"
+      "cta": "Get for $39.99"
     },
     "footnote": "Payments go through CloudPayments and T-Bank. You can cancel in one click — no calls to support required."
   },

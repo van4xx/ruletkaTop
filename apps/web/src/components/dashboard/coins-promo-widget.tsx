@@ -31,6 +31,7 @@ import { DAILY_BONUS_LADDER } from '@ruletka/shared-types';
 import { cn } from '@/lib/cn';
 import { MODAL, useAppModals } from '@/hooks/dashboard/use-app-modals';
 import { useDailyBonus, useClaimDailyBonus, dailyBonusKeys } from '@/features/daily-bonus/use-daily-bonus';
+import { usePremiumTier } from '@/features/premium/use-premium-tier';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 /** Fallback route if the modal host isn't mounted (the buy-coins modal is primary). */
@@ -77,12 +78,17 @@ function hoursUntil(nextResetAtIso: string | undefined, nowMs: number): number {
 
 export function CoinsPromoWidget() {
   const t = useTranslations('misc');
+  const tEconomy = useTranslations('economy');
   const modals = useAppModals();
   const qc = useQueryClient();
   const prefersReducedMotion = useReducedMotion() ?? false;
 
   const stateQuery = useDailyBonus();
   const claim = useClaimDailyBonus();
+  // Tier multiplier badge in the subtitle — server already returns the
+  // post-multiplier `nextRewardCoins`, so the badge here is purely a label
+  // (no client-side math). `'none'` reads as a plain widget (no badge).
+  const tier = usePremiumTier().tier;
 
   // Tick once a minute so the "вернись через Nч" countdown stays fresh after
   // the user has claimed today. Pause the ticker when there's no countdown
@@ -213,6 +219,25 @@ export function CoinsPromoWidget() {
               </h2>
               <p className="text-xs text-muted-foreground">
                 {t('dashboard.dailyBonusSubtitle')}
+                {/* Tier multiplier label — pure cosmetic; the server already
+                    returned the post-multiplier amount. Title attribute powers
+                    the native tooltip (e.g. "Premium Pro x2!"). */}
+                {tier === 'pro' && (
+                  <span
+                    title={tEconomy('dailyBonusTier.tooltipPro')}
+                    className="ml-1.5 inline-flex items-center rounded-full bg-warning/15 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-warning"
+                  >
+                    Pro x2
+                  </span>
+                )}
+                {tier === 'lite' && (
+                  <span
+                    title={tEconomy('dailyBonusTier.tooltipLite')}
+                    className="ml-1.5 inline-flex items-center rounded-full bg-accent/15 px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-accent"
+                  >
+                    Lite x1.5
+                  </span>
+                )}
               </p>
             </div>
           </div>

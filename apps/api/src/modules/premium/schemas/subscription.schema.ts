@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-import type { SubscriptionStatus } from '@ruletka/shared-types';
+import type { PremiumTier, SubscriptionStatus } from '@ruletka/shared-types';
 
 /** Subscription lifecycle states (kept in sync with `subscriptionStatusSchema`). */
 const SUBSCRIPTION_STATUSES: readonly SubscriptionStatus[] = [
@@ -10,6 +10,9 @@ const SUBSCRIPTION_STATUSES: readonly SubscriptionStatus[] = [
   'past_due',
   'none',
 ];
+
+/** Two-tier split (kept in sync with `premiumTierSchema` in shared-types). */
+const PREMIUM_TIERS: readonly PremiumTier[] = ['lite', 'pro'];
 
 /**
  * A user's premium subscription record, keyed 1:1 by `userId`.
@@ -59,6 +62,16 @@ export class Subscription {
   /** Whether the subscription will lapse (not renew) at period end. */
   @Prop({ required: true, default: false })
   cancelAtPeriodEnd!: boolean;
+
+  /**
+   * Two-tier split — `'lite'` (historical baseline) or `'pro'` (higher tier).
+   * Defaults to `'lite'` so pre-split rows are treated as legacy premium
+   * without a backfill. Painted by {@link PremiumService.activate} from the
+   * plan code (`tierForPlanCode`); read by every tier-gated feature via
+   * {@link PremiumService.getEffectiveTier}.
+   */
+  @Prop({ required: true, enum: PREMIUM_TIERS, default: 'lite', type: String })
+  tier!: PremiumTier;
 
   // `createdAt` / `updatedAt` added by `timestamps: true`.
 }

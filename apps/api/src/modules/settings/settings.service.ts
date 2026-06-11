@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
@@ -9,6 +9,7 @@ import type {
   Visibility,
 } from '@ruletka/shared-types';
 
+import { PremiumService } from '../premium/premium.service';
 import { Settings, SettingsDocument } from './schemas/settings.schema';
 
 /**
@@ -21,6 +22,9 @@ const DEFAULT_PRIVACY: PrivacySettings = {
   whoCanCall: 'friends',
   whoCanViewProfile: 'everyone',
   showOnlineStatus: true,
+  // Pro-only; defaults to off. A non-Pro user toggling this on is rejected
+  // with 402 by {@link update}.
+  incognito: false,
 };
 
 /**
@@ -37,6 +41,7 @@ const DEFAULT_PRIVACY: PrivacySettings = {
 export class SettingsService {
   constructor(
     @InjectModel(Settings.name) private readonly settingsModel: Model<SettingsDocument>,
+    private readonly premiumService: PremiumService,
   ) {}
 
   /**
@@ -62,6 +67,7 @@ export class SettingsService {
       whoCanCall: doc.privacy.whoCanCall ?? DEFAULT_PRIVACY.whoCanCall,
       whoCanViewProfile: doc.privacy.whoCanViewProfile ?? DEFAULT_PRIVACY.whoCanViewProfile,
       showOnlineStatus: doc.privacy.showOnlineStatus ?? DEFAULT_PRIVACY.showOnlineStatus,
+      incognito: doc.privacy.incognito ?? DEFAULT_PRIVACY.incognito,
     };
   }
 
@@ -96,6 +102,24 @@ export class SettingsService {
    * Nested blocks are merged key-by-key so omitted keys retain their value.
    */
   async update(userId: string, patch: UpdateSettingsDto): Promise<SettingsContract> {
+    // Tier gate: incognito mode is Pro-only. A caller toggling it ON without
+    // the Pro tier gets a 402 Payment Required with a tier-upgrade hint —
+    // distinguishing "you can't do this for free" from a generic 403. Toggling
+    // it OFF (or no incognito change) is always allowed.
+    if (patch.privacy?.incognito === true) {
+      const isPro = await this.premiumService.hasTierOrAbove(userId, 'pro');
+      if (!isPro) {
+        throw new HttpException(
+          {
+            message: 'Incognito mode requires Premium Pro',
+            requiredTier: 'pro',
+            feature: 'incognito',
+          },
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+    }
+
     const set: Record<string, unknown> = {};
 
     if (patch.privacy) {
@@ -144,6 +168,7 @@ export class SettingsService {
         whoCanCall: doc.privacy.whoCanCall,
         whoCanViewProfile: doc.privacy.whoCanViewProfile,
         showOnlineStatus: doc.privacy.showOnlineStatus,
+        incognito: doc.privacy.incognito ?? false,
       },
       notifications: {
         pushEnabled: doc.notifications.pushEnabled,

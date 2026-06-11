@@ -7,8 +7,9 @@
  */
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
-import { Check, Crown, Sparkles } from 'lucide-react';
-import type { PremiumPlan } from '@ruletka/shared-types';
+import { Check, Crown, Minus, Sparkles, X } from 'lucide-react';
+import type { PremiumPlan, PremiumTier } from '@ruletka/shared-types';
+import { PREMIUM_TIER_FEATURE_MATRIX } from '@ruletka/shared-types';
 import { Badge, Button } from '@ruletka/ui';
 import { cn } from '@/lib/cn';
 import { formatRub } from '@/features/economy/format';
@@ -26,6 +27,42 @@ export interface PlanCardProps {
   index?: number;
 }
 
+/**
+ * Mirror of the server's `tierForPlanCode` — any code matching `pro` is the
+ * Pro tier, everything else Lite. Kept here so the matrix renders the correct
+ * `lite` / `pro` column for a given catalogue row without an extra API field.
+ */
+function tierForPlanCode(code: string): PremiumTier {
+  return /pro/i.test(code) ? 'pro' : 'lite';
+}
+
+/**
+ * Render one matrix-row cell: a check (true / non-false), a cross (false), or
+ * the literal value (a number/string surfacing the diff verbatim, like "1.5x"
+ * or "500"). The non-trivial value rendering is what makes the Lite-vs-Pro
+ * delta scannable at a glance.
+ */
+function FeatureCell({ value }: { value: boolean | number | string }) {
+  if (value === false) {
+    return (
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-muted/40 text-muted-foreground">
+        <X className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+  if (value === true) {
+    return (
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-success/15 text-success">
+        <Check className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+  // Numeric / string — show verbatim, tabular for alignment.
+  return (
+    <span className="font-mono text-xs font-semibold tabular-nums text-foreground/90">{value}</span>
+  );
+}
+
 export function PlanCard({
   plan,
   featured = false,
@@ -36,6 +73,7 @@ export function PlanCard({
   index = 0,
 }: PlanCardProps) {
   const t = useTranslations('economy');
+  const tier = tierForPlanCode(plan.code);
 
   const cadence = (intervalDays: number): string => {
     if (intervalDays % 30 === 0) {
@@ -116,6 +154,32 @@ export function PlanCard({
             </li>
           ))}
         </ul>
+
+        {/* ── Lite vs Pro feature matrix ──────────────────────────────────
+            The six concrete differences, rendered as a compact 3-column
+            check/cross/value table. The contract owns the data
+            ({@link PREMIUM_TIER_FEATURE_MATRIX}); this card just picks the
+            relevant column for THIS plan's tier so the user sees the same
+            row across both cards (Lite vs Pro) at a glance. */}
+        <div className="mt-5 rounded-2xl border border-border/60 bg-card/40 p-3">
+          <div className="mb-2 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <Minus className="h-3 w-3 opacity-50" aria-hidden="true" />
+            {t('planMatrix.title')}
+          </div>
+          <dl className="divide-y divide-border/40">
+            {PREMIUM_TIER_FEATURE_MATRIX.map((row) => (
+              <div
+                key={row.key}
+                className="flex items-center justify-between gap-3 py-1.5 text-xs"
+              >
+                <dt className="truncate text-foreground/85">{t(`planMatrix.${row.key}`)}</dt>
+                <dd className="shrink-0">
+                  <FeatureCell value={tier === 'pro' ? row.pro : row.lite} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
 
         <Button
           className="mt-7"

@@ -7,17 +7,22 @@
  * (gifts value · own views · friends · Top status), the premium surfaces
  * (upsell card when not premium + the "кто смотрел профиль" panel), and the
  * tabbed sections. An action bar offers copy-id, settings, an avatar change and
- * an inline edit toggle. Editing swaps the tabs for the {@link ProfileEditForm}.
+ * an "Edit" button that opens the unified {@link import('@/components/modals/profile-edit-modal').ProfileEditModal}.
  */
 import { useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Camera, Check, Copy, Image as ImageIcon, Pencil, Settings, X } from 'lucide-react';
+import {
+  Camera,
+  Check,
+  Copy,
+  Image as ImageIcon,
+  Pencil,
+  Settings,
+  Sparkles,
+} from 'lucide-react';
 import {
   Button,
-  Card,
-  CardHeader,
-  CardTitle,
   IconButton,
   Tooltip,
   TooltipContent,
@@ -29,6 +34,7 @@ import { useModal } from '@/lib/stores/modal-store';
 import { useFriends } from '@/features/friends/use-friends';
 import { ErrorState, SignInRequired } from '@/components/social/state-views';
 import { ProfileHeader } from '@/components/profile/profile-header';
+import { usePremiumTier } from '@/features/premium/use-premium-tier';
 import { ProfileStats } from '@/components/profile/profile-stats';
 import { ProfileTabs } from '@/components/profile/profile-tabs';
 import { ProfileSkeleton } from '@/components/profile/profile-skeleton';
@@ -39,19 +45,25 @@ import {
   useSyncOwnProfileCache,
   useTopPlacement,
 } from './use-profile';
-import { ProfileEditForm } from './profile-edit-form';
+import { useMyFrames } from './use-frames';
 
 export function MyProfileClient() {
   const t = useTranslations('profile');
   const { user, isAuthenticated, isReady } = useAuth();
   const { open } = useModal();
-  const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const profileQuery = useProfile(user?.id);
   const giftsState = useProfileGifts(user?.id);
   const topPlacement = useTopPlacement(user?.id);
   const friendsQuery = useFriends();
+  // The caller's equipped avatar frame (or null when none) — passed to the
+  // hero so the frame renders around the avatar.
+  const framesQuery = useMyFrames();
+  // Owner's premium tier — drives the silver-vs-gold glow on the hero (the
+  // server doesn't expose another user's tier, so this is owner-only on the
+  // public-profile-client side).
+  const { tier: premiumTier } = usePremiumTier();
   // Mirror modal-driven avatar/nickname changes into the profile cache.
   useSyncOwnProfileCache(user?.id);
 
@@ -110,6 +122,20 @@ export function MyProfileClient() {
           <IconButton
             variant="glass"
             size="sm"
+            aria-label={t('myProfile.changeFrameAria')}
+            onClick={() => open('frames-picker')}
+          >
+            <Sparkles aria-hidden="true" />
+          </IconButton>
+        </TooltipTrigger>
+        <TooltipContent>{t('myProfile.changeFrameAria')}</TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <IconButton
+            variant="glass"
+            size="sm"
             aria-label={t('myProfile.copyIdAria')}
             onClick={copyId}
           >
@@ -130,12 +156,12 @@ export function MyProfileClient() {
       </IconButton>
 
       <Button
-        variant={editing ? 'secondary' : 'primary'}
+        variant="primary"
         size="sm"
-        leadingIcon={editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-        onClick={() => setEditing((v) => !v)}
+        leadingIcon={<Pencil className="h-4 w-4" />}
+        onClick={() => open('profile-edit')}
       >
-        {editing ? t('myProfile.close') : t('myProfile.edit')}
+        {t('myProfile.edit')}
       </Button>
     </>
   );
@@ -148,6 +174,8 @@ export function MyProfileClient() {
         profile={profile}
         status="online"
         coverId={profile.activeCover}
+        frameId={framesQuery.data?.equipped ?? null}
+        premiumTier={premiumTier}
         actions={actions}
       />
 
@@ -164,30 +192,19 @@ export function MyProfileClient() {
         topLoading={topPlacement.isLoading}
       />
 
-      {editing ? (
-        <Card variant="glass" padding="md">
-          <CardHeader className="mb-4">
-            <CardTitle>{t('myProfile.editTitle')}</CardTitle>
-          </CardHeader>
-          <ProfileEditForm profile={profile} onDone={() => setEditing(false)} />
-        </Card>
-      ) : (
-        <>
-          {/* Premium surfaces — upsell for free users, then the views panel. */}
-          {!profile.isPremium && <PremiumUpsellCard />}
-          <ProfileViewsPanel isPremium={profile.isPremium} views={profile.profileViews} />
+      {/* Premium surfaces — upsell for free users, then the views panel. */}
+      {!profile.isPremium && <PremiumUpsellCard />}
+      <ProfileViewsPanel isPremium={profile.isPremium} views={profile.profileViews} />
 
-          <ProfileTabs
-            profile={profile}
-            gifts={giftsState.gifts}
-            giftsLoading={giftsState.isLoading}
-            giftsError={giftsState.isError}
-            giftsValueCoins={giftsState.totalValueCoins}
-            onRetryGifts={giftsState.refetch}
-            isOwnProfile
-          />
-        </>
-      )}
+      <ProfileTabs
+        profile={profile}
+        gifts={giftsState.gifts}
+        giftsLoading={giftsState.isLoading}
+        giftsError={giftsState.isError}
+        giftsValueCoins={giftsState.totalValueCoins}
+        onRetryGifts={giftsState.refetch}
+        isOwnProfile
+      />
     </div>
   );
 }

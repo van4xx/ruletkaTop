@@ -53,11 +53,32 @@ export interface ModalPropsMap {
    * own profile (no target id), so it takes no props.
    */
   'cover-picker': Record<string, never>;
+  /**
+   * Pick / buy / equip an avatar-frame cosmetic. Like cover-picker, always
+   * acts on the caller's own profile, so it takes no props.
+   */
+  'frames-picker': Record<string, never>;
+  /**
+   * Edit the caller's own profile (nickname, status/bio, gender, country,
+   * languages, interests). The avatar/cover keep their own dedicated modals.
+   * No props — the modal reads the current profile from the data layer.
+   */
+  'profile-edit': Record<string, never>;
   /** Coin storefront → CloudPayments checkout. */
   'buy-coins': {
     /** Pre-select a package by its code. */
     presetPackageCode?: string;
     /** Coins the user is short by (shown as context when launched from a gate). */
+    shortfall?: number;
+  };
+  /**
+   * Alias of {@link 'buy-coins'} surfaced by the new "modal-first" entry points
+   * (the dashboard «Купить монеты» CTA and the header user-menu / coin-pill).
+   * Renders the same body so behaviour is identical — legacy call sites keep
+   * using `'buy-coins'`.
+   */
+  coins: {
+    presetPackageCode?: string;
     shortfall?: number;
   };
   /** Buy a Top-feed placement (lane + duration + coins). */

@@ -178,6 +178,7 @@
     "copyFailed": "Couldn't copy",
     "changeAvatarAria": "Change avatar",
     "changeCoverAria": "Change cover",
+    "changeFrameAria": "Change avatar frame",
     "copyIdAria": "Copy my ID",
     "copyIdTooltip": "Copy profile ID",
     "settingsAria": "Settings",
@@ -189,6 +190,12 @@
     "signInRequired": "Sign in to edit your profile.",
     "back": "Back to profile",
     "editTitle": "Edit profile"
+  },
+  "editModal": {
+    "title": "Edit profile",
+    "description": "Update your nickname, bio and interests. Avatar and cover are changed separately.",
+    "changeCover": "Change cover",
+    "discardConfirm": "You have unsaved changes. Close anyway and lose them?"
   },
   "publicProfile": {
     "notFoundTitle": "Profile not found",
@@ -211,6 +218,45 @@
       "galaxy": "Galaxy",
       "prismatic": "Prismatic"
     }
+  },
+  "frames": {
+    "names": {
+      "neon-ring": "Neon Ring",
+      "magenta-pulse": "Magenta Pulse",
+      "gold-filigree": "Gold Filigree",
+      "diamond-shards": "Diamond Shards",
+      "constellation": "Constellation",
+      "roulette-wheel": "Roulette Wheel",
+      "holographic": "Holographic",
+      "aurora-sweep": "Aurora Sweep",
+      "vinyl-record": "Vinyl Record",
+      "flame": "Flame"
+    },
+    "titleSelect": "Avatar frame",
+    "titleConfirm": "Confirm purchase",
+    "descSelect": "Decorate your avatar with a glowing frame. Two are free; the rest are coins, owned forever.",
+    "descConfirm": "The frame is charged to your balance and lands on your avatar instantly.",
+    "loadError": "Couldn't load frames.",
+    "retry": "Retry",
+    "equipped": "Equipped",
+    "locked": "Locked",
+    "free": "Free",
+    "owned": "Owned",
+    "equipAria": "Equip the {name} frame",
+    "buyAria": "Buy the {name} frame for {price} coins",
+    "flagshipHint": "A live neon ring around your avatar.",
+    "permanentNote": "A one-time purchase — the frame is yours forever.",
+    "backToCatalog": "Back to frames",
+    "close": "Close",
+    "removeFrame": "Remove frame",
+    "buyFor": "Buy for {price}",
+    "equippedTitle": "Frame equipped",
+    "removedTitle": "Frame removed",
+    "purchasedTitle": "Frame unlocked!",
+    "purchasedDescription": "{name} is now around your avatar.",
+    "errInsufficientTitle": "Not enough coins",
+    "errInsufficientDescription": "Top up your balance to buy this frame.",
+    "errGeneric": "Couldn't update the frame"
   },
   "achievements": {
     "meta": {

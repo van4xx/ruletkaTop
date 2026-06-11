@@ -5,6 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { CloudPaymentsClient } from '../payments/cloudpayments.client';
 import { PremiumController } from './premium.controller';
 import { PremiumService } from './premium.service';
+import { PremiumTierGuard } from './premium-tier.guard';
 import { PremiumPlan, PremiumPlanSchema } from './schemas/premium-plan.schema';
 import { Subscription, SubscriptionSchema } from './schemas/subscription.schema';
 import {
@@ -38,11 +39,16 @@ import {
   providers: [
     PremiumService,
     SubscriptionSweepProcessor,
+    // The tier guard reads `@RequiresPremiumTier()` metadata and consults
+    // {@link PremiumService.hasTierOrAbove}; exported so any module gating
+    // a route on tier can `imports: [PremiumModule]` and `@UseGuards(...)`
+    // it without a duplicated provider.
+    PremiumTierGuard,
     // The outbound CloudPayments client is `ConfigService`-only (no DB/state),
     // so we provide it directly here for the user-initiated cancel path rather
     // than importing PaymentsModule (which imports PremiumModule — would cycle).
     CloudPaymentsClient,
   ],
-  exports: [PremiumService, MongooseModule],
+  exports: [PremiumService, PremiumTierGuard, MongooseModule],
 })
 export class PremiumModule {}

@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { PremiumModule } from '../premium/premium.module';
 import { ProfilesModule } from '../profiles/profiles.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { ReferralRewardProcessor, REFERRAL_REWARD_QUEUE } from './referral-reward.processor';
@@ -51,6 +52,9 @@ import { ReferralLink, ReferralLinkSchema } from './schemas/referral-link.schema
     // Profiles re-exports `MongooseModule` (with `Profile` registered). Read-only
     // use for inviter nickname (lookup) + invitee profile hydration (downline).
     ProfilesModule,
+    // The tier-aware referral lifetime cap (`lifetimeReferralCapFor`) is
+    // applied inside the credit loop — Pro inviters get a higher ceiling.
+    PremiumModule,
     // The BullMQ root connection lives in AppModule; we just register the named
     // queue this module's processor drains.
     BullModule.registerQueue({ name: REFERRAL_REWARD_QUEUE }),
