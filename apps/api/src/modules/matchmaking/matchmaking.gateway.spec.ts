@@ -195,6 +195,19 @@ function makeGateway(opts: {
     ...opts.presence,
   };
 
+  // Profile model + ConfigService injected for the (opt-in) KYC age gate. Default
+  // config returns `KYC_REQUIRED=false` so the gate is OFF and existing tests
+  // exercise the un-gated mm:join paths exactly as before.
+  const profileModel = {
+    findOne: jest.fn().mockReturnValue({
+      lean: () => ({ exec: jest.fn().mockResolvedValue(null) }),
+      exec: jest.fn().mockResolvedValue(null),
+    }),
+  };
+  const config = {
+    get: jest.fn((key: string, def?: string) => (key === 'KYC_REQUIRED' ? 'false' : def ?? '')),
+  };
+
   const gateway = new MatchmakingGateway(
     matchmaking as never,
     calls as never,
@@ -204,7 +217,9 @@ function makeGateway(opts: {
     {} as never, // wsAuth
     rateLimiter as never, // rateLimiter
     {} as never, // metrics
+    profileModel as never, // profileModel (KYC gate read)
     redis as never,
+    config as never, // ConfigService (reads KYC_REQUIRED)
   );
   // Silence the gateway's internal logger so failing-branch debug lines don't
   // clutter test output.

@@ -12,6 +12,7 @@ import type { PrivacySettings, Settings } from '@ruletka/shared-types';
 import { Button, Switch, toast } from '@ruletka/ui';
 import { useUpdateSettings } from '@/features/settings/use-settings';
 import { VISIBILITY_OPTIONS } from '@/features/settings/options';
+import { KycTile } from '../kyc-tile';
 import { SettingRow, SettingsSection, Select } from '../primitives';
 
 function samePrivacy(a: PrivacySettings, b: PrivacySettings): boolean {
@@ -54,6 +55,7 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
   };
 
   return (
+    <div className="space-y-6">
     <SettingsSection
       title={t('privacy.title')}
       description={t('privacy.description')}
@@ -136,5 +138,8 @@ export function PrivacyTab({ settings }: { settings: Settings }) {
         />
       </div>
     </SettingsSection>
+    {/* KYC age-verification tile — additive safety-section card. */}
+    <KycTile />
+    </div>
   );
 }

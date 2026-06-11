@@ -19,6 +19,7 @@ import { CoversModule } from './modules/covers/covers.module';
 import { DailyBonusModule } from './modules/daily-bonus/daily-bonus.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { GiftsModule } from './modules/gifts/gifts.module';
+import { KycModule } from './modules/kyc/kyc.module';
 import { LeaderboardModule } from './modules/leaderboard/leaderboard.module';
 import { MailModule } from './modules/mail/mail.module';
 import { MatchmakingModule } from './modules/matchmaking/matchmaking.module';
@@ -34,6 +35,8 @@ import { TopModule } from './modules/top/top.module';
 import { TurnModule } from './modules/turn/turn.module';
 import { UsersModule } from './modules/users/users.module';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { AlertingModule } from './observability/alerting/alerting.module';
+import { reportAlert } from './observability/alerting/alerting.bridge';
 import { MetricsModule } from './observability/metrics.module';
 import { buildRedisOptions, RedisModule } from './redis/redis.module';
 
@@ -98,6 +101,67 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
               'res.headers["set-cookie"]',
             ],
             autoLogging: true,
+            // ── Telegram-alerting tap on error/fatal logs ──────────────────
+            // pino's `hooks.logMethod` intercepts EVERY log call before it is
+            // serialised. We inspect the level + payload and, for `error` /
+            // `fatal` events, fan-out to the AlertingService via the module-
+            // level bridge (see observability/alerting/alerting.bridge.ts).
+            //
+            // The original `method.apply(this, args)` is ALWAYS invoked so the
+            // structured log still flows to stdout (and Sentry, and whoever
+            // else listens) — alerting is purely additive. Errors inside the
+            // bridge are swallowed: a Telegram outage MUST NOT block a log.
+            hooks: {
+              // pino calls `logMethod` with `this` bound to the child logger,
+              // `args` as the original log arguments, and `method` as the
+              // underlying write fn (e.g. `pino.write` for `error`). Levels:
+              // 50 = error, 60 = fatal — we tap both.
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              logMethod(this: any, args: unknown[], method: (...a: unknown[]) => void, level: number) {
+                // Filter EARLY so the fast path (info/debug/warn) pays zero cost
+                // beyond a number comparison + the method passthrough.
+                if (level >= 50) {
+                  try {
+                    const isFatal = level >= 60;
+                    // Pino's first arg may be a string OR an object (mergingObject).
+                    // Handle both shapes; never throw out of the hook.
+                    const a0 = args[0];
+                    const a1 = args[1];
+                    let title = 'Unhandled error';
+                    let messageBody = '';
+                    let requestId: string | undefined;
+                    if (typeof a0 === 'string') {
+                      title = a0;
+                      if (typeof a1 === 'string') messageBody = a1;
+                    } else if (a0 && typeof a0 === 'object') {
+                      const obj = a0 as Record<string, unknown>;
+                      // pino-http injects `err` and the request-scoped logger
+                      // carries `req.id` (when an upstream sets X-Request-Id).
+                      const err = obj.err as { message?: string; stack?: string } | undefined;
+                      if (err?.message) {
+                        title = err.message;
+                        messageBody = err.stack ?? err.message;
+                      }
+                      if (typeof a1 === 'string') {
+                        if (title === 'Unhandled error') title = a1;
+                      }
+                      const req = obj.req as { id?: string } | undefined;
+                      if (req?.id) requestId = String(req.id);
+                      if (typeof obj.reqId === 'string') requestId = obj.reqId;
+                    }
+                    reportAlert({
+                      category: isFatal ? 'api-fatal' : 'api-error',
+                      title,
+                      message: messageBody,
+                      requestId,
+                    });
+                  } catch {
+                    // Hook MUST be reentrancy-safe. Drop on any error.
+                  }
+                }
+                return method.apply(this, args);
+              },
+            },
           },
         };
       },
@@ -169,6 +233,15 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
     // Independent of Sentry — metrics emit whether or not error tracking is on.
     MetricsModule,
 
+    // ── Telegram alerting (FATAL log + 5xx burst → operator chat) ──────────
+    // `@Global`. Reads TELEGRAM_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID at boot; a
+    // missing token logs ONE warning and the service becomes a no-op, so the
+    // app still boots clean in dev / CI. The pino hook above is the producer;
+    // AllExceptionsFilter is a second producer on 5xx; both reach the service
+    // via the module-level bridge in observability/alerting/alerting.bridge.ts
+    // so neither has to depend on Nest DI lifecycles.
+    AlertingModule,
+
     // ── Feature modules ──────────────────────────────────────────────────
     // Every `@Module` class authored under `src/modules/<name>/` is registered
     // here. The cross-module import graph is a DAG (no cycles → no
@@ -221,6 +294,11 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
     // coin purchase. Read-only against profiles/wallet ledger; mutations go
     // through the already-exported WalletService.credit.
     ReferralsModule,
+
+    // KYC / age-verification (opt-in gate at the matchmaking level).
+    // Picks SumSub / Veriff / noop by `KYC_PROVIDER` at boot; the gate
+    // (read by MatchmakingGateway) is OFF until `KYC_REQUIRED=true`.
+    KycModule,
 
     // Matchmaking + WebRTC
     MatchmakingModule,

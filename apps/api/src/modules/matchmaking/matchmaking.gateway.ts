@@ -1,4 +1,7 @@
 import { Inject, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import {
   type OnGatewayConnection,
   type OnGatewayDisconnect,
@@ -45,6 +48,7 @@ import type { AppIoServer } from '../../realtime/redis-io.adapter';
 // avoid colliding with the per-user privacy `SettingsService` below.
 import { SettingsService as LiveFlagsService } from '../admin/settings.service';
 import { PresenceService } from '../presence/presence.service';
+import { Profile, ProfileDocument } from '../profiles/schemas/profile.schema';
 import { SettingsService } from '../settings/settings.service';
 import {
   CALL_INVITE_LIMIT,
@@ -217,6 +221,17 @@ export class MatchmakingGateway
   /** Periodic presence-heartbeat timer (re-arms TTLs for local sockets). */
   private presenceHeartbeat?: ReturnType<typeof setInterval>;
 
+  /**
+   * KYC age-gate flag — read ONCE at construction so toggling it requires a
+   * restart (intentional: a launch-readiness switch, not a per-request knob).
+   *
+   * When `false` (default) the gate is OFF and `mm:join` is unaffected — this
+   * ships the port without changing any user's flow until the operator opts
+   * in. When `true`, a user without `Profile.ageVerifiedAt` is refused with a
+   * `forbidden` ws:error carrying the KYC settings deep-link as the hint.
+   */
+  private readonly kycRequired: boolean;
+
   constructor(
     private readonly matchmaking: MatchmakingService,
     private readonly calls: CallService,
@@ -226,8 +241,12 @@ export class MatchmakingGateway
     private readonly wsAuth: WsAuthService,
     private readonly rateLimiter: WsRateLimiterService,
     private readonly metrics: MetricsService,
+    @InjectModel(Profile.name) private readonly profileModel: Model<ProfileDocument>,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
-  ) {}
+    config: ConfigService,
+  ) {
+    this.kycRequired = parseBool(config.get<string>('KYC_REQUIRED', 'false'));
+  }
 
   /**
    * Subscribe to the cluster-wide ban channel: when moderation bans a user,
@@ -422,6 +441,22 @@ export class MatchmakingGateway
         code: 'forbidden',
         event: 'mm:join',
         message: 'Matchmaking is temporarily unavailable',
+      });
+      return;
+    }
+    // ── KYC age-gate (OPT-IN; default OFF) ────────────────────────────────
+    // Gated behind `KYC_REQUIRED` so it ships as a launch-readiness lever — a
+    // platform without verified providers (or in dev) sees no behaviour change.
+    // When ON, users without `Profile.ageVerifiedAt` are refused with the
+    // closest stable WsError code (`forbidden`) plus an enriched `message`
+    // carrying the machine token `KYC_REQUIRED` and the settings deep-link
+    // (`hint` is encoded into the message because the WS error envelope
+    // intentionally has only `{code,event,message}` — no breaking change).
+    if (this.kycRequired && !(await this.hasAgeVerified(userId))) {
+      emitWsError(client, {
+        code: 'forbidden',
+        event: 'mm:join',
+        message: 'KYC_REQUIRED:/settings#account',
       });
       return;
     }
@@ -842,6 +877,32 @@ export class MatchmakingGateway
       return false;
     }
     return true;
+  }
+
+  /**
+   * Has this user passed the KYC age check?
+   *
+   * Reads `Profile.ageVerifiedAt` (any non-null Date = verified). Used only
+   * when `KYC_REQUIRED=true`; a Mongo blip fails OPEN (treated as "verified")
+   * because the gate is a soft launch-readiness lever — refusing every join
+   * on a transient DB error would be a worse outage than skipping the gate
+   * for a few seconds, and the rest of the platform still enforces the 18+
+   * floor at registration via `birthDate`.
+   */
+  private async hasAgeVerified(userId: string): Promise<boolean> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return false;
+    }
+    try {
+      const row = await this.profileModel
+        .findOne({ userId: new Types.ObjectId(userId) }, { ageVerifiedAt: 1 })
+        .lean()
+        .exec();
+      return row?.ageVerifiedAt instanceof Date && !Number.isNaN(row.ageVerifiedAt.getTime());
+    } catch (err) {
+      this.logger.debug(`hasAgeVerified read failed for ${userId}: ${asMessage(err)} — failing open`);
+      return true;
+    }
   }
 
   /**
@@ -1445,6 +1506,17 @@ function extractClientIp(client: MmSocket): string | undefined {
 /** Emit a typed `ws:error` to a single socket. */
 function emitWsError(client: MmSocket, payload: WsErrorPayload): void {
   client.emit('ws:error', payload);
+}
+
+/**
+ * Parse a `KYC_REQUIRED`-shaped env value. Accepts the standard truthy strings
+ * (`true|1|yes|on`) case-insensitively; everything else (incl. empty / unset)
+ * is `false`. Keeps the gate OFF by default — the most conservative shipping
+ * stance for a launch-readiness lever.
+ */
+function parseBool(raw: string | undefined): boolean {
+  const v = (raw ?? '').trim().toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes' || v === 'on';
 }
 
 /**

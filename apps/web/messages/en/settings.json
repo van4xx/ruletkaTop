@@ -76,6 +76,19 @@
     "showOnlineLabel": "Show online status",
     "showOnlineDescription": "Others will see when you're online."
   },
+  "kyc": {
+    "title": "Age verification",
+    "description": "Confirm you're 18+ through our KYC provider. Your document stays with the provider.",
+    "statusLabel": "Status",
+    "statusNone": "Not verified",
+    "statusPending": "Verifying — usually a few minutes",
+    "statusApproved": "Age verified",
+    "statusRejected": "Rejected — please try again",
+    "statusExpired": "Session expired — please start over",
+    "ctaStart": "Start verification",
+    "ctaVerified": "Done",
+    "startError": "Could not start verification"
+  },
   "notifications": {
     "title": "Notifications",
     "description": "Choose delivery channels and the events you want to hear about.",

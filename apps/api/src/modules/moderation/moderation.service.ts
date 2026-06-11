@@ -10,6 +10,8 @@ import type {
   ModerationViolationDto,
 } from '@ruletka/shared-types';
 
+import type { ClientSignalDto } from './moderation.contracts';
+
 import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { AdminService } from './admin.service';
 import { FRAME_SCORER, type FrameScorer } from './frame-scorer';
@@ -116,6 +118,52 @@ export class ModerationService {
       await this.publishAction(userId, payload);
     }
     return payload;
+  }
+
+  /**
+   * Ingest a mobile `client-signal` (the lighter-weight on-device NSFW push:
+   * a per-class aggregate, no evidence frame). We MAP the aggregate score
+   * onto the standard `(label, score)` shape and reuse {@link handleViolation}
+   * so the escalation policy + persistence + delivery path are EXACTLY the
+   * same as a `/moderation/frame` report. The signal is dropped (returns
+   * `none`) below the conservative client-signal threshold so a noisy stream
+   * never tips a user into escalation without a real violation.
+   *
+   * Aggregate = `porn + hentai + sexy`. The dominant per-class score (when
+   * provided) chooses between `sexual` (porn/hentai) and `nudity` (sexy),
+   * mirroring the on-device class→label mapping in
+   * `apps/mobile/lib/features/roulette/data/nsfw_classifier.dart` and the
+   * web's `apps/web/src/features/moderation/classifier.ts`.
+   */
+  async handleClientSignal(
+    userId: string,
+    dto: ClientSignalDto,
+  ): Promise<ModerationActionPayload> {
+    // Conservative floor — anything below this is noise. Tunable here so
+    // operators can tighten without touching the controller.
+    const CLIENT_SIGNAL_FLOOR = 0.7;
+    if (dto.aggregate < CLIENT_SIGNAL_FLOOR) {
+      return { action: 'none', label: 'safe' };
+    }
+
+    const scores = dto.scores ?? {};
+    const porn = scores.porn ?? 0;
+    const hentai = scores.hentai ?? 0;
+    const sexy = scores.sexy ?? 0;
+    const strongestSexual = porn > hentai ? porn : hentai;
+
+    const label: ModerationLabel =
+      strongestSexual >= sexy ? 'sexual' : 'nudity';
+
+    // Reuse the violation pipeline. There's no evidence frame on the
+    // client-signal channel — the persisted row records the signal score and
+    // the auto-action it triggered, with `evidenceUrl` = null.
+    return this.handleViolation(userId, {
+      matchId: dto.matchId,
+      label,
+      score: dto.aggregate,
+      // evidence omitted — client-signal is the no-frame path.
+    });
   }
 
   // ── Escalation policy ────────────────────────────────────────────────────────

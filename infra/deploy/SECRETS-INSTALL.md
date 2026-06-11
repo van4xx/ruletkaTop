@@ -29,6 +29,7 @@
 | **Firebase** (mobile push) | **NO — deferred** | n/a | §6. Skip until after launch. |
 | **NSFW TFLite model** (mobile on-device) | **NO — deferred** | n/a | §7. Drop the binary if/when shipped to mobile users. |
 | After-deploy index sync (`RUN_INDEX_SYNC=true`) | YES — on the **first** deploy only | n/a | §8. |
+| **Telegram alert bot** (`TELEGRAM_ALERT_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID`) | Recommended — without it the cert-watch sidecar can only emit the Prometheus gauge (no Telegram on-call ping) | No — operator pulls from BotFather | §9 below. Used by the **cert-watch** HTTPS-cert expiry monitor; the `ruletka_cert_expiry_days{domain}` gauge keeps working with both blank, so Alertmanager paging is unaffected — Telegram is the secondary signal. |
 
 > **POST-LAUNCH ROTATE (read this before anything else).** Two of the secrets
 > below — **`TURNSTILE_SECRET`** and **`TBANK_PASSWORD`** — almost always reach
@@ -326,6 +327,79 @@ is shipped.
 
 ---
 
+## 9. S3 backup bucket (Mongo + keyFile nightly — REQUIRED for launch)
+
+The `backup` sidecar (defined in `infra/docker/docker-compose.prod.yml`) runs
+nightly at **03:30 UTC**: gzipped `mongodump` of the entire `ruletka` db plus
+a tar of the replica-set keyFile, both uploaded to S3 under
+`s3://$S3_BACKUP_BUCKET/mongo/<TIMESTAMP>/`. Retention is **30 days** by
+default; anything older is deleted in the same run. Full operator runbook:
+**`infra/deploy/backup/README.md`** (bucket setup, restore drill, alerting).
+
+The compose's prod gate (`${S3_BACKUP_*:?…}`) refuses to start the `backup`
+service if any of the five bucket vars is blank — backups cannot silently
+fail to start. Install them BEFORE the first `bootstrap.sh` run, or right
+after if you skipped them.
+
+| Var | What it is | Where to get it |
+|---|---|---|
+| `S3_BACKUP_BUCKET` | Bucket name. Private ACL + server-side encryption ON. | Timeweb-S3 / AWS S3 console — see runbook for the create-bucket steps |
+| `S3_BACKUP_ACCESS_KEY_ID` | Access key id, scoped to ONLY this bucket (PutObject + DeleteObject + ListBucket). **Do not reuse root credentials.** | Same console → Access keys → Create key |
+| `S3_BACKUP_SECRET_ACCESS_KEY` | Matching secret. Treated like a JWT secret. | Same — shown exactly ONCE; save it immediately |
+| `S3_BACKUP_REGION` | Bucket region label. | Timeweb: `ru-1`. AWS: e.g. `us-east-1` |
+| `S3_BACKUP_ENDPOINT_URL` | Custom S3 endpoint. Backup script always passes `--endpoint-url`. | Timeweb: `https://s3.timeweb.cloud`. AWS: leave standard regional endpoint |
+| `BACKUP_RETENTION_DAYS` | Days of snapshots to keep. Defaults to 30. | literal |
+| `ALERT_WEBHOOK_URL` | OPTIONAL. POSTed `{status, timestamp, bucket, key_prefix, message}` on success / failure. Track O (Telegram alerting) wires its bot URL here once it lands. | leave blank until that lands |
+
+```bash
+cd /opt/ruletka
+
+# 1) Install the bucket env. ALL CAPS placeholders → paste real values.
+S3_BACKUP_BUCKET='<PASTE_BUCKET_NAME_HERE>'                       # e.g. ruletka-backups-prod
+S3_BACKUP_ACCESS_KEY_ID='<PASTE_ACCESS_KEY_ID_HERE>'              # scoped to ONLY this bucket
+S3_BACKUP_SECRET_ACCESS_KEY='<PASTE_SECRET_ACCESS_KEY_HERE>'      # shown once at create
+S3_BACKUP_REGION='ru-1'                                           # Timeweb default; AWS = the region you picked
+S3_BACKUP_ENDPOINT_URL='https://s3.timeweb.cloud'                 # AWS leave standard regional endpoint
+BACKUP_RETENTION_DAYS='30'
+
+for KV in \
+  "S3_BACKUP_BUCKET=${S3_BACKUP_BUCKET}" \
+  "S3_BACKUP_ACCESS_KEY_ID=${S3_BACKUP_ACCESS_KEY_ID}" \
+  "S3_BACKUP_SECRET_ACCESS_KEY=${S3_BACKUP_SECRET_ACCESS_KEY}" \
+  "S3_BACKUP_REGION=${S3_BACKUP_REGION}" \
+  "S3_BACKUP_ENDPOINT_URL=${S3_BACKUP_ENDPOINT_URL}" \
+  "BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS}"; do
+  K="${KV%%=*}"
+  sed -i "/^${K}=/d" .env && echo "${KV}" >> .env
+done
+
+# 2) Bring the backup sidecar up (no rebuild — scripts are bind-mounted).
+COMPOSE="docker compose --env-file .env -f infra/docker/docker-compose.prod.yml"
+$COMPOSE up -d --no-deps backup
+
+# 3) Smoke test: run an ad-hoc backup. Should finish with a "SUCCESS:" line
+#    and a new <TS>/ prefix should appear in the bucket.
+$COMPOSE exec backup /usr/local/bin/backup-mongo.sh
+
+# 4) Confirm the snapshot landed.
+$COMPOSE exec backup sh -lc 'aws --endpoint-url "$S3_BACKUP_ENDPOINT_URL" s3 ls s3://$S3_BACKUP_BUCKET/mongo/ | tail -3'
+```
+
+**Rotate** the access key in the bucket dashboard at least once a year and
+within 24h of any suspected leak: create a new key, swap the two `*_KEY_*` env
+vars via `sed`, restart the `backup` sidecar, then revoke the old key.
+
+**Restore drill** — run quarterly. The runbook
+(`infra/deploy/backup/README.md` → "Restore drill") has the exact commands
+for both **drill A** (throwaway local Mongo) and **drill B** (full-cluster
+rebuild from a snapshot). Record the outcome in `LAUNCH-CHECKLIST.md`.
+
+> The `restore-mongo.sh` script REFUSES to run when `MONGODB_URI` looks like
+> the prod RS (mongo1/2/3:27017) — you have to set `FORCE_RESTORE_PROD=1`
+> explicitly. This is by design, so the drill cannot accidentally wipe prod.
+
+---
+
 ## 8. First-deploy index sync (one-shot)
 
 Production runs with Mongoose `autoIndex` OFF. On the **very first deploy** (or
@@ -352,6 +426,274 @@ $COMPOSE up -d --no-deps api
 
 ---
 
+## 10. HTTPS-cert expiry watcher + Telegram alerts
+
+The `cert-watch` sidecar (defined in `infra/docker/docker-compose.prod.yml`)
+runs a daily script (`infra/deploy/nginx/cert-watch.sh`) at **06:00 UTC**
+that:
+
+1. Probes the live listener with `openssl s_client -servername $CERT_WATCH_DOMAIN
+   -connect $CERT_WATCH_DOMAIN:443` and reads the cert's notAfter via
+   `openssl x509 -noout -enddate`.
+2. Falls back to `/etc/letsencrypt/live/$CERT_WATCH_DOMAIN/cert.pem` when
+   the live probe fails (DNS hiccup, edge down mid-deploy).
+3. Writes the computed `days_left` integer to `/var/lib/cert-watch/days_left.txt`
+   on a shared docker volume (`cert-watch-data`). The **API container mounts
+   the same volume**, and `CertExpiryHealth`
+   (`apps/api/src/observability/health/cert-expiry.health.ts`) reads the file
+   at every `/metrics` scrape to publish the **`ruletka_cert_expiry_days{domain}`**
+   Prometheus gauge — same `/api/metrics` endpoint already in use, no extra
+   exporter.
+4. Posts a Telegram alert (*"⚠️ HTTPS cert expires in N days for $CERT_WATCH_DOMAIN"*)
+   when `days_left < CERT_WATCH_WARNING_DAYS` (default **14**), using the
+   shared track-O bot env (`TELEGRAM_ALERT_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID`).
+   Telegram is the on-call signal that doesn't depend on a working dashboard
+   at 03:00; the Prometheus gauge is the durable signal Alertmanager pages
+   on regardless.
+
+The Prometheus path works with NO operator env — `CERT_WATCH_DOMAIN` defaults
+to `ruletka.top` and `CERT_WATCH_WARNING_DAYS` to 14. Telegram alerts are a
+clean no-op when either token/chat-id is blank.
+
+**Operator steps.**
+
+```bash
+cd /opt/ruletka
+
+# 1) (OPTIONAL) Override the defaults — usually leave them.
+# sed -i '/^CERT_WATCH_DOMAIN=/d'        .env && echo 'CERT_WATCH_DOMAIN=ruletka.top'     >> .env
+# sed -i '/^CERT_WATCH_WARNING_DAYS=/d'  .env && echo 'CERT_WATCH_WARNING_DAYS=14'        >> .env
+
+# 2) Install the Telegram bot creds (RECOMMENDED — without these you get the
+#    Prometheus gauge but no Telegram ping).
+#    a) BotFather → /newbot → record TOKEN.
+#    b) From the chat/channel you want alerts in, send the bot any message,
+#       then read the chat_id via:
+#       curl "https://api.telegram.org/bot${TOKEN}/getUpdates" | jq '.result[].message.chat.id'
+TELEGRAM_ALERT_BOT_TOKEN='<PASTE_TELEGRAM_BOT_TOKEN_HERE>'   # 123456789:AAAA…
+TELEGRAM_ALERT_CHAT_ID='<PASTE_TELEGRAM_CHAT_ID_HERE>'       # e.g. -1001234567890 for a channel
+
+for KV in \
+  "TELEGRAM_ALERT_BOT_TOKEN=${TELEGRAM_ALERT_BOT_TOKEN}" \
+  "TELEGRAM_ALERT_CHAT_ID=${TELEGRAM_ALERT_CHAT_ID}"; do
+  K="${KV%%=*}"
+  sed -i "/^${K}=/d" .env && echo "${KV}" >> .env
+done
+
+# 3) Bring the sidecar up.
+docker compose --env-file .env -f infra/docker/docker-compose.prod.yml up -d cert-watch
+```
+
+**Smoke tests.**
+
+```bash
+# The sidecar writes days_left.txt at boot — verify it landed inside ~10s.
+docker exec ruletka-cert-watch cat /var/lib/cert-watch/days_left.txt
+# Expect: a positive integer (e.g. "73"). -1 means the watcher could not
+# determine expiry (both live TLS and the PEM fallback failed) — investigate
+# DNS + the letsencrypt volume.
+
+# Confirm the API surfaces the gauge.
+TOKEN="$(grep -E '^METRICS_TOKEN=' /opt/ruletka/.env | cut -d= -f2-)"
+curl -fsS -H "Authorization: Bearer $TOKEN" https://api.ruletka.top/api/metrics \
+  | grep ruletka_cert_expiry_days
+# Expect: ruletka_cert_expiry_days{domain="ruletka.top"} 73
+
+# (OPTIONAL) Force a Telegram test by lowering the threshold above the actual
+# days remaining. Reset it back to 14 afterwards.
+sed -i 's/^CERT_WATCH_WARNING_DAYS=.*/CERT_WATCH_WARNING_DAYS=999/' /opt/ruletka/.env
+docker compose --env-file .env -f infra/docker/docker-compose.prod.yml up -d cert-watch
+docker exec ruletka-cert-watch /usr/local/bin/cert-watch.sh
+# → Telegram message in the chat. Then reset:
+sed -i 's/^CERT_WATCH_WARNING_DAYS=.*/CERT_WATCH_WARNING_DAYS=14/' /opt/ruletka/.env
+docker compose --env-file .env -f infra/docker/docker-compose.prod.yml up -d cert-watch
+```
+
+**Prometheus alerting recipe.**
+
+```yaml
+# Pair with the existing METRICS_TOKEN bearer scrape config.
+groups:
+  - name: ruletka-cert-watch
+    rules:
+      - alert: HttpsCertExpiringSoon
+        expr: ruletka_cert_expiry_days >= 0 and ruletka_cert_expiry_days < 14
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "HTTPS cert for {{ $labels.domain }} expires in {{ $value }}d"
+      - alert: HttpsCertWatcherBroken
+        expr: ruletka_cert_expiry_days < 0
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: "cert-watch sidecar broken — cannot determine expiry for {{ $labels.domain }}"
+```
+
+The two-rule split lets you distinguish "the CERT is about to expire" (page
+loud) from "the WATCHER is broken" (page quieter / wake-up-time only).
+
+---
+
+## 11. Telegram alerting — API FATAL + nginx 5xx burst (HIGHLY RECOMMENDED)
+
+**What it is.** A two-surface paging pipeline that delivers a Markdown-V2
+message to the operator chat as soon as either:
+
+1. the API logs an `error` or `fatal` (caught by the pino `hooks.logMethod`
+   tap wired in `apps/api/src/app.module.ts` → `AlertingService.notify`), OR
+2. nginx emits more than `NGINX_5XX_THRESHOLD` 5xx responses inside
+   `NGINX_WINDOW_SECONDS` (caught by the `nginx-watchdog` sidecar tailing
+   the shared access-log volume).
+
+**Each surface throttles INDEPENDENTLY.** The API throttles per `category`
+at 1 message / 10s (with suppressed events collapsed into a `(+N suppressed)`
+follow-up). The watchdog throttles at one Telegram POST per
+`NGINX_THROTTLE_SECONDS` (default 60s). A crash that takes the API offline
+still pages via the watchdog; a slow upstream the watchdog can't see still
+pages via the API.
+
+**Where to get the values.**
+
+| Variable | Source |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | `@BotFather` on Telegram → `/newbot` → copy the `123456:ABC…` token. |
+| `TELEGRAM_ALERT_CHAT_ID` | For a private channel: add the bot as admin, send any message, then `curl https://api.telegram.org/bot<TOKEN>/getUpdates` and read `result[].channel_post.chat.id`. For a 1-1 chat: `curl …/getUpdates` after DM-ing the bot, read `result[0].message.chat.id`. |
+| `NGINX_5XX_THRESHOLD` / `NGINX_WINDOW_SECONDS` | Defaults `20 / 60` match the spec. Raise both for a noisier baseline. |
+
+The API-side AlertingService ALSO accepts the older `TELEGRAM_ALERT_BOT_TOKEN`
+name (used by the cert-watch sidecar — §10), so a single token serves both
+sidecars + the API. Recommended: set `TELEGRAM_BOT_TOKEN`.
+
+**Install.**
+
+```bash
+cd /opt/ruletka
+
+TELEGRAM_BOT_TOKEN='<PASTE_BOT_TOKEN_HERE>'
+TELEGRAM_ALERT_CHAT_ID='<PASTE_CHAT_ID_HERE>'
+
+sed -i '/^TELEGRAM_BOT_TOKEN=/d' .env \
+  && echo "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}" >> .env
+
+sed -i '/^TELEGRAM_ALERT_CHAT_ID=/d' .env \
+  && echo "TELEGRAM_ALERT_CHAT_ID=${TELEGRAM_ALERT_CHAT_ID}" >> .env
+
+# Optional tuning:
+# sed -i '/^NGINX_5XX_THRESHOLD=/d'     .env && echo 'NGINX_5XX_THRESHOLD=20'     >> .env
+# sed -i '/^NGINX_WINDOW_SECONDS=/d'    .env && echo 'NGINX_WINDOW_SECONDS=60'    >> .env
+# sed -i '/^NGINX_THROTTLE_SECONDS=/d'  .env && echo 'NGINX_THROTTLE_SECONDS=60'  >> .env
+
+# Apply: bounce the API (picks up the env in onModuleInit) AND the watchdog.
+$COMPOSE --env-file .env -f infra/docker/docker-compose.prod.yml \
+  up -d --no-deps api nginx-watchdog
+```
+
+**Smoke test.**
+
+```bash
+# 1) API surface: tail logs and force-fail one request.
+$COMPOSE -f infra/docker/docker-compose.prod.yml logs --tail 10 api | grep -i alerting
+# (expect: "Telegram alerting enabled.")
+
+# 2) nginx watchdog surface: send 25 requests at a known-500 path.
+for i in $(seq 1 25); do curl -s -o /dev/null https://ruletka.top/api/_force-500 || true; done
+# (expect: a "🚨 nginx 5xx burst" message in the chat within ~60s)
+```
+
+**Graceful degradation.** If `TELEGRAM_BOT_TOKEN` is blank: the API logs
+ONE warning at boot ("Telegram alerting DISABLED…") and `AlertingService.notify`
+becomes a no-op; the watchdog logs a single stderr line and stays alive in
+passive-tail mode. No restart will EVER fail because of a missing alerting
+secret.
+
+---
+
+## 12. KYC age-verification (SumSub / Veriff — OPTIONAL; OFF by default)
+
+**Background.** The API ships a **provider port** (`apps/api/src/modules/kyc/`)
+with three adapters: **SumSub** (`api.sumsub.com`), **Veriff**
+(`stationapi.veriff.com`), and `noop` (the default — onboarding keeps working
+unchanged). The matchmaking gate that consults the resulting
+`Profile.ageVerifiedAt` is **opt-in via `KYC_REQUIRED`** (default OFF), so this
+ships without changing any user's flow until you flip the switch.
+
+**Two operator decisions:**
+
+1. **Which provider?** Set `KYC_PROVIDER=sumsub|veriff|noop` in
+   `/opt/ruletka/.env`. With the chosen provider's credentials missing, the
+   orchestrator silently falls back to `noop` so onboarding never breaks
+   (logged as a `KycModule` warn at boot).
+2. **Enforce or just offer?** Set `KYC_REQUIRED=true` to make the matchmaking
+   `mm:join` event refuse users without `Profile.ageVerifiedAt` (a `forbidden`
+   ws:error with `message=KYC_REQUIRED:/settings#account` is emitted, and the
+   web tile deep-links from there). Default `false` keeps the tile
+   informational — users may still verify voluntarily.
+
+### Where to get the credentials
+
+- **SumSub.** From your SumSub Console (https://cockpit.sumsub.com): →
+  **Integrations → API Keys → Token** (copy `SUMSUB_APP_TOKEN`) and
+  **Secret Key** (copy `SUMSUB_SECRET_KEY`). Optionally override
+  `SUMSUB_LEVEL_NAME` if your workspace ships a custom verification level (the
+  platform default is `id-and-liveness`).
+- **Veriff.** From Veriff Station (https://station.veriff.com): → **Settings
+  → Integrations → API keys**. The **API key** maps to `VERIFF_API_KEY`
+  (sent as the `X-AUTH-CLIENT` header on outbound calls); the **Shared secret
+  key** maps to `VERIFF_PRIVATE_KEY` (used for the HMAC signature on outbound
+  + inbound webhooks).
+
+### Install on the box
+
+```bash
+ssh ruletka.top
+sudo -i
+cd /opt/ruletka
+
+# Pick ONE provider, leave the other empty.
+$EDITOR .env
+# Then add:
+#   KYC_PROVIDER=sumsub        # or veriff
+#   KYC_REQUIRED=false         # keep OFF until you've tested the provider flow E2E
+#   SUMSUB_APP_TOKEN=<paste>
+#   SUMSUB_SECRET_KEY=<paste>
+# OR:
+#   VERIFF_API_KEY=<paste>
+#   VERIFF_PRIVATE_KEY=<paste>
+
+docker compose -f infra/docker/docker-compose.prod.yml --env-file .env restart api
+# Then confirm the boot log either:
+#   - says nothing about kyc (real provider is active), or
+#   - says "KYC_PROVIDER=<x> but credentials missing — falling back to noop"
+```
+
+### Switching provider
+
+Switching is an `.env` edit + an API restart — same shape as
+`PAYMENT_PROVIDER`. Existing in-flight `pending` verification rows for the
+previously-active provider become orphaned (the webhook handler 400s on a
+provider mismatch); a user can simply press **Начать проверку** again to
+open a fresh session against the new provider.
+
+### Configure the webhook URL with the provider
+
+Both providers POST signed JSON to `POST /kyc/webhook/:provider`:
+
+- SumSub: dashboard → **Integrations → Webhooks** →
+  `https://api.ruletka.top/api/kyc/webhook/sumsub`. Algorithm: **HMAC SHA-256**
+  with `SUMSUB_SECRET_KEY` over the raw body (the platform verifies the
+  `X-Payload-Digest` header).
+- Veriff: dashboard → **Integrations → Webhooks → Decision** →
+  `https://api.ruletka.top/api/kyc/webhook/veriff`. The platform verifies the
+  `X-HMAC-SIGNATURE` header (hex SHA-256 HMAC of the raw body using
+  `VERIFF_PRIVATE_KEY`).
+
+Both endpoints are PUBLIC (no JWT) and signature-verified — same model as the
+T-Bank webhook. The handler is **idempotent** on `(provider, externalId)` so
+the providers' retries are safe.
+
+---
+
 ## Final checklist before opening to users
 
 - [ ] §1 Turnstile — both keys installed, register flow blocked-then-solved in a private window.
@@ -360,6 +702,8 @@ $COMPOSE up -d --no-deps api
 - [ ] §4 `METRICS_TOKEN` — Prometheus scrape returns 200 with the bearer; without it returns 401.
 - [ ] §5 Mongo auth — `$COMPOSE exec -T mongo1 mongosh ruletka --quiet -u <root> -p <root pw> --authenticationDatabase admin --eval 'db.getUsers()'` returns both `root` and `app` users.
 - [ ] §8 Index sync — boot log shows "Mongo index sync complete.", then `RUN_INDEX_SYNC=false` set.
+- [ ] §10 cert-watch — `docker exec ruletka-cert-watch cat /var/lib/cert-watch/days_left.txt` shows a positive integer; `curl -H "Authorization: Bearer $METRICS_TOKEN" .../api/metrics | grep ruletka_cert_expiry_days` returns the gauge; (optional) `TELEGRAM_ALERT_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID` installed and the threshold-bump smoke test posted a real Telegram message.
+- [ ] §11 Telegram alerting — `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID` installed, "Telegram alerting enabled." appears in API boot logs, force-500 smoke test posts a real "🚨 nginx 5xx burst" message.
 - [ ] **ROTATE** `TURNSTILE_SECRET` + `TBANK_PASSWORD` within the first week post-launch (provider dash → re-issue → re-run §1 / §2).
 - [ ] Back up `/opt/ruletka/.env` (chmod 600) and `infra/secrets/mongo-keyfile` (chmod 400) to your password manager / vault. **Do NOT commit them.**
 

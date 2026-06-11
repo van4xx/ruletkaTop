@@ -178,6 +178,80 @@ services:
           }
         '
 
+  # ── Mongo + keyFile S3 backup sidecar ──────────────────────────────────────
+  # Nightly mongodump → tar of /etc/mongo-keyfile → S3 upload → retention sweep.
+  # Lives on the same isolated ruletka-net as the mongod nodes (so it reaches
+  # mongo1/2/3:27017 directly without exposing any port to the internet). The
+  # runtime is alpine + awscli + mongodb-database-tools + busybox crond; the
+  # entrypoint writes the crontab (03:30 UTC daily) and exec's `crond -f` so
+  # this container is the cron daemon for this job.
+  #
+  # Operator runbook: infra/deploy/backup/README.md. Env vars: S3_BACKUP_*
+  # + BACKUP_RETENTION_DAYS in .env (see .env.example). Webhook integration
+  # (ALERT_WEBHOOK_URL) is optional — track O picks it up automatically.
+  #
+  # Ad-hoc backup / restore:
+  #   docker compose -f infra/docker/docker-compose.prod.yml exec backup \
+  #     /usr/local/bin/backup-mongo.sh
+  #   docker compose -f infra/docker/docker-compose.prod.yml exec backup \
+  #     /usr/local/bin/restore-mongo.sh
+  backup:
+    image: alpine:3.20
+    container_name: ruletka-backup
+    restart: unless-stopped
+    networks: [ruletka-net]
+    depends_on:
+      mongo-init: { condition: service_completed_successfully }
+    environment:
+      # S3 destination (see infra/deploy/backup/README.md → "Required env").
+      S3_BACKUP_BUCKET: ${S3_BACKUP_BUCKET:?set S3_BACKUP_BUCKET in .env (see infra/deploy/backup/README.md)}
+      S3_BACKUP_ACCESS_KEY_ID: ${S3_BACKUP_ACCESS_KEY_ID:?set S3_BACKUP_ACCESS_KEY_ID in .env}
+      S3_BACKUP_SECRET_ACCESS_KEY: ${S3_BACKUP_SECRET_ACCESS_KEY:?set S3_BACKUP_SECRET_ACCESS_KEY in .env}
+      S3_BACKUP_REGION: ${S3_BACKUP_REGION:?set S3_BACKUP_REGION in .env (e.g. ru-1 for Timeweb)}
+      S3_BACKUP_ENDPOINT_URL: ${S3_BACKUP_ENDPOINT_URL:?set S3_BACKUP_ENDPOINT_URL in .env (e.g. https://s3.timeweb.cloud)}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Mongo creds — same least-privilege app user the API uses (the dump only
+      # needs READ on `ruletka`; readWrite is what the user already has).
+      MONGO_APP_USERNAME: ${MONGO_APP_USERNAME:-app}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}
+      # Restore-only — the operator usually supplies this on the `docker compose
+      # exec` line for restores; left blank for nightly runs (which never call
+      # restore-mongo.sh).
+      MONGODB_URI: ${MONGODB_URI:-}
+    volumes:
+      # Read-only mount of the replica-set keyFile (same file the mongod nodes
+      # mount). Backed up verbatim into keyfile.tgz on every run so we can
+      # rebuild the cluster from a snapshot.
+      - ../secrets/mongo-keyfile:/etc/mongo-keyfile:ro
+      # Scripts mounted in (not baked) so a code change is picked up by a
+      # plain `up -d --no-deps backup` — no rebuild required.
+      - ../deploy/backup/backup-mongo.sh:/usr/local/bin/backup-mongo.sh:ro
+      - ../deploy/backup/restore-mongo.sh:/usr/local/bin/restore-mongo.sh:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        # 1) install runtime: awscli + mongodb-database-tools + curl + coreutils
+        #    (coreutils gives us GNU `date -d "30 days ago"` — alpine busybox's
+        #    date supports `-d "@<epoch>"` only; the script falls back to that
+        #    if `-d "X days ago"` fails, but coreutils is the cleaner path).
+        echo "[backup-init] installing aws-cli + mongodb-tools + curl + coreutils…"
+        apk add --no-cache aws-cli mongodb-tools curl tar gzip coreutils tini \
+          >/dev/null 2>&1 || apk add --no-cache aws-cli mongodb-tools curl tar gzip coreutils
+        # 2) write the crontab — daily 03:30 UTC. Output goes to stdout/err so
+        #    `docker compose logs backup` shows every run.
+        cat >/etc/crontabs/root <<'CRON'
+        # Nightly Mongo + keyFile backup → S3. Times are UTC.
+        30 3 * * * /usr/local/bin/backup-mongo.sh >/proc/1/fd/1 2>/proc/1/fd/2
+        CRON
+        echo "[backup-init] crontab installed:"
+        cat /etc/crontabs/root
+        # 3) exec crond in the foreground so this container IS the cron daemon.
+        echo "[backup-init] starting crond (foreground)…"
+        exec crond -f -l 8
+
   # ── Redis (password-protected) ─────────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -268,10 +342,21 @@ services:
       # shipping with the bot gate disabled. (Pair it with the public site key
       # NEXT_PUBLIC_TURNSTILE_SITE_KEY, baked into the web build.)
       TURNSTILE_SECRET: ${TURNSTILE_SECRET:?set TURNSTILE_SECRET in .env for prod (anti-bot gate; the API refuses to boot without it)}
+      # Read by `CertExpiryHealth` (apps/api/src/observability/health/cert-expiry.health.ts)
+      # at every /metrics scrape — points at the file the cert-watch sidecar
+      # writes daily into the shared `cert-watch-data` volume. Domain becomes
+      # the `domain="…"` label on the `ruletka_cert_expiry_days` gauge.
+      CERT_WATCH_DAYS_LEFT_FILE: /var/lib/cert-watch/days_left.txt
+      CERT_WATCH_DOMAIN: ${CERT_WATCH_DOMAIN:-ruletka.top}
     depends_on:
       mongo-init: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
       coturn: { condition: service_started }
+    volumes:
+      # Shared with the cert-watch sidecar (writer; cron-driven). RO from the
+      # API side — the helper only reads /var/lib/cert-watch/days_left.txt.
+      # Missing file ⇒ -1 sentinel ⇒ operator alert on `cert_expiry_days < 0`.
+      - cert-watch-data:/var/lib/cert-watch:ro
     networks: [ruletka-net]
     # NOTE: a `deploy.replicas` key was intentionally REMOVED here — `docker
     # compose up` ignores it (Swarm-only), so it falsely implied 2 running
@@ -326,10 +411,76 @@ services:
       # certbot-issued certs + ACME http-01 webroot (shared with the certbot svc).
       - letsencrypt:/etc/letsencrypt:ro
       - certbot-webroot:/var/www/certbot:ro
+      # SHARED with the nginx-watchdog sidecar. The official nginx:alpine image
+      # symlinks /var/log/nginx/access.log → /dev/stdout so `docker logs` still
+      # works; we bind a named volume to /var/log/nginx so the watchdog can tail
+      # a REAL file (the dev/stdout symlink is overwritten by nginx itself when
+      # the access_log directive resolves to a path — see the watchdog header
+      # comment for the format assumption). The watchdog mounts this RO.
+      - nginx-logs:/var/log/nginx
     networks: [ruletka-net]
     depends_on:
       api: { condition: service_started }
       web: { condition: service_started }
+
+  # ── nginx-watchdog (5xx burst alarm — STREAMING) ───────────────────────────
+  # Tails the nginx access log in real time and POSTs a Telegram alert when the
+  # rate of `5xx` responses crosses NGINX_5XX_THRESHOLD inside NGINX_WINDOW_SECONDS.
+  # Same delivery channel as the API-side AlertingService (a 5xx is the OTHER
+  # face of a server-side failure — capture them BOTH so a crash that takes
+  # the API offline still pages the operator via nginx's view of reality).
+  #
+  # WHY A SEPARATE SIDECAR (not done in-process):
+  #   • An API process that's crash-looping cannot reliably page itself.
+  #   • nginx's view of 5xx includes upstream timeouts / connect refusals the
+  #     API never even saw.
+  #   • The watchdog is plain POSIX `sh` (Alpine /bin/sh = ash) + curl + awk —
+  #     no language runtime, ~10 MB total, restarts in milliseconds.
+  #
+  # The script is bind-mounted single-file from the repo (same pattern as
+  # nginx.conf + cert-watch.sh), so `git pull && docker compose up -d` picks
+  # up edits with no image rebuild.
+  #
+  # GRACEFUL DEGRADATION: with TELEGRAM_BOT_TOKEN / TELEGRAM_ALERT_CHAT_ID blank
+  # the script logs ONE warning and stays alive in passive-tail mode (no POST)
+  # — matching the API-side AlertingService's no-op behaviour. Setting the
+  # secret + restarting the sidecar is all it takes to enable alerts.
+  nginx-watchdog:
+    image: alpine:3.20
+    container_name: ruletka-nginx-watchdog
+    restart: unless-stopped
+    environment:
+      # Spec defaults: 20 events / 60s window → alert; min 60s between alerts.
+      NGINX_5XX_THRESHOLD: ${NGINX_5XX_THRESHOLD:-20}
+      NGINX_WINDOW_SECONDS: ${NGINX_WINDOW_SECONDS:-60}
+      NGINX_THROTTLE_SECONDS: ${NGINX_THROTTLE_SECONDS:-60}
+      NGINX_ACCESS_LOG: /var/log/nginx/access.log
+      # Re-use the same Telegram secret the API-side AlertingService accepts.
+      # The cert-watch sidecar above uses TELEGRAM_ALERT_BOT_TOKEN; the API
+      # accepts either name, and so does this watchdog (the entrypoint maps
+      # TELEGRAM_ALERT_BOT_TOKEN → TELEGRAM_BOT_TOKEN at startup so the script
+      # itself only needs one variable).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-${TELEGRAM_ALERT_BOT_TOKEN:-}}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID:-}
+    volumes:
+      # READ-ONLY tail of the nginx access log shared volume.
+      - nginx-logs:/var/log/nginx:ro
+      # The script, single-file bind-mount (matches cert-watch + nginx.conf).
+      - ../deploy/nginx/watchdog.sh:/usr/local/bin/watchdog.sh:ro
+    networks: [ruletka-net]
+    depends_on:
+      nginx: { condition: service_started }
+    # Minimal runtime: alpine ships busybox awk/sort/uniq; we only need curl
+    # for the Telegram POST. ~10 MiB at boot, then exec the watcher.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        echo "[nginx-watchdog-init] installing curl…"
+        apk add --no-cache curl >/dev/null 2>&1 || apk add --no-cache curl
+        echo "[nginx-watchdog-init] starting watchdog (foreground)…"
+        exec /bin/sh /usr/local/bin/watchdog.sh
 
   # ── Certbot (Let's Encrypt) — auto-renews the cert covering all web subdomains
   #    (ruletka.top, www, api, admin). FIRST issuance is a manual one-shot — see
@@ -343,6 +494,83 @@ services:
       - certbot-webroot:/var/www/certbot
     entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet --deploy-hook "nginx -s reload || true"; sleep 12h & wait $${!}; done'
 
+  # ── cert-watch (HTTPS-cert expiry monitor — DAILY) ────────────────────────
+  # The certbot service above renews silently every 12h. If a renewal fails
+  # (rate-limit, DNS hiccup, ACME challenge regression) we'd only find out
+  # when the browser serves a hard cert warning. This sidecar closes that
+  # blind spot:
+  #
+  #   • runs infra/deploy/nginx/cert-watch.sh at 06:00 UTC daily (busybox crond),
+  #   • probes the LIVE listener with `openssl s_client -connect <domain>:443`
+  #     and reads notAfter via `openssl x509 -noout -enddate` (truth = what
+  #     the browser sees, so a cert renewed on disk but not picked up by
+  #     nginx still surfaces),
+  #   • falls back to /etc/letsencrypt/live/<domain>/cert.pem on a network
+  #     failure (the letsencrypt volume is bind-mounted RO, same as nginx),
+  #   • writes the computed `days_left` integer into the SHARED `cert-watch-data`
+  #     volume at /var/lib/cert-watch/days_left.txt — the API container mounts
+  #     the same volume and its CertExpiryHealth helper exposes the value as
+  #     `ruletka_cert_expiry_days{domain}` on the existing /api/metrics scrape,
+  #   • posts a Telegram alert ("⚠️ HTTPS cert expires in N days for <domain>")
+  #     when days_left < CERT_WATCH_WARNING_DAYS using the shared track-O bot
+  #     (TELEGRAM_ALERT_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID).
+  #
+  # Image: `alpine:3.20` — ships busybox `crond` natively; we just `apk add`
+  # openssl + curl (~3 MiB at boot, one-shot). We DON'T reuse the certbot
+  # image: its python entrypoint isn't a cron daemon AND we want the watcher
+  # decoupled from certbot's restart cadence — certbot crashing must not
+  # silence the alarm.
+  #
+  # The script is bind-mounted single-file from the repo (same pattern as
+  # nginx.conf), so `git pull && docker compose up -d` picks up edits with
+  # no rebuild. The entrypoint installs the cron line + seeds the metric
+  # by running the script ONCE before crond takes over (a fresh deploy
+  # would otherwise serve -1 for ~24h).
+  cert-watch:
+    image: alpine:3.20
+    container_name: ruletka-cert-watch
+    restart: unless-stopped
+    environment:
+      CERT_WATCH_DOMAIN: ${CERT_WATCH_DOMAIN:-ruletka.top}
+      CERT_WATCH_WARNING_DAYS: ${CERT_WATCH_WARNING_DAYS:-14}
+      # Inherit the shared track-O Telegram bot. Both blank → script logs the
+      # alert text and skips the POST (the Prometheus gauge still updates, so
+      # paging via Alertmanager is unaffected).
+      TELEGRAM_ALERT_BOT_TOKEN: ${TELEGRAM_ALERT_BOT_TOKEN:-}
+      TELEGRAM_ALERT_CHAT_ID: ${TELEGRAM_ALERT_CHAT_ID:-}
+    volumes:
+      # PEM fallback path — same letsencrypt volume nginx + certbot share, RO.
+      - letsencrypt:/etc/letsencrypt:ro
+      # The script itself, single-file bind-mount (matches the nginx.conf pattern).
+      - ../deploy/nginx/cert-watch.sh:/usr/local/bin/cert-watch.sh:ro
+      # Shared days_left file — the API service mounts this same named volume.
+      - cert-watch-data:/var/lib/cert-watch
+    networks: [ruletka-net]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        # 1) install runtime: openssl (cert probe) + curl (Telegram POST).
+        echo "[cert-watch-init] installing openssl + curl…"
+        apk add --no-cache openssl curl >/dev/null 2>&1 || apk add --no-cache openssl curl
+        # 2) daily at 06:00 UTC. busybox crond reads /etc/crontabs/root.
+        cat >/etc/crontabs/root <<'CRON'
+        # HTTPS cert expiry watcher. Time is UTC (container is naked Alpine).
+        0 6 * * * /usr/local/bin/cert-watch.sh >/proc/1/fd/1 2>/proc/1/fd/2
+        CRON
+        chmod 0600 /etc/crontabs/root
+        echo "[cert-watch-init] crontab installed:"
+        cat /etc/crontabs/root
+        # 3) seed the gauge before the first cron tick (fresh deploys would
+        # otherwise serve the -1 sentinel for ~24h).
+        echo "[cert-watch-init] seeding initial days_left.txt…"
+        /usr/local/bin/cert-watch.sh || true
+        # 4) exec crond in the foreground so this container IS the cron daemon
+        # and `restart: unless-stopped` supervises it.
+        echo "[cert-watch-init] starting crond (foreground)…"
+        exec crond -f -l 8
+
 volumes:
   mongo1-data: { name: ruletka-mongo1-data }
   mongo2-data: { name: ruletka-mongo2-data }
@@ -350,6 +578,17 @@ volumes:
   redis-data: { name: ruletka-redis-prod-data }
   letsencrypt: { name: ruletka-letsencrypt }
   certbot-webroot: { name: ruletka-certbot-webroot }
+  # Shared between the nginx service (writer — access.log + error.log) and the
+  # nginx-watchdog sidecar (reader, RO). Kept as a named volume so it survives
+  # nginx restarts (a logrotate-triggered restart must not lose mid-window 5xx
+  # samples). Bounded growth is handled by the official nginx image's built-in
+  # logrotate-via-USR1 + the watchdog itself only retains in-window samples.
+  nginx-logs: { name: ruletka-nginx-logs }
+  # SHARED between the cert-watch sidecar (writer; cron-driven) and the API
+  # (reader; CertExpiryHealth scrapes the file at every /metrics request).
+  # Lives outside any service-specific volume so a redeploy / image rebuild
+  # doesn't wipe the most recent days_left sample.
+  cert-watch-data: { name: ruletka-cert-watch-data }
 
 networks:
   ruletka-net:

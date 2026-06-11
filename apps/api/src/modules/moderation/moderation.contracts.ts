@@ -80,3 +80,39 @@ export const resolveAppealSchema = z.object({
   status: z.enum(['accepted', 'rejected']),
 });
 export type ResolveAppealDto = z.infer<typeof resolveAppealSchema>;
+
+/**
+ * Body of `POST /moderation/client-signal` — the lighter-weight on-device NSFW
+ * signal stream the MOBILE client pushes during a call (separately from the
+ * `/moderation/frame` evidence-bearing report path that the web client + the
+ * mobile per-call screening loop already use).
+ *
+ * The body is intentionally lean — no evidence frame — so we can ingest it at
+ * a much higher rate without bloating evidence storage. The aggregate is
+ * `porn + hentai + sexy` from the on-device 5-class breakdown; the moderation
+ * service feeds it through the same escalation path as a `/moderation/frame`
+ * report (mapping the aggregate to `nudity`/`sexual` per the standard
+ * thresholds — see `ModerationService.handleClientSignal`). Kept API-local
+ * (not exported via `@ruletka/shared-types`) so the mobile client + the
+ * server can iterate on the wire shape without forcing a shared-types rev.
+ */
+export const clientSignalSchema = z.object({
+  /** Active match id, for correlation. Optional — between matches we accept null. */
+  matchId: z
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, 'Invalid matchId')
+    .optional(),
+  /** Combined `porn + hentai + sexy` score in [0,1]. */
+  aggregate: z.number().min(0).max(1),
+  /** Optional per-class breakdown — surfaces the dominant category server-side. */
+  scores: z
+    .object({
+      drawings: z.number().min(0).max(1).optional(),
+      hentai: z.number().min(0).max(1).optional(),
+      neutral: z.number().min(0).max(1).optional(),
+      porn: z.number().min(0).max(1).optional(),
+      sexy: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
+});
+export type ClientSignalDto = z.infer<typeof clientSignalSchema>;

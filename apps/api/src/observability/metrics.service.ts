@@ -337,4 +337,17 @@ export class MetricsService implements OnModuleInit {
   async render(): Promise<string> {
     return this.registry.metrics();
   }
+
+  /**
+   * Expose the dedicated registry to OTHER observability helpers that own their
+   * OWN metric — currently `CertExpiryHealth`, which registers a pull-style
+   * `cert_expiry_days{domain}` gauge whose `collect` reads the on-disk file
+   * dropped by the cert-watch sidecar at scrape time. Helpers register on
+   * THIS registry so a single `/metrics` scrape returns every series; we
+   * deliberately do NOT hand out prom-client's global default registry — that
+   * was a deliberate isolation choice (see the field comment).
+   */
+  getRegistry(): Registry {
+    return this.registry;
+  }
 }

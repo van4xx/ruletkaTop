@@ -23,6 +23,8 @@ import type {
   FriendRequestsResponse,
   Gender,
   Gift,
+  KycMeResponse,
+  KycStartResponse,
   LeaderboardMetric,
   LeaderboardResponse,
   LoginDto,
@@ -982,6 +984,25 @@ export const api = {
      */
     bind: (dto: ReferralBindDto) =>
       request<void>('/referrals/bind', { method: 'POST', json: dto, noRetry: true }),
+  },
+
+  /**
+   * KYC age-verification surface.
+   *
+   * `me` is a cheap read the settings tile polls; `start` opens a provider
+   * session and returns the redirectUrl the UI opens in a NEW TAB (the
+   * provider iframe lives off our origin). Webhooks lands back into the API
+   * out-of-band — the UI just refetches `me` to surface the new status.
+   *
+   * The matchmaking gate that consults this surface is opt-in via the
+   * `KYC_REQUIRED` env on the API; with the gate OFF (default), the tile is
+   * informational only and `start` is the user's voluntary path to a
+   * verified badge.
+   */
+  kyc: {
+    me: (signal?: AbortSignal) => request<KycMeResponse>('/kyc/me', { signal }),
+    start: () =>
+      request<KycStartResponse>('/kyc/start', { method: 'POST', noRetry: true }),
   },
 } as const;
 

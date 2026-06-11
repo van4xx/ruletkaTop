@@ -119,6 +119,25 @@ export class Profile {
   @Prop({ required: true, default: 0, min: 0 })
   profileViews!: number;
 
+  /**
+   * When the user passed KYC age verification (provider stamped them 18+), or
+   * `null` while unverified. Set ONLY by the KYC orchestrator from the
+   * provider's webhook decision timestamp — never from a server-side clock,
+   * so the value reflects the truth of the upstream decision.
+   *
+   * The matchmaking gate (opt-in via `KYC_REQUIRED=true`) treats this as a
+   * boolean: any non-null Date means "verified". Once set, the value is
+   * immutable (the KYC service uses a guarded `$set` that only writes when
+   * the field is null), so a redelivered webhook never moves the stamp and a
+   * downstream bug can never un-verify an account.
+   *
+   * Additive — pre-existing profiles default to `null` (treated as "not yet
+   * verified"). The gate stays OFF until `KYC_REQUIRED` is set, so this
+   * change ships without breaking any existing user flow.
+   */
+  @Prop({ required: false, default: null, type: Date })
+  ageVerifiedAt!: Date | null;
+
   // `createdAt` / `updatedAt` added by `timestamps: true`.
 }
 

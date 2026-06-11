@@ -17,3 +17,4 @@ export * from './socket';
 export * from './referrals';
 export * from './achievements';
 export * from './premium';
+export * from './kyc';

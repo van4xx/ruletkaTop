@@ -46,6 +46,8 @@ import { RolesGuard } from '../../common/roles.guard';
 import { createZodValidationPipe } from '../../common/zod-validation.pipe';
 import { BlocksService } from './blocks.service';
 import {
+  type ClientSignalDto,
+  clientSignalSchema,
   type ListReportsQuery,
   listReportsQuerySchema,
   type ListReviewQuery,
@@ -99,6 +101,21 @@ export class ModerationController {
     @Body(createZodValidationPipe(moderationViolationSchema)) dto: ModerationViolationDto,
   ): Promise<ModerationActionPayload> {
     return this.moderationService.handleViolation(user.sub, dto);
+  }
+
+  @Post('moderation/client-signal')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Mobile client-signal channel: lighter-weight on-device NSFW push ' +
+      '(no evidence frame) routed through the standard escalation flow',
+  })
+  @ApiOkResponse({ description: 'The moderation action taken for this signal' })
+  async reportClientSignal(
+    @CurrentUser() user: JwtPayload,
+    @Body(createZodValidationPipe(clientSignalSchema)) dto: ClientSignalDto,
+  ): Promise<ModerationActionPayload> {
+    return this.moderationService.handleClientSignal(user.sub, dto);
   }
 
   @Get('moderation/review')

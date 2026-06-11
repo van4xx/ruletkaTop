@@ -47,6 +47,33 @@ so a clean user is never falsely cut). See
 3. Rebuild. On boot the app probes the asset; when present and loadable it logs
    `[nsfw] on-device TFLite classifier active` and screening goes live.
 
+## Hash-check protocol
+
+Pin the SHA-256 of the binary you ship to operators (so a corrupted /
+backdoored binary on a build server doesn't silently activate screening):
+
+```sh
+shasum -a 256 apps/mobile/assets/models/nsfw.tflite
+# expected (gantman/nsfw_model 224×224 fp32 conversion — recompute for your build):
+# 0000000000000000000000000000000000000000000000000000000000000000  nsfw.tflite
+```
+
+CI publishes the hash to ops; a mismatch at boot is logged (see
+`lib/core/safety/nsfw_service.dart`) and the service stays inert.
+
+## Env switch
+
+The scaffold loader in `lib/core/safety/nsfw_service.dart` is additionally
+gated behind a **build-time** env flag:
+
+```sh
+flutter build apk --dart-define=NSFW_ENABLED=true
+```
+
+With `NSFW_ENABLED=false` (the default), the service skips the asset probe
+entirely and every classify() returns SAFE — so even a build that ships the
+binary stays inert until an operator flips the switch.
+
 ## License
 
 The gantman/nsfw_model weights are released under the **MIT License**

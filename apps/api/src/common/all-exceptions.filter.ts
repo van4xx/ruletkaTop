@@ -11,6 +11,8 @@ import type { Request, Response } from 'express';
 
 import type { ApiError } from '@ruletka/shared-types';
 
+import { reportAlert } from '../observability/alerting/alerting.bridge';
+
 /**
  * Global exception filter that normalises every thrown error into the shared
  * {@link ApiError} response contract, so clients can rely on a single error
@@ -46,6 +48,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `${request.method} ${request.url} → ${statusCode}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
+      // Fan-out to the Telegram alerting pipeline. `reportAlert` is fail-safe:
+      // it no-ops when the alerting module hasn't booted yet AND when
+      // TELEGRAM_BOT_TOKEN is unset, so dev/CI stay quiet. The bridge swallows
+      // all errors so a Telegram outage cannot corrupt the response we are
+      // currently building.
+      const requestId =
+        (request.headers['x-request-id'] as string | undefined) ??
+        (request as Request & { id?: string }).id;
+      reportAlert({
+        category: 'api-fatal',
+        title: `${request.method} ${request.url} → ${statusCode}`,
+        source: 'AllExceptionsFilter',
+        message:
+          exception instanceof Error
+            ? `${exception.name}: ${exception.message}\n${exception.stack ?? ''}`
+            : String(exception),
+        requestId,
+      });
     }
 
     const body: ApiError = { statusCode, message, error };
