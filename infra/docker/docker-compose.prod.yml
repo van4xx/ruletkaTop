@@ -186,29 +186,54 @@ services:
   # entrypoint writes the crontab (03:30 UTC daily) and exec's `crond -f` so
   # this container is the cron daemon for this job.
   #
+  # ⚠️ DEFERRED-BY-DEFAULT (profile gate). This service is GATED behind the
+  # `backup` Compose profile so the default `docker compose up -d` does NOT
+  # start it — the prod-launch checklist intentionally postpones the paid
+  # S3 bucket (Timeweb-S3 ~100–200 ₽/мес) until the user base grows. Without
+  # the profile, the `${S3_BACKUP_*:?…}` guards above never trip, so a
+  # zero-secret server still comes up clean.
+  #
+  # Enable when ready (after filling S3_BACKUP_* in /opt/ruletka/.env):
+  #   docker compose -f infra/docker/docker-compose.prod.yml --profile backup up -d
+  # See infra/deploy/SECRETS-INSTALL.md → "Deferred features (post-monetization)"
+  # and §9 "S3 backup bucket" for the install snippet.
+  #
   # Operator runbook: infra/deploy/backup/README.md. Env vars: S3_BACKUP_*
   # + BACKUP_RETENTION_DAYS in .env (see .env.example). Webhook integration
   # (ALERT_WEBHOOK_URL) is optional — track O picks it up automatically.
   #
-  # Ad-hoc backup / restore:
-  #   docker compose -f infra/docker/docker-compose.prod.yml exec backup \
+  # Ad-hoc backup / restore (once the profile is active):
+  #   docker compose -f infra/docker/docker-compose.prod.yml --profile backup exec backup \
   #     /usr/local/bin/backup-mongo.sh
-  #   docker compose -f infra/docker/docker-compose.prod.yml exec backup \
+  #   docker compose -f infra/docker/docker-compose.prod.yml --profile backup exec backup \
   #     /usr/local/bin/restore-mongo.sh
   backup:
     image: alpine:3.20
     container_name: ruletka-backup
     restart: unless-stopped
+    # `profiles` is a Compose-native opt-in switch: a service tagged with a
+    # profile is IGNORED unless `--profile backup` is passed on the command
+    # line (or COMPOSE_PROFILES=backup is exported). Default `up` skips it.
+    profiles: ["backup"]
     networks: [ruletka-net]
     depends_on:
       mongo-init: { condition: service_completed_successfully }
     environment:
       # S3 destination (see infra/deploy/backup/README.md → "Required env").
-      S3_BACKUP_BUCKET: ${S3_BACKUP_BUCKET:?set S3_BACKUP_BUCKET in .env (see infra/deploy/backup/README.md)}
-      S3_BACKUP_ACCESS_KEY_ID: ${S3_BACKUP_ACCESS_KEY_ID:?set S3_BACKUP_ACCESS_KEY_ID in .env}
-      S3_BACKUP_SECRET_ACCESS_KEY: ${S3_BACKUP_SECRET_ACCESS_KEY:?set S3_BACKUP_SECRET_ACCESS_KEY in .env}
-      S3_BACKUP_REGION: ${S3_BACKUP_REGION:?set S3_BACKUP_REGION in .env (e.g. ru-1 for Timeweb)}
-      S3_BACKUP_ENDPOINT_URL: ${S3_BACKUP_ENDPOINT_URL:?set S3_BACKUP_ENDPOINT_URL in .env (e.g. https://s3.timeweb.cloud)}
+      # NOTE: these are `${VAR:-}` (default-empty) rather than `${VAR:?…}`
+      # because Compose's variable interpolation runs on the WHOLE FILE at
+      # parse time — even for services whose profile is NOT active. With
+      # this service now gated behind `profiles: ["backup"]`, a strict
+      # `:?` guard would abort the default `docker compose up -d` even
+      # though the service itself is skipped. Defaulting to empty here is
+      # safe because the backup script itself fails-fast if any S3 var is
+      # blank — and the service only ever starts under `--profile backup`,
+      # which the operator only runs after filling them in.
+      S3_BACKUP_BUCKET: ${S3_BACKUP_BUCKET:-}
+      S3_BACKUP_ACCESS_KEY_ID: ${S3_BACKUP_ACCESS_KEY_ID:-}
+      S3_BACKUP_SECRET_ACCESS_KEY: ${S3_BACKUP_SECRET_ACCESS_KEY:-}
+      S3_BACKUP_REGION: ${S3_BACKUP_REGION:-}
+      S3_BACKUP_ENDPOINT_URL: ${S3_BACKUP_ENDPOINT_URL:-}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
       # Mongo creds — same least-privilege app user the API uses (the dump only

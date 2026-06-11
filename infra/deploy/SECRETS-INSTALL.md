@@ -42,6 +42,75 @@
 
 ---
 
+## Deferred features (post-monetization)
+
+> **Read this first if you cloned the repo and saw blank env vars.** Three
+> features ship with all the code wired but are **intentionally OFF by default**
+> until the platform starts earning. Each one is either paid (S3, KYC) or
+> requires an operator-supplied binary asset (mobile NSFW model). Leaving them
+> off is the supported launch-day configuration — the stack boots clean with
+> none of them enabled. Flip them on individually once revenue covers the cost
+> (or, for the mobile model, when the mobile app has a real install base).
+
+### 1. S3 Mongo backup (nightly bucket upload)
+
+- **WHAT.** The `backup` sidecar in `infra/docker/docker-compose.prod.yml`
+  runs `mongodump` of the whole `ruletka` db + tar of the replica-set keyFile
+  at 03:30 UTC daily and uploads to S3, with 30-day retention. Without it
+  a server hardware failure loses everything since the last manual snapshot.
+- **WHEN to revisit.** As soon as you have paying users or any DB content
+  worth restoring. Bucket cost on Timeweb-S3 is **~100–200 ₽/мес** (~€1–2).
+- **HOW to enable.** The sidecar is gated behind a Compose profile — the
+  default `docker compose up -d` does NOT start it, so a blank `.env`
+  is harmless. To turn it on:
+  1. Fill the five `S3_BACKUP_*` vars + `BACKUP_RETENTION_DAYS` in
+     `/opt/ruletka/.env` (see §9 below for the exact snippet + bucket setup).
+  2. `docker compose -f infra/docker/docker-compose.prod.yml --profile backup up -d`
+  3. Smoke-test with the ad-hoc snippet in §9. Full operator runbook:
+     `infra/deploy/backup/README.md`.
+
+### 2. KYC age-verification (SumSub / Veriff)
+
+- **WHAT.** Server-side age-verification port (SumSub + Veriff adapters
+  plus a `noop` fallback) wired into matchmaking. With `KYC_REQUIRED=true`
+  the `mm:join` event refuses users without `Profile.ageVerifiedAt` — the
+  /settings#account tile deep-links them to a provider-hosted ID + liveness
+  flow. Without it the platform meets the 18+ self-attestation bar only.
+- **WHEN to revisit.** When the legal / payments surface demands stronger
+  age-proof than the on-register checkbox, or when a payment provider asks
+  for it. Both vendors bill **per verification (~€1 each)** — flipping the
+  switch with thousands of users would generate a real invoice overnight.
+- **HOW to enable.** `KYC_PROVIDER=noop` + `KYC_REQUIRED=false` ship as the
+  uncommented defaults (gate OFF). To switch on:
+  1. Pick a provider, set `KYC_PROVIDER=sumsub` (or `veriff`) in `/opt/ruletka/.env`.
+  2. Uncomment + fill the matching credential block (`SUMSUB_APP_TOKEN` +
+     `SUMSUB_SECRET_KEY`, or `VERIFF_API_KEY` + `VERIFF_PRIVATE_KEY`).
+  3. Test the flow E2E with `KYC_REQUIRED=false` (informational tile only).
+  4. Once the round-trip works, flip `KYC_REQUIRED=true` to enforce the gate.
+  5. Full snippet + dashboard webhook setup in §12.
+
+### 3. Mobile on-device NSFW classifier (TFLite)
+
+- **WHAT.** A `nsfw.tflite` binary the mobile app loads to flag NSFW frames
+  on-device (twin of the web's `nsfwjs`). Without it the mobile screening
+  pipeline still runs (frame sampling, local cut, evidence POST to
+  `/moderation/frame`) but the classifier is a no-op — frames are reported
+  but never flagged client-side. The server-side Sightengine
+  second-opinion (§3 above) applies independently of this asset.
+- **WHEN to revisit.** Once the mobile app has a real install base (the
+  client is the only consumer of this asset; until then it's wasted bytes
+  in the APK). On-device classification itself is **free** — this is purely
+  postponed shipping a 5 MB binary.
+- **HOW to enable.**
+  1. Provision the gantman/nsfw_model MobileNetV2 binary per
+     `apps/mobile/assets/models/README.md` (224×224, 5 classes Drawings /
+     Hentai / Neutral / Porn / Sexy).
+  2. Drop it at `apps/mobile/assets/models/nsfw.tflite`.
+  3. Rebuild the mobile APK (the asset bakes into the bundle).
+  4. No server-side step — Sightengine moderation is unchanged.
+
+---
+
 ## How edits to `/opt/ruletka/.env` apply
 
 Same pattern as `ENV_CHECKLIST.md`:

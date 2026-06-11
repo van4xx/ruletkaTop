@@ -67,3 +67,13 @@ Access from inside Russia is degraded by **ТСПУ (state DPI)**, not by code/R
 ## 5. After launch (continuous)
 
 Work the rest of `PLATFORM-BACKLOG.md` (P1/P2): gift→payout model, renewal Payment rows, refund UI, top-placement auction/expiry, image DMs, TURN ttl/ICE-restart polish, mobile feature parity, perf + observability.
+
+---
+
+## 6. Deferred until revenue
+
+Three features ship with code wired but are **intentionally OFF for launch** — each is either paid (S3, KYC) or needs an operator-supplied binary. Leaving them off is the supported launch configuration; flip them on individually once revenue covers the cost. Full how-to lives in `infra/deploy/SECRETS-INSTALL.md` → "Deferred features (post-monetization)".
+
+- **S3 Mongo backup** — nightly `mongodump` → S3 bucket. **OFF by default** (Compose `backup` profile is not auto-started). Cost: ~100–200 ₽/мес on Timeweb-S3. Enable once there's a real DB worth restoring: fill `S3_BACKUP_*` in `.env` + `docker compose -f infra/docker/docker-compose.prod.yml --profile backup up -d` (see SECRETS-INSTALL.md §9).
+- **KYC age-verification (SumSub / Veriff)** — server provider port + matchmaking gate. **OFF by default** (`KYC_PROVIDER=noop` + `KYC_REQUIRED=false`). Cost: ~€1 per verification. Enable once legal/payments demand stronger age-proof than the on-register checkbox: pick a provider, fill its credentials, test E2E with `KYC_REQUIRED=false`, then flip `KYC_REQUIRED=true` (see SECRETS-INSTALL.md §12).
+- **Mobile on-device NSFW classifier** — `nsfw.tflite` binary baked into the APK. **OFF by default** (asset absent; mobile screening pipeline still runs but the classifier is a no-op; server-side Sightengine §3 still applies). On-device classification itself is **free** — postponed until mobile has a real install base. Enable by dropping the gantman MobileNetV2 binary at `apps/mobile/assets/models/nsfw.tflite` and rebuilding the APK (see SECRETS-INSTALL.md §7 + `apps/mobile/assets/models/README.md`).
