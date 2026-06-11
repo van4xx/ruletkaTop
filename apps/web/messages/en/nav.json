@@ -12,5 +12,6 @@
   "notifications": { "label": "Notifications", "description": "Notification center" },
   "gifts": { "label": "Gifts", "description": "Gift catalog" },
   "premium": { "label": "Premium", "description": "Premium features" },
-  "leaderboard": { "label": "Leaderboard", "description": "Leaderboard rankings" }
+  "leaderboard": { "label": "Leaderboard", "description": "Leaderboard rankings" },
+  "referrals": { "label": "Referrals", "description": "Invite friends and earn coins" }
 }

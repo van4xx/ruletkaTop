@@ -10,13 +10,14 @@
  * On success it persists the session and redirects home. Controlled fields
  * (gender / password meter / locale) use RHF `Controller`/`watch`.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
-import { AtSign, CircleAlert, Lock, UserRound } from 'lucide-react';
+import { AtSign, CircleAlert, Lock, Sparkles, UserRound } from 'lucide-react';
 import { Button, Input, toast } from '@ruletka/ui';
 import { track } from '@/lib/analytics';
 import { usePublicStatus } from '@/features/status/use-public-status';
@@ -29,6 +30,7 @@ import {
 } from '@/features/auth/schemas';
 import { useFieldError } from '@/features/auth/use-field-error';
 import { useRegister } from '@/features/auth/use-auth-mutations';
+import { useReferralLookup, useReferralBind } from '@/features/referrals/use-referrals';
 import { useErrorMessage } from '@/lib/error-message';
 import { FormField } from './form-field';
 import { PasswordField } from './password-field';
@@ -44,6 +46,9 @@ function maxBirthDate(): string {
 
 export function RegisterForm() {
   const t = useTranslations('auth');
+  // The referral chip lives in the `social` namespace alongside the rest of
+  // the referrals copy, so the same string is reusable on /referrals + here.
+  const tRef = useTranslations('social');
   const fieldError = useFieldError();
   const errorMessage = useErrorMessage();
   const registerMutation = useRegister();
@@ -55,6 +60,21 @@ export function RegisterForm() {
   // failed) leaves the form open so a status hiccup never blocks signups.
   const { data: publicStatus } = usePublicStatus();
   const registrationClosed = publicStatus?.registrationOpen === false;
+
+  // REFERRAL HOOK — when the URL carries `?ref=CODE` we surface a small chip
+  // above the form ("Тебя пригласил {nickname}") and, on successful signup,
+  // fire `POST /referrals/bind` to attach the new account to the inviter.
+  // This is the no-touch-auth path: the inviter is set in a follow-up call
+  // rather than threaded through the registration body (see ReferralsModule).
+  const searchParams = useSearchParams();
+  const referralCode = useMemo(() => {
+    const raw = searchParams?.get('ref') ?? '';
+    return raw.trim().toUpperCase();
+  }, [searchParams]);
+  // The lookup is `valid: false` on an unknown code (no 404), so the chip
+  // hides itself cleanly on a stale/forged value.
+  const referralLookup = useReferralLookup(referralCode, { enabled: referralCode.length > 0 });
+  const referralBind = useReferralBind();
 
   // Localized option labels for the segmented controls (the option arrays carry
   // stable `labelKey`s; resolve them here against the `auth` namespace).
@@ -97,11 +117,24 @@ export function RegisterForm() {
     // so the optional contract field stays absent (dev no-op).
     const payload = captchaToken ? { ...values, captchaToken } : values;
     registerMutation.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: async () => {
         toast.success(t('register.successToast'), {
           description: t('register.successToastDescription'),
         });
         track('signup');
+        // REFERRAL BIND — fire-and-forget, BEST-EFFORT. A failure (e.g. an
+        // invalid/expired code, a self-referral attempt that somehow got
+        // through, or a transient network blip) MUST NOT block the signup
+        // success flow: the account already exists. The bind endpoint is
+        // additionally idempotent on the per-invitee unique edge — a redelivery
+        // 409s cleanly without side-effects.
+        if (referralCode && referralLookup.data?.valid) {
+          try {
+            await referralBind.mutateAsync({ code: referralCode });
+          } catch {
+            // never surface a bind failure on the signup happy path
+          }
+        }
         // Hard navigation so the just-set auth cookies ride the next request.
         window.location.assign('/dashboard');
       },
@@ -134,6 +167,32 @@ export function RegisterForm() {
         <h1 className="font-display text-3xl font-bold tracking-tight">{t('register.title')}</h1>
         <p className="mt-2 text-muted-foreground">{t('register.subtitle')}</p>
       </header>
+
+      {/* REFERRAL CHIP — shown only when the URL carries `?ref=CODE` AND the
+          lookup confirms the inviter exists. A stale/forged code stays hidden
+          rather than rendering an "invited by ???" placeholder. */}
+      <AnimatePresence>
+        {referralCode && referralLookup.data?.valid && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            role="status"
+            aria-live="polite"
+            className="mb-5 inline-flex items-center gap-2 rounded-full border border-border/70 bg-gradient-to-b from-card/80 to-card/40 px-3.5 py-1.5 text-sm"
+          >
+            <Sparkles
+              className="h-4 w-4 text-[var(--color-neon-violet)]"
+              aria-hidden="true"
+            />
+            <span>
+              {tRef('referrals.registerInvitedBy', {
+                nickname: referralLookup.data.inviterNickname ?? '',
+              })}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Registration temporarily closed (live admin flag). Prominent inline
           notice; submit is also disabled below so the form fails fast before the

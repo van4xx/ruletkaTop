@@ -11,6 +11,7 @@
  * Response shapes are taken from `@ruletka/shared-types` (the contract).
  */
 import type {
+  AchievementsCatalogue,
   ApiError,
   AuthResponse,
   AuthTokens,
@@ -25,12 +26,19 @@ import type {
   LeaderboardMetric,
   LeaderboardResponse,
   LoginDto,
+  MyAchievements,
   Notification as StoredNotificationRecord,
   PaginationMeta,
   PremiumPlan,
+  PublicAchievements,
   PublicProfile,
   PublicStatus,
   PushSubscriptionDto,
+  ReferralBindDto,
+  ReferralListResponse,
+  ReferralLookupResponse,
+  ReferralMeResponse,
+  ReferralTier,
   RegisterDto,
   RequestPasswordResetDto,
   ResetPasswordDto,
@@ -880,6 +888,23 @@ export const api = {
   },
 
   /**
+   * Achievements / badges. Three reads, no mutations — unlocks happen as a
+   * SIDE-EFFECT of domain events (purchase, gift sent, call ended, friend
+   * accepted, daily-bonus claim) on the API. The catalogue is `skipAuth` so
+   * the public profile strip + landing pages can render badge icons before
+   * the user signs in.
+   */
+  achievements: {
+    catalogue: (signal?: AbortSignal) =>
+      request<AchievementsCatalogue>('/achievements/catalogue', { skipAuth: true, signal }),
+    me: (signal?: AbortSignal) => request<MyAchievements>('/achievements/me', { signal }),
+    user: (userId: string, signal?: AbortSignal) =>
+      request<PublicAchievements>(`/achievements/user/${encodeURIComponent(userId)}`, {
+        signal,
+      }),
+  },
+
+  /**
    * Notifications center + Web Push subscription management.
    *
    * `list` is cursor-paginated history (`GET /notifications`); `unreadCount`
@@ -920,6 +945,43 @@ export const api = {
         query: { metric: params.metric, limit: params.limit },
         signal,
       }),
+  },
+
+  /**
+   * 3-tier referral program. The `me` + `list` reads + `bind` mutation require
+   * a session; `lookup` is the only public call (the register form previews the
+   * inviter chip BEFORE the user signs up). The wire shapes are owned by
+   * `Referral*` schemas in `@ruletka/shared-types` so a contract drift surfaces
+   * at typecheck.
+   */
+  referrals: {
+    /** Read the caller's link + per-tier downline aggregates. */
+    me: (signal?: AbortSignal) => request<ReferralMeResponse>('/referrals/me', { signal }),
+    /** Cursor-paginated downline list scoped to one tier. */
+    list: (
+      params: { tier: ReferralTier; cursor?: string; limit?: number },
+      signal?: AbortSignal,
+    ) =>
+      request<ReferralListResponse>('/referrals/me/list', {
+        query: { tier: params.tier, cursor: params.cursor, limit: params.limit },
+        signal,
+      }),
+    /**
+     * Public preview of a code → inviter nickname. `skipAuth` so the register
+     * page can call it with no session at all. Always 200 (`valid: false`
+     * carried in the body) so a stale `?ref=` doesn't break the form.
+     */
+    lookup: (code: string, signal?: AbortSignal) =>
+      request<ReferralLookupResponse>(`/referrals/lookup/${encodeURIComponent(code)}`, {
+        skipAuth: true,
+        signal,
+      }),
+    /**
+     * Attach the authenticated user to an inviter by code. Sent right after a
+     * successful registration when the form carried a `?ref=` query.
+     */
+    bind: (dto: ReferralBindDto) =>
+      request<void>('/referrals/bind', { method: 'POST', json: dto, noRetry: true }),
   },
 } as const;
 

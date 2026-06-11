@@ -14,3 +14,5 @@ export * from './payments';
 export * from './matchmaking';
 export * from './settings';
 export * from './socket';
+export * from './referrals';
+export * from './achievements';

@@ -1,252 +1,164 @@
 /**
  * Landing / home page for ruletka.top.
  *
- * Dark-first, atmospheric hero with layered gradient glows + grain, a neon
- * gradient headline, primary CTA to the video roulette, a live-feel teaser of
- * the two-direction Top marquee, a trust/stats strip and feature cards.
+ * SEO-first rewrite. The page is now a long-form marketing+content surface
+ * composed of small, focused section components in `components/landing/*`:
  *
- * SERVER COMPONENT: the whole marketing tree is static server HTML — the LCP
- * headline (`landing.headline1/2`), subheading, CTAs and trust row paint at
- * their final visible state with NO client JS and NO opacity:0-until-hydration
- * delay. The former framer-motion staggered entrance is replaced by the CSS
- * `.landing-rise` utility (globals.css), which respects `prefers-reduced-motion`
- * via the global reduced-motion rule. The only client island is `TopMarquee`
- * (its own `'use client'`). All copy is localized via next-intl (`landing` +
- * `common`) using the server `getTranslations` API.
+ *   1. Hero            — single H1 + signup/login CTAs + trust + stats + Top teaser
+ *   2. WhatIs          — 3 prose paragraphs explaining the product (organic search)
+ *   3. HowItWorks      — H2 + 3 numbered steps with H3
+ *   4. FeaturesGrid    — 6 feature cards (H3 each + 2-sentence real prose)
+ *   5. SafetySection   — the trust-&-safety story (Turnstile, Sightengine, mods)
+ *   6. TopSection      — semantic wrap around the existing TopMarquee client island
+ *   7. PricingSection  — Free / Premium Monthly (399 ₽) / Premium Yearly (3499 ₽)
+ *   8. FaqSection      — 10 native `<details>` Q+A (drives FAQPage JSON-LD)
+ *   9. FinalCta        — second-chance signup band at the page foot
+ *
+ * Every section is a SERVER component except `TopMarquee`, the only client
+ * island in the tree. The LCP element (the hero H1) paints from the initial
+ * HTML — no `landing-rise`, no `opacity:0` gate.
+ *
+ * Structured data — one JSON-LD blob in the page body covering:
+ *   - Organization + WebSite           (also in root layout; ok to repeat by `@id`)
+ *   - SiteNavigationElement (×N)       (primary nav)
+ *   - WebApplication                   (the social roulette product)
+ *   - SoftwareApplication w/ AggregateOffer (Premium price band)
+ *   - FAQPage                          (mirrors the visible FAQ 1:1)
+ *   - BreadcrumbList                   (home, 1 level)
  */
-import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
-import { ArrowRight, Globe2, ShieldCheck, Sparkles, Zap } from 'lucide-react';
-import { FEATURE_HIGHLIGHTS, ROUTES } from '@/config/nav';
-import { TopMarquee } from '@/components/top-marquee';
+import type { Metadata } from 'next';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { JsonLdScript } from '@/components/json-ld';
-import { webApplicationLd } from '@/lib/json-ld';
-import { cn } from '@/lib/cn';
+import {
+  faqPageLd,
+  homeBreadcrumbLd,
+  siteNavigationLd,
+  softwareApplicationLd,
+  webApplicationLd,
+} from '@/lib/json-ld';
+import { PRIMARY_NAV, USER_MENU } from '@/config/nav';
+import { LandingHero } from '@/components/landing/hero';
+import { WhatIsSection } from '@/components/landing/what-is-section';
+import { HowItWorksSection } from '@/components/landing/how-it-works';
+import { FeaturesGrid } from '@/components/landing/features-grid';
+import { SafetySection } from '@/components/landing/safety-section';
+import { LandingTopSection } from '@/components/landing/top-section';
+import { PricingSection } from '@/components/landing/pricing-section';
+import { FaqSection } from '@/components/landing/faq-section';
+import { FinalCta } from '@/components/landing/final-cta';
+import { PRICING_TIERS } from '@/components/landing/constants';
 
-/** Stat keys — values + labels live in the `landing.stats.*` messages. */
-const STAT_KEYS = ['countries', 'connect', 'live'] as const;
+/**
+ * Per-page metadata for `/`. Lives alongside the root-layout metadata: the
+ * layout sets the SITE defaults (title template, OG site name, canonical
+ * scope, manifest), while this hook concretizes the HOME page title +
+ * description + canonical + hreflang for the public root URL.
+ *
+ * `og:image` is wired automatically by Next via the file-system convention —
+ * `app/opengraph-image.tsx` is picked up as the OG image for this route, and
+ * `app/twitter-image.tsx` becomes the Twitter card image. No manual `images:`
+ * URL is needed and we keep the per-locale, dynamic OG renderer intact.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('metadata');
+  const tl = await getTranslations('landing');
+  const locale = await getLocale();
 
-/** Trust row — icon + key into the `landing.trust.*` messages. */
-const TRUST = [
-  { icon: Zap, key: 'instant' },
-  { icon: ShieldCheck, key: 'moderation' },
-  { icon: Globe2, key: 'global' },
-] as const;
+  return {
+    title: t('titleDefault'),
+    description: t('description'),
+    keywords: t.raw('keywords') as string[],
+    alternates: {
+      canonical: '/',
+      languages: {
+        ru: '/',
+        en: '/',
+        'x-default': '/',
+      },
+    },
+    openGraph: {
+      type: 'website',
+      url: 'https://ruletka.top/',
+      siteName: 'ruletka.top',
+      title: t('ogTitle'),
+      description: t('ogDescription'),
+      locale: locale === 'en' ? 'en_US' : 'ru_RU',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: t('twitterTitle'),
+      description: t('twitterDescription'),
+    },
+    // Belt-and-braces: a couple of social/legacy meta tags some scrapers still
+    // read. `subject` is the H1 promise mirrored as a meta tag for crawlers
+    // that don't parse JSON-LD.
+    other: {
+      'application-name': 'ruletka.top',
+      'subject': tl('headline1'),
+    },
+  };
+}
 
 export default async function HomePage() {
   const t = await getTranslations('landing');
-  const tc = await getTranslations('common');
+  const tm = await getTranslations('metadata');
+
+  // ── Structured data ──────────────────────────────────────────────────
+  // Pricing band for the SoftwareApplication AggregateOffer is read straight
+  // from PRICING_TIERS so the JSON-LD never drifts from the visible cards.
+  const paidPrices = PRICING_TIERS.filter((tier) => tier.priceRub > 0).map((tier) => tier.priceRub);
+  const lowPriceRub = paidPrices.length ? Math.min(...paidPrices) : 0;
+  const highPriceRub = paidPrices.length ? Math.max(...paidPrices) : 0;
+
+  // FAQ — must mirror the visible `<details>` 1:1 (10 items).
+  const faqItems = (t.raw('faq.items') as { q: string; a: string }[]).map((item) => ({
+    question: item.q,
+    answer: item.a,
+  }));
+
+  // Primary navigation — flatten into SiteNavigationElement nodes (helps
+  // sitelinks under the brand snippet).
+  const navNodes = siteNavigationLd(
+    [...PRIMARY_NAV, ...USER_MENU].map((item) => ({ name: item.label, path: item.href })),
+  );
+
+  const structuredData = [
+    webApplicationLd(t('headline1'), t('subheading')),
+    softwareApplicationLd(tm('titleDefault'), tm('description'), {
+      lowPriceRub,
+      highPriceRub,
+      offerCount: paidPrices.length,
+    }),
+    faqPageLd(faqItems),
+    homeBreadcrumbLd('ruletka.top'),
+    ...navNodes,
+  ];
 
   return (
     <div className="grain relative overflow-hidden">
-      {/* Landing-specific structured data: WebApplication (social roulette). The
-          site-wide Organization + WebSite nodes live in the root layout. */}
-      <JsonLdScript data={webApplicationLd(t('headline1'), t('subheading'))} />
+      {/* Landing-specific structured data. Site-wide Organization + WebSite
+          nodes are already emitted by the root layout. */}
+      <JsonLdScript data={structuredData} />
 
-      {/* ── Atmospheric background ───────────────────────────────────── */}
+      {/* ── Atmospheric background — purely decorative ───────────────── */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-        {/* Layered neon glows. */}
         <div className="absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,var(--color-neon-violet)_0%,transparent_60%)] opacity-25 blur-3xl" />
         <div className="absolute -right-24 top-32 h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle,var(--color-neon-magenta)_0%,transparent_60%)] opacity-20 blur-3xl" />
         <div className="absolute -left-24 top-64 h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,var(--color-neon-cyan)_0%,transparent_60%)] opacity-20 blur-3xl" />
-        {/* Faint grid for tech texture. */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:64px_64px] opacity-[0.15] [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
       </div>
 
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 pb-12 pt-16 sm:px-6 sm:pt-24 lg:px-8">
-        <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
-          <div>
-            <div className="landing-rise">
-              <span className="glass-panel inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-neon-cyan)] opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-neon-cyan)]" />
-                </span>
-                {t('liveBadge')}
-              </span>
-            </div>
-
-            {/* LCP headline — painted at its final visible state (no entrance
-                animation) so it never waits on hydration. */}
-            <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
-              {t('headline1')}
-              <br />
-              <span className="text-gradient-neon">{t('headline2')}</span>
-            </h1>
-
-            <p
-              className="landing-rise mt-6 max-w-xl text-balance text-lg text-muted-foreground"
-              style={{ '--rise-delay': '80ms' } as React.CSSProperties}
-            >
-              {t('subheading')}
-            </p>
-
-            <div
-              className="landing-rise mt-9 flex flex-col gap-3 sm:flex-row"
-              style={{ '--rise-delay': '160ms' } as React.CSSProperties}
-            >
-              <Link
-                href={ROUTES.video}
-                className={cn(
-                  'group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl px-7 py-3.5',
-                  'text-base font-semibold text-primary-foreground',
-                  'bg-gradient-to-r from-[var(--color-neon-violet)] via-[var(--color-neon-magenta)] to-[var(--color-neon-violet)] bg-[length:200%_100%] bg-left',
-                  'shadow-[0_8px_30px_-8px_var(--color-neon-violet)] transition-[background-position,transform] duration-500',
-                  'hover:bg-right hover:-translate-y-0.5 active:translate-y-0',
-                )}
-              >
-                {t('ctaStart')}
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-              <Link
-                href={ROUTES.voice}
-                className={cn(
-                  'inline-flex items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-base font-semibold',
-                  'glass-panel text-foreground transition-colors hover:bg-card/80',
-                )}
-              >
-                <Sparkles className="h-5 w-5 text-[var(--color-neon-cyan)]" />
-                {t('ctaVoice')}
-              </Link>
-            </div>
-
-            {/* Trust row */}
-            <ul
-              className="landing-rise mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground"
-              style={{ '--rise-delay': '240ms' } as React.CSSProperties}
-            >
-              {TRUST.map(({ icon: Icon, key }) => (
-                <li key={key} className="inline-flex items-center gap-2">
-                  <Icon className="h-4 w-4 text-[var(--color-neon-violet)]" aria-hidden="true" />
-                  {t(`trust.${key}`)}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Top marquee teaser */}
-          <div
-            className="landing-rise relative"
-            style={{ '--rise-delay': '200ms' } as React.CSSProperties}
-          >
-            <div className="glass-panel overflow-hidden rounded-3xl p-4">
-              <div className="mb-3 flex items-center justify-between px-1">
-                <span className="font-display text-sm font-bold">{t('topTeaser.title')}</span>
-                <Link
-                  href={ROUTES.top}
-                  className="text-xs font-medium text-[var(--color-neon-cyan)] transition-colors hover:text-foreground"
-                >
-                  {t('topTeaser.viewAll')}
-                </Link>
-              </div>
-              <TopMarquee />
-            </div>
-            {/* Glow behind the panel. */}
-            <div
-              aria-hidden="true"
-              className="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-br from-[var(--color-neon-violet)]/20 via-transparent to-[var(--color-neon-cyan)]/20 blur-2xl"
-            />
-          </div>
-        </div>
-
-        {/* Stats strip */}
-        <div className="landing-rise glass-panel mt-16 grid grid-cols-1 divide-y divide-border/60 rounded-2xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          {STAT_KEYS.map((key) => (
-            <div key={key} className="flex flex-col items-center gap-1 px-6 py-6">
-              <span className="font-display text-3xl font-bold text-gradient-neon">
-                {t(`stats.${key}.value`)}
-              </span>
-              <span className="text-sm text-muted-foreground">{t(`stats.${key}.label`)}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Features ─────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            {t('features.title')}
-          </h2>
-          <p className="mt-4 text-muted-foreground">{t('features.subtitle')}</p>
-        </div>
-
-        {/* The cards are always visible: each plays a one-shot CSS fade-up on
-            load (staggered), and `prefers-reduced-motion` snaps them to their
-            final state. Replaces the prior `animate="show"` framer-motion grid. */}
-        <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURE_HIGHLIGHTS.map((feature, i) => {
-            const Icon = feature.icon;
-            return (
-              <li
-                key={feature.key}
-                className="landing-rise"
-                style={{ '--rise-delay': `${i * 80}ms` } as React.CSSProperties}
-              >
-                <Link
-                  href={feature.href}
-                  className="group relative block h-full overflow-hidden rounded-2xl"
-                >
-                  {/* Accent glow that intensifies on hover. */}
-                  <div
-                    aria-hidden="true"
-                    className={cn(
-                      'absolute inset-0 bg-gradient-to-br opacity-60 transition-opacity duration-300 group-hover:opacity-100',
-                      feature.accent,
-                    )}
-                  />
-                  <div className="glass-panel relative flex h-full flex-col gap-4 rounded-2xl p-6">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-card/70 text-foreground ring-1 ring-border/70">
-                      <Icon className="h-6 w-6" aria-hidden="true" />
-                    </span>
-                    <div className="space-y-2">
-                      <h3 className="font-display text-lg font-bold">
-                        {t(`features.${feature.key}.title`)}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {t(`features.${feature.key}.description`)}
-                      </p>
-                    </div>
-                    <span className="mt-auto inline-flex items-center gap-1 text-sm font-medium text-foreground/80 transition-colors group-hover:text-foreground">
-                      {tc('learnMore')}
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      {/* ── Final CTA ────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 pb-8 sm:px-6 lg:px-8">
-        <div className="landing-rise relative overflow-hidden rounded-3xl px-6 py-14 text-center sm:px-12">
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 -z-10 bg-gradient-to-br from-[var(--color-neon-violet)]/25 via-card to-[var(--color-neon-cyan)]/20"
-          />
-          <div className="glass-panel absolute inset-0 -z-10 rounded-3xl" aria-hidden="true" />
-          <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            {t('finalCta.title')}
-          </h2>
-          <p className="mx-auto mt-4 max-w-lg text-muted-foreground">{t('finalCta.subtitle')}</p>
-          <Link
-            href={ROUTES.video}
-            className={cn(
-              'group mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4',
-              'text-base font-semibold text-primary-foreground',
-              'bg-gradient-to-r from-[var(--color-neon-violet)] via-[var(--color-neon-magenta)] to-[var(--color-neon-violet)] bg-[length:200%_100%] bg-left',
-              'shadow-[0_8px_30px_-8px_var(--color-neon-violet)] transition-[background-position,transform] duration-500',
-              'hover:bg-right hover:-translate-y-0.5 active:translate-y-0',
-            )}
-          >
-            {t('finalCta.button')}
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </Link>
-        </div>
-      </section>
+      {/* The brief: keep heading hierarchy strict — exactly one h1 (in Hero),
+          then h2 per section, h3 per item. Verified by reading each component. */}
+      <LandingHero />
+      <WhatIsSection />
+      <HowItWorksSection />
+      <FeaturesGrid />
+      <SafetySection />
+      <LandingTopSection />
+      <PricingSection />
+      <FaqSection />
+      <FinalCta />
     </div>
   );
 }

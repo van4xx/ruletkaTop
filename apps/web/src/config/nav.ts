@@ -25,6 +25,7 @@ import {
   MessagesSquare,
   Mic,
   Settings,
+  Share2,
   Sparkles,
   Trophy,
   UserRound,
@@ -56,6 +57,8 @@ export const ROUTES = {
   premium: '/premium',
   leaderboard: '/leaderboard',
   onboarding: '/onboarding',
+  /** 3-tier referral program — share link + downline stats. */
+  referrals: '/referrals',
 
   // ── Legal / informational (now real pages). ──
   rules: '/rules',
@@ -215,6 +218,15 @@ export const MOBILE_NAV: readonly NavItem[] = [
     description: 'Твой профиль',
   },
   {
+    // Tucked into the mobile drawer per the brief — secondary surface, not
+    // primary. The desktop header gets it via COMMAND_ITEMS (⌘K) below.
+    key: 'referrals',
+    label: 'Рефералы',
+    href: ROUTES.referrals,
+    icon: Share2,
+    description: 'Приглашай и зарабатывай монеты',
+  },
+  {
     key: 'settings',
     label: 'Настройки',
     href: ROUTES.settings,
@@ -301,6 +313,14 @@ export const COMMAND_ITEMS: readonly NavItem[] = [
     icon: Trophy,
     description: 'Таблица лидеров',
     keywords: ['leaderboard', 'рейтинг'],
+  },
+  {
+    key: 'referrals',
+    label: 'Рефералы',
+    href: ROUTES.referrals,
+    icon: Share2,
+    description: 'Реферальная программа — 3 уровня',
+    keywords: ['referrals', 'invites', 'приглашения', 'код'],
   },
 ] as const;
 

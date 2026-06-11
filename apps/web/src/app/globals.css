@@ -312,6 +312,30 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Landing — ambient shimmer for accent text/badges (scoped utility).
+ *
+ * Pure CSS keyframe so the marketing tree stays a Server Component with NO
+ * client JS. Sweeps a moving gradient through `background-position` rather
+ * than animating `opacity` or `transform`, so painting cost is minimal. The
+ * global `prefers-reduced-motion` rule above collapses this to 0.001ms.
+ * ------------------------------------------------------------------------- */
+@keyframes landing-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@layer components {
+  .landing-shimmer {
+    background-size: 200% 100%;
+    animation: landing-shimmer 6s linear infinite;
+  }
+}
+
 /* Two-direction "Top" marquee keyframes (teaser on the landing page). */
 @keyframes marquee-up {
   from {
@@ -417,5 +441,51 @@
   .auth-scanline {
     animation: auth-scanline 9s linear infinite;
     animation-delay: calc(var(--i, 0) * 1.4s);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * AuthShell v2 — "constellation map" brand panel.
+ * Pulsing edges (dash slides along the line via stroke-dashoffset) + softly
+ * twinkling nodes. All steady-state animation is CSS so no JS loop runs after
+ * mount; the global prefers-reduced-motion rule collapses everything to a
+ * 0.001ms one-shot, landing each element on its visible end-state.
+ * ------------------------------------------------------------------------- */
+@keyframes auth2-edge-pulse {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 0.25;
+  }
+  45% {
+    opacity: 0.95;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0.25;
+  }
+}
+
+@keyframes auth2-node-twinkle {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@layer components {
+  .auth2-edge {
+    animation: auth2-edge-pulse 5.5s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * 280ms);
+  }
+  .auth2-node {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: auth2-node-twinkle 4.5s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * 340ms);
   }
 }

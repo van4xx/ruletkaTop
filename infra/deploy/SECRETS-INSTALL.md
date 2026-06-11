@@ -24,8 +24,8 @@
 | **Cloudflare Turnstile** (`TURNSTILE_SECRET` + `NEXT_PUBLIC_TURNSTILE_SITE_KEY`) | **YES** — API fails-fast at boot without the secret; widget hides without the site key → registration closed. | No — operator pulls from Cloudflare. | §1 below. `bootstrap.sh` REQUIRES both; this section covers re-install / rotate. |
 | **T-Bank** (payments — `TBANK_*`) | YES (before opening paid flows) | No | §2 below. Restart API; no rebuild. |
 | **Sightengine** (server NSFW scorer — `SIGHTENGINE_API_USER` + `MODERATION_PROVIDER_API_KEY`) | Recommended | No | §3 below. Restart API. |
-| **`METRICS_TOKEN`** (Prometheus bearer) | YES (prod fails-fast) | **YES — `bootstrap.sh` auto-generates** | §4. Nothing to do — operator never touches it. |
-| **Mongo auth** (keyFile + root/app passwords) | YES | **YES — `bootstrap.sh` auto-generates on first deploy** | §5. Nothing to do unless rotating. |
+| **`METRICS_TOKEN`** (Prometheus bearer) | YES (prod fails-fast) | **YES — `bootstrap.sh` auto-generates AND self-heals** | §4. Nothing to do — operator never touches it. Missing on an older `.env`? Next bootstrap run upserts it automatically. |
+| **Mongo auth** (keyFile + root/app passwords) | YES | **YES — `bootstrap.sh` auto-generates on first deploy AND self-heals on every subsequent run** | §5. Nothing to do unless rotating. If any of `MONGO_ROOT_USERNAME` / `MONGO_ROOT_PASSWORD` / `MONGO_APP_USERNAME` / `MONGO_APP_PASSWORD` were missing from a pre-existing `.env`, bootstrap upserts defaults+fresh passwords; if the on-disk Mongo nodes already came up `--auth --keyFile` with no users (lost the root creation race), bootstrap also runs a one-shot **localhost-exception** user-bootstrap on `mongo1` to create root + app — the same recovery we used to run by hand. |
 | **Firebase** (mobile push) | **NO — deferred** | n/a | §6. Skip until after launch. |
 | **NSFW TFLite model** (mobile on-device) | **NO — deferred** | n/a | §7. Drop the binary if/when shipped to mobile users. |
 | After-deploy index sync (`RUN_INDEX_SYNC=true`) | YES — on the **first** deploy only | n/a | §8. |
@@ -229,7 +229,14 @@ no-op) and the moderation record carries the provider's verdict.
 **Nothing to do.** `bootstrap.sh` auto-generates this with `openssl rand -hex 32`
 on first deploy and writes it to `.env`; the API's `MetricsTokenGuard`
 fails-fast at boot in prod if it's blank, so a fresh deploy cannot ship
-`/api/metrics` open to the public edge. To read it back:
+`/api/metrics` open to the public edge.
+
+**Self-heals on every deploy.** If an older `.env` is missing the key (e.g.
+the server was installed before this var became required — the exact failure
+we hit today), the next bootstrap run's `upsert_env` pass detects the gap
+and writes a fresh token automatically. No operator step.
+
+To read it back:
 
 ```bash
 grep -E '^METRICS_TOKEN=' /opt/ruletka/.env | cut -d= -f2-
@@ -243,17 +250,33 @@ the Prometheus config in lockstep.
 
 ## 5. Mongo authentication
 
-**Nothing to do** on a fresh first deploy. `bootstrap.sh` generates **all four
-secrets** automatically (you never see/handle them):
+**Nothing to do** on a fresh first deploy — and **nothing to do on an upgrade
+from an older `.env`** either. `bootstrap.sh` covers three scenarios:
 
-- `infra/secrets/mongo-keyfile` — `openssl rand -base64 756`, chmod 400 (the
-  replica-set internal keyFile bind-mounted into all three nodes).
-- `MONGO_ROOT_USERNAME=root` + `MONGO_ROOT_PASSWORD=<openssl rand -hex 24>`.
-- `MONGO_APP_USERNAME=app` + `MONGO_APP_PASSWORD=<openssl rand -hex 24>` (the
-  least-privilege user the API connects as).
+1. **Fresh `.env`** — generates all four secrets in the one-time heredoc:
+   - `infra/secrets/mongo-keyfile` — `openssl rand -base64 756`, chmod 400 (the
+     replica-set internal keyFile bind-mounted into all three nodes).
+   - `MONGO_ROOT_USERNAME=root` + `MONGO_ROOT_PASSWORD=<openssl rand -hex 24>`.
+   - `MONGO_APP_USERNAME=app` + `MONGO_APP_PASSWORD=<openssl rand -hex 24>` (the
+     least-privilege user the API connects as).
+   - `MONGODB_URI=mongodb://app:<pw>@mongo1:27017,mongo2:27017,mongo3:27017/ruletka?replicaSet=rs0&authSource=ruletka&…`.
 
-The credentialed `MONGODB_URI` in `.env` is built from these and is the single
-source of truth (compose reads it via `${MONGODB_URI:?…}`).
+2. **Pre-existing `.env` that pre-dates the Mongo-auth rollout** — bootstrap's
+   `upsert_env` self-heal pass runs on every deploy, so missing `MONGO_*` keys
+   are upserted with safe defaults (`root` / `app` usernames + fresh 24-byte
+   hex passwords), and a `MONGODB_URI` that's empty or still uses the dev
+   `directConnection` format is rebuilt as the canonical replica-set URI.
+
+3. **Mongo nodes already booted under `--auth --keyFile` with NO users** (lost
+   the image-entrypoint root-creation race — today's exact failure mode):
+   bootstrap waits for `mongo1` to answer `ping`, then uses the **MongoDB
+   localhost-exception** to create the root user on the `admin` db and the
+   least-privilege `app` user on the `ruletka` db. The exception only works
+   while `admin.system.users` is empty — re-running this step after users
+   exist is a clean no-op (it confirms root authenticates and exits).
+
+The credentialed `MONGODB_URI` in `.env` is built from the four secrets and is
+the single source of truth (compose reads it via `${MONGODB_URI:?…}`).
 
 > ⚠️ The keyFile is part of each node's on-disk identity. Do NOT regenerate it
 > against existing `mongoN-data` volumes — follow MongoDB's keyFile-rotation

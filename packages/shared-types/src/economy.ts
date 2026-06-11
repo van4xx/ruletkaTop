@@ -16,6 +16,15 @@ export const coinTxTypeSchema = z.enum([
   'cover',
   'bonus',
   'refund',
+  /**
+   * 3-tier referral reward credit. Distinct from `bonus` so the wallet history
+   * UI / admin reconciliation can group referral earnings separately. The
+   * ledger row's `refId` namespace is
+   * `referral-reward:T{tier}:{purchaserId}:{purchaseLedgerId}` and rides the
+   * same partial-unique `(type, refId)` index, so a redelivered webhook or
+   * retried sweep can never double-credit the inviter.
+   */
+  'referral',
 ]);
 export type CoinTxType = z.infer<typeof coinTxTypeSchema>;
 

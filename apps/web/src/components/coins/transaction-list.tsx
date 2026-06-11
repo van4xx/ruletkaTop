@@ -25,6 +25,9 @@ import { EmptyState, ErrorState } from '@/components/economy/states';
 const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: 'in' | 'out' }> = {
   purchase: { icon: ShoppingCart, tone: 'in' },
   bonus: { icon: Sparkles, tone: 'in' },
+  // 3-tier referral reward — same "incoming" tone as bonus but distinct icon
+  // so the wallet history can be scanned at a glance for invite earnings.
+  referral: { icon: Sparkles, tone: 'in' },
   gift_in: { icon: Gift, tone: 'in' },
   refund: { icon: RotateCcw, tone: 'in' },
   gift_out: { icon: Gift, tone: 'out' },

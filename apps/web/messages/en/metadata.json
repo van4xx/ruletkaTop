@@ -1,19 +1,26 @@
 {
-  "titleDefault": "ruletka.top — video & voice roulette",
+  "titleDefault": "ruletka.top — video chat, video roulette and voice roulette | Online chat",
   "titleTemplate": "%s · ruletka.top",
-  "description": "The next-generation video and voice roulette. Random video calls, voice chat, gifts and friends from all over the world.",
-  "ogTitle": "ruletka.top — video & voice roulette",
-  "ogDescription": "Random video calls and voice chat with people around the world. Send gifts, add friends, reach the Top.",
-  "twitterTitle": "ruletka.top — video & voice roulette",
-  "twitterDescription": "Random video calls and voice chat from around the world.",
+  "description": "The next-generation video roulette and voice roulette. Random video calls, conversations by interest, new connections and virtual gifts. 120+ countries online, sign up free in under a minute.",
+  "ogTitle": "ruletka.top — video chat, video roulette and voice roulette",
+  "ogDescription": "Random video calls and voice chat with people around the world. Interest-based meets, gifts, friends, Premium filters and the daily Top.",
+  "twitterTitle": "ruletka.top — video chat and voice roulette",
+  "twitterDescription": "Random video calls and voice chat from around the world. 120+ countries online, sign up free.",
   "keywords": [
     "video chat",
-    "roulette",
     "video roulette",
+    "chat roulette",
     "voice chat",
+    "voice roulette",
     "random chat",
-    "meet people",
     "online chat",
-    "omegle alternative"
+    "meet people",
+    "make friends online",
+    "anonymous chat",
+    "omegle alternative",
+    "free video chat",
+    "talk to strangers",
+    "interest chat",
+    "language exchange chat"
   ]
 }

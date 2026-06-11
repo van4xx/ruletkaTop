@@ -87,6 +87,7 @@
   "txType": {
     "purchase": "Coin purchase",
     "bonus": "Bonus",
+    "referral": "Referral bonus",
     "gift_in": "Gift received",
     "refund": "Refund",
     "gift_out": "Gift sent",

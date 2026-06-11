@@ -23,6 +23,7 @@ import { useAuth } from '@/features/auth';
 import { usePresence } from '@/features/friends/use-presence';
 import { useIsPremium } from '@/features/economy/use-me';
 import { ErrorState, StatePanel } from '@/components/social/state-views';
+import { AchievementsStrip } from '@/components/profile/achievements-strip';
 import { ProfileHeader } from '@/components/profile/profile-header';
 import { ProfileStats } from '@/components/profile/profile-stats';
 import { ProfileTabs } from '@/components/profile/profile-tabs';
@@ -113,6 +114,10 @@ export function PublicProfileClient({ profileId }: { profileId: string }) {
         isTopPlaced={topPlacement.isPlaced}
         topLoading={topPlacement.isLoading}
       />
+
+      {/* Newest unlocked badges. Self-hides when the user has none or when
+          the privacy gate 404s the public read for this viewer. */}
+      <AchievementsStrip userId={profileId} />
 
       <ProfileTabs
         profile={profile}

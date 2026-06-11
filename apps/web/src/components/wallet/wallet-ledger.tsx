@@ -33,6 +33,9 @@ const TX_META: Record<CoinTxType, { icon: typeof Gift; tone: Tone; badge: BadgeP
   {
     purchase: { icon: ShoppingCart, tone: 'in', badge: 'coin' },
     bonus: { icon: Sparkles, tone: 'in', badge: 'success' },
+    // 3-tier referral reward — incoming, badge tinted accent so a sequence of
+    // referral credits is visually distinct from generic bonuses.
+    referral: { icon: Sparkles, tone: 'in', badge: 'accent' },
     gift_in: { icon: Gift, tone: 'in', badge: 'success' },
     refund: { icon: RotateCcw, tone: 'in', badge: 'accent' },
     gift_out: { icon: Gift, tone: 'out', badge: 'neutral' },

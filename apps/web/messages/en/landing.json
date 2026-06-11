@@ -1,17 +1,18 @@
 {
   "liveBadge": "Live now — jump in",
-  "headline1": "Meet the world",
-  "headline2": "in one click",
-  "subheading": "The next-generation video and voice roulette. Random partners, real conversations, gifts and friends — no borders, no waiting.",
-  "ctaStart": "Start",
+  "headline1": "Meet new people, video chat",
+  "headline2": "with the whole world in one click",
+  "subheading": "ruletka.top is a next-generation video roulette and voice chat. Random partners, real conversations by interest, gifts and friends — no borders, no waiting, sign up in three steps.",
+  "ctaStart": "Sign up free",
+  "ctaSecondary": "Log in",
   "ctaVoice": "Voice roulette",
   "trust": {
-    "instant": "Instant connect",
-    "moderation": "Moderation & reports",
-    "global": "From all over the world"
+    "instant": "Instant connect under 1 second",
+    "moderation": "24/7 moderation and anti-abuse",
+    "global": "120+ countries and thousands online"
   },
   "topTeaser": {
-    "title": "🔥 Top on air",
+    "title": "Top on air",
     "viewAll": "See the full Top →"
   },
   "stats": {
@@ -19,33 +20,169 @@
     "connect": { "value": "<1 sec", "label": "to connect" },
     "live": { "value": "24/7", "label": "live, always on" }
   },
+  "whatIs": {
+    "title": "What is ruletka.top",
+    "lede": "An online video chat and voice roulette with real people from all over the world. Start new connections in one click and have real conversations.",
+    "p1": "ruletka.top is a free video chat and voice roulette where you meet random partners from all over the world. Unlike classic chat-roulettes, smart interest, city and language matching is built in, so every random video call turns into a real conversation instead of an endless «next».",
+    "p2": "The service is built for people looking for new online connections, language practice, friends with shared interests, or simply lively video chat without the boredom of generic dating apps. Launch the video chat straight from the browser on desktop or mobile — no install required.",
+    "p3": "Inside the platform: video roulette, voice roulette, profiles, text chat, animated gifts paid with coins, a daily Top leaderboard and the Premium subscription with gender and country filters. Every mode lives inside a single account, so you can continue a conversation or find a new partner with one motion."
+  },
+  "howItWorks": {
+    "title": "How the video chat works",
+    "lede": "Three steps from landing on the site to your first real conversation. All on one page, no complex setup.",
+    "step1": {
+      "title": "Create a free account",
+      "text": "Sign up in a minute with an email or log in if you are already here. Confirm you are 18+ and pass a quick Cloudflare Turnstile check — that keeps the chat free of bots and spam."
+    },
+    "step2": {
+      "title": "Turn on the camera or mic",
+      "text": "The browser asks for camera and microphone permission. Pick the video roulette or start with the voice roulette if you would rather hide your face. All streams go peer-to-peer via WebRTC."
+    },
+    "step3": {
+      "title": "Talk and make friends",
+      "text": "One swipe — and the next partner is on air. Liked someone? Add them as a friend, continue in DMs, send a gift. Report and block are one-tap if anything goes wrong."
+    }
+  },
   "features": {
-    "title": "Everything for real connection",
-    "subtitle": "From random video calls to gifts and premium perks — designed down to the detail.",
+    "title": "Platform features",
+    "subtitle": "From random video calls to gifts and Premium — designed down to the last detail.",
     "video": {
       "title": "Video roulette",
-      "description": "Instant video calls with random partners from around the world."
+      "description": "Instant video calls with random partners around the world. Video and audio travel peer-to-peer over WebRTC — low latency, nothing recorded on the server."
     },
     "voice": {
       "title": "Voice roulette",
-      "description": "Voice only, when you'd rather keep the camera off. Clean and anonymous."
-    },
-    "gifts": {
-      "title": "Gifts",
-      "description": "Send animated gifts for coins right during a call."
+      "description": "Voice only when you would rather keep the camera off. Perfect for language practice, late-night talks and anonymous meets. Clean, fast, no visual pressure."
     },
     "friends": {
-      "title": "Friends",
-      "description": "Add the people you click with and come back to chat."
+      "title": "Friends and contacts",
+      "description": "Add the people you click with as friends and come back to chat anytime. Notifications nudge you when a friend is back online."
+    },
+    "chat": {
+      "title": "Private chats",
+      "description": "Continue the conversation in text after a call. Emoji, reactions and full message history are supported. Great when you want the pace to slow down a bit."
+    },
+    "gifts": {
+      "title": "Gifts for coins",
+      "description": "Send animated gifts mid-call — a great way to stand out and say thanks. Some gifts are unlocked only for Premium subscribers."
     },
     "premium": {
-      "title": "Premium",
-      "description": "Gender and country filters, no ads, and priority in matching."
+      "title": "Premium subscription",
+      "description": "Gender and country filters, no ads, priority matchmaking and exclusive gifts. You can learn more about Premium on the subscription page."
     }
+  },
+  "safety": {
+    "title": "Safety and moderation",
+    "lede": "We invest in safety just as seriously as in call quality.",
+    "p1": "Every new signup runs through a Cloudflare Turnstile captcha and mandatory 18+ age confirmation. That keeps bots and scripts out of the video chat and reduces the risk of fake partners."
+    ,
+    "p2": "During a call frames are sampled by Sightengine AI moderation for NSFW content, nudity and abusive symbols. Suspicious frames go to a live moderation queue and the offender is temporarily restricted from going on air.",
+    "p3": "If a partner is being aggressive, Report and Block are one tap away. The moderation team is on duty 24/7 and treats incidents as first priority. Full community rules live in the platform rules section."
+  },
+  "topSection": {
+    "title": "Top stars on air today",
+    "lede": "The list of the most active partners over the last 24 hours. Climb the leaderboard with gifts, friends and air time."
+  },
+  "pricing": {
+    "title": "Pricing and Premium",
+    "lede": "Video chat and voice roulette are free. Premium unlocks filters, priority and exclusive gifts starting from 399 rubles per month.",
+    "free": {
+      "name": "Free",
+      "price": "$0",
+      "period": "forever",
+      "tagline": "You can meet people and chat without paying",
+      "perks": [
+        "Unlimited video and voice roulette",
+        "Direct messages and friends",
+        "Daily Top and daily bonus coins",
+        "Basic set of gifts"
+      ],
+      "cta": "Start free"
+    },
+    "lite": {
+      "name": "Premium Monthly",
+      "price": "$4.99",
+      "period": "per month",
+      "tagline": "Flexible subscription you can cancel any time",
+      "popular": "Popular",
+      "perks": [
+        "Gender and country filters",
+        "No ads and Premium badge",
+        "Priority in matchmaking",
+        "Exclusive Premium gifts"
+      ],
+      "cta": "Get for $4.99"
+    },
+    "pro": {
+      "name": "Premium Yearly",
+      "price": "$44.99",
+      "period": "per year",
+      "tagline": "Save 27% — 2 months free vs. monthly billing",
+      "perks": [
+        "Everything in Premium Monthly",
+        "Extra matchmaking priority",
+        "Extended Premium gifts set",
+        "Save about $15 a year"
+      ],
+      "cta": "Get for $44.99"
+    },
+    "footnote": "Payments go through CloudPayments and T-Bank. You can cancel in one click — no calls to support required."
+  },
+  "faq": {
+    "title": "Frequently asked questions about ruletka.top",
+    "lede": "Short answers to the most popular questions about video chat, safety and the subscription.",
+    "items": [
+      {
+        "q": "How do I start the video chat?",
+        "a": "Sign up in a minute by email, confirm you are 18+, allow camera and microphone access — and tap Start. In about a second you are on air with a random partner."
+      },
+      {
+        "q": "Is the video chat and voice roulette really free?",
+        "a": "Yes. The core features — video roulette, voice roulette, DMs and friends — are free and have no ad breaks inside a call. You only pay for gifts and the Premium subscription."
+      },
+      {
+        "q": "Is ruletka.top safe to use?",
+        "a": "We apply multi-layer protection: Cloudflare Turnstile at signup, Sightengine AI moderation on the video stream, one-tap report and block, a 24/7 moderation team and mandatory 18+ confirmation. That makes the risk profile much friendlier than classic open chat-roulettes."
+      },
+      {
+        "q": "Who can see my profile and call me?",
+        "a": "In privacy settings you choose who sees your profile and who is allowed to call you: everyone, friends only, or nobody. Defaults are conservative — change them under Settings → Privacy."
+      },
+      {
+        "q": "What are coins and how do I earn them?",
+        "a": "Coins are the internal currency for gifts and Premium perks. You can earn them via daily login (a 30-coin streak per week), in-call activity, or top up in the wallet via CloudPayments or T-Bank."
+      },
+      {
+        "q": "How do I cancel the Premium subscription?",
+        "a": "Open the Premium page and tap Cancel — recurring charges stop immediately and Premium access stays until the paid period ends. No calls or tickets required."
+      },
+      {
+        "q": "Is there a mobile app?",
+        "a": "The video chat works fully inside the mobile browser — Chrome and Safari support WebRTC, camera and microphone. We also ship native Android and iOS apps — follow updates on the About page."
+      },
+      {
+        "q": "What if a partner is abusive or breaks the rules?",
+        "a": "Tap Report straight from the call window and pick a reason — the partner is hidden immediately and the case goes to moderation. Severe offences lead to a device + account ban. Details live in the how-to-use guide."
+      },
+      {
+        "q": "Do I have to share my real name or phone?",
+        "a": "No. Sign up needs only an email — any nickname will do. We never ask for or store a phone, ID or real name. It is anonymous video chat with a human face."
+      },
+      {
+        "q": "Does the video chat work on slow internet?",
+        "a": "Yes. Video quality auto-adapts to the connection, and on a weak link you can switch to voice roulette. About 1 Mbps each way is the minimum comfortable bandwidth."
+      }
+    ]
   },
   "finalCta": {
     "title": "Ready to meet someone new?",
-    "subtitle": "No sign-up barriers to start. Tap — and you're live.",
-    "button": "Start now"
+    "subtitle": "No complicated signup. Email, a nickname — and you are on air.",
+    "button": "Sign up free",
+    "secondary": "I already have an account"
+  },
+  "links": {
+    "premium": "learn more about Premium",
+    "help": "how to use the service",
+    "rules": "platform rules"
   }
 }

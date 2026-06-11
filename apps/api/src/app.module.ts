@@ -11,6 +11,7 @@ import { ThrottlerBehindProxyGuard } from './common/throttler/throttler-behind-p
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { HealthModule } from './health/health.module';
 import { sentryEnabled } from './instrument';
+import { AchievementsModule } from './modules/achievements/achievements.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ChatModule } from './modules/chat/chat.module';
@@ -27,6 +28,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PremiumModule } from './modules/premium/premium.module';
 import { PresenceModule } from './modules/presence/presence.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
+import { ReferralsModule } from './modules/referrals/referrals.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { TopModule } from './modules/top/top.module';
 import { TurnModule } from './modules/turn/turn.module';
@@ -214,9 +216,22 @@ import { buildRedisOptions, RedisModule } from './redis/redis.module';
     LeaderboardModule,
     DailyBonusModule,
 
+    // 3-tier referral program — owns referrallinks/referraledges + a BullMQ
+    // sweep that fans out wallet credits to the up-to-three inviters of each
+    // coin purchase. Read-only against profiles/wallet ledger; mutations go
+    // through the already-exported WalletService.credit.
+    ReferralsModule,
+
     // Matchmaking + WebRTC
     MatchmakingModule,
     TurnModule,
+
+    // Achievements / badges — reads existing counters by collection name
+    // (matches/friendships/gifttransactions/messages/cointransactions/
+    // dailybonuses/topplacements) and exposes /achievements/{catalogue,me,user/:id}.
+    // Leaf-ish: imports ProfilesModule + PremiumModule (read-only); no module
+    // imports back, so wire ordering is free.
+    AchievementsModule,
 
     // Admin panel (expanded surface) — reuses the moderation staff guard; reads
     // existing collections by name; wires Wallet/Premium/Notifications for the

@@ -11,7 +11,7 @@
 > - `apps/web` (Next.js 16) — every `process.env.NEXT_PUBLIC_*` and other `process.env.*` in `src/` + config files.
 > - `apps/admin` (Vite React SPA) — `import.meta.env.VITE_*`.
 > - `infra/docker/docker-compose.prod.yml` — `build.args` + `environment` blocks.
-> - `infra/deploy/bootstrap.sh` — the `.env` heredoc and the `NEXT_PUBLIC_*` build args it forwards (it now also generates the Mongo auth secrets + replica-set keyFile and an auto `METRICS_TOKEN`).
+> - `infra/deploy/bootstrap.sh` — the `.env` heredoc and the `NEXT_PUBLIC_*` build args it forwards (it now also generates the Mongo auth secrets + replica-set keyFile and an auto `METRICS_TOKEN`), **plus a self-healing `upsert_env` pass that runs on every deploy** (not just the first) so a key newly required by the code lands on already-deployed servers without operator intervention. Today's failure class — `METRICS_TOKEN` + `MONGO_*` missing from an older `.env` — cannot recur.
 > - `.env.example` (repo root) — documented vs. actually-used.
 >
 > **Status legend**
@@ -23,8 +23,19 @@
 > - 🧩 **infra/compose** — provided by `docker-compose.prod.yml` (env or build-arg), not by the `.env` heredoc.
 >
 > **How `.env` works here (important):** `bootstrap.sh` generates `/opt/ruletka/.env`
-> **once** and never overwrites it (lines 72–150). To change a value later you edit
-> that file in place. The repo's documented pattern is:
+> **once** (full heredoc) and never overwrites EXISTING values. **On every subsequent
+> run** it executes a `upsert_env KEY VALUE` self-heal pass that ADDS any
+> code-required secret that's currently missing or blank — `METRICS_TOKEN`,
+> `MONGO_ROOT_USERNAME`/`MONGO_ROOT_PASSWORD`, `MONGO_APP_USERNAME`/`MONGO_APP_PASSWORD`,
+> and a canonical `MONGODB_URI` rebuild when the URI is empty or still uses the
+> dev `directConnection` format. Existing operator-supplied values (Turnstile,
+> T-Bank, Sightengine, SMTP_PASS) are **never** touched.
+>
+> **The operator therefore only ever supplies the secrets they alone hold**
+> (Turnstile, T-Bank, Sightengine, SMTP password — see `SECRETS-INSTALL.md`).
+> Everything else is auto-generated and self-heals across deploys.
+>
+> To change a value later you edit `.env` in place. The repo's documented pattern is:
 >
 > ```bash
 > cd /opt/ruletka

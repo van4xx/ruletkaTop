@@ -3,14 +3,14 @@
 /**
  * Split-screen shell for the auth pages.
  *
- * Left (lg+ only): a "live grid" brand panel — a 4x4 mosaic of breathing neon
- * portrait tiles (placeholder gradient blocks, NOT real photos) layered over the
- * brand aurora. A few tiles wear a LIVE dot that drifts between them, making
- * the abstract value-prop ("dozens of strangers, connecting right now") visually
- * literal. The headline and online-count caption sit above the grid.
+ * Left (lg+ only): an editorial "constellation" — pseudonymous "stars" scattered
+ * across a starry void, connected by faint edges that pulse one-by-one as if new
+ * matches were forming live. Pure SVG; positions are derived from a stable
+ * integer hash of the node index so SSR and CSR produce byte-identical markup.
+ * The headline + live caption sit above the figure.
  *
  * Right: the form, vertically centered. On mobile (< lg) the brand panel
- * collapses to a compact logo header above the form.
+ * collapses to the same compact RouletteEmblem header the previous shell used.
  */
 import Link from 'next/link';
 import { motion, type Variants } from 'framer-motion';
@@ -20,25 +20,84 @@ import { cn } from '@/lib/cn';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
-/**
- * Deterministic seed → 16 tile descriptors. Index-based so SSR and CSR produce
- * the exact same DOM (no hydration drift). Hues are picked from the brand palette
- * (cyan / magenta / violet) by index parity; "live" tiles are a fixed subset.
- */
-const TILE_COUNT = 16;
-const LIVE_INDICES = new Set([2, 5, 9, 14]);
-/** Two-letter glyphs that hint at "people" without naming real users. */
-const TILE_GLYPHS = [
-  'AX', 'KO', 'MY', 'JS', 'RU', 'EN', 'LV', 'TZ',
-  'NB', 'QO', 'PL', 'CY', 'GH', 'SD', 'IO', 'VX',
-] as const;
+/** SVG canvas in design units. The viewBox is fixed; the panel scales it. */
+const W = 520;
+const H = 560;
 
-/** Brand neon stops, indexed deterministically per tile. */
-const TILE_HUES: ReadonlyArray<readonly [string, string]> = [
-  ['var(--color-neon-cyan)', 'var(--color-neon-violet)'],
-  ['var(--color-neon-magenta)', 'var(--color-neon-cyan)'],
-  ['var(--color-neon-violet)', 'var(--color-neon-magenta)'],
-] as const;
+/**
+ * Deterministic integer hash for a non-negative input. xorshift-style mixing
+ * over a single u32; identical math runs on both server and client, so we never
+ * import a PRNG and never read Date/random. The two seeds (sx/sy) decouple the
+ * axes so x and y don't visibly correlate.
+ */
+function hash(n: number, seed: number): number {
+  let x = (n + 1) * 0x9e3779b1 + seed;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x85ebca6b);
+  x ^= x >>> 13;
+  x = Math.imul(x, 0xc2b2ae35);
+  x ^= x >>> 16;
+  return (x >>> 0) / 0xffffffff;
+}
+
+const NODE_COUNT = 14;
+
+/**
+ * Place stars deterministically inside a soft inset, with a couple of "anchor"
+ * nodes pinned near the optical centre so the cluster has a focal point.
+ */
+const NODES = Array.from({ length: NODE_COUNT }, (_, i) => {
+  const fx = hash(i, 0x1337);
+  const fy = hash(i, 0xbeef);
+  // Inset 10% on each side; anchors (i=0,1) pulled toward the centre.
+  const inset = 0.1;
+  let x = inset * W + fx * (1 - inset * 2) * W;
+  let y = inset * H + fy * (1 - inset * 2) * H;
+  if (i < 2) {
+    x = W * 0.5 + (fx - 0.5) * W * 0.25;
+    y = H * 0.45 + (fy - 0.5) * H * 0.3;
+  }
+  const r = 2 + hash(i, 0xc0de) * 2.5; // 2 – 4.5
+  // Cycle through brand neon stops so the field reads as one palette, not three.
+  const hueStops = [
+    'var(--color-neon-cyan)',
+    'var(--color-neon-magenta)',
+    'var(--color-neon-violet)',
+  ] as const;
+  const hue = hueStops[i % 3]!;
+  return { x, y, r, hue };
+});
+
+/**
+ * Edges connect each node to its nearest two neighbours (deduplicated). This
+ * yields a graph that *looks* organic — no triangulation library needed — and
+ * because input is deterministic the edge list is stable across renders.
+ */
+const EDGES = (() => {
+  const pairs: Array<{ a: number; b: number; len: number }> = [];
+  for (let i = 0; i < NODES.length; i++) {
+    const ds = NODES.map((n, j) => ({
+      j,
+      d: j === i ? Infinity : Math.hypot(n.x - NODES[i]!.x, n.y - NODES[i]!.y),
+    }))
+      .sort((p, q) => p.d - q.d)
+      .slice(0, 2);
+    for (const { j, d } of ds) {
+      const a = Math.min(i, j);
+      const b = Math.max(i, j);
+      if (!pairs.some((p) => p.a === a && p.b === b)) pairs.push({ a, b, len: d });
+    }
+  }
+  return pairs;
+})();
+
+/** Tiny "field stars" sprinkled behind the graph for depth. Pure decoration. */
+const FIELD_STARS = Array.from({ length: 36 }, (_, i) => ({
+  cx: hash(i, 0xfeed) * W,
+  cy: hash(i, 0xface) * H,
+  r: 0.4 + hash(i, 0xa11a) * 0.9,
+  o: 0.18 + hash(i, 0xb0b0) * 0.32,
+}));
 
 function RouletteEmblem() {
   return (
@@ -57,74 +116,82 @@ function RouletteEmblem() {
 }
 
 /**
- * Single grid tile — pure CSS+SVG, no images. Each tile breathes on a staggered
- * 6s loop; a fixed subset wears a pulsing "LIVE" dot.
+ * The constellation figure. Edges pulse one-by-one via a stroke-dashoffset loop
+ * staggered by index; nodes twinkle on a slower 4–7s cycle (cycle length seeded
+ * per-node so the field never feels metronomic).
  */
-function LiveTile({ index, glyph }: { index: number; glyph: string }) {
-  const [from, to] = TILE_HUES[index % TILE_HUES.length]!;
-  const isLive = LIVE_INDICES.has(index);
-  // Stagger the LIVE pulse across the 4 live tiles so they feel like independent
-  // events, not a synced strobe.
-  const liveOrder = isLive ? [...LIVE_INDICES].indexOf(index) : 0;
-  const liveDelay = `${liveOrder * 1750}ms`;
+function Constellation() {
   return (
-    <div
+    <svg
       aria-hidden="true"
-      className="auth-tile relative aspect-square overflow-hidden rounded-2xl border border-white/10"
-      style={
-        {
-          '--i': index,
-          backgroundImage: `linear-gradient(135deg, ${from} 0%, transparent 55%), linear-gradient(315deg, ${to} 0%, transparent 65%)`,
-          backgroundColor: 'rgba(10,10,16,0.85)',
-        } as React.CSSProperties
-      }
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="auth2-constellation block h-auto w-full max-w-[34rem]"
     >
-      {/* Subtle inner sheen — sells the "glass tile" feel. */}
-      <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent_40%)]" />
-      {/* Faint two-letter glyph stands in for an avatar without faking one. */}
-      <span className="absolute inset-0 flex items-center justify-center font-display text-base font-bold tracking-tight text-white/40">
-        {glyph}
-      </span>
-      {/* Scanline — only on every 3rd tile so the wall doesn't shimmer uniformly. */}
-      {index % 3 === 0 && (
-        <span
-          className="auth-scanline pointer-events-none absolute inset-x-0 top-0 h-6 bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.18),transparent)]"
-          style={{ '--i': index } as React.CSSProperties}
-        />
-      )}
-      {/* LIVE indicator — pulsing dot + ring corner badge. */}
-      {isLive && (
-        <>
-          <span
-            className="auth-tile-live-ring absolute inset-0 rounded-2xl ring-2 ring-[var(--color-neon-magenta)]"
-            style={{ '--live-delay': liveDelay } as React.CSSProperties}
-          />
-          <span
-            className="auth-tile-live-dot absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm"
-            style={{ '--live-delay': liveDelay } as React.CSSProperties}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-neon-magenta)] shadow-[0_0_8px_var(--color-neon-magenta)]" />
-            LIVE
-          </span>
-        </>
-      )}
-    </div>
-  );
-}
+      <defs>
+        <radialGradient id="auth2-vignette" cx="50%" cy="50%" r="65%">
+          <stop offset="55%" stopColor="rgba(8,8,14,0)" />
+          <stop offset="100%" stopColor="rgba(8,8,14,0.85)" />
+        </radialGradient>
+        <radialGradient id="auth2-node-cyan" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--color-neon-cyan)" stopOpacity="1" />
+          <stop offset="100%" stopColor="var(--color-neon-cyan)" stopOpacity="0" />
+        </radialGradient>
+      </defs>
 
-/** 4x4 mosaic — the centerpiece of the brand panel. */
-function LiveGrid() {
-  return (
-    <div
-      aria-hidden="true"
-      className="relative grid w-full max-w-md grid-cols-4 gap-2"
-    >
-      {Array.from({ length: TILE_COUNT }).map((_, i) => (
-        <LiveTile key={i} index={i} glyph={TILE_GLYPHS[i]!} />
+      {/* Far-field stars — static; tuned low-opacity so they read as depth, not noise. */}
+      {FIELD_STARS.map((s, i) => (
+        <circle key={`f${i}`} cx={s.cx} cy={s.cy} r={s.r} fill="white" opacity={s.o} />
       ))}
-      {/* Vignette so the grid melts into the aurora instead of squaring off. */}
-      <span className="pointer-events-none absolute inset-0 [background:radial-gradient(ellipse_at_center,transparent_55%,rgba(8,8,14,0.65)_100%)]" />
-    </div>
+
+      {/* Edges: each gets a fixed pathLength=1, then animates a dash sliding along it
+          (stroke-dashoffset loop). Stagger via per-edge --i so the pulse train
+          ripples across the graph instead of strobing in sync. */}
+      <g
+        fill="none"
+        stroke="var(--color-neon-violet)"
+        strokeWidth={0.7}
+        strokeLinecap="round"
+        opacity={0.55}
+      >
+        {EDGES.map((e, i) => {
+          const a = NODES[e.a]!;
+          const b = NODES[e.b]!;
+          return (
+            <line
+              key={`e${i}`}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              className="auth2-edge"
+              pathLength={1}
+              strokeDasharray="0.18 0.82"
+              style={{ '--i': i } as React.CSSProperties}
+            />
+          );
+        })}
+      </g>
+
+      {/* Nodes: outer halo (gradient circle) + bright core. Halo radius animates
+          on a per-node delay derived from index. */}
+      {NODES.map((n, i) => (
+        <g key={`n${i}`} className="auth2-node" style={{ '--i': i } as React.CSSProperties}>
+          <circle cx={n.x} cy={n.y} r={n.r * 4} fill={n.hue} opacity={0.18} />
+          <circle
+            cx={n.x}
+            cy={n.y}
+            r={n.r}
+            fill={n.hue}
+            style={{ filter: `drop-shadow(0 0 6px ${n.hue})` }}
+          />
+        </g>
+      ))}
+
+      {/* Vignette on top — same trick the old grid used to melt the figure into
+          the aurora instead of clipping at the SVG bounds. */}
+      <rect x={0} y={0} width={W} height={H} fill="url(#auth2-vignette)" />
+    </svg>
   );
 }
 
@@ -136,7 +203,7 @@ const rise: Variants = {
 export interface AuthShellProps {
   /** Form column. */
   children: React.ReactNode;
-  /** Headline shown above the live grid on large screens. */
+  /** Headline shown above the constellation on large screens. */
   pitch?: string;
 }
 
@@ -177,7 +244,6 @@ export function AuthShell({ children, pitch }: AuthShellProps) {
           </motion.div>
 
           <motion.div variants={rise} className="flex flex-col gap-3">
-            {/* Live-now caption — decorative dot pulses with one of the LIVE tiles. */}
             <div
               className="inline-flex w-fit items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground"
               aria-hidden="true"
@@ -195,10 +261,13 @@ export function AuthShell({ children, pitch }: AuthShellProps) {
             <h2 className="max-w-md font-display text-4xl font-extrabold leading-[1.08] tracking-tight">
               {headline}
             </h2>
+            <p className="max-w-md text-sm text-muted-foreground">
+              {t('shell.constellation.sub')}
+            </p>
           </motion.div>
 
-          <motion.div variants={rise}>
-            <LiveGrid />
+          <motion.div variants={rise} className="relative">
+            <Constellation />
           </motion.div>
         </motion.aside>
 

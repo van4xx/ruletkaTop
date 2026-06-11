@@ -12,5 +12,6 @@
   "notifications": { "label": "Уведомления", "description": "Центр уведомлений" },
   "gifts": { "label": "Подарки", "description": "Каталог подарков" },
   "premium": { "label": "Премиум", "description": "Премиум-возможности" },
-  "leaderboard": { "label": "Лидерборд", "description": "Таблица лидеров" }
+  "leaderboard": { "label": "Лидерборд", "description": "Таблица лидеров" },
+  "referrals": { "label": "Рефералы", "description": "Приглашай и зарабатывай монеты" }
 }
